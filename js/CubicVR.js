@@ -1,13 +1,4 @@
-/*
-  Javascript port of CubicVR 3D engine for WebGL
-  by Charles J. Cliffe
-  http://www.cubicvr.org/
 
-  May be used under the terms of the MIT license.
-  http://www.opensource.org/licenses/mit-license.php
-*/
-
-/*globals alert: false */
 try {
   if (!window) {
     self.window = self;
@@ -28,8 +19,6 @@ catch (e) {
 }
 
 (function(window, document, Math, nop, undef) {
-
-  /** Global Constants **/
   var M_TWO_PI = 2.0 * Math.PI;
   var M_HALF_PI = Math.PI / 2.0;
 
@@ -45,7 +34,6 @@ catch (e) {
     }
   }
   catch(e) {
-    // likely that 'document' is not defined (doesn't really matter)
   } //try
 
   var CubicVR = window['CubicVR'] = {};
@@ -80,12 +68,6 @@ catch (e) {
         return undef;
     } else if (typeof(e) === 'number') {
         return e;
-/*        if (typeBase.indexOf(e) !== -1) {
-            return e;
-        } else {
-            log("enumerator validation failed, unknown enum value: "+e);
-            return undef;
-        }*/
     } else if (typeof(e) === 'string') {
         var finiteVal = parseInt(e,10);
         if (e !== "" && isFinite(finiteVal)) {
@@ -149,8 +131,6 @@ catch (e) {
     base.log = log;
     base.enums = CubicVR.enums;
     base.MAX_LIGHTS = 6;
-    
-        // class extension functions from http://www.lshift.net/blog/2006/08/03/subclassing-in-javascript-part-2
     function general_extend(superclass, constructor, prototype) {
         var withoutcon = function () {};
         withoutcon.prototype = superclass.prototype;
@@ -170,36 +150,6 @@ catch (e) {
 
     base.extendClassGeneral = general_extend;
     base.extendClass = extend;
-
-/*
-
-usage:
-
-    var Child = general_extend(Parent, function () {
-        Parent.apply(this, ["an argument"]);
-        this.somethingelse = "hello Mum!";
-    }, {
-        anotherMethod: function () {
-            this.array.push(this.somethingelse);
-        }
-    });
-
-    var Child = (function (uber) {
-        return general_extend(uber, function() {
-            uber.apply(this, ["an argument"]);
-            this.somethingelse = "hello Mum!";
-        }, {
-            printState: function() {
-                uber.prototype.printState.apply(this);
-                print("somethingelse:" + this.somethingelse);
-            }
-        });
-    })(Parent);
-
-*/
-
-    
-    
     base.features = {};
     base.quality = CubicVR.enums.HIGH;
   
@@ -234,7 +184,6 @@ usage:
         var extend = moduleRegistry[mod](base);
         for (var ext in extend) {
            if (extend.hasOwnProperty(ext)) {
-             //log("Added extension: "+ext);
              base[ext] = extend[ext];
           } //if
         } //for
@@ -267,8 +216,6 @@ usage:
         resizeList: [],
         canvasSizeFactor:1
     };
-
-    /* Core Init, single context only at the moment */
     GLCore.init = function(gl_in, vs_in, fs_in) {
       var gl,
         util = base.util,
@@ -279,7 +226,6 @@ usage:
         vs_in = util.getScriptContents(vs_in);
         fs_in = util.getScriptContents(fs_in);
       } else {  // default shader handler if no custom override specified
-        // See if they have been embeded in js
         if (window.CubicVRShader.CubicVRCoreVS && window.CubicVRShader.CubicVRCoreFS) {
           vs_in = window.CubicVRShader.CubicVRCoreVS;
           fs_in = window.CubicVRShader.CubicVRCoreFS;
@@ -306,10 +252,6 @@ usage:
           GLCore.height = GLCore.fixed_size[1];
           GLCore.resizeElement(gl_in,GLCore.width,GLCore.height);
         } else {
-
-
-          // document.body.style.margin = "0px";        
-          // document.body.style.padding = "0px";        
           GLCore.addResizeable(gl_in);
           
           if (GLCore.canvasSizeFactor!==1 && gl_in.getContext!==undef) {
@@ -317,9 +259,6 @@ usage:
             GLCore.resizeElement(gl_in,nw,nh);        
             gl_in.style.top = (window.innerHeight/2-nh/2) + "px";
             gl_in.style.left = (window.innerWidth/2-nw/2) + "px";
-  //            gl_in.style.top="0px";
-  //            gl_in.style.left="0px";
-  //            gl_in.style.width="100%";
   //           gl_in.style.height="100%";
             gl_in.style.position = "absolute";
           } else {
@@ -338,8 +277,6 @@ usage:
               GLCore.canvas = gl_in;
               GLCore.width = gl_in.width;
               GLCore.height = gl_in.height;
-              
-              // set these default, can always be easily over-ridden
               gl.clearColor(0.0, 0.0, 0.0, 1.0);
               gl.clearDepth(1.0);
               gl.enable(gl.DEPTH_TEST);
@@ -347,7 +284,6 @@ usage:
         } catch (e2) {}
         
         if (!gl) {
-  //         alert("Could not initialise WebGL, sorry :-(");
            return null;
         }
       }
@@ -573,8 +509,6 @@ usage:
       return GLCore.gl;
 
     }; //initCubicVR
-     
-    // simplified initialization with WebGL check 
     function startUp(canvas,pass,fail,vs,fs) {
         if (typeof(canvas) === 'string' && canvas.toLowerCase() === "auto") {
             canvas = undef;
@@ -628,8 +562,6 @@ usage:
     
   }; //Core
 
-  //registerModule("Core", Core { return extend; });
-
   CubicVR.init = function( options, vs, fs ) {
     var context, core;
     if( options && options.context && typeof options.context === "string" ) {
@@ -657,7 +589,6 @@ usage:
   }; //start
 
   CubicVR.RegisterModule = function( module_id, module_in ) {
-    //log("Registering Module: "+module_id);
     moduleRegistry[module_id] = module_in;
   }; //registerModule
 
@@ -682,8 +613,6 @@ CubicVR.RegisterModule("Math",function (base) {
 
   var M_TWO_PI = 2.0 * Math.PI;
   var M_HALF_PI = Math.PI / 2.0;
-
-  /* Base functions */
   var vec2 = {
     equal: function(a, b, epsilon) {
       if (epsilon===undef) epsilon = 0.00000001;
@@ -793,12 +722,9 @@ CubicVR.RegisterModule("Math",function (base) {
     },
 	  linePlaneIntersect: function(normal, point_on_plane, segment_start, segment_end)
 	  {
-    // form a plane from normal and point_on_plane and test segment start->end to find intersect point
 		  var denom,mu;
 		
 		  var d = - normal[0] * point_on_plane[0] - normal[1] * point_on_plane[1] - normal[2] * point_on_plane[2];
-		
-		  // calculate position where the plane intersects the segment
 		  denom = normal[0] * (segment_end[0] - segment_start[0]) + normal[1] * (segment_end[1] - segment_start[1]) + normal[2] * (segment_end[2] - segment_start[2]);
       if (Math.abs(denom) < 0.001) return false;
 		
@@ -868,12 +794,8 @@ CubicVR.RegisterModule("Math",function (base) {
           up[2] = upz;
 
           forward = vec3.normalize(forward);
-
-          /* Side = forward x up */
           side = vec3.cross(forward, up);
           side = vec3.normalize(side);
-
-          /* Recompute up as: up = side x forward */
           up = vec3.cross(side, forward);
 
           m = [ side[0], up[0], -forward[0], 0, side[1], up[1], -forward[1], 0, side[2], up[2], -forward[2], 0, 0, 0, 0, 1];
@@ -954,7 +876,6 @@ CubicVR.RegisterModule("Math",function (base) {
           return det;
       },
       coFactor: function (m, n, out) {
-        // .. todo..
       },
 
       transpose: function (m) {
@@ -1140,9 +1061,6 @@ CubicVR.RegisterModule("Math",function (base) {
         return m;
    }      
   };
-  
-  /* Transform Controller */
-
   function Transform(init_mat) {
     return this.clearStack(init_mat);
   }
@@ -1315,8 +1233,6 @@ CubicVR.RegisterModule("Math",function (base) {
         return this;
       }
   };
-  
-  /* Quaternions */
   function Quaternion() {
     if (arguments.length === 1) {
       this.x = arguments[0][0];
@@ -1600,7 +1516,6 @@ CubicVR.RegisterModule("Utility",function(base) {
       if (srcUrl.length !== 0) {
         var xmlHttp = new XMLHttpRequest();
         if(xmlHttp.overrideMimeType){
-          // Firefox generates a misleading "syntax" error if we don't have this line.
           xmlHttp.overrideMimeType("application/json");
         }
         xmlHttp.open('GET', srcUrl, false);
@@ -1663,12 +1578,7 @@ CubicVR.RegisterModule("Utility",function(base) {
             }
             return undef;
         }
-        
-        // example http://some.domain/myJSONServer.php?file=100&_ext=json
-        // example http://some.domain/myFile.json
-        // example http://some.domain/myFile.xml
         // example myFile.js
-        // example someFile.someExt?_ext=json
         
         if (lcurl.indexOf("?")!==-1) {  // split query
             var arUrl = lcurl.split("?");
@@ -1778,8 +1688,6 @@ CubicVR.RegisterModule("Utility",function(base) {
               json_data = xml;  // pass through text loading, possibly check for json or xml in the string here
             }
         }
-
-        // automagic recall of previous ID's, URL's and class instances
         if (json_data && jsonBin[url]===undef) {
           jsonBin[url] = json_data;                
         }      
@@ -1800,7 +1708,6 @@ CubicVR.RegisterModule("Utility",function(base) {
         console.log("Unable to retrieve requested ID: '"+idOrUrl+"'");
         return undef;
       } else {
-//        console.log("Unable to retrieve requested object or ID: '"+idOrUrl+"'");
         return undef;
       }
     },
@@ -1913,7 +1820,6 @@ CubicVR.RegisterModule("Utility",function(base) {
       return s;
     },
     floatDelimArray: function(float_str, delim) {
-//      if (!float_str) return [];
       if (delim != "\n") {
         float_str = float_str.replace(/\n/g," ").replace(/^\s+|\s+$/, '');          
       }
@@ -1927,7 +1833,6 @@ CubicVR.RegisterModule("Utility",function(base) {
       return fa;
     },
     intDelimArray: function(int_str, delim) {
-//      if (!int_str) return [];
       if (delim != "\n") {
         int_str = int_str.replace(/\n/g," ").replace(/^\s+|\s+$/, '');          
       }
@@ -1941,7 +1846,6 @@ CubicVR.RegisterModule("Utility",function(base) {
       return fa;
     },
     textDelimArray: function(text_str, delim) {
-//      if (!text_str) return "";
       if (delim != "\n") {
         text_str = text_str.replace(/\n/g," ").replace(/^\s+|\s+$/, '');          
       }
@@ -2103,10 +2007,8 @@ CubicVR.RegisterModule("Utility",function(base) {
             json.$ = s;
         }
     } 
-//console.log(json_root);
     return json_root;
   },
-  // convert XML to badgerfish-json preserving attributes
   xml2badgerfish: function(xmlDoc) {
       var jsonData = {};
       var nodeStack = [];
@@ -2170,7 +2072,6 @@ CubicVR.RegisterModule("Utility",function(base) {
       }
       return jsonData;
    },
-   // check if an XML node only contains text
    isTextNode: function(tn) {
       var s = "";
       var textNodeChildren = tn.childNodes;
@@ -2180,39 +2081,29 @@ CubicVR.RegisterModule("Utility",function(base) {
       
       return true;
    },
-   // if string is a number such as int or float then parse it as such, otherwise pass through
    parseNumeric: function(str_in) {
         var arr = null,i,iMax,s;
 
         s = str_in.replace(/(?:(?:^|\n)\s+|\s+(?:$|\n))/g,'').replace(/\n/g,' ').replace(/ *, */gm,',').replace(/\s+/g,' ');   // trim any whitespace or line feeds or double spaces
         if (s === "") return s;
-
-        // see if it's an array type and parse it out, order is important so don't re-arrange ;)
         if ((s.indexOf(" ") !== -1 || s.indexOf(",") !== -1) && /[0-9\.,e\-\+ ]+/g.test(s)) {
             if (!/[^0-9\-\+]+/g.test(s)) { // int
-                //console.log("int");
                 return parseInt(s,10);
             } else if (!/[^0-9\- ]+/g.test(s)) { // long vector space
-                //console.log("long vector");
                 return util.intDelimArray(s," ");
             } else if (!/[^0-9\-,]+/g.test(s)) { // long vector csv
-                //console.log("long vector");
                 return util.intDelimArray(s,",");
             } else if (!/[^0-9\.e\-\+ ]+/g.test(s)) { // float vector space
-                //console.log("float vector");
                 return util.floatDelimArray(s," ");
             } else if (!/[^0-9\.,e\+\-]+/g.test(s)) { // float vector csv
-                //console.log("float vector");
                 return util.floatDelimArray(s,",");
             }  else if (!/[^0-9,\-\+ ]+/g.test(s)) { // 2 dimensional long vector space,csv
-                //console.log("2 dimensional long vector");
                 arr = s.split(" ");
                 for (i = 0, iMax = arr.length; i<iMax; i++) {
                     arr[i] = util.intDelimArray(arr[i],",");
                 }
                 return arr;
             } else if (!/[^0-9\.,e\-\+ ]+/g.test(s)) { // 2 dimensional float vector space,csv
-                //console.log("2 dimensional float vector");
                 arr = s.split(" ");
                 for (i = 0, iMax = arr.length; i<iMax; i++) {
                     arr[i] = util.floatDelimArray(arr[i],",");
@@ -2233,8 +2124,6 @@ CubicVR.RegisterModule("Utility",function(base) {
         
         return str_in;
    },
-   // direct conversion of <tag><tag2>string</tag2></tag> -> { tag2: "string" } attributes will be dropped.
-   // to preserve attributes use xml2badgerfish
    xml2json: function(xmlDoc) {
       var jsonData = {};
       var nodeStack = [];
@@ -2319,8 +2208,6 @@ CubicVR.RegisterModule("Shader",function(base) {
   var enums = base.enums;    
   var log = base.log;
   var util = base.util;
-
-  // Shader Map Inputs (binary hash index)
   enums.shader = {
     map: {
       COLOR: 1,
@@ -2333,8 +2220,6 @@ CubicVR.RegisterModule("Shader",function(base) {
       ALPHA: 128,
       COLORMAP: 256
     },
-
-    /* Uniform types */
     uniform: {
       MATRIX: 0,
       VECTOR: 1,
@@ -2360,10 +2245,6 @@ CubicVR.RegisterModule("Shader",function(base) {
 
     gl.shaderSource(shader, str);
     gl.compileShader(shader);
-
-//    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-  //    log(gl.getShaderInfoLog(shader));
-//      return null;
 //    }
 
     return shader;
@@ -2400,9 +2281,6 @@ CubicVR.RegisterModule("Shader",function(base) {
 
     return shader;
   };
-
-  /* Shaders */
-
   function Shader(vs_id, fs_id) {
     var util = base.util;
     var vertexShader;
@@ -2434,7 +2312,6 @@ CubicVR.RegisterModule("Shader",function(base) {
 
     if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
       this.vertexLog = gl.getShaderInfoLog(vertexShader);
-//      log();
       this.success = false;
     }
 
@@ -2453,7 +2330,6 @@ CubicVR.RegisterModule("Shader",function(base) {
 
     if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
       this.fragmentLog = gl.getShaderInfoLog(fragmentShader);
-      //      log(gl.getShaderInfoLog(fragmentShader));
       this.success = false;
     }
     
@@ -2464,7 +2340,6 @@ CubicVR.RegisterModule("Shader",function(base) {
       gl.linkProgram(this.shader);
 
       if (!GLCore.gl.getProgramParameter(this.shader,gl.LINK_STATUS)) {
-  //      throw new Error("Could not initialise shader vert(" + vs_id + "), frag(" + fs_id + ")");
         log("Error linking shader:\n"+gl.getProgramInfoLog(this.shader));
         this.success = false;
       }
@@ -2772,48 +2647,6 @@ CubicVR.RegisterModule("Shader",function(base) {
       }
       return str;
     },
-    /*
-        TODO: for getShaderInfo -- validate the parsed GLSL data against what the standard WebGL attribute/uniform
-        query to make sure we didn't miss any and we can report and handle whatever GLSL has factored out on it's own.
-        
-        Also need to parse #define statements if we want to get proper results and not keep binding variables that
-        don't exist in the current compile.
-        
-        If we have too many problems with parsing we should just scrap this function and use the WebGL queries
-        directly as it's the most sensible method.
-
-        Proper query funcs:
-        ------------------
-                
-        var t = gl.getActiveUniform(this._shader.shader,0);
-        console.log(t.size,t.type,t.name);
-        var t = gl.getActiveAttrib(this._shader.shader,1);
-        console.log(t.size,t.type,t.name);
-                
-        //  WebGLActiveInfo getActiveAttrib(WebGLProgram program, GLuint index);
-        //  WebGLActiveInfo getActiveUniform(WebGLProgram program, GLuint index);
-        //  WebGLShader[ ] getAttachedShaders(WebGLProgram program);
-        
-        
-        Proper enums:
-        ------------
-        const GLenum FLOAT_VEC2                     = 0x8B50;
-        const GLenum FLOAT_VEC3                     = 0x8B51;
-        const GLenum FLOAT_VEC4                     = 0x8B52;
-        const GLenum INT_VEC2                       = 0x8B53;
-        const GLenum INT_VEC3                       = 0x8B54;
-        const GLenum INT_VEC4                       = 0x8B55;
-        const GLenum BOOL                           = 0x8B56;
-        const GLenum BOOL_VEC2                      = 0x8B57;
-        const GLenum BOOL_VEC3                      = 0x8B58;
-        const GLenum BOOL_VEC4                      = 0x8B59;
-        const GLenum FLOAT_MAT2                     = 0x8B5A;
-        const GLenum FLOAT_MAT3                     = 0x8B5B;
-        const GLenum FLOAT_MAT4                     = 0x8B5C;
-        const GLenum SAMPLER_2D                     = 0x8B5E;
-        const GLenum SAMPLER_CUBE                   = 0x8B60;
-        
-    */
     getShaderInfo: function(v,f) {
         var i,iMax,j,jMax,s,sa;
         var typeList = ["uniform","attribute","varying"];
@@ -2829,8 +2662,6 @@ CubicVR.RegisterModule("Shader",function(base) {
         
         shader_vars.v_define = shader_util.getDefines(v); 
         shader_vars.f_define = shader_util.getDefines(f); 
-
-        // we only care about array definitions, such as myVar[myLengthDefine], so wrap with []
         v = shader_util.replaceAll(v,shader_vars.v_define,"[","]");
         f = shader_util.replaceAll(f,shader_vars.f_define,"[","]");
 
@@ -2856,19 +2687,6 @@ CubicVR.RegisterModule("Shader",function(base) {
             .replace(/ +$/gm,"")
             .replace(/^ +/gm,"")
             .replace(/\n\n/gm,"\n");
-            
-            /*
-            while (structStr.indexOf("  ") !== -1) { 
-              structStr = structStr.replace("  "," ");
-            }
-            while (structStr.indexOf(" \n") !== -1) {
-              structStr = structStr.replace(" \n","\n");
-            }
-            while (structStr.indexOf("\n\n") !== -1) {
-              structStr = structStr.replace("\n\n","\n");
-            }
-            */
-            
             structList.push({start:start,end:end,struct:structStr.split("\n")});
             start = -1;
             end = -1;
@@ -3052,10 +2870,8 @@ CubicVR.RegisterModule("Shader",function(base) {
         var svloc = sv.location;
         var basename = sv.basename;
         if (internal_vars.indexOf(basename)!==-1) {
-//           console.log("MaterialShader: Skipped ~["+basename+"]");
            continue;
         } else {
-//           console.log("CustomShader: Added +["+svloc+": "+sv.type+"]");
         }
         var svtype = sv.type;
         if (svtype === "vec3") {
@@ -3343,9 +3159,6 @@ CubicVR.RegisterModule("MainLoop", function (base) {
       CLOSE_BRACKET: 221,
       SINGLE_QUOTE: 222
     };
-
-    /* Timer */
-
     function Timer() {
         this.time_elapsed = 0;
         this.system_milliseconds = 0;
@@ -3457,9 +3270,6 @@ CubicVR.RegisterModule("MainLoop", function (base) {
             return this.paused_state;
         }
     };
-
-    /* Run-Loop Controller */
-
     function MainLoopRequest() {
         var gl = GLCore.gl;
 
@@ -3482,7 +3292,6 @@ CubicVR.RegisterModule("MainLoop", function (base) {
         }
 
         if (base.GLCore.mainloop !== null) {
-            // kill old mainloop
             if (!(window.requestAnimationFrame) && base.GLCore.mainloop) {
                 clearInterval(base.GLCore.mainloop.interval);
             }
@@ -3547,7 +3356,6 @@ CubicVR.RegisterModule("MainLoop", function (base) {
 
         if (!noloop) {
           if (window.requestAnimationFrame) {
-              //loopFunc();
               this.interval = loopFunc;
               window.requestAnimationFrame(MainLoopRequest);
           } else {
@@ -3655,23 +3463,6 @@ CubicVR.RegisterModule("MainLoop", function (base) {
         }
 
     };
-    
-
-    /* Simple View Controller */
-
-    /*
-        callback_obj =
-        {    
-            mouseMove: function(mvc,mPos,mDelta,keyState) {},
-            mouseDown: function(mvc,mPos,keyState) {},
-            mouseUp: function(mvc,mPos,keyState) {},
-            bool keyDown: function(mvc,mPos,key,keyState) {}, // return false to cancel keyDown event / keyState
-            keyUp: function(mvc,mPos,key,keyState) {},
-            bool keyPress: function(mvc,mPos,key,keyState) {},  // return false to cancel keyDown event / keyState
-            wheelMove: function(mvc,mPos,wDelta,keyState) {}
-        }
-    */
-
     function MouseViewController(canvas, cam_in, callback_obj) {
         this.canvas = canvas;
         this.camera = cam_in;
@@ -3776,7 +3567,6 @@ CubicVR.RegisterModule("MainLoop", function (base) {
                 if (!ctx.mdown) return;
 
                 ctx.orbitView(mdelta);
-                //          ctx.panView(mdelta);
             },
             mouseWheel: function (ctx, mpos, wdelta, keyState) {
                 ctx.zoomView(wdelta);
@@ -3908,8 +3698,6 @@ CubicVR.RegisterModule("Texture", function (base) {
     var enums = base.enums;
     var undef = base.undef;
     var log = base.log;
-
-    // Texture Types
     enums.texture = {
         map: {
             COLOR: 0,
@@ -3929,10 +3717,6 @@ CubicVR.RegisterModule("Texture", function (base) {
             NEAREST_MIP: 3
         }
     };
-
-    /**
-     * Check if a given width/height is Power Of Two (POT).
-     */
     function checkIsPOT(w, h) {
         if (w === 1 || h === 1) {
           return false;
@@ -3957,8 +3741,6 @@ CubicVR.RegisterModule("Texture", function (base) {
 
         return true;
     }
-
-    /* Textures */
     var DeferredLoadTexture = function (img_path, filter_type) {
             this.img_path = img_path;
             this.filter_type = filter_type;
@@ -4049,7 +3831,6 @@ CubicVR.RegisterModule("Texture", function (base) {
                     } //if
                 } else {
                     base.Images[this.tex_id].deferredSrc = img_path;
-                    //console.log('adding image to binId=' + binId + ' img_path=' + img_path);
                     deferred_bin.addImage(binId, img_path, base.Images[this.tex_id]);
                 }
             }
@@ -4170,12 +3951,6 @@ CubicVR.RegisterModule("Texture", function (base) {
             gl.bindTexture(gl.TEXTURE_2D, null);
         } //CanvasTexture.update
     };
-
-    /**
-     * PdfTexture takes a pdf.js Page object, and uses it as the basis for a texture.
-     * PdfTexture is meant to be used in conjunction with base.PDF, which takes care
-     * of loading/rendering PDF page objects.
-     **/
     function PdfTexture(page, options) {
         if (!page) {
             throw("PDF Texture Error: page is null.");
@@ -4187,7 +3962,6 @@ CubicVR.RegisterModule("Texture", function (base) {
             ctx;
 
         canvas.mozOpaque = true;
-        // TODO: need to deal with non-POT sizes
         canvas.width = options.width;
         canvas.height = options.height;
 
@@ -4253,8 +4027,6 @@ CubicVR.RegisterModule("Texture", function (base) {
             lines = text.length;
         } //if
         ctx.font = font;
-
-        // This approximation is awful. There has to be a better way to find the height of a text block
         var lineHeight = (options && options.lineHeight) || ctx.measureText('OO').width;
         var widest;
         if (lines === 1) {
@@ -4306,13 +4078,9 @@ CubicVR.RegisterModule("Texture", function (base) {
         this.canvas = document.createElement("CANVAS");
         this.canvas.width = width;
         this.canvas.height = height;
-
-        // this assumes processing is already included..
         this.pjs = new Processing(this.canvas, base.util.getURL(pjsURL));
         this.pjs.noLoop();
         this.pjs.redraw();
-
-        // bind functions to "subclass" a texture
         this.setFilter = this.texture.setFilter;
         this.clear = this.texture.clear;
         this.use = this.texture.use;
@@ -4358,16 +4126,10 @@ CubicVR.RegisterModule("Texture", function (base) {
 
         var isPOT = checkIsPOT(width, height),
           vTexel = [1.0 / width, 1.0 / height, 0];
-
-        // buffers
         this.outputBuffer = new base.RenderBuffer(width, height, false);
-
-        // quads
         this.fsQuad = base.fsQuad.make(width, height);
 
         var vs = ["attribute vec3 aVertex;", "attribute vec2 aTex;", "varying vec2 vTex;", "void main(void)", "{", "  vTex = aTex;", "  vec4 vPos = vec4(aVertex.xyz,1.0);", "  gl_Position = vPos;", "}"].join("\n");
-
-        // simple convolution test shader
         shaderNMap = new base.Shader(vs, ["#ifdef GL_ES", "precision highp float;", "#endif", "uniform sampler2D srcTex;", "varying vec2 vTex;", "uniform vec3 texel;", "void main(void)", "{", " vec3 color;", " color.r = (texture2D(srcTex,vTex + vec2(texel.x,0)).r-texture2D(srcTex,vTex + vec2(-texel.x,0)).r)/2.0 + 0.5;", " color.g = (texture2D(srcTex,vTex + vec2(0,-texel.y)).r-texture2D(srcTex,vTex + vec2(0,texel.y)).r)/2.0 + 0.5;", " color.b = 1.0;", " gl_FragColor.rgb = color;", " gl_FragColor.a = 1.0;", "}"].join("\n"));
 
         shaderNMap.use();
@@ -4378,8 +4140,6 @@ CubicVR.RegisterModule("Texture", function (base) {
         shaderNMap.setVector("texel", vTexel);
 
         this.shaderNorm = shaderNMap;
-
-        // bind functions to "subclass" a texture
         this.setFilter = this.outputBuffer.texture.setFilter;
         this.clear = this.outputBuffer.texture.clear;
         this.use = this.outputBuffer.texture.use;
@@ -4387,16 +4147,10 @@ CubicVR.RegisterModule("Texture", function (base) {
         this.filterType = this.outputBuffer.texture.filterType;
 
         this.outTex.use(gl.TEXTURE0);
-        // 
-        // if (!isPOT) {
-        //    this.setFilter(enums.texture.filter.LINEAR);
         //    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        //    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);    
-        //  } else {
         this.setFilter(enums.texture.filter.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-        //  }
     }
 
     NormalMapGen.prototype = {
@@ -4430,8 +4184,6 @@ CubicVR.RegisterModule("Texture", function (base) {
         this.texture = this.outTex.texture;
 
         var isPOT = checkIsPOT(width, height);
-
-        // bind functions to "subclass" a texture
         this.setFilter = this.outTex.texture.setFilter;
         this.clear = this.outTex.texture.clear;
         this.use = this.outTex.texture.use;
@@ -4480,8 +4232,6 @@ CubicVR.RegisterModule("Texture", function (base) {
     function SceneRenderTexture(scene,camera) {
       this.scene = scene;
       this.renderTex = new RenderTexture(camera?camera.width:scene.camera.width,camera?camera.height:scene.camera.height,true);
-      
-      // bind functions to "subclass" a texture
       this.setFilter = this.renderTex.texture.setFilter;
       this.clear = this.renderTex.texture.clear;
       this.use = this.renderTex.texture.use;
@@ -4521,8 +4271,6 @@ CubicVR.RegisterModule("Material", function(base) {
   var util = base.util;
   
   var failSafeShader = null;
- 
-  /* Materials */
   function Material(obj_init) {
     this.initialized = false;
     this.dirtyFlag = false;
@@ -4567,7 +4315,6 @@ CubicVR.RegisterModule("Material", function(base) {
 
     if (obj_init.textures) {
         for (var i in obj_init.textures) {
-            // enumeration and image cache / string url are now handled by setTexture()
             this.setTexture(obj_init.textures[i],i);
         }
     }
@@ -4744,18 +4491,12 @@ CubicVR.RegisterModule("Material", function(base) {
 
       if (obj_in.morphTarget) {
         up = u.vertexMorphPosition;
-    //    var uv = u.vertexTexCoord; 
         un = u.vertexMorphNormal; 
 
         gl.bindBuffer(gl.ARRAY_BUFFER, obj_in.morphTarget.gl_points);
         gl.vertexAttribPointer(up, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(up);
-
-    //    if (obj_in.compiled.gl_uvs!==null && uv !==-1) {
-    //      gl.bindBuffer(gl.ARRAY_BUFFER, obj_in.compiled.gl_uvs);
-    //      gl.vertexAttribPointer(uv, 2, gl.FLOAT, false, 0, 0);
     //      gl.enableVertexAttribArray(uv);
-    //    } 
 
         if (un !== null && obj_in.morphTarget.gl_normals!==null && un !==-1) {
           gl.bindBuffer(gl.ARRAY_BUFFER, obj_in.morphTarget.gl_normals);
@@ -4789,7 +4530,6 @@ CubicVR.RegisterModule("Material", function(base) {
       if (obj_in.morphTarget && u) {
         up = u.vertexMorphPosition;
         gl.disableVertexAttribArray(up);    
-    //    var uv = u.vertexTexCoord; 
 
         un = u.vertexMorphNormal; 
         if (un !== null && obj_in.compiled.gl_normals!==null && un !==-1) {
@@ -5065,9 +4805,6 @@ CubicVR.RegisterModule("Mesh", function (base) {
     var undef = base.undef;
     var GLCore = base.GLCore;
     var log = base.log;
-
-    /* Faces */
-
   function parseTransform(t) {
         if (t === undef) return undef;
         if (typeof(t) === 'array') {
@@ -5653,23 +5390,15 @@ CubicVR.RegisterModule("Mesh", function (base) {
             }
 
             var numFaces = this.faces.length;
-
-            // build a quick list of point/face sharing
             for (i = 0; i < numFaces; i++) {
                 var numFacePoints = this.faces[i].points.length;
 
                 for (j = 0; j < numFacePoints; j++) {
                     var idx = this.faces[i].points[j];
-
-                    //      if (point_smoothRef[idx] === undef) point_smoothRef[idx] = [];
                     point_smoothRef[idx].push([i, j]);
                 }
             }
-
-            // step through smoothing references and compute normals
             for (i = 0, iMax = this.points.length; i < iMax; i++) {
-                //    if(!point_smoothRef.hasOwnProperty(i)) { continue; }
-                //    if (typeof(point_smoothRef[i]) === undef) { continue; }
                 var numPts = point_smoothRef[i].length;
 
                 for (j = 0; j < numPts; j++) {
@@ -5687,15 +5416,11 @@ CubicVR.RegisterModule("Mesh", function (base) {
                             normalMapRef_out[faceNum][pointNum] = [];
                         }
                     }
-
-                    // set point to it's face's normal
                     var tmpNorm = new Array(3);
 
                     tmpNorm[0] = thisFace.normal[0];
                     tmpNorm[1] = thisFace.normal[1];
                     tmpNorm[2] = thisFace.normal[2];
-
-                    // step through all other faces which share this point
                     if (max_smooth !== 0) {
                         for (k = 0; k < numPts; k++) {
                             if (j === k) {
@@ -5742,9 +5467,7 @@ CubicVR.RegisterModule("Mesh", function (base) {
 
                 if (!outNormalMapRef.faceCount) outNormalMapRef.faceCount = new Uint8Array(this.faces.length*3);
                 if (!outNormalMapRef.faceNorm) outNormalMapRef.faceNorm = new Uint16Array(normTotal);
-//                if (hasSegments) {                   
                     if (!outNormalMapRef.faceNormIdx) outNormalMapRef.faceNormIdx = new Uint16Array(this.faces.length);
-  //              }
 
                 var c = 0;
 
@@ -5752,9 +5475,7 @@ CubicVR.RegisterModule("Mesh", function (base) {
                     for (j = 0; j< 3; j++){
                         var nmij = normalMapRef_out[i][j];
                         outNormalMapRef.faceCount[i*3+j] = nmij?nmij.length:0;
-    //                    if (hasSegments) {
                             outNormalMapRef.faceNormIdx[i] = c;
-      //                  }
                         if (nmij) for (k = 0, kMax = nmij.length; k<kMax; k++){
                           outNormalMapRef.faceNorm[c++] = normalMapRef_out[i][j][k];
                         } else {
@@ -5764,66 +5485,10 @@ CubicVR.RegisterModule("Mesh", function (base) {
                 }
                 
                 this.normalMapRef = outNormalMapRef;
-//                this.normalMapRef = normalMapRef_out;
             }
 
             return this;
         },
-
-        // given the parameter map output from calcNormals, recalculate all the normals again quickly
-/*        recalcNormals: function (normalMapRef) {
-            var faceNum,faceMax,pointNum,pMax,i,l,n,a,b,c,nc,pn,oRef,oFace,face,faceMapRef,nCount;
-
-            normalMapRef = normalMapRef||this.normalMapRef;
-
-            if (!normalMapRef) return;
-            
-            this.calcFaceNormals();
-
-            for (faceNum = 0, faceMax = this.faces.length; faceNum < faceMax; faceNum++) {
-                face = this.faces[faceNum];
-                faceMapRef = normalMapRef[faceNum];
-                
-                for (pointNum = 0, pMax = face.points.length; pointNum < pMax; pointNum++) {
-                    pn = face.point_normals[pointNum];
-                    oRef = faceMapRef[pointNum];
-                    nCount = oRef.length;
-
-                    n = face.normal;
-                    a = n[0];
-                    b = n[1];
-                    c = n[2];
-
-                    for (var i = 0; i < nCount; i++) {
-                        oFace = this.faces[oRef[i]];
-                        n = oFace.normal;
-                        a += n[0];
-                        b += n[1];
-                        c += n[2];
-                    }
-
-                    if (nCount) {
-                        nc = nCount+1;
-                        a /= nc;
-                        b /= nc;
-                        c /= nc;
-
-                        l = Math.sqrt(a * a + b * b + c * c);
-
-                        a /= l;
-                        b /= l;
-                        c /= l;
-                        
-                        pn[0] = a; pn[1] = b; pn[2] = c;
-                    }
-                }
-            }
-
-            return this;
-        },
-        */
-        
-        // New version with linear typed array run
         recalcNormals: function (normalMapRef,options) {
             var faceNum,faceMax,pointNum,pMax,i,l,n,a,b,c,nc,pn,oRef,oFace,face,faceMapRef,nCount;
 
@@ -6119,7 +5784,6 @@ CubicVR.RegisterModule("Mesh", function (base) {
                     point_face_list[pta].push(i);
                     
                     if (edges[pta][ptb]!==undef) {
-//                        log("Mesh.subdivide warning face #"+i+", edge:["+fpa+"->"+fpb+"] already used by face#"+edges[pta][ptb].face+", edge:["+edges[pta][ptb].fpa+"->"+edges[pta][ptb].fpb+"] possible mangling.");
                     }
                     
                     edges[pta][ptb] = { face:i, a: pta, b: ptb, fpa: fpa, fpb: fpb };
@@ -6422,8 +6086,6 @@ CubicVR.RegisterModule("Mesh", function (base) {
 
             return this;
         },
-
-        // generate a compile-map object for the current mesh, used to create a VBO with compileVBO(compileMap)  
         compileMap: function (tolerance) {
             var vec3 = base.vec3;
             var vec2 = base.vec2;
@@ -6525,7 +6187,6 @@ CubicVR.RegisterModule("Mesh", function (base) {
 
                                 if (vtxRef[ptNum] !== undef) {
                                     for (y = 0, yMax = vtxRef[ptNum].length; y < yMax; y++) {
-                                        // face / point
                                         var oFace = vtxRef[ptNum][y][0]; // faceNum
                                         var oPoint = vtxRef[ptNum][y][1]; // pointNum
                                         var oIndex = vtxRef[ptNum][y][2]; // index
@@ -6663,8 +6324,6 @@ CubicVR.RegisterModule("Mesh", function (base) {
 
             return compileMap;
         },
-
-        // Take a compileMap() result and create a compiled mesh VBO object for bufferVBO(VBO)
         compileVBO: function (compileMap, doElements, doVertex, doNormal, doUV, doColor, doLines, doDynamic) {
             if (typeof (doElements) == 'object') {
                 doElements = (doElements.element !== undef) ? doElements.element : true;
@@ -6817,8 +6476,6 @@ CubicVR.RegisterModule("Mesh", function (base) {
            
             compiled.segments = compileMap.segments;
             compiled.bounds = compileMap.bounds;
-
-            // segmented update support
             if (doDynamic && compileMap.segments.length>1) {
                 var segmentMap = [];
                 var segId;
@@ -6950,8 +6607,6 @@ CubicVR.RegisterModule("Mesh", function (base) {
 
             return this;
         },
-
-        // take a compiled VBO from compileVBO() and create a mesh buffer object for bindBuffer(), fuse with baseBuffer overlay if provided
         bufferVBO: function (VBO, baseBuffer) {
             var gl = GLCore.gl;
 
@@ -7008,14 +6663,6 @@ CubicVR.RegisterModule("Mesh", function (base) {
 
             buffer.segments = VBO.segments;
             buffer.bounds = VBO.bounds;
-
-/*            if (baseBuffer.elements_ref && !VBO.elements_ref) {
-                buffer.elements_ref = VBO.elements_ref;            
-            }
-            if (baseBuffer.line_elements_ref && !VBO.line_elements_ref) {
-                buffer.line_elements_ref = VBO.line_elements_ref;            
-            }*/
-
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
             return buffer;
@@ -7047,8 +6694,6 @@ CubicVR.RegisterModule("Mesh", function (base) {
             this.updateVBO(this.dynamicData.VBO,options);
             this.rebufferVBO(this.dynamicData.VBO,this.dynamicData.buffer,options);
         },
-
-        // bind a bufferVBO object result to the mesh
         bindBuffer: function (vbo_buffer) {
             if (this.originBuffer === null) {
                 this.originBuffer = vbo_buffer;
@@ -7061,8 +6706,6 @@ CubicVR.RegisterModule("Mesh", function (base) {
             }
             this.bb = vbo_buffer.bounds;
         },
-
-        // Do the works
         compile: function (tolerance) {
             if (this.faces.length > 0 && this.points.length > 0 ) {
               var VBO = this.compileVBO(this.compileMap(tolerance));
@@ -7128,14 +6771,11 @@ CubicVR.RegisterModule("UVMapper",function(base) {
   var M_HALF_PI = Math.PI / 2.0;
   
   enums.uv = {
-    /* UV Axis enums */
     axis: {
       X: 0,
       Y: 1,
       Z: 2
     },
-
-    /* UV Projection enums */
     projection: {
       UV: 0,
       PLANAR: 1,
@@ -7145,9 +6785,6 @@ CubicVR.RegisterModule("UVMapper",function(base) {
       SKY: 5
     }
   };
-
-
-  // convert XYZ space to longitude
   var xyz_to_h = function(x, y, z) {
     var h;
 
@@ -7165,9 +6802,6 @@ CubicVR.RegisterModule("UVMapper",function(base) {
 
     return h;
   };
-
-
-  // convert XYZ space to latitude and longitude
   var xyz_to_hp = function(x, y, z) {
     var h, p;
 
@@ -7319,26 +6953,19 @@ CubicVR.RegisterModule("UVMapper",function(base) {
           if (transformed) {
             uvpoint = mat4.vec3_multiply(uvpoint, t_result);
           }
-
-          /* calculate the uv for the points referenced by this face's pointref vector */
           var p_mode = this.projection_mode;
-          //switch (this.projection_mode) {
           if (p_mode === enums.uv.projection.SKY) {
-          //case enums.uv.projection.SKY:
             var mapping = obj.sky_mapping;
-            /* see enums.uv.projection.CUBIC for normalization reasoning */
             if (nx >= ny && nx >= nz) {
               s = uvpoint[2] / (this.scale[2]) + this.scale[2] / 2;
               t = -uvpoint[1] / (this.scale[1]) + this.scale[1] / 2;
               if (obj.faces[i].normal[0] < 0) {
-                //left
                 s = (mapping[2][2] - mapping[2][0]) * (1-s);
                 t = 1-((mapping[2][3] - mapping[2][1]) * (t));
                 s += mapping[2][0];
                 t += mapping[2][1];
               }
               else {
-                //right
                 s = (mapping[3][2] - mapping[3][0]) * (s);
                 t = 1-((mapping[3][3] - mapping[3][1]) * (t));
                 s += mapping[3][0];
@@ -7349,14 +6976,12 @@ CubicVR.RegisterModule("UVMapper",function(base) {
               s = uvpoint[0] / (this.scale[0]) + this.scale[0] / 2;
               t = -uvpoint[2] / (this.scale[2]) + this.scale[2] / 2;
               if (obj.faces[i].normal[1] < 0) {
-                //down
                 s = ((mapping[1][2] - mapping[1][0]) * (s));
                 t = 1-((mapping[1][3] - mapping[1][1]) * (t));
                 s += mapping[1][0];
                 t -= mapping[1][1];
               }
               else {
-                //up
                 s = ((mapping[0][2] - mapping[0][0]) * (s));
                 t = 1-((mapping[0][3] - mapping[0][1]) * (t));
                 s += mapping[0][0];
@@ -7367,14 +6992,12 @@ CubicVR.RegisterModule("UVMapper",function(base) {
               s = uvpoint[0] / (this.scale[0]) + this.scale[0] / 2;
               t = uvpoint[1] / (this.scale[1]) + this.scale[1] / 2;
               if (obj.faces[i].normal[2] < 0) {
-                //front
                 s = ((mapping[4][2] - mapping[4][0]) * (s));
                 t = 1-((mapping[4][3] - mapping[4][1]) * (1-t));
                 s += mapping[4][0];
                 t -= mapping[4][1];
               }
               else {
-                //back
                 s = ((mapping[5][2] - mapping[5][0]) * (1-s));
                 t = 1-((mapping[5][3] - mapping[5][1]) * (1-t));
                 s += mapping[5][0];
@@ -7382,27 +7005,17 @@ CubicVR.RegisterModule("UVMapper",function(base) {
               } //if
             } //if
             obj.faces[i].setUV([s, t], j);
-            //break;
           }
           else if (p_mode === enums.uv.projection.CUBIC) {
-          //case enums.uv.projection.CUBIC:
-            /* cubic projection needs to know the surface normal */
-            /* x portion of vector is dominant, we're mapping in the Y/Z plane */
             if (nx >= ny && nx >= nz) {
-              /* we use a .5 offset because texture coordinates range from 0->1, so to center it we need to offset by .5 */
               s = uvpoint[2] / this.scale[2] + 0.5;
-              /* account for scale here */
               t = uvpoint[1] / this.scale[1] + 0.5;
             }
-
-            /* y portion of vector is dominant, we're mapping in the X/Z plane */
             if (ny >= nx && ny >= nz) {
 
               s = -uvpoint[0] / this.scale[0] + 0.5;
               t = uvpoint[2] / this.scale[2] + 0.5;
             }
-
-            /* z portion of vector is dominant, we're mapping in the X/Y plane */
             if (nz >= nx && nz >= ny) {
               s = -uvpoint[0] / this.scale[0] + 0.5;
               t = uvpoint[1] / this.scale[1] + 0.5;
@@ -7419,42 +7032,27 @@ CubicVR.RegisterModule("UVMapper",function(base) {
             }
 
             obj.faces[i].setUV([s, t], j);
-            //break;
           }
           else if (p_mode === enums.uv.projection.PLANAR) {
-          //case enums.uv.projection.PLANAR:
             s = ((this.projection_axis === enums.uv.axis.X) ? uvpoint[2] / this.scale[2] + 0.5 : -uvpoint[0] / this.scale[0] + 0.5);
             t = ((this.projection_axis === enums.uv.axis.Y) ? uvpoint[2] / this.scale[2] + 0.5 : uvpoint[1] / this.scale[1] + 0.5);
 
             obj.faces[i].setUV([s, t], j);
-            //break;
           }
           else if (p_mode === enums.uv.projection.CYLINDRICAL) {
-          //case enums.uv.projection.CYLINDRICAL:
-            // Cylindrical is a little more tricky, we map based on the degree around the center point
             p_axis = this.projection_axis;
-            //switch (this.projection_axis) {
             if (p_axis === enums.uv.axis.X) {
-            //case enums.uv.axis.X:
-              // xyz_to_h takes the point and returns a value representing the 'unwrapped' height position of this point
               lon = xyz_to_h(uvpoint[2], uvpoint[0], -uvpoint[1]);
               t = -uvpoint[0] / this.scale[0] + 0.5;
-              //break;
             }
             else if (p_axis === enums.uv.axis.Y) {
-            //case enums.uv.axis.Y:
               lon = xyz_to_h(-uvpoint[0], uvpoint[1], uvpoint[2]);
               t = -uvpoint[1] / this.scale[1] + 0.5;
-              //break;
             }
             else if (p_axis === enums.uv.axis.Z) {
-            //case enums.uv.axis.Z:
               lon = xyz_to_h(-uvpoint[0], uvpoint[2], -uvpoint[1]);
               t = -uvpoint[2] / this.scale[2] + 0.5;
-              //break;
             } //if
-
-            // convert it from radian space to texture space 0 to 1 * wrap, TWO_PI = 360 degrees
             lon = 1.0 - lon / (M_TWO_PI);
 
             if (this.wrap_w_count !== 1.0) {
@@ -7465,46 +7063,33 @@ CubicVR.RegisterModule("UVMapper",function(base) {
             v = t;
 
             obj.faces[i].setUV([u, v], j);
-            //break;
           }
           else if (p_mode === enums.uv.projection.SPHERICAL) {
-          //case enums.uv.projection.SPHERICAL:
             var latlon,latlonb,latlonc;
-
-            // spherical is similar to cylindrical except we also unwrap the 'width'
             p_axis = this.projection_axis;
-
-            //switch (this.projection_axis) {
             if (p_axis === enums.uv.axis.X) {
-            //case enums.uv.axis.X:
-              // xyz to hp takes the point value and 'unwraps' the latitude and longitude that projects to that point
               if(latlon_cache[pta]) latlon = latlon_cache[pta]; else latlon = xyz_to_hp(uvpoint[2], uvpoint[0], -uvpoint[1]);
               if (!latlon_cache[pta]) latlon_cache[pta] = latlon;
               if(latlon_cache[ptb]) latlonb = latlon_cache[ptb]; else latlonb = xyz_to_hp(uvpointb[2], uvpointb[0], -uvpointb[1]);
               if (!latlon_cache[ptb]) latlon_cache[ptb] = latlonb;
               if(latlon_cache[ptc]) latlonc = latlon_cache[ptc]; else latlonc = xyz_to_hp(uvpointc[2], uvpointc[0], -uvpointc[1]);
               if (!latlon_cache[ptc]) latlon_cache[ptc] = latlonc;
-              //break;
             }
             else if (p_axis === enums.uv.axis.Y) {
-            //case enums.uv.axis.Y:
               if(latlon_cache[pta]) latlon = latlon_cache[pta]; else latlon = xyz_to_hp(uvpoint[0], -uvpoint[1], uvpoint[2]);
               if (!latlon_cache[pta]) latlon_cache[pta] = latlon;
               if(latlon_cache[ptb]) latlonb = latlon_cache[ptb]; else latlonb = xyz_to_hp(uvpointb[0], -uvpointb[1], uvpointb[2]);
               if (!latlon_cache[ptb]) latlon_cache[ptb] = latlonb;
               if(latlon_cache[ptc]) latlonc = latlon_cache[ptc]; else latlonc = xyz_to_hp(uvpointc[0], -uvpointc[1], uvpointc[2]);
               if (!latlon_cache[ptc]) latlon_cache[ptc] = latlonc;
-              //break;
             }
             else if (p_axis === enums.uv.axis.Z) {
-            //case enums.uv.axis.Z:
               if(latlon_cache[pta]) latlon = latlon_cache[pta]; else latlon = xyz_to_hp(-uvpoint[0], uvpoint[2], -uvpoint[1]);
               if (!latlon_cache[pta]) latlon_cache[pta] = latlon;
               if(latlon_cache[ptb]) latlonb = latlon_cache[ptb]; else latlonb = xyz_to_hp(-uvpointb[0], uvpointb[2], -uvpointb[1]);
               if (!latlon_cache[ptb]) latlon_cache[ptb] = latlonb;
               if(latlon_cache[ptc]) latlonc = latlon_cache[ptc]; else latlonc = xyz_to_hp(-uvpointc[0], uvpointc[2], -uvpointc[1]);
               if (!latlon_cache[ptc]) latlon_cache[ptc] = latlonc;
-              //break;
             } //if
 
             if (Math.abs(latlon[0]-latlonb[0])>M_HALF_PI && Math.abs(latlon[0]-latlonc[0])>M_HALF_PI) {
@@ -7521,8 +7106,6 @@ CubicVR.RegisterModule("UVMapper",function(base) {
                 latlon[1]+=M_TWO_PI;
               }
             }
-
-            // convert longitude and latitude to texture space coordinates, multiply by wrap height and width
             lon = 1.0 - latlon[0] / M_TWO_PI;
             lat = 0.5 - latlon[1] / Math.PI;
 
@@ -7537,19 +7120,12 @@ CubicVR.RegisterModule("UVMapper",function(base) {
             v = lat;
 
             obj.faces[i].setUV([u, v], j);
-            //break;
           }
           else {
-
-            // case enums.uv.projection.UV:
-            //   // not handled here..
-            // break;
           //default:
-            // else mapping cannot be handled here, this shouldn't have happened :P
             u = 0;
             v = 0;
             obj.faces[i].setUV([u, v], j);
-            //break;
           } //if
         } //for
       } //for - faces
@@ -7570,8 +7146,6 @@ CubicVR.RegisterModule("Renderer",function(base){
   var undef = base.undef;
   var enums = base.enums;
   var GLCore = base.GLCore;
-  
-  /* Render functions */
   function cubicvr_renderObject(obj_in,camera,o_matrix,lighting,skip_trans,skip_solid,force_wire) {
     var has_transparency = false;
     skip_trans = skip_trans||false;
@@ -7588,8 +7162,6 @@ CubicVR.RegisterModule("Renderer",function(base){
     var lcount = 0;
     var j;
     var mat = null;
-  //  var nullAmbient = [0,0,0];
-  //  var tmpAmbient = base.globalAmbient;
 
     var materials = obj_in.instanceMaterials||obj_in.materials;
 
@@ -7647,13 +7219,9 @@ CubicVR.RegisterModule("Renderer",function(base){
         }
 
         if (obj_in.segment_state[j]) {
-          // ...
         } else if (len > this_len) {
           ofs += this_len*2;
           len -= this_len;
-          
-          // start lighting loop
-         // start inner
         if (!numLights) {
          mat.use(0,0);
 
@@ -7729,13 +7297,7 @@ CubicVR.RegisterModule("Renderer",function(base){
             } else {
                 gl.drawElements(gl.TRIANGLES, len, gl.UNSIGNED_SHORT, ofs);
             }            
-            // var err = gl.getError();
-            // if (err) {
-            //   var uv = mshader.uniforms["vertexTexCoord"]; 
             //   var un = mshader.uniforms["aNormal"];
-            //   console.log(obj_in.compiled.gl_uvs!==null,obj_in.compiled.gl_normals!==null, un, uv, len, ofs, subcount);
-            //   
-            //   throw new Error('webgl error on mesh: ' + obj_in.name);
             // }
 
             subcount += nLights;
@@ -7747,8 +7309,6 @@ CubicVR.RegisterModule("Renderer",function(base){
             gl.depthFunc(gl.LEQUAL);
           }
         }
-
-        /// end inner
 
 
           ofs += len*2;  // Note: unsigned short = 2 bytes
@@ -7761,9 +7321,6 @@ CubicVR.RegisterModule("Renderer",function(base){
       }
 
       if (!drawn && obj_in.segment_state[j] && mat.visible) {
-        // this is an exact copy/paste of above
-        // start lighting loop
-         // start inner
         if (!numLights) {
          mat.use(0,0);
 
@@ -7839,13 +7396,7 @@ CubicVR.RegisterModule("Renderer",function(base){
             } else {
                 gl.drawElements(gl.TRIANGLES, len, gl.UNSIGNED_SHORT, ofs);
             }            
-            // var err = gl.getError();
-            // if (err) {
-            //   var uv = mshader.uniforms["vertexTexCoord"]; 
             //   var un = mshader.uniforms["aNormal"];
-            //   console.log(obj_in.compiled.gl_uvs!==null,obj_in.compiled.gl_normals!==null, un, uv, len, ofs, subcount);
-            //   
-            //   throw new Error('webgl error on mesh: ' + obj_in.name);
             // }
 
             subcount += nLights;
@@ -7857,8 +7408,6 @@ CubicVR.RegisterModule("Renderer",function(base){
             gl.depthFunc(gl.LEQUAL);
           }
         }
-
-        /// end inner
 
         ofs += len*2;
       }
@@ -7892,8 +7441,6 @@ CubicVR.RegisterModule("Light", function (base) {
     var util = base.util;
 
     var cubicvr_identity = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
-
-    // Light Types
     enums.light = {
         type: {
             NULL: 0,
@@ -7902,7 +7449,6 @@ CubicVR.RegisterModule("Light", function (base) {
             SPOT: 3,
             AREA: 4,
             DEPTH_PACK: 5,
-            // this lets us pass the shadow stage in as a light definition
             SPOT_SHADOW: 6,
             SPOT_SHADOW_PROJECTOR: 7,
             MAX: 8
@@ -7995,8 +7541,6 @@ CubicVR.RegisterModule("Light", function (base) {
         if ((this.light_type === enums.light.type.SPOT_SHADOW || this.light_type === enums.light.type.SPOT_SHADOW_PROJECTOR) || this.light_type === enums.light.type.AREA && base.features.lightShadows) {
             this.setShadow(this.map_res);
         }
-
-        // modelview / normalmatrix transform outputs
         this.lDir = [0, 0, 0];
         this.lPos = [0, 0, 0];
         this.parent = null;
@@ -8086,10 +7630,6 @@ CubicVR.RegisterModule("Light", function (base) {
             } else if (controllerId === enums.motion.INTENSITY) {
                 this.intensity = value;
             }
-
-            // else if (controllerId === enums.motion.ROT) {
-            //    this.rotation[motionId] = value;
-            //  }
         },
 
         getAABB: function () {
@@ -8193,11 +7733,7 @@ CubicVR.RegisterModule("Light", function (base) {
             this.dummyCam = new base.Camera(this.map_res, this.map_res, 80, 0.1, this.distance);
             this.dummyCam.calc_nmatrix = false; // don't need a normal matrix, save some cycles and determinant issues
             this.dummyCam.setTargeted(true);
-            // if(!(strncmp(cone_tex.c_str(),"null",4) == 0 || strncmp(cone_tex.c_str(),"Null",4) == 0 || strncmp(cone_tex.c_str(),"NULL",4) == 0))
-            // {
-            //  coneTex = Texture::create(cone_tex);
             //  has_projector = true;
-            // }
             this.has_shadow = true;
         },
 
@@ -8238,8 +7774,6 @@ CubicVR.RegisterModule("Light", function (base) {
                var lPos = mat4.vec3_multiply(this.position, this.parent.tMatrix);
                this.dummyCam.lookat(this.position[0], this.position[1], this.position[2], this.position[0] + this.direction[0] * 10.0, this.position[1] + this.direction[1] * 10.0, this.position[2] + this.direction[2] * 10.0, 0, 1, 0);
                mat4.multiply(this.dummyCam.mvMatrix.slice(0),mat4.inverse(this.parent.tMatrix),this.dummyCam.mvMatrix);
-               
-//               this.dummyCam.lookat(lPos[0], lPos[1], lPos[2], lPos[0] + lDir[0] * 10.0, lPos[1] + lDir[1] * 10.0, lPos[2] + lDir[2] * 10.0, 0, 1, 0);
             } else {
               this.dummyCam.lookat(this.position[0], this.position[1], this.position[2], this.position[0] + this.direction[0] * 10.0, this.position[1] + this.direction[1] * 10.0, this.position[2] + this.direction[2] * 10.0, 0, 1, 0);
             }
@@ -8278,7 +7812,6 @@ CubicVR.RegisterModule("Light", function (base) {
             this.dummyCam.setClip(0.01, 1); // set defaults
             var dist = 0.0;
             var sx = Math.tan((this.areaCam.fov / 2.0) * (Math.PI / 180.0));
-            // var far_clip_range = far_range;
             var vview = vec3.subtract(this.areaCam.target, this.areaCam.position);
             vview[1] = 0;
             vview = vec3.normalize(vview);
@@ -8312,8 +7845,6 @@ CubicVR.RegisterModule("Light", function (base) {
 
             var nearclip = this.dummyCam.nearclip;
             var farclip = this.dummyCam.farclip * (Math.abs(this.direction[1]) * areaHeight);
-
-            // adjust clipping ranges to fit ortho bounds
             var aabb = this.orthoBounds(this.position, this.distance, this.distance, this.dummyCam.pMatrix, this.dummyCam.mvMatrix, this.dummyCam.nearclip);
             var diff;
 
@@ -8328,8 +7859,6 @@ CubicVR.RegisterModule("Light", function (base) {
                 diff = (aabb[1][1] - this.areaFloor);
                 farclip += diff / Math.abs(this.direction[1]);
             }
-
-            //if (nearclip < 0.01) 
             nearclip = 0.01;
             this.dummyCam.nearclip = nearclip;
             this.dummyCam.farclip = farclip;
@@ -8607,16 +8136,11 @@ CubicVR.RegisterModule("Camera", function (base) {
         unProject: function (winx, winy, winz) {
             var mat4 = base.mat4;
             var vec3 = base.vec3;
-
-            //    var tmpClip = this.nearclip;
-            //    if (tmpClip < 1.0) { this.nearclip = 1.0; this.calcProjection(); }
             var viewport = [0, 0, this.width, this.height];
 
             var p = [(((winx - viewport[0]) / (viewport[2])) * 2) - 1, -((((winy - viewport[1]) / (viewport[3])) * 2) - 1), 1, 1.0];
 
             var invp = mat4.vec4_multiply(mat4.vec4_multiply(p, mat4.inverse(this.pMatrix)), mat4.inverse(this.mvMatrix));
-
-            //    if (tmpClip < 1.0) { this.nearclip = tmpClip; this.calcProjection(); }
             var result = [invp[0] / invp[3], invp[1] / invp[3], invp[2] / invp[3]];
             
             if (winz !== undef) {
@@ -8633,17 +8157,11 @@ CubicVR.RegisterModule("Camera", function (base) {
             var p = [objx, objy, objz, 1.0];
 
             var mp = mat4.vec4_multiply(mat4.vec4_multiply(p, this.mvMatrix), this.pMatrix);
-            
-            // depth hack, not sure why this broke..
             mp[2] = base.vec3.length(base.vec3.subtract([objx,objy,objz],this.position));
 
             return [((mp[0] / mp[3] + 1.0) / 2.0) * this.width, ((-mp[1] / mp[3] + 1.0) / 2.0) * this.height, mp[2]];
         }
     };
-
-
-    /*** Auto-Cam Prototype ***/
-
     function AutoCameraNode(pos) {
         this.position = (pos !== undef) ? pos : [0, 0, 0];
     }
@@ -9095,7 +8613,6 @@ CubicVR.RegisterModule("Motion", function (base) {
             var k1 = this.keys;
 
             while (k1) {
-                // update first/last key
                 if (this.firstKey.time > time) {
                     this.firstKey = tempKey;
                 } else if (this.lastKey.time < time) {
@@ -9133,24 +8650,16 @@ CubicVR.RegisterModule("Motion", function (base) {
             var key0, key1, skey, ekey;
             var t, h1, h2, h3, h4, inval, out, offset = 0.0;
             var noff;
-
-            /* if there's no key, the value is 0 */
             if (this.nKeys === 0) {
                 return 0.0;
             }
-
-            /* if there's only one key, the value is constant */
             if (this.nKeys === 1) {
                 return (this.keys).value;
             }
-
-            /* find the first and last keys */
             skey = this.firstKey;
             ekey = this.lastKey;
 
             var tmp, behavior;
-
-            /* use pre-behavior if time is before first key time */
             if (time < skey.time) {
                 behavior = this.in_behavior;
 
@@ -9180,8 +8689,6 @@ CubicVR.RegisterModule("Motion", function (base) {
                 }
 
             }
-
-            /* use post-behavior if time is after last key time */
             else if (time > ekey.time) {
                 behavior = this.out_behavior;
 
@@ -9210,9 +8717,6 @@ CubicVR.RegisterModule("Motion", function (base) {
                     return inval * (time - ekey.time) + ekey.value;
                 }
             }
-
-            // get the endpoints of the interval being evaluated
-            // if we have a last key, it's likely we haven't moved far on the list
             if (this.lastKey0) {
                 if (time > this.lastKey0.time) {
                     key0 = this.lastKey0;
@@ -9233,22 +8737,13 @@ CubicVR.RegisterModule("Motion", function (base) {
             }
 
             key1 = key0.next;
-
-            // cache last key
             this.lastKey0 = key0;
-
-
-            // check for singularities first
             if (time === key0.time) {
                 return key0.value + offset;
             } else if (time === key1.time) {
                 return key1.value + offset;
             }
-
-            // get interval length, time in [0, 1]
             t = (time - key0.time) / (key1.time - key0.time);
-
-            // interpolate
             var keyShape = key1.shape;
 
             if (keyShape === enums.envelope.shape.TCB || keyShape === enums.envelope.shape.BEZI || keyShape === enums.envelope.shape.HERM) {
@@ -9307,8 +8802,6 @@ CubicVR.RegisterModule("Motion", function (base) {
             this.env_init = env_init;
             this.key_init = key_init;            
         }
-    
-        //  this.rscale = 1;
     }
 
     Motion.prototype = {
@@ -9376,8 +8869,6 @@ CubicVR.RegisterModule("Motion", function (base) {
             for (var i in this.controllers) {
                 if (this.controllers.hasOwnProperty(i)) {
                     var ic = parseInt(i, 10);
-
-                    /* Special case quaternion fix for ZY->YZ rotation envelopes */
                     if (this.yzflip && ic === enums.motion.ROT) // assume channel 0,1,2
                     {
                         if (!this.q) {
@@ -9388,8 +8879,6 @@ CubicVR.RegisterModule("Motion", function (base) {
                         var x = this.controllers[i][0].evaluate(index);
                         var y = this.controllers[i][1].evaluate(index);
                         var z = this.controllers[i][2].evaluate(index);
-
-                        //q.fromEuler(x*this.rscale, z*this.rscale, -y*this.rscale);
                         q.fromEuler(x, z, -y);
 
 
@@ -9541,12 +9030,9 @@ CubicVR.RegisterModule("EventHandler",function(base) {
     this.properties = obj_init.properties||{};
     this.event_properties = obj_init.event_properties||{};
     this.buffered = obj_init.buffered||false;
-    // TODO: use weight to allow event stack sorting
     this.weight = (obj_init.weight===undef)?-1:obj_init.weight;
     
     this.subject = null;
-
-    // internal
     this.t_sleep = 0;
     this.t_active = 0;
     this.t_updatecall = 0;
@@ -9813,7 +9299,6 @@ CubicVR.RegisterModule("EventHandler",function(base) {
       return !!this.listeners[eventId];
     },      
     triggerEvent: function(eventId, properties) {
-      // TODO: warn of collision or make it work?  For now we can check the return to see what's already set (persistent).
       if (!this.listeners[eventId]) return null;
       
       if (this.eventProperties[eventId] == undef) {
@@ -10281,7 +9766,6 @@ CubicVR.RegisterModule("Scene", function (base) {
                 } //if
             } //if
         },
-        //SceneObject::adjust_octree
         bindChild: function (childSceneObj) {
             if (this.children === null) {
                 this.children = [];
@@ -10323,27 +9807,10 @@ CubicVR.RegisterModule("Scene", function (base) {
                 }
 
                 if (!this.obj || aabbMin === undef || aabbMax === undef) {
-                    // aabbMin=[-1,-1,-1];
-                    // aabbMax=[1,1,1];      
-                    // 
                     // if (this.obj.bb.length===0)
-                    // {
                     this.aabb = [vec3.add([-1, -1, -1], this.position), vec3.add([1, 1, 1], this.position)];
                     return this.aabb;
-                    // }
                 }
-
-/*
-        if (this.scale[0] !== 1 || this.scale[1] !== 1 || this.scale[2] !== 1) {
-          aabbMin[0] *= this.scale[0];
-          aabbMin[1] *= this.scale[1];
-          aabbMin[2] *= this.scale[2];
-          aabbMax[0] *= this.scale[0];
-          aabbMax[1] *= this.scale[1];
-          aabbMax[2] *= this.scale[2];
-        }
-        */
-
                 var obj_aabb = aabbMin;
                 var obj_bounds = vec3.subtract(aabbMax, aabbMin);
 
@@ -10423,8 +9890,6 @@ CubicVR.RegisterModule("Scene", function (base) {
             this.skybox = options.skybox || null;
             this.name = options.name || "scene" + sceneUUID;
             this.wireframe = options.wireframe||false;
-    
-            // purposely redundant
             this.destroy = options.destroy ||
             function () {};
             this.update = options.update ||
@@ -10501,7 +9966,6 @@ CubicVR.RegisterModule("Scene", function (base) {
             if (octree.init) {
                 octree.init(this);
             } //if
-            // rebind any active lights
             var tmpLights = this.lights;
             this.lights = [];
 
@@ -10528,10 +9992,8 @@ CubicVR.RegisterModule("Scene", function (base) {
                 } //for
             } //if
         },
-        //Scene::attachOctree
         setSkyBox: function (skybox) {
             this.skybox = skybox;
-            //this.bindSceneObject(skybox.scene_object, null, false);
         },
 
         getSceneObject: function (name) {
@@ -10577,8 +10039,6 @@ CubicVR.RegisterModule("Scene", function (base) {
             if (idx  >= 0) {
                 this.lights.splice(idx, 1);
             }
-
-            // TODO: Remove from Octrees as well (global_lights, dynamic_lights).
         },
 
         removeSceneObject: function (sceneObj) {
@@ -10616,17 +10076,6 @@ CubicVR.RegisterModule("Scene", function (base) {
                     this.removeSceneObject(sceneObj.children[i]);
                 }
             }
-
-            //todo: remove from octree!
-/*  if (this.octree !== undef && (use_octree === undef || use_octree === "true")) {
-        if (sceneObj.id < 0) {
-          sceneObj.id = scene_object_uuid;
-          ++scene_object_uuid;
-        } //if
-        this.sceneObjectsById[sceneObj.id] = sceneObj;
-        AABB_reset(sceneObj.octree_aabb, sceneObj.position);
-        this.octree.insert(sceneObj);
-      } //if */
         },
 
         bindLight: function (lightObj, use_octree) {
@@ -10773,8 +10222,6 @@ CubicVR.RegisterModule("Scene", function (base) {
             if (!base.features.lightShadows) return;
 
             var currentBuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
-
-            // Begin experimental shadowing code..
             var has_shadow = false;
             var dims = gl.getParameter(gl.VIEWPORT);
             for (var l = 0, lMax = this.lights.length; l < lMax; l++) {
@@ -10783,8 +10230,6 @@ CubicVR.RegisterModule("Scene", function (base) {
                 if ((light.light_type == enums.light.type.SPOT_SHADOW) || (light.light_type == enums.light.type.SPOT_SHADOW_PROJECTOR) || (light.light_type == enums.light.type.AREA)) {
                     has_shadow = true;
                     var lDepthPack = [new base.Light(enums.light.type.DEPTH_PACK)];
-
-                    // shadow state depth
                     if ((light.light_type === enums.light.type.AREA)) {
                         light.areaCam = this.camera;
                         light.updateAreaLight();
@@ -10817,9 +10262,6 @@ CubicVR.RegisterModule("Scene", function (base) {
             if (has_shadow) {
                 gl.viewport(dims[0], dims[1], dims[2], dims[3]);
             }
-
-
-            // End experimental shadow code..  
         },
 
         updateCamera: function () {
@@ -10860,9 +10302,7 @@ CubicVR.RegisterModule("Scene", function (base) {
                     if (scene_object.visible === false || (use_octree && (scene_object.ignore_octree || scene_object.drawn_this_frame === true || scene_object.culled === true))) {
                         continue;
                     } //if
-                    //lights = frustum_hits.lights;
                     lights = scene_object.dynamic_lights;
-                    //lights = this.lights;
                     lights = lights.concat(scene_object.static_lights);
                     lights = lights.concat(this.global_lights);
                     if (this.collect_stats) {
@@ -10984,9 +10424,6 @@ CubicVR.RegisterModule("Scene", function (base) {
             var use_octree = this.octree !== undef;
             this.lights_rendered = 0;
             if (use_octree) {
-//                for (var i = 0, l = this.dynamic_lights.length; i < l; ++i) {
-//                    var light = this.dynamic_lights[i];
-//                    light.doTransform();
 //                } //for
                 this.octree.reset_node_visibility();
                 this.octree.cleanup();
@@ -10998,8 +10435,6 @@ CubicVR.RegisterModule("Scene", function (base) {
             this.updateCamera();
 
             this.updateShadows(true);
-            
-            // TODO: temporary until dependent code is updated.
             this.shadows_updated = false;
             
             var i, iMax;
@@ -11021,8 +10456,6 @@ CubicVR.RegisterModule("Scene", function (base) {
 
                 this.renderSceneObject(scene_object,this.camera,lights,true,true,false,transparencies);
             } //for
-
-            // TODO: sort transparencies..?
 
             for (i = 0, iMax = transparencies.length; i < iMax; i++) {
                 this.renderSceneObject(transparencies[i],this.camera,lights,false,false,true);                
@@ -11206,7 +10639,6 @@ CubicVR.RegisterModule("Scene", function (base) {
         },
 
         isMeshBinEmpty: function (binId) {
-            //console.log('isMeshBinEmpty[' + binId + '] = ' + (this.meshBinPtr[binId] === this.meshBin[binId].length) + ' meshBinPtr = ' + this.meshBinPtr[binId] + ' meshBin.length = ' + this.meshBin[binId].length);
             return this.meshBinPtr[binId] === this.meshBin[binId].length;
         },
 
@@ -11215,10 +10647,7 @@ CubicVR.RegisterModule("Scene", function (base) {
 
             if (img !== null) {
                 img.src = img.deferredSrc;
-                //     return true;
             }
-
-            //   return false;
         },
 
         getNextImage: function (binId) {
@@ -11233,16 +10662,9 @@ CubicVR.RegisterModule("Scene", function (base) {
         },
 
         isImageBinEmpty: function (binId) {
-            //console.log('isImageBinEmpty[' + binId + '] = ' + (this.imageBinPtr[binId] === this.imageBin[binId].length));
             return this.imageBinPtr[binId] === this.imageBin[binId].length;
         }
     };
-
-
-
-
-    /* SkyBox */
-
     function SkyBox(in_obj) {
         var texture = in_obj.texture;
         var mapping = in_obj.mapping;
@@ -11322,8 +10744,6 @@ CubicVR.RegisterModule("PostProcess", function(base) {
   var GLCore = base.GLCore;
   var enums = CubicVR.enums;
   var makeFSQuad, destroyFSQuad, renderFSQuad;  
- 
-  /* Post Processing */
   enums.post = {
     output: {
       REPLACE: 0,
@@ -11332,24 +10752,6 @@ CubicVR.RegisterModule("PostProcess", function(base) {
       ALPHACUT: 3
     }
   };
-
-  /*
-      PostProcessShader:
-      
-      shaderInfo
-      {
-        enabled: enabled (default true)
-        shader_vertex: id or url for vertex shader
-        shader_fragment: id or url for fragment shader
-        outputMode: method of output for this shader
-        init: function to perform to initialize shader
-        onresize: function to perform on resize; params ( shader, width, height )
-        onupdate: function to perform on update; params ( shader )
-        outputDivisor: use custom output buffer size, divisor of (outputDivisor) eg. 1 (default) = 1024x768, 2 = 512x384, 3 = 256x192
-      }
-
-    */
-
   var postProcessDivisorBuffers = [];
   var postProcessDivisorQuads = [];
 
@@ -11370,8 +10772,6 @@ CubicVR.RegisterModule("PostProcess", function(base) {
 
     this.shader = new CubicVR.Shader(shaderInfo.shader_vertex, shaderInfo.shader_fragment);
     this.shader.use();
-
-    // set defaults
     this.shader.addUVArray("aTex");
     this.shader.addVertexArray("aVertex");
     this.shader.addInt("srcTex", 0);
@@ -11382,9 +10782,6 @@ CubicVR.RegisterModule("PostProcess", function(base) {
       this.init(this.shader);
     }
   }
-
-  /* New post-process shader chain -- to replace postProcessFX */
-
   function PostProcessChain(width, height, accum) {
     var gl = GLCore.gl;
 
@@ -11392,8 +10789,6 @@ CubicVR.RegisterModule("PostProcess", function(base) {
     this.height = height;
     this.accum = (accum === undef)?false:true;
     this.vTexel = [1.0 / this.width, 1.0 / this.height, 0];
-
-    // buffers
     this.captureBuffer = new CubicVR.RenderBuffer(width, height, true);
     this.bufferA = new CubicVR.RenderBuffer(width, height, false);
     this.bufferB = new CubicVR.RenderBuffer(width, height, false);
@@ -11445,8 +10840,6 @@ CubicVR.RegisterModule("PostProcess", function(base) {
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     this.end();
-
-    // quad
     this.fsQuad = this.makeFSQuad(this.width, this.height);
 
     this.shaders = [];
@@ -11542,7 +10935,6 @@ CubicVR.RegisterModule("PostProcess", function(base) {
       if (shader.outputDivisor && shader.outputDivisor != 1)
       {
         if (postProcessDivisorBuffers[shader.outputDivisor] === undef) {
-          // XXXhumph - this change needs a check, if block was missing braces, might have too much in here...
           var divw = (this.width/shader.outputDivisor) | 0;
           var divh = (this.height/shader.outputDivisor) | 0;
           postProcessDivisorBuffers[shader.outputDivisor] = new CubicVR.RenderBuffer(divw, divh, false);  
@@ -11658,9 +11050,7 @@ CubicVR.RegisterModule("PostProcess", function(base) {
         this.inputBuffer.texture.use(gl.TEXTURE0);
 
         var o_mode = s.outputMode;
-        //switch (s.outputMode) {
         if (o_mode === enums.post.output.REPLACE) {
-        //case enums.post.output.REPLACE:
           if (s.outputDivisor !== 1) {
             postProcessDivisorBuffers[s.outputDivisor].use();
           }
@@ -11669,11 +11059,8 @@ CubicVR.RegisterModule("PostProcess", function(base) {
           } //if
           gl.clearColor(0.0, 0.0, 0.0, 1.0);
           gl.clear(gl.COLOR_BUFFER_BIT);
-          //break;
         }
         else if (o_mode === enums.post.output.ADD || o_mode === enums.post.output.BLEND) {
-        //case enums.post.output.ADD:
-        //case enums.post.output.BLEND:
           if (s.outputDivisor !== 1) {
             postProcessDivisorBuffers[s.outputDivisor].use();
           }
@@ -11683,7 +11070,6 @@ CubicVR.RegisterModule("PostProcess", function(base) {
 
           gl.clearColor(0.0, 0.0, 0.0, 1.0);
           gl.clear(gl.COLOR_BUFFER_BIT);
-          //break;
         } //if
 
         if (s.onupdate !== null) {
@@ -11712,13 +11098,7 @@ CubicVR.RegisterModule("PostProcess", function(base) {
         else {
           this.renderFSQuad(s.shader, this.fsQuad);      
         } //if
-
-        //switch (s.outputMode) {
-        
-        //case enums.post.output.REPLACE:
-        //  break;
         if (o_mode === enums.post.output.BLEND) {
-        //case enums.post.output.BLEND:
           this.swap();
           this.outputBuffer.use();
 
@@ -11737,10 +11117,8 @@ CubicVR.RegisterModule("PostProcess", function(base) {
           this.renderFSQuad(this.copy_shader.shader, this.fsQuad);
 
           gl.disable(gl.BLEND);
-          //break;
         }
         else if (o_mode === enums.post.output.ADD) {
-        //case enums.post.output.ADD:
           this.swap();
           this.outputBuffer.use();
 
@@ -11757,7 +11135,6 @@ CubicVR.RegisterModule("PostProcess", function(base) {
           this.renderFSQuad(this.copy_shader.shader, this.fsQuad);
 
           gl.disable(gl.BLEND);
-          //break;
         } //if
 
         this.end();
@@ -11829,8 +11206,6 @@ CubicVR.RegisterModule("PostProcess", function(base) {
        if (depth_enabled) {
          this.depth = gl.createRenderbuffer();
        }
-
-       // configure fbo
        gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
 
        if (depth_enabled) {
@@ -11847,29 +11222,15 @@ CubicVR.RegisterModule("PostProcess", function(base) {
            gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, gl.RENDERBUFFER, this.depth); 
          }
        }
-
-       // if (depth_enabled) {
-       //   gl.bindRenderbuffer(gl.RENDERBUFFER, this.depth);
-       //   gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
        // }
-
-       //  GL_DEPTH_COMPONENT32 0x81A7
-       //  if (depth_enabled) { gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT, w, h); }
-       // if (depth_enabled) {
        //   gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this.depth);
-       // }
 
-       // init texture
        this.texture = new CubicVR.Texture();
        gl.bindTexture(gl.TEXTURE_2D, base.Textures[this.texture.tex_id]);
-
-       // configure texture params
        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-       // clear buffer
        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, base.Textures[this.texture.tex_id], 0);
@@ -11889,23 +11250,15 @@ CubicVR.RegisterModule("PostProcess", function(base) {
 
      sizeParam: function(t) {
        return t;
-       // var s = 32;
        //
-       // while (t > s) s *= 2;
-       //
-       // return s;
      },
 
      use: function() {
        var gl = GLCore.gl;
 
        gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
-       //  if (this.depth !== null) { gl.bindRenderbuffer(gl.RENDERBUFFER, this.depth); }
-       //  gl.viewport(0, 0, this.width, this.height);
      }
   };
-
-  // Full-screen quad related
   var fsQuad = {
     make:PostProcessChain.prototype.makeFSQuad,
     destroy:PostProcessChain.prototype.destroyFSQuad,
@@ -11948,7 +11301,6 @@ CubicVR.RegisterModule("Layout", function (base) {
     View.prototype = {
         addSubview: function (view) {
             this.childViews.push(view);
-            //  this.superView.makePanel(view);
             view.superView = this;
         },
 
@@ -12012,7 +11364,6 @@ CubicVR.RegisterModule("Layout", function (base) {
                   "varying vec2 vTex;", 
                   "void main(void) {", 
                     "vec4 color = texture2D(srcTex, vTex)*vec4(tint,1.0);",
-                  // "if (color.a == 0.0) discard;",
                     "gl_FragColor = color;", 
                   "}"
                 ].join("\n"),
@@ -12028,7 +11379,6 @@ CubicVR.RegisterModule("Layout", function (base) {
 
         addSubview: function (view) {
             this.childViews.push(view);
-            //  this.makePanel(view);
             view.superView = this;
         },
 
@@ -12092,8 +11442,6 @@ CubicVR.RegisterModule("Layout", function (base) {
             }
 
             view.texture.use(gl.TEXTURE0);
-
-            //  this.renderPanel(view,this.panel);        
             gl.drawArrays(gl.TRIANGLES, 0, 6);
 
             if (view.blend) {
@@ -12169,9 +11517,6 @@ CubicVR.RegisterModule("Primitives",function(base) {
 
   var M_TWO_PI = 2.0 * Math.PI;
   var M_HALF_PI = Math.PI / 2.0;
-
-  /* Procedural Objects */
-
   function cubicvr_latheObject(obj_in, pointList, lathe_divisions, material, transform, uvmapper) {
     var mat4 = base.mat4;
     var vec3 = base.vec3;
@@ -12257,7 +11602,6 @@ CubicVR.RegisterModule("Primitives",function(base) {
 
       if (uvm !== null)
       {
-        // Calculate face normals (used for UV mapping and lighting), todo: face range+offset
         obj_in.calcFaceNormals();
 
         uvm.apply(obj_in, material);  
@@ -12313,7 +11657,6 @@ CubicVR.RegisterModule("Primitives",function(base) {
 
       if (uvm !== null)
       {
-        // Calculate face normals (used for UV mapping and lighting), todo: face range+offset
         mesh.calcFaceNormals();
 
         uvm.apply(mesh, mat);  
@@ -12391,7 +11734,6 @@ CubicVR.RegisterModule("Primitives",function(base) {
 
       if (uvm !== null)
       {
-        // Calculate face normals (used for UV mapping and lighting), todo: face range+offset
         boxObj.calcFaceNormals();
 
         uvm.apply(boxObj, box_mat);  
@@ -12404,8 +11746,6 @@ CubicVR.RegisterModule("Primitives",function(base) {
       var pointList = [],
        thick = outer_radius-inner_radius,
        radius = inner_radius+(thick)/2.0;
-
-      // generate a circle on the right side (radius) of the X/Y axis, circle radius of (thick)
       var step = (M_TWO_PI / lat),
         theta = 0;
       for (var i = 0; i <= lat; i ++) {
@@ -12431,8 +11771,6 @@ CubicVR.RegisterModule("Primitives",function(base) {
 
       lat = (lat /= 2) | 0;
       lon = lon | 0;
-
-      // generate a half-circle on the right side of the x/y axis
       var step = (Math.PI / lat);
       var theta = -M_HALF_PI;
       for (var i = 0; i <= lat; i ++) {
@@ -12654,7 +11992,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
           }
       },
       fixukaxis: function (up_axis, mot, chan, val) {
-          // if (mot === enums.motion.POS && chan === enums.motion.Y && up_axis === enums.motion.Z) return -val;
           if (mot === enums.motion.POS && chan === enums.motion.Z && up_axis === enums.motion.Z) {
               return -val;
           }
@@ -12723,36 +12060,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
           if (matrix && !translate && !rotate && !scale) {
           
             return retObj;  // TODO: fix this up
-/*
-  // experimental            
-            var m = util.floatDelimArray(matrix.$," ");
-            
-            m = [m[0],m[4],m[8],m[12],
-                 m[1],m[5],m[9],m[13],
-                 m[2],m[6],m[10],m[14],
-                 m[3],m[7],m[11],m[15]];
-//console.log(m);
-//            retObj.matrix = m;
-            
-  //          return retObj;
-            
-            var quat = new CubicVR.Quaternion();
-            quat.fromMatrix(m);
-
-            retObj.position = collada_tools.fixuaxis(up_axis, CubicVR.mat4.vec3_multiply([0,0,0],m));
-
-            var invTrans = CubicVR.vec3.subtract([0,0,0],retObj.position);
-            
-            CubicVR.mat4.translate(invTrans[0],invTrans[1],invTrans[2],m);
-
-            retObj.rotation = quat.toEuler();
-
-            var invRot = CubicVR.vec3.subtract([0,0,0],retObj.rotation);
-           
-            CubicVR.mat4.rotate(invRot[0],invRot[1],invRot[2],m);
-
-            retObj.scale = [m[0], -m[5], m[10]];
-*/
           }
 
           if (translate && translate.$) {
@@ -12780,20 +12087,13 @@ CubicVR.RegisterModule("COLLADA",function(base) {
           if (scale) {
               retObj.scale = collada_tools.fixscaleaxis(up_axis, util.floatDelimArray(scale.$, " "));
           }
-
-          // var cl_matrix = scene_node.getElementsByTagName("matrix");
-          // 
-          // if (cl_matrix.length)
           // {
-          //   console.log(util.collectTextNode(cl_matrix[0]));
-          // }
           return retObj;
       }
   };
 
 
   function cubicvr_parseCollada(meshUrl, prefix, deferred_bin) {
-      //  if (MeshPool[meshUrl] !== undef) return MeshPool[meshUrl];
       var util = base.util;
       var tech;
       var sourceId;
@@ -12834,9 +12134,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
           cameras: [],
           animations: []
       };
-
-
-      // var up_axis = 1; // Y
       if (cl_source.asset) {
           var sAxis = cl_source.asset.up_axis.$;
           if (sAxis === "X_UP") {
@@ -12870,7 +12167,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
                   if (prefix !== undef && (imageSource.lastIndexOf("\\") !== -1)) {
                       imageSource = imageSource.substr(imageSource.lastIndexOf("\\") + 1);
                   }
-                  // console.log("Image reference: "+imageSource+" @"+imageId+":"+imageName);
                   clib.images[imageId] = {
                       source: imageSource,
                       id: imageId,
@@ -12880,8 +12176,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
             }
           }
       }
-
-      // Effects
       var effectId;
       var effectCount, effectMax;
       var tCount, tMax, inpCount, inpMax;
@@ -12966,7 +12260,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
 
                               var img_path = prefix + "/" + clib.images[initFrom].source;
                               effect.surfaces[paramId].source = img_path;
-                              //                console.log(prefix+"/"+clib.images[initFrom].source);
                           }
                       } else if (cl_param.sampler2D) {
                           effect.samplers[paramId] = {};
@@ -12988,14 +12281,11 @@ CubicVR.RegisterModule("COLLADA",function(base) {
               var cl_technique = cl_effect.profile_COMMON.technique;
 
               if (cl_technique && !cl_technique.length) cl_technique = [cl_technique];
-
-              //            effect.material = new Material(effectId);
               effect.material = {
                   textures_ref: []
               };
 
               for (tCount = 0, tMax = cl_technique.length; tCount < tMax; tCount++) {
-                  //        if (cl_technique[tCount].getAttribute("sid") === 'common') {
                   tech = cl_technique[tCount].blinn;
 
                   if (!tech) {
@@ -13006,8 +12296,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
                   }
 
                   if (tech) {
-                      // for (var eCount = 0, eMax = tech[0].childNodes.length; eCount < eMax; eCount++) {
-                      //   var node = tech[0].childNodes[eCount];
                       for (var tagName in tech) {
                           var node = tech[tagName];
 
@@ -13046,8 +12334,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
                           } else if (tagName == "index_of_refraction") {
                             nop();
                           }
-
-                          // case "transparency": if (f!==false) effect.material.opacity = 1.0-f; break;
                           if (t !== false) {
                               var srcTex = effect.surfaces[effect.samplers[t].source].source;
                               if (tagName == "emission") {
@@ -13093,8 +12379,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
               }
           }
       }
-
-      // End Effects
 
       var cl_lib_mat_inst = collada_tools.getAllOf(cl_source, "instance_geometry");
 
@@ -13164,13 +12448,9 @@ CubicVR.RegisterModule("COLLADA",function(base) {
                   var currentMaterial;
 
                   var cl_geomesh = cl_geo_node[meshCount].mesh;
-
-                  // console.log("found "+meshUrl+"@"+meshName);
                   if (cl_geomesh) {
                       meshId = cl_geo_node[meshCount]["@id"];
                       meshName = cl_geo_node[meshCount]["@name"];
-
-                      //                    MeshPool[meshUrl + "@" + meshName] = newObj;
                       var cl_geosources = cl_geomesh.source;
                       if (cl_geosources && !cl_geosources.length) cl_geosources = [cl_geosources];
 
@@ -13323,7 +12603,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
                                   computedLen = ((triangleData.length) / cl_inputmap.length) / 3;
 
                                   if (computedLen !== cl_trianglesCount) {
-                                      //                console.log("triangle data doesn't add up, skipping object load: "+computedLen+" !== "+cl_trianglesCount);
                                   } else {
                                       if (meshData.points.length === 0) {
                                           meshData.points = geoSources[pointRef].data;
@@ -13514,17 +12793,12 @@ CubicVR.RegisterModule("COLLADA",function(base) {
 
                                           var tlist;
                                           if (vert.length) {
-                                              // if (up_axis !== 1)
-                                              // {
-                                              //   vert.reverse();
                                               // }
-                                              // nFace = newObj.addFace(vert);
                                               meshPart.faces.push(vert);
 
                                               if (norm.length) {
                                                   nlist = [];
                                                   for (k = 0, kMax = norm.length; k < kMax; k++) {
-                                                      // newObj.faces[nFace].point_normals[k] = fixuaxis(geoSources[normalRef].data[norm[k]]);
                                                       nlist.push(collada_tools.fixuaxis(clib.up_axis, geoSources[normalRef].data[norm[k]]));
                                                   }
                                                   meshPart.normals.push(nlist);
@@ -13533,7 +12807,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
                                               if (uv.length) {
                                                   tlist = [];
                                                   for (k = 0, kMax = uv.length; k < kMax; k++) {
-                                                      // newObj.faces[nFace].uvs[k] = geoSources[uvRef].data[uv[k]];
                                                       tlist.push(geoSources[uvRef].data[uv[k]]);
                                                   }
                                                   meshPart.texcoords.push(tlist);
@@ -13541,7 +12814,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
                                               if (color.length) {
                                                   tlist = [];
                                                   for (k = 0, kMax = color.length; k < kMax; k++) {
-                                                      // newObj.faces[nFace].uvs[k] = geoSources[uvRef].data[uv[k]];
                                                       tlist.push(geoSources[colorRef].data[color[k]]);
                                                   }
                                                   meshPart.colors.push(tlist);
@@ -13587,10 +12859,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
 
               var cameraId = cl_camera["@id"];
               var cameraName = cl_camera["@name"];
-
-              //      var cl_perspective = cl_camera.getElementsByTagName("perspective");
-              // if (cl_perspective.length) {
-              //   var perspective = cl_perspective[0];
               var cl_yfov = 0;
               var cl_znear = 0;
               var cl_zfar = 0;
@@ -14136,7 +13404,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
           }
 
           if (newObj.faces.length) {            
-            // newObj.calcNormals();
             if (!deferred_bin) {
                 if (!hasNormals) newObj.calcNormals();
                 newObj.triangulateQuads();
@@ -14258,11 +13525,7 @@ CubicVR.RegisterModule("COLLADA",function(base) {
 
                           mtn = targetLight.motion;
                       }
-                      // else
-                      // {
-                      //   console.log("missing",chan.targetName);
                       //   console.log("missing",chan.paramName);
-                      // }
                       if (mtn === null) {
                           continue;
                       }
@@ -14308,8 +13571,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
                               motionTarget = enums.motion.Z;
                           }
                       } else if (pName === "LENS") {
-                          // controlTarget = enums.motion.LENS;
-                          // motionTarget = 4;
                           controlTarget = 10;
                           motionTarget = 10;
                           continue; // disabled, only here for temporary collada files
@@ -14328,10 +13589,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
                       }
 
                       if (targetLight && controlTarget < 3) targetLight.method = enums.light.method.DYNAMIC;
-
-                      // if (up_axis === 2 && motionTarget === enums.motion.Z) motionTarget = enums.motion.Y;
-                      // else if (up_axis === 2 && motionTarget === enums.motion.Y) motionTarget = enums.motion.Z;
-                      // 
                       var ival;
                       for (mCount = 0, mMax = samplerInput.data.length; mCount < mMax; mCount++) { // in the process of being deprecated
                           k = null;
@@ -14404,9 +13661,6 @@ CubicVR.RegisterModule("COLLADA",function(base) {
                                           if (controlTarget === enums.motion.ROT) {
                                               ity = samplerInTangent.data[mCount][1];
                                               oty = samplerOutTangent.data[mCount][1];
-
-                                              //  k.value = k.value/10;
-                                              //  mtn.rscale = 10;
                                               k.param[0] = itx - k.time;
                                               k.param[1] = ity - k.value + ofs;
                                               k.param[2] = otx - k.time;
@@ -14654,12 +13908,8 @@ CubicVR.RegisterModule("GML", function (base) {
             if (do_zmove === undef) {
                 do_zmove = false;
             }
-
-            // temporary defaults
             var divs = 3;
-            //  var divsper = 0.02;
             if (divsper === undef) divsper = 0.02;
-            //  var pwidth = 0.015;
             if (pwidth === undef) pwidth = 0.015;
 
             var extrude = extrude_depth !== 0;
@@ -14782,12 +14032,7 @@ CubicVR.RegisterModule("GML", function (base) {
                     obj.setSegment(faceSegment);
 
                     var arFace = [ptofs + i, ptofs + i + 1, ptofs + i + 3, ptofs + i + 2];
-                    // var ftest = vec3.dot(this.viewvector, triangle.normal(obj.points[arFace[0]], obj.points[arFace[1]], obj.points[arFace[2]]));
                     var faceNum = obj.addFace(arFace);
-
-                    // if (ftest < 0) {
-                    //   this.faces[faceNum].flip();
-                    // }
                     if (extrude) {
                         var arFace2 = [arFace[3] + ptlen - ptofs, arFace[2] + ptlen - ptofs, arFace[1] + ptlen - ptofs, arFace[0] + ptlen - ptofs];
                         faceNum = obj.addFace(arFace2);
@@ -14847,36 +14092,20 @@ CubicVR.RegisterModule("PDF", function (base) {
           pdf,
           pages = [],
           thumbnails = [];
-
-        /**
-         * Number of pages, or 0 if not loaded yet.
-         */
         this.__defineGetter__('pages', function() {
           return pdf ? pdf.numPages : 0;
         });
 
         this.getPage = function(n) {
-//          // Need a better solution here...
-//          if (!pages.length) {
-//            console.log("PDF Error: pdf not loaded yet...");
 //            return;
-//          }
 
           var pageCount = pdf.numPages;
-
-          // Normalize n
           n = n < 1 ? 1 : n;
           n = n > pageCount ? pageCount : n;
           n = n - 1;
 
           return pages[n];
         };
-
-        /**
-         * Get a PdfTexture for the given page.  The texture is either
-         * page.width x page.height or width x height (width and height
-         * are optional).
-         */
         this.getPageTexture = function(n, width, height) {
           var page = this.getPage(n);
           width = width || page.width;
@@ -14917,10 +14146,6 @@ CubicVR.RegisterModule("Particles",function(base) {
   var undef = base.undef;
   var GLCore = base.GLCore;
   var enums = CubicVR.enums;
-  
-
-  /* Particle System */
-
   function Particle(pos, start_time, life_time, velocity, accel) {
     this.startpos = new Float32Array(pos);
     this.pos = new Float32Array(pos);
@@ -14976,8 +14201,6 @@ CubicVR.RegisterModule("Particles",function(base) {
     } else {
       this.hasColor = hasColor;
     }
-
-    //    gl.enable(gl.VERTEX_PROGRAM_POINT_SIZE);
     var hasTex = (this.pTex !== null);
 
     this.vs = [
@@ -15089,11 +14312,8 @@ CubicVR.RegisterModule("Particles",function(base) {
 
     updatePoints: function() {
       var gl = GLCore.gl;
-
-      // buffer update
       gl.bindBuffer(gl.ARRAY_BUFFER, this.glPoints);
       gl.bufferData(gl.ARRAY_BUFFER, this.arPoints, gl.DYNAMIC_DRAW);
-      // end buffer update
     },
 
     updateColors: function() {
@@ -15102,10 +14322,8 @@ CubicVR.RegisterModule("Particles",function(base) {
       if (!this.hasColor) {
         return;
       }
-      // buffer update
       gl.bindBuffer(gl.ARRAY_BUFFER, this.glColor);
       gl.bufferData(gl.ARRAY_BUFFER, this.arColor, gl.DYNAMIC_DRAW);
-      // end buffer update
     },
 
     draw: function(modelViewMat, projectionMat, time) {
@@ -15200,7 +14418,6 @@ CubicVR.RegisterModule("Particles",function(base) {
       gl.drawArrays(gl.POINTS, 0, this.numParticles);
 
       if (this.alpha) {
-        // gl.enable(gl.DEPTH_TEST);
         gl.disable(gl.BLEND);
         gl.depthMask(1);
         gl.blendFunc(gl.ONE, gl.ONE);
@@ -15222,8 +14439,6 @@ CubicVR.RegisterModule("Particles",function(base) {
 });
 
 CubicVR.RegisterModule("HeightField", function(base) {
-    
-    // heightfield is a fork and simplification of Landscape, hopefully for use in larger dynamic structures :)
     var undef = base.undef;
     var enums = base.enums;
     var GLCore = base.GLCore;
@@ -15421,11 +14636,7 @@ CubicVR.RegisterModule("Landscape", function (base) {
 
     var M_TWO_PI = 2.0 * Math.PI;
     var M_HALF_PI = Math.PI / 2.0;
-
-    // Landscape extends SceneObject
     var Landscape = base.extendClassGeneral(base.SceneObject, function() {
-        // args: [0]size, [1]divisions_w, [2]divisions_h, [3]matRef 
-        // todo: fix examples for single argument constructor
         this.heightfield = new base.HeightField({
             size: arguments[0], 
             divX: arguments[1], 
@@ -15457,7 +14668,6 @@ CubicVR.RegisterModule("Landscape", function (base) {
         getHeightValue: function (x, z, transform) {
            
             if (transform !== undef) {
-                // TODO: perform transformation inverse of x,0,z coordinate
             }
 
             return this.heightfield.getHeightValue([x,0,z]);
@@ -15596,7 +14806,6 @@ function Octree(size, max_depth, root, position, child_index) {
   position = this._position = position || [0,0,0];
 
   this._nodes = [];
-  //this._static_nodes = [];
   this._lights = [];
   this._static_lights = [];
 
@@ -15805,7 +15014,6 @@ Octree.prototype.insert = function(node, is_light) {
     $insert(this, node, is_light, this._root);
     return;
   } //if
-  //Check to see where the node is
   var p = this._position;
   var t_nw, t_ne, t_sw, t_se, b_nw, b_ne, b_sw, b_se;
   var aabb = node.getAABB();
@@ -15820,8 +15028,6 @@ Octree.prototype.insert = function(node, is_light) {
   t_se = max[0] > p[0] && min[1] < p[1] && max[2] > p[2];
   b_sw = min[0] < p[0] && max[1] > p[1] && max[2] > p[2];
   b_se = max[0] > p[0] && max[1] > p[1] && max[2] > p[2];
-
-  //Is it in every sector?
   if (t_nw && t_ne && b_nw && b_ne && t_sw && t_se && b_sw && b_se) {
     $insert(this, node, is_light, this);
     if (is_light) {
@@ -15833,8 +15039,6 @@ Octree.prototype.insert = function(node, is_light) {
       this.collect_static_lights(node);
     } //if
   } else {
-
-    //Add static lights in this octree
     for (var i=0, ii=this._static_lights.length; i<ii; ++i) {
       if (node.static_lights === undef) node.static_lights = [];
       if (node.static_lights.indexOf(this._static_lights[i]) === -1) {
@@ -15847,7 +15051,6 @@ Octree.prototype.insert = function(node, is_light) {
     var new_position;
 
     var num_inserted = 0;
-    //Create & check children to see if node fits there too
     var x = this._position[0];
     var y = this._position[1];
     var z = this._position[2];
@@ -16067,7 +15270,6 @@ Octree.prototype.draw_on_map = function(map_canvas, map_context, target) {
         map_context.lineWidth = 1;
         if (n.common_root !== null) {
           map_context.strokeStyle = "#00FF00";
-          //$draw_oct(n.octree_common_root);
         } //if
         break;
       } //if
@@ -16099,7 +15301,6 @@ Octree.prototype.get_frustum_hits = function(camera, test_children) {
       if (Sphere.intersects(camera.frustum.sphere, this._sphere) === false) {
         return hits;
       }
-      //if(_sphere.intersects(c.get_frustum().get_cone()) === false) return;
       var contains_sphere = camera.frustum.contains_sphere(this._sphere);
       if (contains_sphere === -1) {
         this._debug_visible = false;
@@ -16160,8 +15361,6 @@ Octree.prototype.get_frustum_hits = function(camera, test_children) {
           } //if
         } //for j
       } //for o
-      //hits.lights = hits.lights.concat(child_hits.lights);
-      //collect lights and make sure they're unique <- really slow
       for (o = 0, max_o = child_hits.lights.length; o < max_o; ++o) {
         if (hits.lights.indexOf(child_hits.lights[o]) < 0) {
           hits.lights.push(child_hits.lights[o]);
@@ -16190,10 +15389,6 @@ Octree.prototype.reset_node_visibility = function() {
     } //if
   } //for
 }; //Octree::reset_visibility
-/***********************************************
- * OctreeNode
- ***********************************************/
-
 function OctreeNode() {
   this.position = [0, 0, 0];
   this.visible = false;
@@ -16254,11 +15449,6 @@ base_OctreeWorker.prototype.onmessage = function(input) {
     this.octree.cleanup();
   } //if
 }; //onmessage
-
-/***********************************************
- * Frustum
- ***********************************************/
-
 function FrustumWorkerProxy(worker, camera) {
   this.camera = camera;
   this.worker = worker;
@@ -16296,37 +15486,26 @@ Frustum.prototype.extract = function(camera, mvMatrix, pMatrix) {
   var comboMatrix = mat4.multiply(pMatrix, mvMatrix);
 
   var planes = this._planes;
-  // Left clipping plane
   planes[enums.frustum.plane.LEFT][0] = comboMatrix[3] + comboMatrix[0];
   planes[enums.frustum.plane.LEFT][1] = comboMatrix[7] + comboMatrix[4];
   planes[enums.frustum.plane.LEFT][2] = comboMatrix[11] + comboMatrix[8];
   planes[enums.frustum.plane.LEFT][3] = comboMatrix[15] + comboMatrix[12];
-
-  // Right clipping plane
   planes[enums.frustum.plane.RIGHT][0] = comboMatrix[3] - comboMatrix[0];
   planes[enums.frustum.plane.RIGHT][1] = comboMatrix[7] - comboMatrix[4];
   planes[enums.frustum.plane.RIGHT][2] = comboMatrix[11] - comboMatrix[8];
   planes[enums.frustum.plane.RIGHT][3] = comboMatrix[15] - comboMatrix[12];
-
-  // Top clipping plane
   planes[enums.frustum.plane.TOP][0] = comboMatrix[3] - comboMatrix[1];
   planes[enums.frustum.plane.TOP][1] = comboMatrix[7] - comboMatrix[5];
   planes[enums.frustum.plane.TOP][2] = comboMatrix[11] - comboMatrix[9];
   planes[enums.frustum.plane.TOP][3] = comboMatrix[15] - comboMatrix[13];
-
-  // Bottom clipping plane
   planes[enums.frustum.plane.BOTTOM][0] = comboMatrix[3] + comboMatrix[1];
   planes[enums.frustum.plane.BOTTOM][1] = comboMatrix[7] + comboMatrix[5];
   planes[enums.frustum.plane.BOTTOM][2] = comboMatrix[11] + comboMatrix[9];
   planes[enums.frustum.plane.BOTTOM][3] = comboMatrix[15] + comboMatrix[13];
-
-  // Near clipping plane
   planes[enums.frustum.plane.NEAR][0] = comboMatrix[3] + comboMatrix[2];
   planes[enums.frustum.plane.NEAR][1] = comboMatrix[7] + comboMatrix[6];
   planes[enums.frustum.plane.NEAR][2] = comboMatrix[11] + comboMatrix[10];
   planes[enums.frustum.plane.NEAR][3] = comboMatrix[15] + comboMatrix[14];
-
-  // Far clipping plane
   planes[enums.frustum.plane.FAR][0] = comboMatrix[3] - comboMatrix[2];
   planes[enums.frustum.plane.FAR][1] = comboMatrix[7] - comboMatrix[6];
   planes[enums.frustum.plane.FAR][2] = comboMatrix[11] - comboMatrix[10];
@@ -16335,8 +15514,6 @@ Frustum.prototype.extract = function(camera, mvMatrix, pMatrix) {
   for (var i = 0; i < 6; ++i) {
     Plane.normalize(planes[i]);
   }
-
-  //Sphere
   var fov = 1 / pMatrix[5];
   var near = -planes[enums.frustum.plane.NEAR][3];
   var far = planes[enums.frustum.plane.FAR][3];
@@ -16369,19 +15546,14 @@ Frustum.prototype.contains_sphere = function(sphere) {
     var normal = [p[0], p[1], p[2]];
     var distance = vec3.dot(normal, [sphere[0],sphere[1],sphere[2]]) + p.d;
     this.last_in[i] = 1;
-
-    //OUT
     if (distance < -sphere[3]) {
       return -1;
     }
-
-    //INTERSECT
     if (Math.abs(distance) < sphere[3]) {
       return 0;
     }
 
   } //for
-  //IN
   return 1;
 }; //Frustum::contains_sphere
 
@@ -16441,15 +15613,12 @@ Frustum.prototype.contains_box = function(bbox) {
       } //if
     } //for j
     this.last_in[i] = point_in;
-
-    //OUT
     if (in_count === 0) {
       return -1;
     }
 
     total_in += point_in;
   } //for i
-  //IN
   if (total_in === 6) {
     return 1;
   }
@@ -17159,8 +16328,6 @@ CubicVR.RegisterModule("CVRXML",function(base) {
     var tempNode;
 
     var position, rotation, scale;
-
-    //  var pts_str = util.collectTextNode(pts_elem[0]);
     for (var i = 0, iMax = sceneobjs[0].childNodes.length; i < iMax; i++) {
       var sobj = sceneobjs[0].childNodes[i];
 
@@ -17338,15 +16505,6 @@ CubicVR.RegisterModule("CVRXML",function(base) {
   return exports;
   
 });
-/*
-  Javascript port of CubicVR 3D engine for WebGL
-  https://github.com/cjcliffe/CubicVR.js/
-  http://www.cubicvr.org/
-
-  May be used under the terms of the MIT license.
-  http://www.opensource.org/licenses/mit-license.php
-*/
-
 CubicVR.RegisterModule("Worker", function(base) {
   
   try {
@@ -17782,7 +16940,6 @@ CubicVR.RegisterModule("Worker", function(base) {
       } //new_obj
 
       function reassembleMotion(obj) {
-        //reassemble linked-list for sceneObject motion envelope keys
         if (obj.motion) {
           var co = obj.motion.controllers;
           var new_controllers = [];
@@ -17934,7 +17091,6 @@ CubicVR.RegisterModule("Worker", function(base) {
         } //for i
 
         var new_scene = new Scene();
-        // place parsed scene elements into new scene (since parse scene has no prototype)
         var camera = new_scene.camera;
         var camera_transform = camera.transform;
         copyObjectFromJSON(scene.camera, camera);
@@ -17951,7 +17107,6 @@ CubicVR.RegisterModule("Worker", function(base) {
             o.getAABB();
           }
           catch(ex) {
-            //console.log(o);
           } //try
           
         } //for
@@ -18012,19 +17167,7 @@ CubicVR.RegisterModule("Worker", function(base) {
 CubicVR.RegisterModule("Polygon",function(base) {
     
     var undef = base.undef;
-    
-    /**
-    area, insideTriangle, snip and triangulate2D by John W. Ratcliff  // July 22, 2000
-    See original code and more information here: http://www.flipcode.com/archives/Efficient_Polygon_Triangulation.shtml
-     
-    ported to actionscript by Zevan Rosser (www.actionsnippet.com)
-    area, insideTriangle, snip and triangulate2D search & replaced to Javascript by Charles J. Cliffe
-    additions by Charles J. Cliffe - July 2011 (www.cubicvr.org)
-    */
-
     var EPSILON = 0.0000000001;
-
-    // calculate area of the contour polygon
     function area(contour) {
         var n = contour.length;
         var a = 0.0;
@@ -18034,8 +17177,6 @@ CubicVR.RegisterModule("Polygon",function(base) {
         }
         return a * 0.5;
     }
-
-    // see if p is inside triangle abc
     function insideTriangle(ax, ay, bx, by, cx, cy, px, py) {
         var aX, aY, bX, bY,
           cX, cY, apx, apy,
@@ -18088,10 +17229,6 @@ CubicVR.RegisterModule("Polygon",function(base) {
         }
         return true;
     }
-
-
-    // contour = [[1,1],[2,2],vec2,...]
-    // returns: triangle indices to from contour
     function triangulate2D(contour) {
 
         var result = [];
@@ -18100,8 +17237,6 @@ CubicVR.RegisterModule("Polygon",function(base) {
         if (n < 3) return null;
 
         var verts = [];
-
-        /* we want a counter-clockwise polygon in verts */
         var v;
 
         if (0.0 < area(contour)) {
@@ -18111,18 +17246,12 @@ CubicVR.RegisterModule("Polygon",function(base) {
         }
 
         var nv = n;
-
-        /*  remove nv-2 vertsertices, creating 1 triangle every time */
         var count = 2 * nv; /* error detection */
         var m;
         for (m = 0, v = nv - 1; nv > 2;) { /* if we loop, it is probably a non-simple polygon */
             if (0 >= (count--)) {
-                //** Triangulate: ERROR - probable bad polygon!
-                // trace("bad poly");
                 return null;
             }
-
-            /* three consecutive vertices in current polygon, <u,v,w> */
             var u = v;
             if (nv <= u) u = 0; /* previous */
             v = u + 1;
@@ -18132,24 +17261,16 @@ CubicVR.RegisterModule("Polygon",function(base) {
 
             if (snip(contour, u, v, w, nv, verts)) {
                 var a, b, c, s, t;
-
-                /* true names of the vertices */
                 a = verts[u];
                 b = verts[v];
                 c = verts[w];
-
-                /* output Triangle */
                 result.push(a);
                 result.push(b);
                 result.push(c);
 
                 m++;
-
-                /* remove v from remaining polygon */
                 for (s = v, t = v + 1; t < nv; s++, t++) verts[s] = verts[t];
                 nv--;
-
-                /* resest error detection counter */
                 count = 2 * nv;
             }
         }
@@ -18216,8 +17337,6 @@ CubicVR.RegisterModule("Polygon",function(base) {
     if (minPair[0]>0) a = a.concat(c1.slice(0,minPair[0]));
     var b = c2.slice(minPair[1]);
     if (minPair[1]>0) b = b.concat(c2.slice(0,minPair[1]));
-
-    // rewrite original arrays    
     c1.length = 0;
     c2.length = 0;
     
@@ -18236,8 +17355,6 @@ CubicVR.RegisterModule("Polygon",function(base) {
       result = [],
       iMax = c1.length,
       jMax = c2.length;
-
-    //minPairShift(c1,c2);
     
     var pairs = [];
     
@@ -18274,8 +17391,6 @@ CubicVR.RegisterModule("Polygon",function(base) {
     for (i = 0; i < pairs.length; i++) {
        result_pairs.push([result[pairs[i][0]],result[pairs[i][1]]]);
     }
-    
-//    console.log(result[pairs[0][0]],result[pairs[0][1]]);
     
     return result_pairs;
   }
@@ -18317,25 +17432,6 @@ CubicVR.RegisterModule("Polygon",function(base) {
     
     for (i = 0; i <= aLen; i++) polygonB.push(a[i]);
     for (i = 0; i <= bLen; i++) polygonB.push(b[i]);
-
-// TODO: use references to utilize original points instead of making dupes
-/* 
-    var aOfs = -aPair[1];
-    var bOfs = -aPair[2];
-
-    var aRef = [];
-    var bRef = [];
-
-    for (var i = aLen; i < a.length; i++) aRef.push([0,wrap(i+aOfs,c1.length)]);
-    aRef.push([0,wrap(aOfs,c1.length)]);
-    for (var i = bLen; i < b.length; i++) aRef.push([1,wrap(i+bOfs,c2.length)]);
-    aRef.push([1,wrap(bOfs,c2.length)]);
-    
-    for (var i = 0; i <= aLen; i++) bRef.push([0,wrap(i+aOfs,c1.length)]);
-    for (var i = 0; i <= bLen; i++) bRef.push([1,wrap(i+bOfs,c2.length)]);
-
-    return [aRef,bRef];
-*/
     return [polygonA,polygonB];
   }
  
@@ -18726,7 +17822,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
   }
 
   function vec3btquat(a) {
-//    uquat.fromEuler(a[0],a[1],a[2]);
     var q = new Ammo.btQuaternion();
     q.setEulerZYX(a[2]*(Math.PI/180.0),a[1]*(Math.PI/180.0),a[0]*(Math.PI/180.0));
     return q;
@@ -18754,29 +17849,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
       for (i = 0, iMax = shapes.length; i<iMax; i++) {
         shape = shapes[i];
         btShape = null;
-        
-      /*
-        //    TODO: optimize shape allocation with a shapeBin:
-
-        if (shape_in.type !== enums.collision.shape.MESH && shapeBin[shape_in.type] === undef) {
-          shapeBin[shape_in.type] = [];
-        }
-        
-        var cached = false;
-
-        if (shape_in.type !== enums.collision.shape.MESH) {
-          if (!shapeBin[shape_in.type][scale[0]]) shapeBin[shape_in.type][scale[0]] = [];
-          if (!shapeBin[shape_in.type][scale[0]][scale[1]]) shapeBin[shape_in.type][scale[0]][scale[1]] = [];
-        }
-        
-        if (shapeBin[shape_in.type][scale[0]][scale[1][scale[2]]) {
-          
-        } else {
-          shapeBin[shape_in.type][scale[0]][scale[1][scale[2]] = shape_in;
-        }
-      
-      */
-        
         if (shape.type === enums.collision.shape.BOX) {
           btShape = new Ammo.btBoxShape(new Ammo.btVector3(shape.size[0]/2,shape.size[1]/2,shape.size[2]/2));
         } else if (shape.type === enums.collision.shape.SPHERE) {
@@ -18818,13 +17890,10 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
             if (rigidBody.getMass() === 0.0 || rigidBody.getType() == enums.physics.body.STATIC || rigidBody.getType() == enums.physics.body.GHOST)  // static
             {
               rigidBody.setMass(0);
-              // btScaledBvhTriangleMeshShape -- if scaled instances
               btShape = new Ammo.btBvhTriangleMeshShape(mTriMesh,true);
             }
             else
             { 
-              // btGimpactTriangleMeshShape -- complex?
-              // btConvexHullShape -- possibly better?
               btShape = new Ammo.btConvexTriangleMeshShape(mTriMesh,true);
             }
         } else if (shape.type === enums.collision.shape.CONVEX_HULL) {
@@ -18844,8 +17913,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
             var xdiv = 0, xsize = 0;
             var zdiv = 0, zsize = 0;
             var points;
-
-            // allow heightfield type patch-over
             if (shape.landscape && !shape.heightfield && shape.landscape instanceof base.HeightField) {
                 shape.heightfield = shape.landscape;    // patch
             } else if (shape.landscape && shape.landscape instanceof base.Landscape) {
@@ -18855,8 +17922,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
               zsize = shape.landscape.heightfield.sizeZ;
               points = shape.landscape.heightfield.getMesh().points;
             } 
-            
-            // heightfield direct
             if (shape.heightfield && shape.heightfield instanceof base.HeightField) {
               xdiv = shape.heightfield.divX;
               zdiv = shape.heightfield.divZ;
@@ -18868,27 +17933,11 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
             var upIndex = 1; 
 	        var maxHeight = 100;	
 	        var flipQuadEdges=false;
-
-            // TODO: store this pointer for doing updates!
-/* */
             var ptr = Ammo.allocate(points.length*4, "float", Ammo.ALLOC_NORMAL);
 
             for (f = 0, fMax = xdiv*zdiv; f < fMax; f++) {
-//              Ammo.HEAPF32[(ptr>>2)+f] = points[f][1];   // also works in place of next line
               Ammo.setValue(ptr+(f<<2), points[f][1], 'float');
-//              console.log(Ammo.getValue(ptr+(f<<2), 'float'));
             }
-
-/* 
-            var ptr = Ammo.allocate(points.length*8, "double", Ammo.ALLOC_NORMAL);
-            var heapf64 = new Float64Array(Ammo.HEAPF32.buffer);
-            for (f = 0, fMax = xdiv*zdiv; f < fMax; f++) {
-                heapf64[(ptr>>3)+f] = points[f][1];
-//                Ammo.setValue(ptr+(f<<3), points[f][1], 'double');
-//                console.log(Ammo.getValue(ptr+(f<<3), 'double'));
-            }
-*/
-
             var scalarType = {
                 FLOAT: 0,
                 DOUBLE: 1,
@@ -18899,7 +17948,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
             };
 
 	        btShape = new Ammo.btHeightfieldTerrainShape(xdiv, zdiv, ptr, 1, -maxHeight, maxHeight, upIndex, scalarType.FLOAT, flipQuadEdges);
-//	        btShape = new Ammo.btHeightfieldTerrainShape(xdiv, zdiv, ptr, 1, -maxHeight, maxHeight, upIndex, scalarType.DOUBLE, flipQuadEdges);
 
 	        btShape.setUseDiamondSubdivision(true);
 
@@ -18926,7 +17974,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
 
         for (i = 0, iMax=btShapes.length; i < iMax; i++)
         {
-          // use relative transform for shape
           utrans.setIdentity();
           utrans.setOrigin(vec3bt(btShapes[i].cShape.position));
           utrans.setRotation(vec3btquat(btShapes[i].cShape.rotation));
@@ -18934,8 +17981,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
           btResultShape.addChildShape(utrans,btShapes[i].btShape);
         }
       } // TODO: btMultiSphereShape optimized for sphere clusters
-
-      // cache the completed shape for collision map re-use
       cmap.setResult(btResultShape);
 
       return btResultShape;
@@ -19035,11 +18080,9 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
       if (this.body) {
           this.body.setMassProps(mass_in,this.localInertia);
       }
-      // TODO: update collision shape
     },
     setRestitution: function(restitution_in) {
       this.restitution = restitution_in;
-      // TODO: update collision shape
     },
     getBody: function() {
       if (!this.body && !this.ghost) {
@@ -19083,9 +18126,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
           }
           this.body._cvr_rigidbody = this;
         }
-
-//        Ammo.wrapPointer(this.body,Ammo.btRigidBody)._cvr_ref = this;
-//        this.body._sceneObject = this.sceneObject;
       }
 
       return this.body||this.ghost;
@@ -19095,12 +18135,8 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
       if (this.body.isActive() || force_update) {
         this.body.getMotionState().getWorldTransform(utrans);
 
-        // optional optimization if not using the position/rotation, avoids quaternion conversion
-        // var m;  utrans.getOpenGLMatrix(m);  this.sceneObject.tMatrix = m;
-
         var origin = utrans.getOrigin();
         if (origin.x != origin.x) {
-          // Nan?
           console.log("origin is NaN");
         } else {
           this.sceneObject.position[0] = origin.x();
@@ -19115,7 +18151,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
         uquat.w = quat_rotation.w();
         
         if (uquat.x != uquat.x) {
-          // Nan?          
           console.log("rotation is NaN");
         } else {
           var rotation = uquat.toEuler();
@@ -19126,7 +18161,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
                 
         return true;
       } else {
-//          this.transform.setRotation(vec3btquat(this.init_rotation));
       }
     },
     reset: function(pos, quat) {
@@ -19336,11 +18370,7 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
     }
   };
 
-
-//  var staticBody;
-
   var Constraint = function(obj_init) {
-                // btHingeConstraint
             obj_init = obj_init||{};
                 
             this.ctype = base.parseEnum(enums.physics.constraint,obj_init.ctype)||enums.physics.constraint.P2P;
@@ -19354,14 +18384,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
             this.btConstraint = null;
             this.localPivotA = vec3bt(this.positionA);
             this.localPivotB = vec3bt(this.positionB);
-
-//          Hack for when constructor overload was broken..
-            
-/*            if (!staticBody) {
-              var bodyInit = new Ammo.btRigidBodyConstructionInfo(0, NULL, NULL, NULL);
-              staticBody = new Ammo.btRigidBody(bodyInit);
-              staticBody.setMassProps(0,new Ammo.btVector3(0,0,0));
-            }*/
   };
 
   Constraint.prototype = {
@@ -19372,16 +18394,11 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
           }
 
           if (this.ctype === enums.physics.constraint.P2P) {            
-//          Hack for when constructor overload was broken..
-//            this.btConstraint = new Ammo.btPoint2PointConstraint(this.rigidBodyA.getBody(),staticBody,this.localPivotA,this.localPivotB);
             if (this.rigidBodyA && this.rigidBodyB) { // connect two rigid bodies via p2p if provided
               this.btConstraint = new Ammo.btPoint2PointConstraint(this.rigidBodyA.getBody(),this.rigidBodyB.getBody(),this.localPivotA,this.localPivotB);
             } else {  // otherwise assume we're just constraining with pivot B
               this.btConstraint = new Ammo.btPoint2PointConstraint(this.rigidBodyA.getBody(),this.localPivotA);
             }
-             
-//            this.btConstraint.setPivotA(this.localPivotA);
-//            this.btConstraint.setPivotB(this.localPivotB);
             this.btConstraint.get_m_setting().set_m_tau(this.strength);
             this.btConstraint.get_m_setting().set_m_damping(this.damping);
             if (this.maxImpulse) {
@@ -19467,16 +18484,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
     
     this.collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
     this.dispatcher = new Ammo.btCollisionDispatcher(this.collisionConfiguration);
-
-/*
-  // SLOOOOOWWWW -- do not recommend..
-    this.maxProxies = 4096;
-    this.aabbmin = world_aabb_min||[-1000,-1000,-1000];
-    this.aabbmax = world_aabb_max||[1000,1000,1000];
-
-    this.overlappingPairCache = new btAxisSweep3(vec3bt(this.aabbmin),vec3bt(this.aabbmax),this.maxProxies);
-*/
-
     this.overlappingPairCache = new Ammo.btDbvtBroadphase();
 
     this.solver = new Ammo.btSequentialImpulseConstraintSolver();
@@ -19500,8 +18507,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
      
         if (btConstraint) {
            this.dynamicsWorld.addConstraint(btConstraint);
-//          btConstraint.get_m_setting().set_m_tau(constraint.getStrength());
-//          constraint.rigidBodyA.getBody().setActivationState(enums.physics.collision_states.ACTIVE_TAG);
           constraint.rigidBodyA.activate(true);
           return true;
         }   
@@ -19756,7 +18761,6 @@ CubicVR.RegisterModule("ScenePhysics",function(base) {
 
         if (body !== Ammo.NULL)
         {        
-          //other exclusions?
           if (!((body.isStaticObject()&&!pickStatic) || (body.isKinematicObject()&&!pickKinematic)))
           {
             var pickedBody = body;
@@ -19944,18 +18948,12 @@ CubicVR.RegisterModule("RigidVehicle", function (base) {
       base.vec3bt_copy([-1, 0, 0], this.wheelAxleCS);
 
       this.gVehicleSteering = 0;
-      //        mRigidBody->setCenterOfMassTransform(btTransform::getIdentity());
       this.body.setLinearVelocity([0, 0, 0]);
       this.body.setAngularVelocity([0, 0, 0]);
-
-      /// create vehicle
       this.m_vehicleRayCaster = new Ammo.btDefaultVehicleRaycaster(scenePhysics.dynamicsWorld);
       this.m_tuning = new Ammo.btVehicleTuning();
       this.m_vehicle = new Ammo.btRaycastVehicle(this.m_tuning, this.body.getBody(), this.m_vehicleRayCaster);
-      ///never deactivate the vehicle
       this.body.getBody().setActivationState(enums.physics.collision_states.DISABLE_DEACTIVATION);
-
-      //choose coordinate system
       this.m_vehicle.setCoordinateSystem(this.rightIndex, this.upIndex, this.forwardIndex);
 
       var wpos = new Ammo.btVector3();
@@ -19987,14 +18985,8 @@ CubicVR.RegisterModule("RigidVehicle", function (base) {
         if (this.wheels[i].isDriving()) {
           this.m_vehicle.applyEngineForce(this.gEngineForce, i);
         }
-
-        //synchronize the wheels with the (interpolated) chassis worldtransform
         this.m_vehicle.updateWheelTransform(i, true);
         var wtrans = this.m_vehicle.getWheelTransformWS(i);  //.getOpenGLMatrix(this.wheels[i].wheelObj.tMatrix);
-
-        // this.body.getBody().getMotionState().getWorldTransform();
-        // optional optimization if not using the position/rotation, avoids quaternion conversion
-        // var m;  utrans.getOpenGLMatrix(m);  this.sceneObject.tMatrix = m;
 
         var origin = wtrans.getOrigin();
         this.wheels[i].wheelObj.position[0] = origin.x();
@@ -20027,12 +19019,9 @@ CubicVR.RegisterModule("RigidVehicle", function (base) {
       if (!this.body) return;
       if (this.body.isActive() || force_update) {
         this.body.getBody().getMotionState().getWorldTransform(utrans);
-        // optional optimization if not using the position/rotation, avoids quaternion conversion
-        // var m;  utrans.getOpenGLMatrix(m);  this.sceneObject.tMatrix = m;
 
         var origin = utrans.getOrigin();
         if (origin.x != origin.x) {
-          // Nan?
           console.log("origin is NaN");
         } else {
           this.sceneObject.position[0] = origin.x();
@@ -20046,7 +19035,6 @@ CubicVR.RegisterModule("RigidVehicle", function (base) {
         uquat.w = quat_rotation.w();
         
         if (uquat.x != uquat.x) {
-          // Nan?          
           console.log("rotation is NaN");
         } else {
           var rotation = uquat.toEuler();
@@ -20057,8 +19045,6 @@ CubicVR.RegisterModule("RigidVehicle", function (base) {
                 
         return true;
       } else {
-
-//          this.transform.setRotation(vec3btquat(this.init_rotation));
       }
     },
     setEngineForce: function (engineForce) {
@@ -20095,7 +19081,6 @@ CubicVR.RegisterModule("RigidVehicle", function (base) {
       this.gBreakingForce = brake_val;
     },
     getWheelGroundPosition: function (wheelNum) {
-      //      if (wheelNum > 3) return [0,0,0];
       return this.wheels[wheelNum].wheelObj.getWorldPosition() - [0, wheels[wheelNum].getWheelRadius(), 0];
     },
     getWheelSkid: function (wheelNum) {
@@ -20105,37 +19090,13 @@ CubicVR.RegisterModule("RigidVehicle", function (base) {
     },
     getRigidGround: function (wheelNum) {
       var wheelInfo = this.m_vehicle.getWheelInfo(wheelNum);
-
-//console.log(wheelInfo.get_m_raycastInfo());   // Fails
-
-//Working
-//console.log(wheelInfo.get_m_worldTransform());
-//console.log(wheelInfo.get_m_chassisConnectionPointCS());
 //console.log(wheelInfo.get_m_wheelDirectionCS());
-//console.log(wheelInfo.get_m_suspensionRestLength1());
-//console.log(wheelInfo.get_m_wheelDirectionCS());
-//console.log(wheelInfo.get_m_maxSuspensionTravelCm());
 //console.log(wheelInfo.get_m_wheelsRadius());
-//console.log(wheelInfo.get_m_suspensionStiffness());
-//console.log(wheelInfo.get_m_wheelsDampingCompression());
-//console.log(wheelInfo.get_m_wheelsDampingRelaxation());
 //console.log(wheelInfo.get_m_frictionSlip());
-//console.log(wheelInfo.get_m_steering());
-//console.log(wheelInfo.get_m_rotation());
-//console.log(wheelInfo.get_m_deltaRotation());
 //console.log(wheelInfo.get_m_rollInfluence());
-//console.log(wheelInfo.get_m_maxSuspensionForce());
-//console.log(wheelInfo.get_m_brake());
-//console.log(wheelInfo.get_m_clientInfo());
 //console.log(wheelInfo.get_m_clippedInvContactDotSuspension());
-//console.log(wheelInfo.get_m_suspensionRelativeVelocity());
-//console.log(wheelInfo.get_m_wheelsSuspensionForce());
-//console.log(wheelInfo.get_m_skidInfo());
 //console.log(wheelInfo.getSuspensionRestLength());
-//console.log(wheelInfo.get_m_bIsFrontWheel());
 
-
-//      return wheelInfo.get_m_raycastInfo().get_m_groundObject()._cvr_rigidbody||null;
     },
     addWheel: function (wheel_in, wheelNum) {
         if (wheelNum===undef) {            
@@ -20199,8 +19160,6 @@ CubicVR.RegisterModule("RigidVehicle", function (base) {
       this.wheelObj = new base.SceneObject();
       
       this.wheelRef.scale = obj_init.scale||[1,1,1];
-
-      // These will be initialized automatically from the model if not provided
       this.wheelRadius = obj_init.radius||0.0;
       this.wheelWidth = obj_init.width||0.0;
       
@@ -20216,13 +19175,8 @@ CubicVR.RegisterModule("RigidVehicle", function (base) {
 
       this.frictionSlip = obj_init.frictionSlip||0.94;
       this.rollInfluence = obj_init.rollInfluence||0.5;
-
-
-      // Relative position/rotation ( right wheels typicaly have rotation XYZ(0,180,0) );
       this.wheelPosition = obj_init.position||[0, 0, 0];
       this.wheelRotation = [0, 0, 0];
-
-      // Is this a steering, braking and / or driving wheel?
       this.steering = obj_init.steering||false;
       this.braking = obj_init.braking||false;
       this.driving = obj_init.driving||false;
@@ -20236,7 +19190,6 @@ CubicVR.RegisterModule("RigidVehicle", function (base) {
       this.wheelWidth = wheelWidth_in || 0.0;
 
       if (this.wheelRadius === 0.0) {
-        // average front to back & top to bottom to hopefully even out any tesselation misalignment
         this.wheelRadius = (this.wheelModel.bb[1][1] - this.wheelModel.bb[0][1]) / 2.0;
         this.wheelRadius += (this.wheelModel.bb[1][2] - this.wheelModel.bb[0][2]) / 2.0;
         this.wheelRadius /= 2.0;
@@ -20342,7 +19295,5 @@ CubicVR.RegisterModule("RigidVehicle", function (base) {
 
   return extend;
 });
-/* Auto Embed ./CubicVR_Core.vs */
 window.CubicVRShader.CubicVRCoreVS="attribute vec3 vertexPosition;\nattribute vec3 vertexNormal;\nattribute vec2 vertexTexCoord;\n#if VERTEX_COLOR\nattribute vec3 vertexColor;\nvarying vec3 vertexColorOut;\n#endif\n#if VERTEX_MORPH\nattribute vec3 vertexMorphPosition;\nattribute vec3 vertexMorphNormal;\nuniform float materialMorphWeight;\n#endif\nvarying vec2 vertexTexCoordOut;\nuniform vec2 materialTexOffset;\n#if !LIGHT_PERPIXEL\n#if LIGHT_IS_POINT||LIGHT_IS_DIRECTIONAL||LIGHT_IS_SPOT||LIGHT_IS_AREA\nuniform vec3 lightDirection[LIGHT_COUNT];\nuniform vec3 lightPosition[LIGHT_COUNT];\nuniform vec3 lightSpecular[LIGHT_COUNT];\nuniform vec3 lightDiffuse[LIGHT_COUNT];\nuniform float lightIntensity[LIGHT_COUNT];\nuniform float lightDistance[LIGHT_COUNT];\n#if LIGHT_IS_SPOT\nuniform float lightCutOffAngle[LIGHT_COUNT];\n#endif\nvarying vec3 lightColorOut;\nvarying vec3 lightSpecularOut;\n#endif\nuniform vec3 materialDiffuse;\nuniform vec3 materialSpecular;\nuniform float materialShininess;\n#endif\nuniform mat4 matrixModelView;\nuniform mat4 matrixProjection;\nuniform mat4 matrixObject;\nuniform mat3 matrixNormal;\nvarying vec3 vertexNormalOut;\nvarying vec4 vertexPositionOut;\n#if !LIGHT_DEPTH_PASS\n#if LIGHT_SHADOWED\nvarying vec4 lightProjectionOut[LIGHT_COUNT];\nuniform mat4 lightShadowMatrix[LIGHT_COUNT];\n#endif\n#if TEXTURE_ENVSPHERE\n#if TEXTURE_NORMAL\nvarying vec3 envTexCoordOut;\n#else\nvarying vec2 envTexCoordOut;\n#endif\n#endif\n#if TEXTURE_BUMP||TEXTURE_NORMAL\nvarying vec3 envEyeVectorOut;\n#endif\n#endif \nvoid cubicvr_normalMap() {\n#if !LIGHT_DEPTH_PASS\n#if TEXTURE_BUMP||TEXTURE_NORMAL\nvec3 tangent;\nvec3 binormal;\nvec3 c1 = cross( vertexNormal, vec3(0.0, 0.0, 1.0) );\nvec3 c2 = cross( vertexNormal, vec3(0.0, 1.0, 0.0) );\nif ( length(c1) > length(c2) )  {\ntangent = c1;\n}  else {\ntangent = c2;\n}\ntangent = normalize(tangent);\nbinormal = cross(vertexNormal, tangent);\nbinormal = normalize(binormal);\nmat4 uMVOMatrix = matrixModelView * matrixObject;\nmat3 TBNMatrix = mat3( (vec3 (uMVOMatrix * vec4 (tangent, 0.0))),\n(vec3 (uMVOMatrix * vec4 (binormal, 0.0))),\n(vec3 (uMVOMatrix * vec4 (vertexNormal, 0.0)))\n);\nenvEyeVectorOut = vec3(uMVOMatrix * vec4(vertexPosition,1.0)) * TBNMatrix;\n#endif\n#endif\n}\nvoid cubicvr_environmentMap() {\n#if !LIGHT_DEPTH_PASS\n#if TEXTURE_ENVSPHERE\n#if TEXTURE_NORMAL\nenvTexCoordOut = normalize( vertexPositionOut.xyz );\n#else\nvec3 ws = (matrixModelView * vec4(vertexPosition,1.0)).xyz;\nvec3 r = reflect(ws, vertexNormalOut );\nfloat m = 2.0 * sqrt( r.x*r.x + r.y*r.y + (r.z+1.0)*(r.z+1.0) );\nenvTexCoordOut.s = r.x/m + 0.5;\nenvTexCoordOut.t = r.y/m + 0.5;\n#endif\n#endif\n#if VERTEX_COLOR\nvertexColorOut = vertexColor;\n#endif\n#endif\n}\nvoid cubicvr_shadowMap() {\n#if (LIGHT_IS_SPOT||LIGHT_IS_AREA) && LIGHT_SHADOWED\nfor (int i = 0; i < LIGHT_COUNT; i++)\n{\n#if LIGHT_SHADOWED\n#if VERTEX_MORPH\nlightProjectionOut[i] = lightShadowMatrix[i] * (matrixObject * vec4(vertexPosition+(vertexMorphPosition-vertexPosition)*materialMorphWeight, 1.0));\n#else\nlightProjectionOut[i] = lightShadowMatrix[i] * (matrixObject * vec4(vertexPosition, 1.0));\n#endif\n#endif\n}\n#endif\n}\nvoid cubicvr_lighting() {\n#if !LIGHT_PERPIXEL\n#if LIGHT_IS_POINT\nvec3 specTotal = vec3(0.0,0.0,0.0);\nvec3 accum = vec3(0.0,0.0,0.0);\nfor (int i = 0; i < LIGHT_COUNT; i++) {\nvec3 lightDirection = lightPosition[i]-vertexPositionOut.xyz;\nfloat dist = length(lightDirection);\nvec3 halfVector = normalize(vec3(0.0,0.0,1.0)+lightDirection);\nfloat NdotL = max(dot(normalize(lightDirection),vertexNormalOut),0.0);\nif (NdotL > 0.0) {\nfloat att = clamp(((lightDistance[i]-dist)/lightDistance[i]), 0.0, 1.0)*lightIntensity[i];\naccum += att * NdotL * lightDiffuse[i] * materialDiffuse;\nfloat NdotHV = max(dot(vertexNormalOut, halfVector),0.0);\nvec3 spec2 = lightSpecular[i] * materialSpecular * pow(NdotHV,materialShininess);\nspecTotal += spec2;\n}\n}\nlightColorOut = accum;\nlightSpecularOut = specTotal;\n#endif\n#if LIGHT_IS_DIRECTIONAL\nfloat NdotL;\nfloat NdotHV = 0.0;\nvec3 specTotal = vec3(0.0,0.0,0.0);\nvec3 spec2 = vec3(0.0,0.0,0.0);\nvec3 accum = vec3(0.0,0.0,0.0);\nvec3 halfVector;\nfor (int i = 0; i < LIGHT_COUNT; i++) {\nhalfVector = normalize(vec3(0.0,0.0,1.0)-lightDirection[i]);\nNdotL = max(dot(normalize(-lightDirection[i]),vertexNormalOut),0.0);\nif (NdotL > 0.0)   {\naccum += lightIntensity[i] * materialDiffuse * lightDiffuse[i] * NdotL;\nNdotHV = max(dot(vertexNormalOut, halfVector),0.0);\nspec2 = lightSpecular[i] * materialSpecular * pow(NdotHV,materialShininess);\nspecTotal += spec2;\n}\n}\nlightColorOut = accum;\nlightSpecularOut = specTotal;\n#endif\n#if LIGHT_IS_SPOT\nvec3 specTotal = vec3(0.0,0.0,0.0);\nvec3 spec2 = vec3(0.0,0.0,0.0);\nvec3 accum = vec3(0.0,0.0,0.0);\nvec3 halfVector;\nfloat spotEffect;\nfloat spotDot;\nfloat power;\nfor (int i = 0; i < LIGHT_COUNT; i++) {\nvec3 l = lightPosition[i]-vertexPositionOut.xyz;\nfloat dist = length(l);\nfloat att = clamp(((lightDistance[i]-dist)/lightDistance[i]), 0.0, 1.0)*lightIntensity[i];\natt = clamp(att,0.0,1.0);\nspotDot = dot(normalize(-l), normalize(lightDirection[i]));\nif ( spotDot < cos((lightCutOffAngle[i]/2.0)*(3.14159/180.0)) ) {\nspotEffect = 0.0;\n}\nelse {\nspotEffect = pow(spotDot, 1.0);\n}\natt *= spotEffect;\nvec3 v = normalize(-vertexPositionOut.xyz);\nvec3 h = normalize(l + v);\nfloat NdotL = max(0.0, dot(vertexNormalOut, normalize(l)));\nfloat NdotH = max(0.0, dot(vertexNormalOut, h));\nif (NdotL > 0.0) {\npower = pow(NdotH, materialShininess);\n}\nelse {\npower = 0.0;\n}\naccum += att * lightDiffuse[i] * materialDiffuse * NdotL;\nspec2 = lightSpecular[i] * materialSpecular * power;\nspecTotal += spec2*spotEffect;\n}\nlightColorOut = accum;\nlightSpecularOut = specTotal;\n#endif\n#endif \ncubicvr_normalMap();\ncubicvr_shadowMap();\ncubicvr_environmentMap();\n}\nvec2 cubicvr_texCoord() {\nreturn vertexTexCoord + materialTexOffset;\n}\nvec4 cubicvr_transform() {\n#if LIGHT_DEPTH_PASS\nvertexNormalOut = vec3(0.0,0.0,0.0);\n#endif\n#if VERTEX_MORPH\nvec4 vPos = matrixObject * vec4(vertexPosition+(vertexMorphPosition-vertexPosition)*materialMorphWeight, 1.0);\n#else\nvec4 vPos = matrixObject * vec4(vertexPosition, 1.0);\n#endif\nvertexPositionOut = matrixModelView * vPos;\nreturn vPos;\n}\nvec3 cubicvr_normal() {\n#if VERTEX_MORPH\nreturn normalize(matrixObject*vec4(vertexNormal+(vertexMorphNormal-vertexNormal)*materialMorphWeight,0.0)).xyz;\n#else\nreturn normalize(matrixObject*vec4(vertexNormal,0.0)).xyz;\n#endif\n}\n#define customShader_splice 1\nvoid main(void)\n{\nvertexTexCoordOut = cubicvr_texCoord();\ngl_Position =  matrixProjection * matrixModelView * cubicvr_transform();\n#if !LIGHT_DEPTH_PASS  \nvertexNormalOut = matrixNormal * cubicvr_normal();\ncubicvr_lighting();\n#endif \n}\n";
-/* Auto Embed ./CubicVR_Core.fs */
 window.CubicVRShader.CubicVRCoreFS="#ifdef GL_ES\n#if LIGHT_PERPIXEL\nprecision highp float;\n#else\nprecision lowp float;\n#endif\n#endif\n#if FOG_ENABLED\nuniform vec3 fogColor;\nuniform float fogDensity;\nuniform float fogNear;\nuniform float fogFar;\n#endif\nuniform vec3 materialAmbient;\nuniform vec3 lightAmbient;\nuniform vec3 materialColor;\n#if LIGHT_PERPIXEL\nuniform vec3 materialDiffuse;\nuniform vec3 materialSpecular;\nuniform float materialShininess;\n#if LIGHT_IS_POINT||LIGHT_IS_DIRECTIONAL||LIGHT_IS_SPOT||LIGHT_IS_AREA\nuniform vec3 lightDirection[LIGHT_COUNT];\nuniform vec3 lightPosition[LIGHT_COUNT];\nuniform vec3 lightSpecular[LIGHT_COUNT];\nuniform vec3 lightDiffuse[LIGHT_COUNT];\nuniform float lightIntensity[LIGHT_COUNT];\nuniform float lightDistance[LIGHT_COUNT];\n#if LIGHT_IS_SPOT\nuniform float lightCutOffAngle[LIGHT_COUNT];\n#endif\n#endif\n#if LIGHT_IS_PROJECTOR\nuniform sampler2D lightProjectionMap[LIGHT_COUNT];\n#endif\n#if LIGHT_SHADOWED\nvarying vec4 lightProjectionOut[LIGHT_COUNT];\nuniform sampler2D lightShadowMap[LIGHT_COUNT];\nuniform vec3 lightDepthClip[LIGHT_COUNT];\n#endif\n#else \nvarying vec3 lightColorOut;\nvarying vec3 lightSpecularOut;\n#endif  \nvarying vec3 vertexNormalOut;\nvarying vec2 vertexTexCoordOut;\n#if VERTEX_COLOR\nvarying vec3 vertexColorOut;\n#endif\n#if FX_DEPTH_ALPHA||LIGHT_DEPTH_PASS||LIGHT_SHADOWED\nuniform vec3 postDepthInfo;\nfloat ConvertDepth3(float d) { return (postDepthInfo.x*postDepthInfo.y)/(postDepthInfo.y-d*(postDepthInfo.y-postDepthInfo.x));  }\nfloat DepthRange( float d ) { return ( d - postDepthInfo.x ) / ( postDepthInfo.y - postDepthInfo.x ); }\nfloat ConvertDepth3A(float d, float near, float far) { return (near*far)/(far-d*(far-near));  }\nfloat DepthRangeA( float d, float near, float far ) { return ( d - near ) / ( far - near ); }\n#endif\n#if LIGHT_DEPTH_PASS\nvec4 packFloatToVec4i(const float value)\n{\nconst vec4 bitSh = vec4(256.0*256.0*256.0, 256.0*256.0, 256.0, 1.0);\nconst vec4 bitMsk = vec4(0.0, 1.0/256.0, 1.0/256.0, 1.0/256.0);\nvec4 res = fract(value * bitSh);\nres -= res.xxyz * bitMsk;\nreturn res;\n}\n#endif\n#if LIGHT_SHADOWED\nfloat unpackFloatFromVec4i(const vec4 value)\n{\nconst vec4 bitSh = vec4(1.0/(256.0*256.0*256.0), 1.0/(256.0*256.0), 1.0/256.0, 1.0);\nreturn(dot(value, bitSh));\n}\n#if LIGHT_SHADOWED_SOFT\nfloat getShadowVal(sampler2D shadowTex,vec4 shadowCoord, float proj, float texel_size) {\nvec2 filterTaps[6];\nfilterTaps[0] = vec2(-0.326212,-0.40581);\nfilterTaps[1] = vec2(-0.840144,-0.07358);\nfilterTaps[2] = vec2(-0.695914,0.457137);\nfilterTaps[3] = vec2(-0.203345,0.620716);\nfilterTaps[4] = vec2(0.96234,-0.194983);\nfilterTaps[5] = vec2(0.473434,-0.480026);\n/*  filterTaps[6] = vec2(0.519456,0.767022);\nfilterTaps[7] = vec2(0.185461,-0.893124);\nfilterTaps[8] = vec2(0.507431,0.064425);\nfilterTaps[9] = vec2(0.89642,0.412458) ;\nfilterTaps[10] =vec2(-0.32194,-0.932615);\nfilterTaps[11] =vec2(-0.791559,-0.59771); */\nfloat shadow = 0.0;\nvec4  shadowSample;\nfloat distanceFromLight;\nfor (int i = 0; i < 6; i++) {\nshadowSample = texture2D(shadowTex,shadowCoord.st+filterTaps[i]*(2.0*texel_size));\ndistanceFromLight = unpackFloatFromVec4i(shadowSample);\nshadow += distanceFromLight <= shadowCoord.z ? 0.0 : 1.0 ;\n}\nshadow /= 6.0;\nreturn shadow;\n}\n#else\nfloat getShadowVal(sampler2D shadowTex,vec4 shadowCoord, float proj, float texel_size) {\nvec4 shadowSample = texture2D(shadowTex,shadowCoord.st);\nfloat distanceFromLight = unpackFloatFromVec4i(shadowSample);\nfloat shadow = 1.0;\nshadow = distanceFromLight <= (shadowCoord.z) ? 0.0 : 1.0 ;\nreturn shadow;\n}\n#endif\n#endif\n#if !LIGHT_DEPTH_PASS\n#if TEXTURE_COLOR\nuniform sampler2D textureColor;\n#endif\n#if TEXTURE_BUMP||TEXTURE_NORMAL\nvarying vec3 envEyeVectorOut;\n#endif\n#if TEXTURE_BUMP\nuniform sampler2D textureBump;\n#endif\n#if TEXTURE_ENVSPHERE\nuniform sampler2D textureEnvSphere;\nuniform float materialEnvironment;\n#if TEXTURE_NORMAL\nvarying vec3 envTexCoordOut;\n#else\nvarying vec2 envTexCoordOut;\n#endif\n#endif\n#if TEXTURE_REFLECT\nuniform sampler2D textureReflect;\n#endif\n#if TEXTURE_NORMAL\nuniform sampler2D textureNormal;\n#endif\nuniform float materialAlpha;\n#if TEXTURE_AMBIENT\nuniform sampler2D textureAmbient;\n#endif\n#if TEXTURE_SPECULAR\nuniform sampler2D textureSpecular;\n#endif\n#endif \n#if TEXTURE_ALPHA\nuniform sampler2D textureAlpha;\n#endif\nvarying vec4 vertexPositionOut;\nvec2 cubicvr_texCoord() {\n#if LIGHT_DEPTH_PASS\nreturn vertexTexCoordOut;\n#else\n#if TEXTURE_BUMP\nfloat height = texture2D(textureBump, vertexTexCoordOut.xy).r;\nfloat v = (height) * 0.05 - 0.04; \nvec3 eye = normalize(envEyeVectorOut);\nreturn vertexTexCoordOut.xy + (eye.xy * v);\n#else\nreturn vertexTexCoordOut;\n#endif\n#endif\n}\nvec3 cubicvr_normal(vec2 texCoord) {\n#if TEXTURE_NORMAL && !LIGHT_DEPTH_PASS\nvec3 bumpNorm = vec3(texture2D(textureNormal, texCoord));\nvec3 n = (vec4(normalize(vertexNormalOut),1.0)).xyz;\nbumpNorm = (bumpNorm-0.5)*2.0;\nbumpNorm.y = -bumpNorm.y;\nreturn normalize((n+bumpNorm)/2.0);\n#else\nreturn normalize(vertexNormalOut);\n#endif\n}\n#if FOG_ENABLED\nvec4 apply_fog(vec4 color) {\nvec4 outColor = color;\nfloat depth = gl_FragCoord.z / gl_FragCoord.w;\n#if USE_FOG_EXP\nconst float LOG2 = 1.442695;\nfloat fogFactor = exp2( - fogDensity * fogDensity * depth * depth * LOG2 );\nfogFactor = 1.0 - clamp( fogFactor, 0.0, 1.0 );\noutColor = mix( color, vec4( fogColor, color.w ), fogFactor );\n#endif\n#if USE_FOG_LINEAR\nfloat fogFactor = smoothstep( fogNear, fogFar, depth );\noutColor = mix( color, vec4( fogColor, color.w ), fogFactor );\n#endif\nreturn outColor;\n}\n#endif\nvec4 cubicvr_color(vec2 texCoord) {\nvec4 color = vec4(0.0,0.0,0.0,0.0);\n#if !LIGHT_DEPTH_PASS\n#if TEXTURE_COLOR\n#if !(LIGHT_IS_POINT||LIGHT_IS_DIRECTIONAL||LIGHT_IS_SPOT||LIGHT_IS_AREA)\ncolor = texture2D(textureColor, texCoord).rgba;\ncolor.rgb *= materialColor;\n#else\ncolor = texture2D(textureColor, texCoord).rgba;\n#if !TEXTURE_ALPHA\nif (color.a<=0.9) {\ndiscard;\n}\n#endif\ncolor.rgb *= materialColor;\n#endif\n#if VERTEX_COLOR\ncolor *= vec4(vertexColorOut,1.0);\n#endif\n#else\n#if VERTEX_COLOR\ncolor = vec4(vertexColorOut,1.0);\n#else\ncolor = vec4(materialColor,1.0);\n#endif\n#endif\n#if TEXTURE_ALPHA\ncolor.a = texture2D(textureAlpha, texCoord).r;\n#if FX_DEPTH_ALPHA\nif (color.a < 0.9) discard;\n#else\n#if MATERIAL_ALPHA\nif (color.a == 0.0) discard;\n#else\nif (color.a < 0.9) discard;\n#endif\n#endif\n#else\n#if MATERIAL_ALPHA\ncolor.a = materialAlpha;\n#endif\n#endif\n#endif\nreturn color;\n}\nvec4 cubicvr_lighting(vec4 color_in, vec3 n, vec2 texCoord) {\nvec4 color = color_in;\n#if !LIGHT_DEPTH_PASS\nvec3 accum = lightAmbient;\n#if LIGHT_PERPIXEL\n#if LIGHT_IS_POINT\nvec3 specTotal = vec3(0.0,0.0,0.0);\nfor (int i = 0; i < LIGHT_COUNT; i++) {\nvec3 lightDirection = lightPosition[i]-vertexPositionOut.xyz;\nfloat dist = length(lightDirection);\nvec3 halfVector = normalize(vec3(0.0,0.0,1.0)+lightDirection);\nfloat NdotL = max(dot(normalize(lightDirection),n),0.0);\nif (NdotL > 0.0) {\nfloat att = clamp(((lightDistance[i]-dist)/lightDistance[i]), 0.0, 1.0)*lightIntensity[i];\naccum += att * NdotL * lightDiffuse[i] * materialDiffuse;\nfloat NdotHV = max(dot(n, halfVector),0.0);\n#if TEXTURE_SPECULAR\nvec3 spec2 = lightSpecular[i] * texture2D(textureSpecular, vec2(texCoord.s, texCoord.t)).rgb * pow(NdotHV,materialShininess);\n#else\nvec3 spec2 = lightSpecular[i] * materialSpecular * pow(NdotHV,materialShininess);\n#endif\nspecTotal += spec2;\n}\n}\ncolor.rgb *= accum;\ncolor.rgb += specTotal;\n#endif\n#if LIGHT_IS_DIRECTIONAL\nfloat NdotL;\nfloat NdotHV = 0.0;\nvec3 specTotal = vec3(0.0,0.0,0.0);\nvec3 spec2 = vec3(0.0,0.0,0.0);\nvec3 halfVector;\nfor (int i = 0; i < LIGHT_COUNT; i++) {\nhalfVector = normalize(vec3(0.0,0.0,1.0)-lightDirection[i]);\nNdotL = max(dot(normalize(-lightDirection[i]),n),0.0);\nif (NdotL > 0.0)   {\naccum += lightIntensity[i] * materialDiffuse * lightDiffuse[i] * NdotL;\nNdotHV = max(dot(n, halfVector),0.0);\n#if TEXTURE_SPECULAR\nspec2 = lightSpecular[i] * texture2D(textureSpecular, vec2(texCoord.s, texCoord.t)).rgb * pow(NdotHV,materialShininess);\n#else\nspec2 = lightSpecular[i] * materialSpecular * pow(NdotHV,materialShininess);\n#endif\nspecTotal += spec2;\n}\n}\ncolor.rgb *= accum;\ncolor.rgb += specTotal;\n#endif\n#if LIGHT_IS_AREA\nvec3 specTotal = vec3(0.0,0.0,0.0);\nvec3 spec2 = vec3(0.0,0.0,0.0);\nfloat NdotL;\nfloat NdotHV = 0.0;\nvec3 halfVector;\nfor (int i = 0; i < LIGHT_COUNT; i++) {\nhalfVector = normalize(vec3(0.0,0.0,1.0)-lightDirection[i]);\nNdotL = max(dot(normalize(-lightDirection[i]),n),0.0);\nif (NdotL > 0.0)   {\nNdotHV = max(dot(n, halfVector),0.0);\n#if LIGHT_SHADOWED\nvec4 shadowCoord = lightProjectionOut[i] / lightProjectionOut[i].w;\nshadowCoord.z = DepthRangeA(ConvertDepth3A(shadowCoord.z,lightDepthClip[i].x,lightDepthClip[i].y),lightDepthClip[i].x,lightDepthClip[i].y);\nvec4 shadowSample;\nfloat shadow = 1.0;\nif (shadowCoord.s > 0.000&&shadowCoord.s < 1.000 && shadowCoord.t > 0.000 && shadowCoord.t < 1.000) if (i == 0) { shadow = getShadowVal(lightShadowMap[0],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z);}\n#if LIGHT_COUNT>1\nelse if (i == 1) { shadow = getShadowVal(lightShadowMap[1],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z); }\n#endif\n#if LIGHT_COUNT>2\nelse if (i == 2) { shadow = getShadowVal(lightShadowMap[2],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z); }\n#endif\n#if LIGHT_COUNT>3\nelse if (i == 3) { shadow = getShadowVal(lightShadowMap[3],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z);  }\n#endif\n#if LIGHT_COUNT>4\nelse if (i == 4) { shadow = getShadowVal(lightShadowMap[4],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z);  }\n#endif\n#if LIGHT_COUNT>5\nelse if (i == 5) { shadow = getShadowVal(lightShadowMap[5],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z);  }\n#endif\n#if LIGHT_COUNT>6\nelse if (i == 6) { shadow = getShadowVal(lightShadowMap[6],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z);  }\n#endif\n#if LIGHT_COUNT>7\nelse if (i == 7) { shadow = getShadowVal(lightShadowMap[7],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z); }\n#endif\naccum += shadow * lightIntensity[i] * materialDiffuse * lightDiffuse[i] * NdotL;\n#else\naccum += lightIntensity[i] * materialDiffuse * lightDiffuse[i] * NdotL;\n#endif\n#if TEXTURE_SPECULAR\nspec2 = lightSpecular[i] * texture2D(textureSpecular, vec2(texCoord.s, texCoord.t)).rgb * pow(NdotHV,materialShininess);\n#else\nspec2 = lightSpecular[i] * materialSpecular * pow(NdotHV,materialShininess);\n#endif\n#if LIGHT_SHADOWED\nspec2 *= shadow;\n#endif\nspecTotal += spec2;\n#if LIGHT_SHADOWED\n#endif\n}\n}\ncolor.rgb *= accum;\ncolor.rgb += specTotal;\n#endif\n#if LIGHT_IS_SPOT\nvec3 specTotal = vec3(0.0,0.0,0.0);\nvec3 spec2 = vec3(0.0,0.0,0.0);\nvec3 halfVector;\nfloat spotEffect;\nfloat spotDot;\nfloat power;\nfor (int i = 0; i < LIGHT_COUNT; i++) {\nvec3 l = lightPosition[i]-vertexPositionOut.xyz;\nfloat dist = length(l);\nfloat att = clamp(((lightDistance[i]-dist)/lightDistance[i]), 0.0, 1.0)*lightIntensity[i];\natt = clamp(att,0.0,1.0);\nspotDot = dot(normalize(-l), normalize(lightDirection[i]));\nif ( spotDot < cos((lightCutOffAngle[i]/2.0)*(3.14159/180.0)) ) {\nspotEffect = 0.0;\n}\nelse {\nspotEffect = pow(spotDot, 1.0);\n}\n#if !LIGHT_IS_PROJECTOR\natt *= spotEffect;\n#endif\nvec3 v = normalize(-vertexPositionOut.xyz);\nvec3 h = normalize(l + v);\nfloat NdotL = max(0.0, dot(n, normalize(l)));\nfloat NdotH = max(0.0, dot(n, h));\nif (NdotL > 0.0) {\npower = pow(NdotH, materialShininess);\n}\nelse {\npower = 0.0;\n}\n#if LIGHT_SHADOWED\nvec4 shadowCoord = lightProjectionOut[i] / lightProjectionOut[i].w;\nshadowCoord.z = DepthRangeA(ConvertDepth3A(shadowCoord.z,lightDepthClip[i].x,lightDepthClip[i].y),lightDepthClip[i].x,lightDepthClip[i].y);\nvec4 shadowSample;\nfloat shadow = 1.0;\nif (shadowCoord.s >= 0.000&&shadowCoord.s <= 1.000 && shadowCoord.t >= 0.000 && shadowCoord.t <= 1.000) if (i == 0) { shadow = getShadowVal(lightShadowMap[0],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z);}\n#if LIGHT_COUNT>1\nelse if (i == 1) { shadow = getShadowVal(lightShadowMap[1],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z); }\n#endif\n#if LIGHT_COUNT>2\nelse if (i == 2) { shadow = getShadowVal(lightShadowMap[2],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z); }\n#endif\n#if LIGHT_COUNT>3\nelse if (i == 3) { shadow = getShadowVal(lightShadowMap[3],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z);  }\n#endif\n#if LIGHT_COUNT>4\nelse if (i == 4) { shadow = getShadowVal(lightShadowMap[4],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z);  }\n#endif\n#if LIGHT_COUNT>5\nelse if (i == 5) { shadow = getShadowVal(lightShadowMap[5],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z);  }\n#endif\n#if LIGHT_COUNT>6\nelse if (i == 6) { shadow = getShadowVal(lightShadowMap[6],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z);  }\n#endif\n#if LIGHT_COUNT>7\nelse if (i == 7) { shadow = getShadowVal(lightShadowMap[7],shadowCoord,lightProjectionOut[i].w,lightDepthClip[i].z); }\n#endif\natt = att * shadow;\n#endif\n#if LIGHT_IS_PROJECTOR && LIGHT_SHADOWED\nif (shadowCoord.s >= 0.0&&shadowCoord.s <= 1.0 && shadowCoord.t >= 0.0 && shadowCoord.t <= 1.0 && spotDot > cos((90.0)*(3.14159/180.0))) {\nvec3 projTex = texture2D(lightProjectionMap[i],shadowCoord.st).rgb;\naccum += att * projTex * lightIntensity[i] * materialDiffuse * lightDiffuse[i] * NdotL;\n}\n#else\naccum += att * lightDiffuse[i] * materialDiffuse * NdotL;\n#endif\n#if TEXTURE_SPECULAR\nspec2 = lightSpecular[i] * texture2D(textureSpecular, vec2(texCoord.s, texCoord.t)).rgb * power;\n#else\nspec2 = lightSpecular[i] * materialSpecular * power;\n#endif\n#if LIGHT_SHADOWED\nspec2 *= shadow;\n#endif\nspecTotal += spec2*spotEffect;\n}\ncolor.rgb *= accum;\ncolor.rgb += specTotal;\n#if LIGHT_SHADOWED\n#endif\n#endif\n#else\n#if LIGHT_IS_POINT||LIGHT_IS_DIRECTIONAL||LIGHT_IS_SPOT||LIGHT_IS_AREA\ncolor.rgb *= lightColorOut;\ncolor.rgb += lightSpecularOut;\n#endif\n#endif \n#if TEXTURE_AMBIENT\n#if LIGHT_IS_POINT||LIGHT_IS_DIRECTIONAL||LIGHT_IS_SPOT||LIGHT_IS_AREA\ncolor.rgb += texture2D(textureAmbient, texCoord).rgb*(vec3(1.0,1.0,1.0)+materialColor*materialAmbient);\n#else\ncolor.rgb = color.rgb*texture2D(textureAmbient, texCoord).rgb;\n#endif\n#else\n#if TEXTURE_COLOR\ncolor.rgb += materialAmbient*texture2D(textureColor, texCoord).rgb;\n#else\ncolor.rgb += materialColor*materialAmbient;\n#endif\n#endif\n#endif\n#if FOG_ENABLED\nreturn apply_fog(color);\n#else\nreturn color;\n#endif\n}\nvec4 cubicvr_environment(vec4 color_in, vec3 n, vec2 texCoord) {\nvec4 color = color_in;\n#if !LIGHT_DEPTH_PASS\n#if TEXTURE_REFLECT\nfloat environmentAmount = texture2D( textureReflect, texCoord).r;\n#endif\n#if TEXTURE_ENVSPHERE\n#if TEXTURE_NORMAL\nvec3 r = reflect( envTexCoordOut, n );\nfloat m = 2.0 * sqrt( r.x*r.x + r.y*r.y + (r.z+1.0)*(r.z+1.0) );\nvec3 coord;\ncoord.s = r.x/m + 0.5;\ncoord.t = r.y/m + 0.5;\n#if TEXTURE_REFLECT\ncolor.rgb += materialColor*texture2D( textureEnvSphere, coord.st).rgb * environmentAmount;\n#else\ncolor.rgb += materialColor*texture2D( textureEnvSphere, coord.st).rgb * materialEnvironment;\n#endif\n#else\n#if TEXTURE_REFLECT\ncolor.rgb += materialColor*texture2D( textureEnvSphere, envTexCoordOut).rgb * environmentAmount;\n#else\ncolor.rgb += materialColor*texture2D( textureEnvSphere, envTexCoordOut).rgb * materialEnvironment;\n#endif\n#endif\n#endif \n#endif \n#if FX_DEPTH_ALPHA\n#if !MATERIAL_ALPHA\nfloat linear_depth = DepthRange( ConvertDepth3(gl_FragCoord.z) );\ncolor.a = linear_depth;\n#endif\n#endif\nreturn color;\n}\n#if LIGHT_DEPTH_PASS\nvec4 cubicvr_depthPack(vec2 texCoord) {\n#if TEXTURE_ALPHA\nfloat alphaVal = texture2D(textureAlpha, texCoord).r;\nif (alphaVal < 0.9) discard;\n#endif\nreturn packFloatToVec4i(DepthRange( ConvertDepth3(gl_FragCoord.z)));\n}\n#endif\n#define customShader_splice 1\nvoid main(void)\n{\nvec2 texCoord = cubicvr_texCoord();\n#if !LIGHT_DEPTH_PASS\nvec4 color = cubicvr_color(texCoord);\nvec3 normal = cubicvr_normal(texCoord);\ncolor = cubicvr_environment(color,normal,texCoord);\ncolor = cubicvr_lighting(color,normal,texCoord);\ngl_FragColor = clamp(color,0.0,1.0);\n#else \ngl_FragColor = cubicvr_depthPack(texCoord);\n#endif\n}\n";
