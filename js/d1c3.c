@@ -1,4 +1,6 @@
-#include<emscripten.h>
+#include <emscripten.h>
+#include <emscripten/html5.h>
+
 EM_JS(void,ma,(),{
 addedObjects=[];
 mainScene=null;
@@ -21,27 +23,27 @@ var die4mesh=colladaScene.getSceneObject("Die4Side").obj;
 var die4Collision=new CubicVR.CollisionMap({
 type:"mesh",mesh:die4mesh
 });
-var colladaScene=CubicVR.loadCollada("images/die_6.dae","images/");
+colladaScene=CubicVR.loadCollada("images/die_6.dae","images/");
 var die6mesh=colladaScene.getSceneObject("Die6n").obj;
 var die6Collision=new CubicVR.CollisionMap({
 type:"mesh",mesh:die6mesh
 });
-var colladaScene=CubicVR.loadCollada("images/die_8.dae","images/");
+colladaScene=CubicVR.loadCollada("images/die_8.dae","images/");
 var die8mesh=colladaScene.getSceneObject("Die").obj;
 var die8Collision=new CubicVR.CollisionMap({
 type:"mesh",mesh:die8mesh
 });
-var colladaScene=CubicVR.loadCollada("images/die_10.dae","images/");
+colladaScene=CubicVR.loadCollada("images/die_10.dae","images/");
 var die10mesh=colladaScene.getSceneObject("Die10").obj;
 var die10Collision=new CubicVR.CollisionMap({
 type:"mesh",mesh:die10mesh
 });
-var colladaScene=CubicVR.loadCollada("images/die_12.dae","images/");
+colladaScene=CubicVR.loadCollada("images/die_12.dae","images/");
 var die12mesh=colladaScene.getSceneObject("Die12").obj;
 var die12Collision=new CubicVR.CollisionMap({
 type:"mesh",mesh:die12mesh
 });
-var colladaScene=CubicVR.loadCollada("images/die_20.dae","images/");
+colladaScene=CubicVR.loadCollada("images/die_20.dae","images/");
 var die20mesh=colladaScene.getSceneObject("Die20").obj;
 var die20Collision=new CubicVR.CollisionMap({
 type:"mesh",mesh:die20mesh
