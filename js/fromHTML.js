@@ -83,7 +83,6 @@ distance:60
 }
 });
 CubicVR.setSoftShadows(true);
-var floorMaterial=new CubicVR.Material();
 var floorMesh=new CubicVR.Mesh({
 primitive:{
 type:"box",size:1.0,material:{
