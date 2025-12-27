@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
-import { createConvexHullShape, spawnDicePhysics } from './physics.js';
+import { createConvexHullShape, spawnDicePhysics, getAmmo } from './physics.js';
 
 let diceModels = {};
 let spawnedDice = [];
@@ -20,7 +20,7 @@ const diceTypes = [
 export const loadDiceModels = async () => {
     const promises = diceTypes.map(d => {
         return new Promise((resolve, reject) => {
-            loader.load(`/public/images/${d.file}`, (collada) => {
+            loader.load(`/images/${d.file}`, (collada) => {
                 // Find the mesh in the scene
                 let mesh = null;
                 collada.scene.traverse((child) => {
@@ -84,14 +84,9 @@ export const spawnObjects = (scene, world) => {
 
 export const updateDiceVisuals = () => {
     // Sync physics to visual
-    // We need a reusable transform object to avoid GC, but for now creates new one or reads from Ammo
-    // Since Ammo is global in physics.js, we assume it's available or we pass it.
-    // Ideally we pass a helper or use the one from window.Ammo if exposed.
+    const Ammo = getAmmo();
 
-    // Quick hack: assuming window.Ammo is available and valid since initPhysics ran
-    if (!window.Ammo) return;
-
-    const transform = new window.Ammo.btTransform();
+    const transform = new Ammo.btTransform();
 
     spawnedDice.forEach(die => {
         const body = die.body;
@@ -107,7 +102,7 @@ export const updateDiceVisuals = () => {
         }
     });
 
-    window.Ammo.destroy(transform);
+    Ammo.destroy(transform);
 };
 
 // Helper for "reset" functionality if needed

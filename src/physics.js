@@ -1,18 +1,28 @@
+import Ammo from 'ammo.js';
+import * as THREE from 'three';
 
 // Ensure Ammo is loaded
 let AmmoInstance = null;
 
 export const initPhysics = async () => {
-    if (window.Ammo) {
-        if (typeof window.Ammo === 'function') {
-             // It's a promise-based factory in newer builds
-             AmmoInstance = await window.Ammo();
-        } else {
-             // It's already the instance
-             AmmoInstance = window.Ammo;
+    // Ammo.js (v0.0.10) export is the Module object, not a factory function.
+    // However, we handle both cases for robustness.
+    if (typeof Ammo === 'function') {
+        try {
+            AmmoInstance = await Ammo();
+        } catch (e) {
+            // Fallback if it's not a promise
+            AmmoInstance = Ammo();
         }
     } else {
-        throw new Error("Ammo.js not loaded");
+        AmmoInstance = Ammo;
+    }
+
+    // Check for initialization
+    if (!AmmoInstance.btVector3) {
+        // Sometimes it takes a moment or relies on a callback?
+        // But for 0.0.10 asm.js it should be sync.
+        console.warn("Ammo.btVector3 is missing. Ammo object:", AmmoInstance);
     }
 
     const collisionConfiguration = new AmmoInstance.btDefaultCollisionConfiguration();
@@ -25,13 +35,20 @@ export const initPhysics = async () => {
     return dynamicsWorld;
 };
 
+export const getAmmo = () => {
+    if (!AmmoInstance) {
+        throw new Error("Ammo not initialized. Call initPhysics first.");
+    }
+    return AmmoInstance;
+};
+
 export const stepPhysics = (world, deltaTime) => {
     world.stepSimulation(deltaTime, 10);
 };
 
 export const createFloorAndWalls = (scene, world) => {
     // Floor
-    createBox(scene, world, 25, 1, 25, 0, -5, 0, 0, 0xffffff, 'public/images/wood.jpg'); // Using path directly, might need texture loader adjustments
+    createBox(scene, world, 25, 1, 25, 0, -5, 0, 0, 0xffffff, 'images/wood.jpg'); // Using path directly, might need texture loader adjustments
 
     // Walls
     createBox(scene, world, 1, 100, 25, 13, 45, 0, 0, 0x000000, null, true);
@@ -39,8 +56,6 @@ export const createFloorAndWalls = (scene, world) => {
     createBox(scene, world, 25, 100, 1, 0, 45, 13, 0, 0x000000, null, true);
     createBox(scene, world, 25, 100, 1, 0, 45, -13, 0, 0x000000, null, true);
 };
-
-import * as THREE from 'three';
 
 const createBox = (scene, world, sx, sy, sz, px, py, pz, mass, color, textureUrl, invisible = false) => {
     // Three.js visual
