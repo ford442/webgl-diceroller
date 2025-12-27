@@ -1,38 +1,45 @@
-# WebGPU Dice Roller Migration Plan
+# Agentic Development Plan
 
-This document outlines the roadmap for upgrading the existing WebGL Dice Roller application to WebGPU using Three.js.
+This document outlines the roadmap for the further development of the WebGPU Dice Roller project, specifically focusing on agentic workflows and future optimizations.
 
-## Goals
+## 1. Dice Logic Requirements
 
-1.  **Migrate to WebGPU**: Replace the legacy CubicVR.js engine with Three.js using its WebGPU renderer.
-2.  **Support Standard Dice**: Implement 4, 6, 8, 10, 12, and 20-sided dice.
-3.  **Add 100-sided Die**: Implement a new 100-sided die.
+The following dice types are required and have been partially implemented in the initial migration:
 
-## Implementation Steps
+*   **d4 (4-sided)**
+*   **d6 (6-sided)**
+*   **d8 (8-sided)**
+*   **d10 (10-sided)**
+*   **d12 (12-sided)**
+*   **d20 (20-sided)**
 
-### 1. Technology Stack
-*   **Rendering Engine**: Three.js (with WebGPURenderer).
-*   **Physics Engine**: Cannon-es or Ammo.js (compatible with Three.js).
-*   **Language**: JavaScript / TypeScript.
+### Future Agentic Tasks for Dice Logic:
+*   **Result Determination:** Implement logic to determine which face is "up" after the physics simulation settles. This involves raycasting or analyzing the quaternion orientation relative to the dice geometry.
+*   **Throwing Mechanics:** Implement a user-input driven throwing mechanism (drag and release vector) rather than the current static drop.
+*   **Materials & Visuals:** Improve the visual fidelity using PBR materials (roughness, metalness) instead of basic standard materials, potentially leveraging the texture maps embedded in the original DAEs more effectively.
 
-### 2. Dice Models
-*   **Existing Dice (d4, d6, d8, d10, d12, d20)**:
-    *   Port existing Collada (`.dae`) or Blender (`.blend`) models to a format compatible with Three.js (e.g., glTF/GLB).
-    *   Ensure textures and UV maps are correctly preserved.
-    *   Set up physics collision meshes for each die type.
-*   **100-sided Die (d100)**:
-    *   Procedurally generate the geometry for a "Zocchihedron" or similar sphere-like polyhedron.
-    *   Generate texture coordinates and number labels programmatically.
+## 2. Asset Optimization Pipeline
 
-### 3. Application Logic
-*   **Scene Setup**: Recreate the floor and walls setup with correct physics boundaries.
-*   **Dice Spawning**: Implement logic to spawn selected dice types.
-*   **Interaction**: Implement mouse/touch interaction to throw or interact with dice (similar to the current "pick constraint" or drag-to-throw).
-*   **Animation**: Ensure smooth simulation steps using the physics engine loop.
+To fully modernize the application, the legacy Collada (`.dae`) assets should be converted to glTF/GLB.
 
-### 4. Milestones
-1.  **Basic Setup**: Initialize Three.js WebGPU renderer and physics world.
-2.  **Asset Conversion**: Convert d4-d20 models to GLB.
-3.  **Standard Dice Implementation**: Get d4-d20 rolling in the new engine.
-4.  **d100 Implementation**: Develop the procedural generation algorithm for the d100.
-5.  **UI/UX**: Add controls to select dice and reset the board.
+### Conversion Strategy:
+1.  **Automated Conversion Script:** Create a Node.js script using `gltf-pipeline` or Blender CLI to batch convert all `.dae` files in `public/images/` to `.glb` format.
+2.  **Draco Compression:** Apply Draco compression to the resulting GLB files to reduce download sizes.
+3.  **Loader Update:** Switch `ColladaLoader` to `GLTFLoader` in `src/dice.js`.
+
+## 3. WebGPU & WGSL Optimizations
+
+The current implementation uses Three.js's `WebGPURenderer` which abstracts much of the WebGPU complexity. However, for high-performance physics or custom visual effects, raw WGSL (WebGPU Shading Language) can be utilized.
+
+### Roadmap for Compute Shaders:
+*   **Physics Offloading:** Currently, `ammo.js` (WASM) handles physics on the CPU. A major optimization would be to implement a **Compute Shader** based physics engine (or use a library that does) to handle collision detection and rigid body dynamics entirely on the GPU.
+    *   *Step 1:* Implement a basic particle system using WGSL compute shaders.
+    *   *Step 2:* Attempt to port simple rigid body collision logic to WGSL.
+*   **Visual Effects:** Use TSL (Three.js Shading Language) or raw WGSL nodes to create dynamic effects like:
+    *   Motion blur on fast-moving dice.
+    *   Glow effects when a die settles on a critical number (e.g., natural 20).
+
+## 4. WebGL2 Fallback Robustness
+
+*   Ensure all custom shaders or materials written for WebGPU have appropriate fallbacks or transpilation for WebGL2 to maintain broad compatibility.
+*   Test on devices with disabled WebGPU flags.
