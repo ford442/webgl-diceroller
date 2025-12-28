@@ -106,8 +106,11 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
     transform.setIdentity();
     transform.setOrigin(new AmmoInstance.btVector3(position.x, position.y, position.z));
 
-    const q = new AmmoInstance.btQuaternion();
-    q.setEulerZYX(rotation.z, rotation.y, rotation.x);
+    // Convert Euler rotation to quaternion using THREE.js
+    const threeQuat = new THREE.Quaternion();
+    threeQuat.setFromEuler(new THREE.Euler(rotation.x, rotation.y, rotation.z));
+    
+    const q = new AmmoInstance.btQuaternion(threeQuat.x, threeQuat.y, threeQuat.z, threeQuat.w);
     transform.setRotation(q);
 
     const motionState = new AmmoInstance.btDefaultMotionState(transform);
