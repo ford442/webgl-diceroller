@@ -30,15 +30,25 @@ export const loadDiceModels = async () => {
                 });
 
                 if (mesh) {
-                    // Clone the geometry to ensure we have a clean copy
-                    // Original CubicVR code extracted meshes by name like "Die4Side", "Die6n", etc.
-                    // ColladaLoader usually returns a hierarchy. We grab the first mesh.
-                    diceModels[d.type] = mesh;
-                    mesh.castShadow = true;
-                    mesh.receiveShadow = true;
+                    // Create a clean clone to detach from Collada scene hierarchy
+                    // and normalize coordinate system (Z-UP to Y-UP)
+                    const cleanMesh = mesh.clone();
+                    cleanMesh.geometry = mesh.geometry.clone();
+                    cleanMesh.geometry.rotateX(-Math.PI / 2);
+                    
+                    // Reset transforms ensuring we have a clean "prefab"
+                    cleanMesh.position.set(0, 0, 0);
+                    cleanMesh.rotation.set(0, 0, 0);
+                    cleanMesh.scale.set(1, 1, 1);
+                    cleanMesh.updateMatrixWorld(true);
 
-                    // Pre-calculate physics shape
-                    diceModels[d.type].userData.physicsShape = createConvexHullShape(mesh);
+                    diceModels[d.type] = cleanMesh;
+                    cleanMesh.castShadow = true;
+                    cleanMesh.receiveShadow = true;
+
+                    // Pre-calculate physics shape from the clean mesh
+                    // Since matrixWorld is identity (or scale 1), this uses raw vertex data which is now Y-UP
+                    diceModels[d.type].userData.physicsShape = createConvexHullShape(cleanMesh);
                     resolve();
                 } else {
                     console.error(`No mesh found in ${d.file}`);
