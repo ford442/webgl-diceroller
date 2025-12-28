@@ -61,7 +61,6 @@ export const loadDiceModels = async () => {
                     cleanMesh.position.set(0, 0, 0);
                     cleanMesh.rotation.set(0, 0, 0);
                     cleanMesh.scale.set(1, 1, 1);
-                    cleanMesh.updateMatrixWorld(true);
 
                     diceModels[d.type] = cleanMesh;
                     cleanMesh.castShadow = true;
