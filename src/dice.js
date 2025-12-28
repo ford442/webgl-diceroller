@@ -20,7 +20,7 @@ const diceTypes = [
 export const loadDiceModels = async () => {
     const promises = diceTypes.map(d => {
         return new Promise((resolve, reject) => {
-            loader.load(`./images/${d.file}`, (collada) => {
+            loader.load(`https://test.1ink.us/dice-roller/images/${d.file}`, (collada) => {
                 // Find the mesh in the scene
                 let mesh = null;
                 collada.scene.traverse((child) => {
