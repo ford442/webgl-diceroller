@@ -52,7 +52,8 @@ export const loadDiceModels = async () => {
                         material = Array.isArray(material) ? material.map(m => m.clone()) : material.clone();
                     } else {
                         // Create a default material if none exists
-                        material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+                        console.warn(`No material found for ${d.file}, using default magenta material`);
+                        material = new THREE.MeshStandardMaterial({ color: 0xff00ff }); // Magenta for visibility
                     }
                     const cleanMesh = new THREE.Mesh(geometry, material);
                     
