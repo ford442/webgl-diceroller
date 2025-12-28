@@ -30,13 +30,33 @@ export const loadDiceModels = async () => {
                 });
 
                 if (mesh) {
-                    // Create a clean clone to detach from Collada scene hierarchy
-                    // and normalize coordinate system (Z-UP to Y-UP)
-                    const cleanMesh = mesh.clone();
-                    cleanMesh.geometry = mesh.geometry.clone();
-                    cleanMesh.geometry.rotateX(-Math.PI / 2);
+                    // The ColladaLoader rotates the scene container for Z-UP assets,
+                    // but doesn't convert vertex data. We need to:
+                    // 1. Get the world-transformed geometry (accounts for parent rotations)
+                    // 2. Convert to Y-UP by rotating geometry vertices
                     
-                    // Reset transforms ensuring we have a clean "prefab"
+                    // Clone the geometry to avoid modifying the original
+                    const geometry = mesh.geometry.clone();
+                    
+                    // Update the mesh's world matrix to account for parent transforms
+                    mesh.updateMatrixWorld(true);
+                    
+                    // Apply the world transform to the geometry vertices
+                    // This bakes in any rotations from the collada.scene parent
+                    geometry.applyMatrix4(mesh.matrixWorld);
+                    
+                    // Create a clean mesh with the transformed geometry
+                    // Handle material cloning properly - might be null or an array
+                    let material = mesh.material;
+                    if (material) {
+                        material = Array.isArray(material) ? material.map(m => m.clone()) : material.clone();
+                    } else {
+                        // Create a default material if none exists
+                        material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+                    }
+                    const cleanMesh = new THREE.Mesh(geometry, material);
+                    
+                    // Reset transforms ensuring we have a clean "prefab" at origin with identity transform
                     cleanMesh.position.set(0, 0, 0);
                     cleanMesh.rotation.set(0, 0, 0);
                     cleanMesh.scale.set(1, 1, 1);
@@ -47,7 +67,7 @@ export const loadDiceModels = async () => {
                     cleanMesh.receiveShadow = true;
 
                     // Pre-calculate physics shape from the clean mesh
-                    // Since matrixWorld is identity (or scale 1), this uses raw vertex data which is now Y-UP
+                    // The geometry now has Y-UP vertex data baked in
                     diceModels[d.type].userData.physicsShape = createConvexHullShape(cleanMesh);
                     resolve();
                 } else {
