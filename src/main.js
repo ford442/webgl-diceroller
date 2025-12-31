@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
 import { loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice } from './dice.js';
 import { initUI } from './ui.js';
@@ -52,6 +53,10 @@ async function init() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, -3, 0);
+    controls.update();
 
     // Initialize Physics
     try {
