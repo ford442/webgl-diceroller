@@ -3,7 +3,7 @@ import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import { createConvexHullShape, spawnDicePhysics, getAmmo } from './physics.js';
 
 let diceModels = {};
-let spawnedDice = [];
+export let spawnedDice = [];
 
 const loader = new ColladaLoader();
 
@@ -12,7 +12,7 @@ const diceTypes = [
     { type: 'd4', file: 'die_4.dae' },
     { type: 'd6', file: 'die_6.dae' },
     { type: 'd8', file: 'die_8.dae' },
-    { type: 'd10', file: 'die_10.dae' }, // Added d10 as it was in original
+    { type: 'd10', file: 'die_10.dae' },
     { type: 'd12', file: 'die_12.dae' },
     { type: 'd20', file: 'die_20.dae' }
 ];
@@ -20,8 +20,16 @@ const diceTypes = [
 export const loadDiceModels = async () => {
     const promises = diceTypes.map(d => {
         return new Promise((resolve, reject) => {
+            let timedOut = false;
+            const timer = setTimeout(() => {
+                console.warn(`Timeout loading ${d.file}`);
+                timedOut = true;
+                resolve(); // Resolve anyway to unblock
+            }, 5000);
+
             loader.load(`./images/${d.file}`, (collada) => {
-                // Find the mesh in the scene
+                if (timedOut) return;
+                clearTimeout(timer);
                 let mesh = null;
                 collada.scene.traverse((child) => {
                     if (child.isMesh) {
@@ -30,34 +38,19 @@ export const loadDiceModels = async () => {
                 });
 
                 if (mesh) {
-                    // The ColladaLoader rotates the scene container for Z-UP assets,
-                    // but doesn't convert vertex data. We need to:
-                    // 1. Get the world-transformed geometry (accounts for parent rotations)
-                    // 2. Convert to Y-UP by rotating geometry vertices
-                    
-                    // Clone the geometry to avoid modifying the original
                     const geometry = mesh.geometry.clone();
-                    
-                    // Update the mesh's world matrix to account for parent transforms
                     mesh.updateMatrixWorld(true);
-                    
-                    // Apply the world transform to the geometry vertices
-                    // This bakes in any rotations from the collada.scene parent
                     geometry.applyMatrix4(mesh.matrixWorld);
                     
-                    // Create a clean mesh with the transformed geometry
-                    // Handle material cloning properly - might be null or an array
                     let material = mesh.material;
                     if (material) {
                         material = Array.isArray(material) ? material.map(m => m.clone()) : material.clone();
                     } else {
-                        // Create a default material if none exists
                         console.warn(`No material found for ${d.file}, using default magenta material`);
-                        material = new THREE.MeshStandardMaterial({ color: 0xff00ff }); // Magenta for visibility
+                        material = new THREE.MeshStandardMaterial({ color: 0xff00ff });
                     }
                     const cleanMesh = new THREE.Mesh(geometry, material);
                     
-                    // Reset transforms ensuring we have a clean "prefab" at origin with identity transform
                     cleanMesh.position.set(0, 0, 0);
                     cleanMesh.rotation.set(0, 0, 0);
                     cleanMesh.scale.set(1, 1, 1);
@@ -66,15 +59,15 @@ export const loadDiceModels = async () => {
                     cleanMesh.castShadow = true;
                     cleanMesh.receiveShadow = true;
 
-                    // Pre-calculate physics shape from the clean mesh
-                    // The geometry now has Y-UP vertex data baked in
                     diceModels[d.type].userData.physicsShape = createConvexHullShape(cleanMesh);
                     resolve();
                 } else {
                     console.error(`No mesh found in ${d.file}`);
-                    resolve(); // Resolve anyway to not block app
+                    resolve();
                 }
             }, undefined, (e) => {
+                if (timedOut) return;
+                clearTimeout(timer);
                 console.error(`Error loading ${d.file}`, e);
                 resolve();
             });
@@ -85,21 +78,31 @@ export const loadDiceModels = async () => {
     console.log("All dice models loaded");
 };
 
-export const spawnObjects = (scene, world) => {
-    const diceList = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+// Config is { d4: 1, d6: 2, ... }
+export const spawnObjects = (scene, world, config = null) => {
+    // Default config if none provided (backward compatibility)
+    if (!config) {
+        config = { d4: 1, d6: 1, d8: 1, d10: 1, d12: 1, d20: 1 };
+    }
 
-    diceList.forEach((type, index) => {
+    const diceToSpawn = [];
+    Object.keys(config).forEach(type => {
+        const count = config[type];
+        for (let i = 0; i < count; i++) {
+            diceToSpawn.push(type);
+        }
+    });
+
+    diceToSpawn.forEach((type, index) => {
         const template = diceModels[type];
         if (!template) return;
 
         const mesh = template.clone();
 
-        // Initial position logic from original: [(i - 2) * 2, -3, 0] -> but y is -3?
-        // Original: position:[(i -2) * 2, -3, 0] with floor at -5. So they are floating slightly above.
-        // Let's spawn them higher to drop.
-        const x = (index - 2.5) * 3;
-        const y = 5;
-        const z = 0;
+        // Spread them out a bit randomly around the center but high up
+        const x = (Math.random() - 0.5) * 5;
+        const y = 5 + index * 1.5; // Stagger height to avoid immediate collision
+        const z = (Math.random() - 0.5) * 5;
 
         mesh.position.set(x, y, z);
         mesh.rotation.set(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2);
@@ -108,14 +111,15 @@ export const spawnObjects = (scene, world) => {
 
         const body = spawnDicePhysics(world, mesh, template.userData.physicsShape, {x, y, z}, mesh.rotation);
 
+        // Link mesh and body for interaction
+        mesh.userData.body = body;
+
         spawnedDice.push({ mesh, body });
     });
 };
 
 export const updateDiceVisuals = () => {
-    // Sync physics to visual
     const Ammo = getAmmo();
-
     const transform = new Ammo.btTransform();
 
     spawnedDice.forEach(die => {
@@ -135,12 +139,54 @@ export const updateDiceVisuals = () => {
     Ammo.destroy(transform);
 };
 
-// Helper for "reset" functionality if needed
-export const resetDice = (scene, world) => {
+export const clearDice = (scene, world) => {
     spawnedDice.forEach(die => {
         scene.remove(die.mesh);
         world.removeRigidBody(die.body);
     });
     spawnedDice = [];
-    spawnObjects(scene, world);
+};
+
+export const updateDiceSet = (scene, world, config) => {
+    clearDice(scene, world);
+    spawnObjects(scene, world, config);
+};
+
+export const throwDice = (scene, world) => {
+    // For a throw/reset: we can just lift them up and randomize rotation/velocity
+    const Ammo = getAmmo();
+    const transform = new Ammo.btTransform();
+
+    spawnedDice.forEach((die, index) => {
+        const body = die.body;
+
+        // Stop current movement
+        body.setLinearVelocity(new Ammo.btVector3(0, 0, 0));
+        body.setAngularVelocity(new Ammo.btVector3(0, 0, 0));
+
+        // Reset position to high up
+        const x = (Math.random() - 0.5) * 5;
+        const y = 5 + index * 1.5;
+        const z = (Math.random() - 0.5) * 5;
+
+        transform.setIdentity();
+        transform.setOrigin(new Ammo.btVector3(x, y, z));
+
+        // Random rotation
+        const q = new THREE.Quaternion();
+        q.setFromEuler(new THREE.Euler(
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2
+        ));
+        transform.setRotation(new Ammo.btQuaternion(q.x, q.y, q.z, q.w));
+
+        body.setWorldTransform(transform);
+        body.getMotionState().setWorldTransform(transform);
+
+        // Wake up
+        body.activate();
+    });
+
+    Ammo.destroy(transform);
 };
