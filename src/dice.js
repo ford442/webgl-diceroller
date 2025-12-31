@@ -21,7 +21,7 @@ export const loadDiceModels = async () => {
     const promises = diceTypes.map(d => {
         return new Promise((resolve, reject) => {
             let timedOut = false;
-            const url = `/images/${d.file}`; // Serve from public root so dev/build servers (Vite) will find them
+            const url = `./images/${d.file}`; // Serve from public root so dev/build servers (Vite) will find them
             const timer = setTimeout(() => {
                 console.warn(`Timeout loading ${url} (file: ${d.file}) - check network/asset path`);
                 timedOut = true;
