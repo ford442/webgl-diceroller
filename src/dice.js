@@ -41,6 +41,7 @@ export const loadDiceModels = async () => {
                     const geometry = mesh.geometry.clone();
                     mesh.updateMatrixWorld(true);
                     geometry.applyMatrix4(mesh.matrixWorld);
+                    geometry.rotateX(-Math.PI / 2);
                     
                     let material = mesh.material;
                     if (material) {

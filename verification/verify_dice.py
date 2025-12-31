@@ -1,31 +1,34 @@
 from playwright.sync_api import sync_playwright
+import time
 
-def run():
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page()
+def verify_dice(page):
+    page.on("console", lambda msg: print(f"Console: {msg.text}"))
+    page.on("pageerror", lambda exc: print(f"Page Error: {exc}"))
 
-        # Capture console messages
-        page.on("console", lambda msg: print(f"Console: {msg.text}"))
-        page.on("pageerror", lambda exc: print(f"PageError: {exc}"))
+    # Go to local dev server
+    page.goto("http://localhost:5173")
 
-        # Navigate to the local server
-        page.goto("http://localhost:5173")
+    # Wait a bit for things to initialize
+    time.sleep(5)
 
-        # Wait for the canvas to appear (give it time to load models and physics)
-        try:
-            print("Waiting for canvas...")
-            page.wait_for_selector("canvas", timeout=30000)
-            print("Canvas found.")
-            # Wait a bit for render loop to run
-            page.wait_for_timeout(5000)
-        except Exception as e:
-            print(f"Error waiting for canvas: {e}")
+    # Check for canvas
+    if page.locator("canvas").count() > 0:
+        print("Canvas found!")
+    else:
+        print("Canvas NOT found!")
+        print(page.content())
 
-        # Take a screenshot
-        page.screenshot(path="verification/dice_screenshot.png")
-        print("Screenshot taken at verification/dice_screenshot.png")
-        browser.close()
+    # Wait more for models
+    time.sleep(5)
+
+    # Take screenshot
+    page.screenshot(path="verification/dice_check.png")
 
 if __name__ == "__main__":
-    run()
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        try:
+            verify_dice(page)
+        finally:
+            browser.close()
