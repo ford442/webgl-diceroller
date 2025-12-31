@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
-import { loadDiceModels, spawnObjects, updateDiceVisuals } from './dice.js';
+import { loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice } from './dice.js';
+import { initUI } from './ui.js';
+import { initInteraction, updateInteraction } from './interaction.js';
 
 let camera, scene, renderer;
-let stats;
 let physicsWorld;
 let clock;
+let ui;
 
 init();
 
@@ -62,7 +64,20 @@ async function init() {
 
     // Load Models and Spawn Dice
     await loadDiceModels();
-    spawnObjects(scene, physicsWorld);
+    spawnObjects(scene, physicsWorld); // Initial spawn with defaults
+
+    // UI Setup
+    ui = initUI(
+        (newCounts) => {
+            updateDiceSet(scene, physicsWorld, newCounts);
+        },
+        () => {
+            throwDice(scene, physicsWorld);
+        }
+    );
+
+    // Interaction Setup
+    initInteraction(camera, scene, renderer.domElement, physicsWorld);
 
     clock = new THREE.Clock();
 
@@ -86,6 +101,7 @@ function animate() {
     if (physicsWorld) {
         stepPhysics(physicsWorld, deltaTime);
         updateDiceVisuals();
+        updateInteraction();
     }
 
     renderer.render(scene, camera);
