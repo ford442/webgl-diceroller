@@ -8,7 +8,7 @@
     <created>2012-06-12T14:10:44</created>
     <modified>2012-06-12T14:10:44</modified>
     <unit name="meter" meter="1"/>
-    <up_axis>Z_UP</up_axis>
+    <up_axis>Y_UP</up_axis>
   </asset>
   <library_cameras>
     <camera id="Camera-camera" name="Camera">
@@ -358,7 +358,7 @@
         <rotate sid="rotationZ">0 0 1 0</rotate>
         <rotate sid="rotationY">0 1 0 0</rotate>
         <rotate sid="rotationX">1 0 0 0</rotate>
-        <scale sid="scale">6.999999 6.999999 7</scale>
+        <scale sid="scale">1 1 1</scale>
         <instance_geometry url="#Die6n-mesh">
           <bind_material>
             <technique_common>

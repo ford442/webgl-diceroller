@@ -21,13 +21,14 @@ export const loadDiceModels = async () => {
     const promises = diceTypes.map(d => {
         return new Promise((resolve, reject) => {
             let timedOut = false;
+            const url = `/images/${d.file}`; // Serve from public root so dev/build servers (Vite) will find them
             const timer = setTimeout(() => {
-                console.warn(`Timeout loading ${d.file}`);
+                console.warn(`Timeout loading ${url} (file: ${d.file}) - check network/asset path`);
                 timedOut = true;
                 resolve(); // Resolve anyway to unblock
-            }, 5000);
+            }, 15000); // longer timeout for slower networks
 
-            loader.load(`./images/${d.file}`, (collada) => {
+            loader.load(url, (collada) => {
                 if (timedOut) return;
                 clearTimeout(timer);
                 let mesh = null;

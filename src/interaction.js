@@ -146,13 +146,20 @@ function startDrag(body, point, physicsWorld) {
 
     dragConstraint = new Ammo.btPoint2PointConstraint(body, localPivotAmmo);
 
-    // Make the constraint stronger?
-    dragConstraint.m_setting.m_impulseClamp = 100; // default is 0 (unlimited?) check ammo docs or source
-    // Actually default impulse clamp is 0, which means no clamp.
-    // Usually we want to increase tau (strength) and damping.
-    dragConstraint.m_setting.m_tau = 0.001;
-    dragConstraint.m_setting.m_damping = 1.0;
-    // Values might need tuning.
+    // Make the constraint stronger? Use safe accessors because different Ammo builds expose constraint settings differently
+    const setting = (typeof dragConstraint.get_m_setting === 'function') ? dragConstraint.get_m_setting() : (dragConstraint.m_setting || null);
+    if (setting) {
+        // Some Ammo builds expose setters; others provide direct fields.
+        if (typeof setting.set_m_impulseClamp === 'function') {
+            setting.set_m_impulseClamp(100);
+            setting.set_m_tau(0.001);
+            setting.set_m_damping(1.0);
+        } else {
+            setting.m_impulseClamp = 100;
+            setting.m_tau = 0.001;
+            setting.m_damping = 1.0;
+        }
+    }
 
     physicsWorld.addConstraint(dragConstraint);
 
