@@ -5,6 +5,7 @@ import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
 import { loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice } from './dice.js';
 import { initUI } from './ui.js';
 import { initInteraction, updateInteraction } from './interaction.js';
+import { createTable } from './environment/Table.js';
 
 let camera, scene, renderer;
 let physicsWorld;
@@ -61,7 +62,10 @@ async function init() {
     // Initialize Physics
     try {
         physicsWorld = await initPhysics();
-        createFloorAndWalls(scene, physicsWorld);
+
+        // Environment
+        const tableConfig = createTable(scene);
+        createFloorAndWalls(scene, physicsWorld, tableConfig);
     } catch (e) {
         console.error("Failed to initialize physics", e);
         return;

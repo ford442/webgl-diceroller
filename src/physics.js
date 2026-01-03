@@ -46,15 +46,59 @@ export const stepPhysics = (world, deltaTime) => {
     world.stepSimulation(deltaTime, 10);
 };
 
-export const createFloorAndWalls = (scene, world) => {
+export const createFloorAndWalls = (scene, world, tableConfig = null) => {
     // Floor
-    createBox(scene, world, 25, 1, 25, 0, -5, 0, 0, 0xffffff, 'images/wood.jpg'); // Using path directly, might need texture loader adjustments
+    let floorY = -5;
+    let width = 25;
+    let depth = 25;
+    let thickness = 1;
 
-    // Walls
-    createBox(scene, world, 1, 100, 25, 13, 45, 0, 0, 0x000000, null, true);
-    createBox(scene, world, 1, 100, 25, -13, 45, 0, 0, 0x000000, null, true);
-    createBox(scene, world, 25, 100, 1, 0, 45, 13, 0, 0x000000, null, true);
-    createBox(scene, world, 25, 100, 1, 0, 45, -13, 0, 0x000000, null, true);
+    if (tableConfig) {
+        // Use table config for floor physics
+        floorY = tableConfig.position.y;
+        width = tableConfig.width;
+        depth = tableConfig.depth;
+        thickness = tableConfig.height;
+
+        // Visuals are already created by Table.js, so we only need physics for the floor
+        createPhysicsBox(world, width, thickness, depth, tableConfig.position.x, floorY, tableConfig.position.z, 0);
+    } else {
+        // Fallback or legacy floor
+        createBox(scene, world, 25, 1, 25, 0, -5, 0, 0, 0xffffff, 'images/wood.jpg');
+    }
+
+    // Walls - Adjusted based on floor size
+    // We want walls around the floor area.
+    const wallHeight = 100;
+    const halfWidth = width / 2;
+    const halfDepth = depth / 2;
+
+    // Ensure walls start from the floor level
+    const wallY = floorY + wallHeight / 2; // Center of wall
+
+    createBox(scene, world, 1, wallHeight, depth, halfWidth + 0.5, wallY, 0, 0, 0x000000, null, true);
+    createBox(scene, world, 1, wallHeight, depth, -halfWidth - 0.5, wallY, 0, 0, 0x000000, null, true);
+    createBox(scene, world, width, wallHeight, 1, 0, wallY, halfDepth + 0.5, 0, 0x000000, null, true);
+    createBox(scene, world, width, wallHeight, 1, 0, wallY, -halfDepth - 0.5, 0, 0x000000, null, true);
+};
+
+const createPhysicsBox = (world, sx, sy, sz, px, py, pz, mass) => {
+    const shape = new AmmoInstance.btBoxShape(new AmmoInstance.btVector3(sx * 0.5, sy * 0.5, sz * 0.5));
+    const transform = new AmmoInstance.btTransform();
+    transform.setIdentity();
+    transform.setOrigin(new AmmoInstance.btVector3(px, py, pz));
+
+    const motionState = new AmmoInstance.btDefaultMotionState(transform);
+    const localInertia = new AmmoInstance.btVector3(0, 0, 0);
+
+    if (mass > 0) {
+        shape.calculateLocalInertia(mass, localInertia);
+    }
+
+    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
+    const body = new AmmoInstance.btRigidBody(rbInfo);
+
+    world.addRigidBody(body);
 };
 
 const createBox = (scene, world, sx, sy, sz, px, py, pz, mass, color, textureUrl, invisible = false) => {
@@ -81,23 +125,9 @@ const createBox = (scene, world, sx, sy, sz, px, py, pz, mass, color, textureUrl
     scene.add(mesh);
 
     // Ammo.js physics
-    const shape = new AmmoInstance.btBoxShape(new AmmoInstance.btVector3(sx * 0.5, sy * 0.5, sz * 0.5));
-    const transform = new AmmoInstance.btTransform();
-    transform.setIdentity();
-    transform.setOrigin(new AmmoInstance.btVector3(px, py, pz));
-
-    const motionState = new AmmoInstance.btDefaultMotionState(transform);
-    const localInertia = new AmmoInstance.btVector3(0, 0, 0);
-
-    if (mass > 0) {
-        shape.calculateLocalInertia(mass, localInertia);
-    }
-
-    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
-    const body = new AmmoInstance.btRigidBody(rbInfo);
-
-    world.addRigidBody(body);
+    createPhysicsBox(world, sx, sy, sz, px, py, pz, mass);
 };
+
 
 // Placeholder for spawning dice physics
 export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation) => {
