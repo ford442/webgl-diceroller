@@ -46,7 +46,7 @@ async function init() {
         await renderer.init();
         console.log('Using WebGPU');
     } catch (e) {
-        console.warn('WebGPU not supported, falling back to WebGL2', e);
+        console.error('WebGPU not supported, falling back to WebGL2. Error:', e);
         renderer = new THREE.WebGLRenderer({ antialias: true });
     }
 

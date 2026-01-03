@@ -1,5 +1,6 @@
 import Ammo from 'ammo.js';
 import * as THREE from 'three';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // Ensure Ammo is loaded
 let AmmoInstance = null;
@@ -12,6 +13,7 @@ export const initPhysics = async () => {
             AmmoInstance = await Ammo();
         } catch (e) {
             // Fallback if it's not a promise
+            console.warn("Ammo() failed or is not a promise, retrying synchronously.", e);
             AmmoInstance = Ammo();
         }
     } else {
@@ -20,9 +22,7 @@ export const initPhysics = async () => {
 
     // Check for initialization
     if (!AmmoInstance.btVector3) {
-        // Sometimes it takes a moment or relies on a callback?
-        // But for 0.0.10 asm.js it should be sync.
-        console.warn("Ammo.btVector3 is missing. Ammo object:", AmmoInstance);
+        console.error("Ammo.btVector3 is missing. Ammo object:", AmmoInstance);
     }
 
     const collisionConfiguration = new AmmoInstance.btDefaultCollisionConfiguration();
@@ -159,14 +159,33 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
 export const createConvexHullShape = (mesh) => {
     const shape = new AmmoInstance.btConvexHullShape();
 
-    // Iterate over vertices
-    const geometry = mesh.geometry;
+    // Clone geometry to avoid modifying the visual mesh
+    let geometry = mesh.geometry.clone();
+
+    // Merge vertices to remove duplicates and reduce count
+    geometry = BufferGeometryUtils.mergeVertices(geometry);
+
     const positionAttribute = geometry.attributes.position;
+    console.log(`Creating convex hull from ${positionAttribute.count} vertices (original: ${mesh.geometry.attributes.position.count})`);
 
     for ( let i = 0; i < positionAttribute.count; i ++ ) {
         const v = new THREE.Vector3();
         v.fromBufferAttribute( positionAttribute, i );
-        // Apply scale if any
+        // Apply scale if any (matrixWorld of the mesh)
+        // Note: matrixWorld might include position/rotation which we might not want if we set transform later?
+        // Usually for a shape, we want local coordinates scaled.
+        // If mesh.matrixWorld includes position, the shape origin will be offset.
+        // Usually we want the shape centered.
+        // Let's assume the mesh is centered at 0,0,0 and we just want to apply scale.
+        // But the previous code applied matrixWorld. Let's check if we should only apply scale.
+
+        // If the mesh is already at 0,0,0, applying matrixWorld (which might be identity or contain transform)
+        // is risky if the mesh was just loaded and not positioned yet.
+        // However, in dice.js, we see:
+        // cleanMesh.position.set(0, 0, 0);
+        // cleanMesh.scale.set(1, 1, 1);
+        // So matrixWorld is likely Identity.
+
         v.applyMatrix4(mesh.matrixWorld);
 
         const vec = new AmmoInstance.btVector3(v.x, v.y, v.z);
