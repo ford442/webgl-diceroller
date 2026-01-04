@@ -25,13 +25,25 @@ async function init() {
     camera.lookAt(0, -3, 0);
 
     // Lights
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444);
+    // Ambient Atmosphere (Darker, slightly blue for night/tavern feel)
+    const hemiLight = new THREE.HemisphereLight(0x444455, 0x111122, 0.5);
     hemiLight.position.set(0, 20, 0);
     scene.add(hemiLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff);
+    // Warm Candle Light (Point Light)
+    // Positioned slightly above the table to cast soft shadows
+    const candleLight = new THREE.PointLight(0xffaa33, 500, 25);
+    candleLight.position.set(5, 5, 5);
+    candleLight.castShadow = true;
+    candleLight.shadow.mapSize.width = 2048;
+    candleLight.shadow.mapSize.height = 2048;
+    candleLight.shadow.bias = -0.001;
+    scene.add(candleLight);
+
+    // Subtle Fill Light (Directional - Moonlight?)
+    const dirLight = new THREE.DirectionalLight(0xccccff, 0.5);
     dirLight.position.set(-10, 10, -10);
-    dirLight.castShadow = true;
+    dirLight.castShadow = true; // Keep shadows for variety
     dirLight.shadow.camera.top = 10;
     dirLight.shadow.camera.bottom = -10;
     dirLight.shadow.camera.left = -10;
