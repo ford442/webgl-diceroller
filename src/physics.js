@@ -61,6 +61,10 @@ export const createFloorAndWalls = (scene, world, tableConfig = null) => {
         thickness = tableConfig.height;
 
         // Visuals are already created by Table.js, so we only need physics for the floor
+        // Note: floorY matches the visual mesh position. The box shape is centered at floorY,
+        // so the top surface is at floorY + thickness/2.
+        // Visual mesh is also centered at floorY, so surfaces align.
+        console.log(`Creating physics floor at Y=${floorY} with thickness=${thickness}`);
         createPhysicsBox(world, width, thickness, depth, tableConfig.position.x, floorY, tableConfig.position.z, 0);
     } else {
         // Fallback or legacy floor
