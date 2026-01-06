@@ -17,7 +17,7 @@ init();
 async function init() {
     // Scene setup
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xbfd1e5);
+    scene.background = new THREE.Color(0x222222); // Darker, more atmospheric background
 
     // Camera setup
     camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -25,20 +25,26 @@ async function init() {
     camera.lookAt(0, -3, 0);
 
     // Lights
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444);
-    hemiLight.position.set(0, 20, 0);
-    scene.add(hemiLight);
+    // Ambient light (low intensity)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+    scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff);
-    dirLight.position.set(-10, 10, -10);
-    dirLight.castShadow = true;
-    dirLight.shadow.camera.top = 10;
-    dirLight.shadow.camera.bottom = -10;
-    dirLight.shadow.camera.left = -10;
-    dirLight.shadow.camera.right = 10;
-    dirLight.shadow.camera.near = 0.1;
-    dirLight.shadow.camera.far = 40;
-    scene.add(dirLight);
+    // Warm PointLight (Candle/Fireplace) - Key Light
+    const pointLight = new THREE.PointLight(0xffaa55, 1.5, 50);
+    pointLight.position.set(2, 5, 2);
+    pointLight.castShadow = true;
+    pointLight.shadow.bias = -0.0001;
+    pointLight.shadow.mapSize.width = 1024;
+    pointLight.shadow.mapSize.height = 1024;
+    scene.add(pointLight);
+
+    // Cool SpotLight (Moonlight/Rim) - Fill/Rim Light
+    const spotLight = new THREE.SpotLight(0x8888ff, 0.8);
+    spotLight.position.set(-10, 10, -5);
+    spotLight.angle = Math.PI / 4;
+    spotLight.penumbra = 0.5;
+    spotLight.castShadow = true;
+    scene.add(spotLight);
 
     // Renderer setup
     try {
