@@ -55,10 +55,13 @@ export const createFloorAndWalls = (scene, world, tableConfig = null) => {
 
     if (tableConfig) {
         // Use table config for floor physics
+        // Ensure we handle the config from Table.js correctly
         floorY = tableConfig.position.y;
         width = tableConfig.width;
         depth = tableConfig.depth;
         thickness = tableConfig.height;
+
+        console.log("Physics: Creating floor from config", { floorY, width, depth, thickness });
 
         // Visuals are already created by Table.js, so we only need physics for the floor
         // Note: floorY matches the visual mesh position. The box shape is centered at floorY,
