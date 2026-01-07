@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+// WebGPURenderer import path depends on three.js version and build
+// Trying to import from 'three/webgpu' which is mapped in package.json exports to ./build/three.webgpu.js
 import { WebGPURenderer } from 'three/webgpu';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
@@ -6,6 +8,7 @@ import { loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDi
 import { initUI } from './ui.js';
 import { initInteraction, updateInteraction } from './interaction.js';
 import { createTable } from './environment/Table.js';
+import { RoomEnvironment } from './environment/RoomEnvironment.js';
 
 let camera, scene, renderer;
 let physicsWorld;
@@ -47,19 +50,23 @@ async function init() {
     scene.add(spotLight);
 
     // Renderer setup
-    try {
-        renderer = new WebGPURenderer({ antialias: true });
-        await renderer.init();
-        console.log('Using WebGPU');
-    } catch (e) {
-        console.error('WebGPU not supported, falling back to WebGL2. Error:', e);
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-    }
-
+    // Note: Switched to WebGLRenderer for stable PMREMGenerator/RoomEnvironment support
+    // WebGPURenderer is currently experimental and has issues with PMREM in some environments
+    renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1;
     document.body.appendChild(renderer.domElement);
+
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+    const roomEnvironment = new RoomEnvironment();
+    scene.environment = pmremGenerator.fromScene(roomEnvironment).texture;
+    // scene.background = scene.environment; // Optional: use environment as background
+    pmremGenerator.dispose();
+    roomEnvironment.dispose();
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, -3, 0);
