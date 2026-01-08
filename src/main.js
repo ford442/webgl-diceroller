@@ -8,6 +8,7 @@ import { loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDi
 import { initUI } from './ui.js';
 import { initInteraction, updateInteraction } from './interaction.js';
 import { createTable } from './environment/Table.js';
+import { createRoom } from './environment/Room.js';
 import { RoomEnvironment } from './environment/RoomEnvironment.js';
 
 let camera, scene, renderer;
@@ -77,6 +78,7 @@ async function init() {
         physicsWorld = await initPhysics();
 
         // Environment
+        createRoom(scene);
         const tableConfig = createTable(scene);
         createFloorAndWalls(scene, physicsWorld, tableConfig);
     } catch (e) {
