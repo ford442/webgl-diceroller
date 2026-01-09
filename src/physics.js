@@ -1,5 +1,6 @@
 import Ammo from 'ammo.js';
 import * as THREE from 'three';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // Ensure Ammo is loaded
 let AmmoInstance = null;
@@ -12,6 +13,7 @@ export const initPhysics = async () => {
             AmmoInstance = await Ammo();
         } catch (e) {
             // Fallback if it's not a promise
+            console.warn("Ammo() failed or is not a promise, retrying synchronously.", e);
             AmmoInstance = Ammo();
         }
     } else {
@@ -20,9 +22,7 @@ export const initPhysics = async () => {
 
     // Check for initialization
     if (!AmmoInstance.btVector3) {
-        // Sometimes it takes a moment or relies on a callback?
-        // But for 0.0.10 asm.js it should be sync.
-        console.warn("Ammo.btVector3 is missing. Ammo object:", AmmoInstance);
+        console.error("Ammo.btVector3 is missing. Ammo object:", AmmoInstance);
     }
 
     const collisionConfiguration = new AmmoInstance.btDefaultCollisionConfiguration();
@@ -55,12 +55,19 @@ export const createFloorAndWalls = (scene, world, tableConfig = null) => {
 
     if (tableConfig) {
         // Use table config for floor physics
+        // Ensure we handle the config from Table.js correctly
         floorY = tableConfig.position.y;
         width = tableConfig.width;
         depth = tableConfig.depth;
         thickness = tableConfig.height;
 
+        console.log("Physics: Creating floor from config", { floorY, width, depth, thickness });
+
         // Visuals are already created by Table.js, so we only need physics for the floor
+        // Note: floorY matches the visual mesh position. The box shape is centered at floorY,
+        // so the top surface is at floorY + thickness/2.
+        // Visual mesh is also centered at floorY, so surfaces align.
+        console.log(`Creating physics floor at Y=${floorY} with thickness=${thickness}`);
         createPhysicsBox(world, width, thickness, depth, tableConfig.position.x, floorY, tableConfig.position.z, 0);
     } else {
         // Fallback or legacy floor
@@ -155,18 +162,57 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
     return body;
 };
 
+export const createStaticBody = (world, mesh, shape) => {
+    const mass = 0; // Static
+    const transform = new AmmoInstance.btTransform();
+    transform.setIdentity();
+    transform.setOrigin(new AmmoInstance.btVector3(mesh.position.x, mesh.position.y, mesh.position.z));
+
+    // Quaternion
+    const q = new AmmoInstance.btQuaternion(mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w);
+    transform.setRotation(q);
+
+    const motionState = new AmmoInstance.btDefaultMotionState(transform);
+    const localInertia = new AmmoInstance.btVector3(0, 0, 0);
+
+    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
+    const body = new AmmoInstance.btRigidBody(rbInfo);
+
+    world.addRigidBody(body);
+    return body;
+};
+
 // Helper to create convex hull shape from mesh
 export const createConvexHullShape = (mesh) => {
     const shape = new AmmoInstance.btConvexHullShape();
 
-    // Iterate over vertices
-    const geometry = mesh.geometry;
+    // Clone geometry to avoid modifying the visual mesh
+    let geometry = mesh.geometry.clone();
+
+    // Merge vertices to remove duplicates and reduce count
+    geometry = BufferGeometryUtils.mergeVertices(geometry);
+
     const positionAttribute = geometry.attributes.position;
+    console.log(`Creating convex hull from ${positionAttribute.count} vertices (original: ${mesh.geometry.attributes.position.count})`);
 
     for ( let i = 0; i < positionAttribute.count; i ++ ) {
         const v = new THREE.Vector3();
         v.fromBufferAttribute( positionAttribute, i );
-        // Apply scale if any
+        // Apply scale if any (matrixWorld of the mesh)
+        // Note: matrixWorld might include position/rotation which we might not want if we set transform later?
+        // Usually for a shape, we want local coordinates scaled.
+        // If mesh.matrixWorld includes position, the shape origin will be offset.
+        // Usually we want the shape centered.
+        // Let's assume the mesh is centered at 0,0,0 and we just want to apply scale.
+        // But the previous code applied matrixWorld. Let's check if we should only apply scale.
+
+        // If the mesh is already at 0,0,0, applying matrixWorld (which might be identity or contain transform)
+        // is risky if the mesh was just loaded and not positioned yet.
+        // However, in dice.js, we see:
+        // cleanMesh.position.set(0, 0, 0);
+        // cleanMesh.scale.set(1, 1, 1);
+        // So matrixWorld is likely Identity.
+
         v.applyMatrix4(mesh.matrixWorld);
 
         const vec = new AmmoInstance.btVector3(v.x, v.y, v.z);

@@ -1,39 +1,56 @@
 import * as THREE from 'three';
 
 export function createTable(scene) {
-    const width = 25;
-    const height = 1; // Thickness of the table
-    const depth = 25;
-    const position = { x: 0, y: -2, z: 0 }; // Top surface at y = -1.5
+    // Dimensions
+    const width = 20;
+    const depth = 20;
+    const height = 0.5;
 
-    // Load Texture
-    const loader = new THREE.TextureLoader();
-    const texture = loader.load('images/wood.jpg');
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(4, 4);
-    texture.colorSpace = THREE.SRGBColorSpace;
+    // Position
+    const position = { x: 0, y: -3, z: 0 };
 
-    // Create Material
-    // Using MeshStandardMaterial for PBR
+    // Texture Loader
+    const textureLoader = new THREE.TextureLoader();
+    const diffuseMap = textureLoader.load('/images/wood_diffuse.jpg');
+    const roughnessMap = textureLoader.load('/images/wood_roughness.jpg');
+    const bumpMap = textureLoader.load('/images/wood_bump.jpg');
+
+    // Configure textures
+    [diffuseMap, roughnessMap, bumpMap].forEach(texture => {
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(2, 2); // Repeat texture 2x2 times across the table
+        texture.colorSpace = THREE.SRGBColorSpace;
+    });
+    // Bump/Roughness maps should be linear, not sRGB. Three.js handles this automatically if we don't set SRGBColorSpace on them,
+    // but diffuseMap definitely needs it.
+    roughnessMap.colorSpace = THREE.NoColorSpace;
+    bumpMap.colorSpace = THREE.NoColorSpace;
+
+    // Material
     const material = new THREE.MeshStandardMaterial({
-        map: texture,
-        roughness: 0.8,
-        metalness: 0.1,
-        color: 0x8B4513 // SaddleBrown tint to make it look rich
+        map: diffuseMap,
+        roughnessMap: roughnessMap,
+        bumpMap: bumpMap,
+        bumpScale: 0.05,
+        color: 0xffffff, // White to let texture color show through
+        roughness: 1.0,  // Base roughness
+        metalness: 0.0
     });
 
-    // Create Mesh
+    // Geometry
     const geometry = new THREE.BoxGeometry(width, height, depth);
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(position.x, position.y, position.z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    const tableMesh = new THREE.Mesh(geometry, material);
 
-    scene.add(mesh);
+    tableMesh.position.set(position.x, position.y, position.z);
+    tableMesh.receiveShadow = true;
+    tableMesh.castShadow = true;
 
+    scene.add(tableMesh);
+
+    // Return configuration for physics
+    // Returning flat properties to match physics.js expectation
     return {
-        mesh,
         width,
         height,
         depth,

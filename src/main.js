@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+// WebGPURenderer import path depends on three.js version and build
+// Trying to import from 'three/webgpu' which is mapped in package.json exports to ./build/three.webgpu.js
 import { WebGPURenderer } from 'three/webgpu';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
@@ -6,6 +8,9 @@ import { loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDi
 import { initUI } from './ui.js';
 import { initInteraction, updateInteraction } from './interaction.js';
 import { createTable } from './environment/Table.js';
+import { createRoom } from './environment/Room.js';
+import { createClutter } from './environment/Clutter.js';
+import { RoomEnvironment } from './environment/RoomEnvironment.js';
 
 let camera, scene, renderer;
 let physicsWorld;
@@ -17,7 +22,7 @@ init();
 async function init() {
     // Scene setup
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xbfd1e5);
+    scene.background = new THREE.Color(0x222222); // Darker, more atmospheric background
 
     // Camera setup
     camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -25,35 +30,45 @@ async function init() {
     camera.lookAt(0, -3, 0);
 
     // Lights
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444);
-    hemiLight.position.set(0, 20, 0);
-    scene.add(hemiLight);
+    // Ambient light (low intensity)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+    scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff);
-    dirLight.position.set(-10, 10, -10);
-    dirLight.castShadow = true;
-    dirLight.shadow.camera.top = 10;
-    dirLight.shadow.camera.bottom = -10;
-    dirLight.shadow.camera.left = -10;
-    dirLight.shadow.camera.right = 10;
-    dirLight.shadow.camera.near = 0.1;
-    dirLight.shadow.camera.far = 40;
-    scene.add(dirLight);
+    // Warm PointLight (Candle/Fireplace) - Key Light
+    const pointLight = new THREE.PointLight(0xffaa55, 1.5, 50);
+    pointLight.position.set(2, 5, 2);
+    pointLight.castShadow = true;
+    pointLight.shadow.bias = -0.0001;
+    pointLight.shadow.mapSize.width = 1024;
+    pointLight.shadow.mapSize.height = 1024;
+    scene.add(pointLight);
+
+    // Cool SpotLight (Moonlight/Rim) - Fill/Rim Light
+    const spotLight = new THREE.SpotLight(0x8888ff, 0.8);
+    spotLight.position.set(-10, 10, -5);
+    spotLight.angle = Math.PI / 4;
+    spotLight.penumbra = 0.5;
+    spotLight.castShadow = true;
+    scene.add(spotLight);
 
     // Renderer setup
-    try {
-        renderer = new WebGPURenderer({ antialias: true });
-        await renderer.init();
-        console.log('Using WebGPU');
-    } catch (e) {
-        console.warn('WebGPU not supported, falling back to WebGL2', e);
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-    }
-
+    // Note: Switched to WebGLRenderer for stable PMREMGenerator/RoomEnvironment support
+    // WebGPURenderer is currently experimental and has issues with PMREM in some environments
+    renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1;
     document.body.appendChild(renderer.domElement);
+
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+    const roomEnvironment = new RoomEnvironment();
+    scene.environment = pmremGenerator.fromScene(roomEnvironment).texture;
+    // scene.background = scene.environment; // Optional: use environment as background
+    pmremGenerator.dispose();
+    roomEnvironment.dispose();
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, -3, 0);
@@ -64,8 +79,10 @@ async function init() {
         physicsWorld = await initPhysics();
 
         // Environment
+        createRoom(scene);
         const tableConfig = createTable(scene);
         createFloorAndWalls(scene, physicsWorld, tableConfig);
+        createClutter(scene, physicsWorld);
     } catch (e) {
         console.error("Failed to initialize physics", e);
         return;
