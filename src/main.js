@@ -9,6 +9,7 @@ import { initUI } from './ui.js';
 import { initInteraction, updateInteraction } from './interaction.js';
 import { createTable } from './environment/Table.js';
 import { createRoom } from './environment/Room.js';
+import { createClutter } from './environment/Clutter.js';
 import { RoomEnvironment } from './environment/RoomEnvironment.js';
 
 let camera, scene, renderer;
@@ -81,6 +82,7 @@ async function init() {
         createRoom(scene);
         const tableConfig = createTable(scene);
         createFloorAndWalls(scene, physicsWorld, tableConfig);
+        createClutter(scene, physicsWorld);
     } catch (e) {
         console.error("Failed to initialize physics", e);
         return;

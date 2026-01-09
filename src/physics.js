@@ -162,6 +162,26 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
     return body;
 };
 
+export const createStaticBody = (world, mesh, shape) => {
+    const mass = 0; // Static
+    const transform = new AmmoInstance.btTransform();
+    transform.setIdentity();
+    transform.setOrigin(new AmmoInstance.btVector3(mesh.position.x, mesh.position.y, mesh.position.z));
+
+    // Quaternion
+    const q = new AmmoInstance.btQuaternion(mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w);
+    transform.setRotation(q);
+
+    const motionState = new AmmoInstance.btDefaultMotionState(transform);
+    const localInertia = new AmmoInstance.btVector3(0, 0, 0);
+
+    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
+    const body = new AmmoInstance.btRigidBody(rbInfo);
+
+    world.addRigidBody(body);
+    return body;
+};
+
 // Helper to create convex hull shape from mesh
 export const createConvexHullShape = (mesh) => {
     const shape = new AmmoInstance.btConvexHullShape();
