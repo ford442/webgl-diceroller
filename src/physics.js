@@ -20,8 +20,6 @@ export const initPhysics = async () => {
 
     // Check for initialization
     if (!AmmoInstance.btVector3) {
-        // Sometimes it takes a moment or relies on a callback?
-        // But for 0.0.10 asm.js it should be sync.
         console.warn("Ammo.btVector3 is missing. Ammo object:", AmmoInstance);
     }
 
@@ -30,7 +28,7 @@ export const initPhysics = async () => {
     const overlappingPairCache = new AmmoInstance.btDbvtBroadphase();
     const solver = new AmmoInstance.btSequentialImpulseConstraintSolver();
     const dynamicsWorld = new AmmoInstance.btDiscreteDynamicsWorld(dispatcher, overlappingPairCache, solver, collisionConfiguration);
-    dynamicsWorld.setGravity(new AmmoInstance.btVector3(0, -10, 0));
+    dynamicsWorld.setGravity(new AmmoInstance.btVector3(0, -20, 0)); // Increased gravity for heavier feel
 
     return dynamicsWorld;
 };
@@ -43,7 +41,8 @@ export const getAmmo = () => {
 };
 
 export const stepPhysics = (world, deltaTime) => {
-    world.stepSimulation(deltaTime, 10);
+    // Higher sub-steps for better accuracy with fast moving dice
+    world.stepSimulation(deltaTime, 10, 1/60);
 };
 
 export const createFloorAndWalls = (scene, world, tableConfig = null) => {
@@ -68,13 +67,11 @@ export const createFloorAndWalls = (scene, world, tableConfig = null) => {
     }
 
     // Walls - Adjusted based on floor size
-    // We want walls around the floor area.
     const wallHeight = 100;
     const halfWidth = width / 2;
     const halfDepth = depth / 2;
 
-    // Ensure walls start from the floor level
-    const wallY = floorY + wallHeight / 2; // Center of wall
+    const wallY = floorY + wallHeight / 2;
 
     createBox(scene, world, 1, wallHeight, depth, halfWidth + 0.5, wallY, 0, 0, 0x000000, null, true);
     createBox(scene, world, 1, wallHeight, depth, -halfWidth - 0.5, wallY, 0, 0, 0x000000, null, true);
@@ -98,11 +95,14 @@ const createPhysicsBox = (world, sx, sy, sz, px, py, pz, mass) => {
     const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
     const body = new AmmoInstance.btRigidBody(rbInfo);
 
+    // Floor properties
+    body.setFriction(0.6);
+    body.setRestitution(0.5); // Bouncy floor
+
     world.addRigidBody(body);
 };
 
 const createBox = (scene, world, sx, sy, sz, px, py, pz, mass, color, textureUrl, invisible = false) => {
-    // Three.js visual
     let material;
     if (textureUrl) {
         const texture = new THREE.TextureLoader().load(textureUrl);
@@ -124,19 +124,20 @@ const createBox = (scene, world, sx, sy, sz, px, py, pz, mass, color, textureUrl
     mesh.receiveShadow = true;
     scene.add(mesh);
 
-    // Ammo.js physics
     createPhysicsBox(world, sx, sy, sz, px, py, pz, mass);
 };
 
-
-// Placeholder for spawning dice physics
+// Spawn Dice with tuned physics
 export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation) => {
-    const mass = 15;
+    const mass = 5; // Lower mass works better with higher gravity for responsiveness
+
+    // TIGHTEN MARGINS: This prevents "floating" and balancing on edges
+    collisionShape.setMargin(0.01);
+
     const transform = new AmmoInstance.btTransform();
     transform.setIdentity();
     transform.setOrigin(new AmmoInstance.btVector3(position.x, position.y, position.z));
 
-    // Convert Euler rotation to quaternion using THREE.js
     const threeQuat = new THREE.Quaternion();
     threeQuat.setFromEuler(new THREE.Euler(rotation.x, rotation.y, rotation.z));
     
@@ -150,28 +151,34 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
     const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, collisionShape, localInertia);
     const body = new AmmoInstance.btRigidBody(rbInfo);
 
+    // PHYSICS TUNING
+    body.setFriction(0.6);        // Prevent sliding too much
+    body.setRollingFriction(0.1); // Help them stop rolling
+    body.setRestitution(0.3);     // Bounciness (0 = no bounce, 1 = super ball)
+
+    // Damping simulates air resistance/heavy feel
+    // Linear 0.05, Angular 0.1 helps them stop spinning eventually
+    body.setDamping(0.05, 0.1);
+
+    // Prevent sleeping too early (so they don't freeze in mid-air/roll)
+    body.setActivationState(4); // 4 = DISABLE_DEACTIVATION initialy, we can let them sleep later if needed
+
     world.addRigidBody(body);
 
     return body;
 };
 
-// Helper to create convex hull shape from mesh
 export const createConvexHullShape = (mesh) => {
     const shape = new AmmoInstance.btConvexHullShape();
-
-    // Iterate over vertices
     const geometry = mesh.geometry;
     const positionAttribute = geometry.attributes.position;
 
     for ( let i = 0; i < positionAttribute.count; i ++ ) {
         const v = new THREE.Vector3();
         v.fromBufferAttribute( positionAttribute, i );
-        // Apply scale if any
         v.applyMatrix4(mesh.matrixWorld);
-
         const vec = new AmmoInstance.btVector3(v.x, v.y, v.z);
         shape.addPoint(vec);
     }
-
     return shape;
 };
