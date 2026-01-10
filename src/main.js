@@ -81,6 +81,7 @@ async function init() {
         // Environment
         createRoom(scene);
         const tableConfig = createTable(scene);
+        // Pass tableConfig to physics to ensure walls align with visual tray
         createFloorAndWalls(scene, physicsWorld, tableConfig);
         createClutter(scene, physicsWorld);
     } catch (e) {
