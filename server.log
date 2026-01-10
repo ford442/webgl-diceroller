@@ -3,7 +3,11 @@
 > vite
 
 
-  VITE v7.2.7  ready in 378 ms
+  VITE v7.3.1  ready in 391 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
+9:09:58 AM [vite] (client) page reload src/environment/Table.js
+9:09:58 AM [vite] (client) page reload src/environment/Table.js
+9:10:16 AM [vite] (client) page reload src/physics.js
+9:15:44 AM [vite] (client) page reload src/main.js

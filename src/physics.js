@@ -76,17 +76,63 @@ export const createFloorAndWalls = (scene, world, tableConfig = null) => {
 
     // Walls - Adjusted based on floor size
     // We want walls around the floor area.
-    const wallHeight = 100;
+    let wallHeight = 100; // Default invisible high wall
+    let wallThickness = 1;
+    let wallOffsetY = 0; // Relative to floorY if we want to shift it up/down
+
+    // Adjust walls based on config if provided (to match visual rims)
+    if (tableConfig && tableConfig.walls) {
+        // Use visual rim height + some buffer, OR just use the rim height if we want realistic physics (dice can fly out)
+        // Let's make it match the visual rim exactly for now, but maybe extend slightly upwards if needed.
+        // The user prompt says "The collision box needs to be slightly larger than the visual tray so dice don't clip through walls."
+        // So let's make it taller or thicker?
+        // Let's stick to the config height but maybe verify thickness.
+        wallHeight = tableConfig.walls.height;
+        wallThickness = tableConfig.walls.thickness;
+        // Visual Rim Center Y relative to floor center (0 local): tableConfig.walls.offsetY
+        // floorY is World Y of floor center.
+        // So wall center Y = floorY + tableConfig.walls.offsetY
+        // BUT wait, floorY is passed as -3. Visual floor is at -3.
+        // tableConfig.walls.offsetY is 0.75 (relative to -3).
+        // So Wall Y = -3 + 0.75 = -2.25.
+        // This matches our calculation in Table.js.
+
+        // HOWEVER: createBox expects wallY to be center of box.
+        // If we use wallOffsetY from config, we can calculate wallY directly.
+        wallOffsetY = tableConfig.walls.offsetY;
+    }
+
     const halfWidth = width / 2;
     const halfDepth = depth / 2;
 
-    // Ensure walls start from the floor level
-    const wallY = floorY + wallHeight / 2; // Center of wall
+    // Calculate wall center Y
+    // If using config: floorY + wallOffsetY
+    // If not using config: floorY + wallHeight/2
+    const wallY = (tableConfig && tableConfig.walls) ? (floorY + wallOffsetY) : (floorY + wallHeight / 2);
 
-    createBox(scene, world, 1, wallHeight, depth, halfWidth + 0.5, wallY, 0, 0, 0x000000, null, true);
-    createBox(scene, world, 1, wallHeight, depth, -halfWidth - 0.5, wallY, 0, 0, 0x000000, null, true);
-    createBox(scene, world, width, wallHeight, 1, 0, wallY, halfDepth + 0.5, 0, 0x000000, null, true);
-    createBox(scene, world, width, wallHeight, 1, 0, wallY, -halfDepth - 0.5, 0, 0x000000, null, true);
+    console.log(`Creating physics walls at Y=${wallY} with Height=${wallHeight} Thickness=${wallThickness}`);
+
+    // Create walls matching the rim positions
+    // Left/Right Walls
+    // Position X: +/- (halfWidth + wallThickness/2)
+    // Dimension: wallThickness x wallHeight x depth
+    // Note: In Table.js, Top/Bottom rims span full width (width + 2*rimWidth).
+    // Here we use overlapping boxes?
+    // createBox creates physics box.
+    // If we want exact match:
+    // Side walls: 1 x 2 x 20. Position +/- 10.5.
+    // Top/Bottom walls: 22 x 2 x 1. Position +/- 10.5.
+
+    // Side Walls
+    createBox(scene, world, wallThickness, wallHeight, depth, halfWidth + wallThickness/2, wallY, 0, 0, 0x000000, null, true);
+    createBox(scene, world, wallThickness, wallHeight, depth, -halfWidth - wallThickness/2, wallY, 0, 0, 0x000000, null, true);
+
+    // Top/Bottom Walls
+    // Width for these should cover the corners if we want to match visual "TopBotWidth" from Table.js
+    // width + 2*wallThickness
+    const topBotWidth = width + 2 * wallThickness;
+    createBox(scene, world, topBotWidth, wallHeight, wallThickness, 0, wallY, halfDepth + wallThickness/2, 0, 0x000000, null, true);
+    createBox(scene, world, topBotWidth, wallHeight, wallThickness, 0, wallY, -halfDepth - wallThickness/2, 0, 0x000000, null, true);
 };
 
 const createPhysicsBox = (world, sx, sy, sz, px, py, pz, mass) => {
