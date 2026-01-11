@@ -42,7 +42,7 @@ export function createTable(scene) {
         bumpMap: woodBump,
         bumpScale: 0.05,
         color: 0xffffff,
-        roughness: 1.0,
+        roughness: 0.7, // Reduce roughness to allow some specular highlight
         metalness: 0.0
     });
 
