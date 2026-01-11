@@ -3,6 +3,12 @@ import * as THREE from 'three';
 // Trying to import from 'three/webgpu' which is mapped in package.json exports to ./build/three.webgpu.js
 import { WebGPURenderer } from 'three/webgpu';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { VignetteShader } from './shaders/VignetteShader.js';
+
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
 import { loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice } from './dice.js';
 import { initUI } from './ui.js';
@@ -12,7 +18,7 @@ import { createRoom } from './environment/Room.js';
 import { createClutter } from './environment/Clutter.js';
 import { RoomEnvironment } from './environment/RoomEnvironment.js';
 
-let camera, scene, renderer;
+let camera, scene, renderer, composer;
 let physicsWorld;
 let clock;
 let ui;
@@ -31,36 +37,57 @@ async function init() {
 
     // Lights
     // Ambient light (low intensity)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.1); // Lower ambient for more contrast
     scene.add(ambientLight);
 
     // Warm PointLight (Candle/Fireplace) - Key Light
-    const pointLight = new THREE.PointLight(0xffaa55, 1.5, 50);
-    pointLight.position.set(2, 5, 2);
+    const pointLight = new THREE.PointLight(0xffaa55, 2.0, 50); // Slightly brighter, warm
+    pointLight.position.set(3, 6, 3);
     pointLight.castShadow = true;
-    pointLight.shadow.bias = -0.0001;
-    pointLight.shadow.mapSize.width = 1024;
-    pointLight.shadow.mapSize.height = 1024;
+    pointLight.shadow.bias = -0.0005; // Reduced bias
+    pointLight.shadow.mapSize.width = 2048; // Higher res shadows
+    pointLight.shadow.mapSize.height = 2048;
+    pointLight.shadow.radius = 4; // Soft shadows (PCFSoftShadowMap usually ignores this unless using specific filter, but good to have)
     scene.add(pointLight);
 
     // Cool SpotLight (Moonlight/Rim) - Fill/Rim Light
-    const spotLight = new THREE.SpotLight(0x8888ff, 0.8);
+    const spotLight = new THREE.SpotLight(0x8888ff, 1.0);
     spotLight.position.set(-10, 10, -5);
     spotLight.angle = Math.PI / 4;
-    spotLight.penumbra = 0.5;
+    spotLight.penumbra = 1.0; // Soft edges
     spotLight.castShadow = true;
+    spotLight.shadow.bias = -0.0001;
     scene.add(spotLight);
 
     // Renderer setup
     // Note: Switched to WebGLRenderer for stable PMREMGenerator/RoomEnvironment support
-    // WebGPURenderer is currently experimental and has issues with PMREM in some environments
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer = new THREE.WebGLRenderer({ antialias: false }); // Antialias handled by post-processing or browser (if not using composer, but here we use composer so turn off AA or handle it)
+    // Actually, when using EffectComposer, standard MSAA is disabled. We might need SMAAPass if jagged edges are an issue.
+    // For performance and style, let's stick to standard.
+
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1;
+    renderer.toneMappingExposure = 1.0;
     document.body.appendChild(renderer.domElement);
+
+    // Post-Processing
+    composer = new EffectComposer(renderer);
+
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+
+    // Vignette
+    const vignettePass = new ShaderPass(VignetteShader);
+    vignettePass.uniforms['offset'].value = 1.2;
+    vignettePass.uniforms['darkness'].value = 1.6;
+    composer.addPass(vignettePass);
+
+    // Output Pass (Tone Mapping & Color Space)
+    const outputPass = new OutputPass();
+    composer.addPass(outputPass);
 
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
@@ -119,6 +146,7 @@ function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
 }
 
 function animate() {
@@ -131,5 +159,5 @@ function animate() {
         updateInteraction();
     }
 
-    renderer.render(scene, camera);
+    composer.render();
 }
