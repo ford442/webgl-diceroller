@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 // WebGPURenderer import path depends on three.js version and build
-// Trying to import from 'three/webgpu' which is mapped in package.json exports to ./build/three.webgpu.js
 import { WebGPURenderer } from 'three/webgpu';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -22,13 +21,15 @@ let camera, scene, renderer, composer;
 let physicsWorld;
 let clock;
 let ui;
+let pointLight; // Exposed for flickering
+let candleFlamePos; // Position of the candle flame
 
 init();
 
 async function init() {
     // Scene setup
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x222222); // Darker, more atmospheric background
+    scene.background = new THREE.Color(0x111111); // Darker for atmosphere
 
     // Camera setup
     camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -37,38 +38,35 @@ async function init() {
 
     // Lights
     // Ambient light (low intensity)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.1); // Lower ambient for more contrast
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.05); // Very low ambient to make candle pop
     scene.add(ambientLight);
 
-    // Warm PointLight (Candle/Fireplace) - Key Light
-    const pointLight = new THREE.PointLight(0xffaa55, 2.0, 50); // Slightly brighter, warm
-    pointLight.position.set(3, 6, 3);
+    // Warm PointLight (Candle) - Key Light
+    // Initial setup, position will be updated by clutter
+    pointLight = new THREE.PointLight(0xffaa55, 2.0, 15); // Range reduced for intimacy
+    pointLight.position.set(3, 6, 3); // Default if no candle
     pointLight.castShadow = true;
-    pointLight.shadow.bias = -0.0005; // Reduced bias
-    pointLight.shadow.mapSize.width = 2048; // Higher res shadows
+    pointLight.shadow.bias = -0.0005;
+    pointLight.shadow.mapSize.width = 2048;
     pointLight.shadow.mapSize.height = 2048;
-    pointLight.shadow.radius = 4; // Soft shadows (PCFSoftShadowMap usually ignores this unless using specific filter, but good to have)
+    pointLight.shadow.radius = 4; // Soft shadows
     scene.add(pointLight);
 
     // Cool SpotLight (Moonlight/Rim) - Fill/Rim Light
-    const spotLight = new THREE.SpotLight(0x8888ff, 1.0);
+    const spotLight = new THREE.SpotLight(0x8888ff, 0.8); // Reduced intensity
     spotLight.position.set(-10, 10, -5);
     spotLight.angle = Math.PI / 4;
-    spotLight.penumbra = 1.0; // Soft edges
+    spotLight.penumbra = 1.0;
     spotLight.castShadow = true;
     spotLight.shadow.bias = -0.0001;
     scene.add(spotLight);
 
     // Renderer setup
-    // Note: Switched to WebGLRenderer for stable PMREMGenerator/RoomEnvironment support
-    renderer = new THREE.WebGLRenderer({ antialias: false }); // Antialias handled by post-processing or browser (if not using composer, but here we use composer so turn off AA or handle it)
-    // Actually, when using EffectComposer, standard MSAA is disabled. We might need SMAAPass if jagged edges are an issue.
-    // For performance and style, let's stick to standard.
-
+    renderer = new THREE.WebGLRenderer({ antialias: false });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
     document.body.appendChild(renderer.domElement);
@@ -82,18 +80,18 @@ async function init() {
     // Vignette
     const vignettePass = new ShaderPass(VignetteShader);
     vignettePass.uniforms['offset'].value = 1.2;
-    vignettePass.uniforms['darkness'].value = 1.6;
+    vignettePass.uniforms['darkness'].value = 1.8; // Darker vignette
     composer.addPass(vignettePass);
 
-    // Output Pass (Tone Mapping & Color Space)
+    // Output Pass
     const outputPass = new OutputPass();
     composer.addPass(outputPass);
 
+    // Environment Map
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
     const roomEnvironment = new RoomEnvironment();
     scene.environment = pmremGenerator.fromScene(roomEnvironment).texture;
-    // scene.background = scene.environment; // Optional: use environment as background
     pmremGenerator.dispose();
     roomEnvironment.dispose();
 
@@ -108,9 +106,18 @@ async function init() {
         // Environment
         createRoom(scene);
         const tableConfig = createTable(scene);
-        // Pass tableConfig to physics to ensure walls align with visual tray
         createFloorAndWalls(scene, physicsWorld, tableConfig);
-        createClutter(scene, physicsWorld);
+
+        // Clutter & Candle
+        const clutterData = createClutter(scene, physicsWorld);
+        if (clutterData && clutterData.flamePosition) {
+            candleFlamePos = clutterData.flamePosition;
+            // Move light to flame
+            pointLight.position.copy(candleFlamePos);
+            // Slightly above the wick visual
+            pointLight.position.y += 0.05;
+        }
+
     } catch (e) {
         console.error("Failed to initialize physics", e);
         return;
@@ -118,7 +125,7 @@ async function init() {
 
     // Load Models and Spawn Dice
     await loadDiceModels();
-    spawnObjects(scene, physicsWorld); // Initial spawn with defaults
+    spawnObjects(scene, physicsWorld);
 
     // UI Setup
     ui = initUI(
@@ -135,10 +142,8 @@ async function init() {
 
     clock = new THREE.Clock();
 
-    // Event listeners
     window.addEventListener('resize', onWindowResize);
 
-    // Start loop
     renderer.setAnimationLoop(animate);
 }
 
@@ -151,12 +156,30 @@ function onWindowResize() {
 
 function animate() {
     const deltaTime = clock.getDelta();
+    const time = clock.getElapsedTime();
 
     // Step physics
     if (physicsWorld) {
         stepPhysics(physicsWorld, deltaTime);
         updateDiceVisuals();
         updateInteraction();
+    }
+
+    // Candle Flicker
+    if (pointLight && candleFlamePos) {
+        // Flicker intensity
+        // Base 2.0, plus sine wave for breathing, plus noise for flicker
+        const flicker = Math.sin(time * 10) * 0.1 + (Math.random() - 0.5) * 0.2;
+        pointLight.intensity = 2.0 + flicker;
+
+        // Jitter position slightly
+        const jitterX = (Math.random() - 0.5) * 0.02;
+        const jitterZ = (Math.random() - 0.5) * 0.02;
+        pointLight.position.set(
+            candleFlamePos.x + jitterX,
+            candleFlamePos.y + 0.05, // Keep Y mostly stable
+            candleFlamePos.z + jitterZ
+        );
     }
 
     composer.render();

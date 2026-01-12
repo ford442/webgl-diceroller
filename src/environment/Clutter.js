@@ -12,6 +12,16 @@ export function createClutter(scene, physicsWorld) {
 
     // 3. Book
     createBook(scene, physicsWorld, ammo);
+
+    // 4. Parchment
+    createParchment(scene, physicsWorld, ammo);
+
+    // 5. Candle
+    const flamePosition = createCandle(scene, physicsWorld, ammo);
+
+    return {
+        flamePosition
+    };
 }
 
 function createMug(scene, physicsWorld, ammo) {
@@ -35,21 +45,9 @@ function createMug(scene, physicsWorld, ammo) {
     const handleGeo = new THREE.TorusGeometry(0.3, 0.08, 16, 32);
     const handleMesh = new THREE.Mesh(handleGeo, material);
     handleMesh.position.set(0.5, 0, 0);
-    handleMesh.rotation.z = Math.PI / 2; // Vertical handle? No, default torus lies on XY plane.
-    // If we rotate Z by 90, it stands up in YZ plane?
-    // Default Torus center 0,0,0, tube around Z axis.
-    // Wait, TorusGeometry(radius, tube, radialSegments, tubularSegments)
-    // "The torus is created parallel to the XY plane."
-    // So normal is Z.
-    // We want handle on the side of cylinder (which is Y-up).
-    // So we need to rotate torus so its hole is along X or Z.
-    // Rotate around Y? No.
-    // Rotate around X? No.
-    // Default: lying flat on table.
-    // We want it standing up. Rotate X 90? No.
-    // We want it attached to the side.
+    // Rotate to stand upright on the side
+    handleMesh.rotation.set(0, Math.PI / 2, 0);
 
-    // Let's keep it simple.
     handleMesh.castShadow = true;
     mugGroup.add(handleMesh);
 
@@ -62,19 +60,7 @@ function createMug(scene, physicsWorld, ammo) {
     scene.add(mugGroup);
 
     // Physics
-    // We use a cylinder shape for the mug body. Ignoring handle for physics to keep it simple.
-    // Physics body position should match the mugGroup position.
-    // Note: createStaticBody expects a mesh, we have a group.
-    // We can create a dummy mesh or pass the group if it has position/quaternion properties (it does).
-    // But createStaticBody uses mesh.position/quaternion.
-    // It works for Object3D too.
-
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(0.5, 0.5, 0.5)); // Half extents for Cylinder?
-    // Ammo Cylinder shape constructor takes half extents?
-    // No, btCylinderShape constructor takes halfExtents vector.
-    // Height is Y. Radius is X/Z.
-    // So (0.5, 0.5, 0.5) means radius 0.5, height 1 (2*0.5). Correct.
-
+    const shape = new ammo.btCylinderShape(new ammo.btVector3(0.5, 0.5, 0.5));
     createStaticBody(physicsWorld, mugGroup, shape);
 }
 
@@ -101,7 +87,6 @@ function createCoin(scene, physicsWorld, ammo) {
     scene.add(mesh);
 
     // Physics
-    // Cylinder shape
     const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, thickness / 2, radius));
     createStaticBody(physicsWorld, mesh, shape);
 }
@@ -130,4 +115,94 @@ function createBook(scene, physicsWorld, ammo) {
     // Physics
     const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
     createStaticBody(physicsWorld, mesh, shape);
+}
+
+function createParchment(scene, physicsWorld, ammo) {
+    // Visuals: A sheet of paper/parchment
+    const width = 5;
+    const depth = 7;
+    const thickness = 0.02; // Very thin
+    const geometry = new THREE.BoxGeometry(width, thickness, depth);
+    const material = new THREE.MeshStandardMaterial({
+        color: 0xf5deb3, // Wheat
+        roughness: 0.9,
+        bumpScale: 0.01
+    });
+
+    // Create a texture (optional, or just noise if we had it)
+    // For now simple color.
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.receiveShadow = true;
+
+    // Position
+    // Table top -2.75. Center at -2.75 + 0.01 = -2.74.
+    mesh.position.set(4, -2.74, -3);
+    mesh.rotation.y = -0.3;
+
+    scene.add(mesh);
+
+    // Physics
+    // Even though it's thin, it needs physics or dice will clip/float oddly if they land on it.
+    const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, thickness/2, depth/2));
+    createStaticBody(physicsWorld, mesh, shape);
+}
+
+function createCandle(scene, physicsWorld, ammo) {
+    const candleGroup = new THREE.Group();
+
+    // Candle Body
+    const radius = 0.4;
+    const height = 1.5;
+    const geometry = new THREE.CylinderGeometry(radius, radius, height, 32);
+    const material = new THREE.MeshStandardMaterial({
+        color: 0xeeeecc, // Off-white wax
+        roughness: 0.4,
+        metalness: 0.0
+        // SSS is hard in standard Three.js without transmission or custom shader,
+        // but simple standard material is fine.
+    });
+    const candleMesh = new THREE.Mesh(geometry, material);
+    candleMesh.castShadow = true;
+    candleMesh.receiveShadow = true;
+    candleGroup.add(candleMesh);
+
+    // Wick
+    const wickHeight = 0.2;
+    const wickGeo = new THREE.CylinderGeometry(0.05, 0.05, wickHeight, 8);
+    const wickMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 1.0 });
+    const wickMesh = new THREE.Mesh(wickGeo, wickMat);
+    wickMesh.position.set(0, height/2 + wickHeight/2, 0);
+    candleMesh.add(wickMesh); // Attach to candle mesh so it moves with it
+
+    // Flame (Visual Only)
+    // We can use a Sprite or a small emissive mesh
+    const flameGeo = new THREE.SphereGeometry(0.1, 8, 8);
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+    const flameMesh = new THREE.Mesh(flameGeo, flameMat);
+    flameMesh.position.set(0, height/2 + wickHeight + 0.05, 0);
+    candleMesh.add(flameMesh);
+
+    // Position
+    // Table top -2.75. Height 1.5. Center at -2.75 + 0.75 = -2.0.
+    const posX = -2;
+    const posZ = -6;
+    const posY = -2.0;
+
+    candleGroup.position.set(posX, posY, posZ);
+    scene.add(candleGroup);
+
+    // Physics
+    const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height/2, radius));
+    createStaticBody(physicsWorld, candleGroup, shape);
+
+    // Calculate flame world position
+    // Group pos + candle internal offset
+    // Candle mesh is at 0,0,0 inside group.
+    // Flame is at (0, height/2 + wickHeight + 0.05, 0) inside candle mesh.
+    // So world Y = posY + height/2 + wickHeight + 0.05
+    // = -2.0 + 0.75 + 0.2 + 0.05 = -1.0
+    const flameWorldPos = new THREE.Vector3(posX, posY + height/2 + wickHeight + 0.05, posZ);
+
+    return flameWorldPos;
 }
