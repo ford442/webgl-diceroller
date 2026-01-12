@@ -3,15 +3,7 @@
 > vite
 
 
-  VITE v7.2.7  ready in 399 ms
+  VITE v7.3.1  ready in 347 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
-1:31:42 PM [vite] (client) page reload src/main.js
-1:31:54 PM [vite] (client) page reload src/physics.js
-2:49:18 PM [vite] (client) page reload src/physics.js
-2:49:31 PM [vite] (client) ✨ new dependencies optimized: three/examples/jsm/utils/BufferGeometryUtils.js
-2:49:31 PM [vite] (client) ✨ optimized dependencies changed. reloading
-2:51:54 PM [vite] (client) page reload src/debug-logger.js
-2:52:14 PM [vite] (client) page reload src/physics.js
-2:52:24 PM [vite] (client) page reload src/main.js
