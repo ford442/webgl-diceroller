@@ -13,7 +13,7 @@ export function createTable(scene) {
     // Floor bottom at -3.25 (since center is -3, height 0.5)
     // We want rim bottom at -3.25.
     // Rim center = -3.25 + (rimHeight / 2) = -3.25 + 1.0 = -2.25.
-    const rimY = -2.25;
+    // const rimY = -2.25; // World Y
 
     // Position
     const position = { x: 0, y: -3, z: 0 };
@@ -35,45 +35,46 @@ export function createTable(scene) {
     woodRoughness.colorSpace = THREE.NoColorSpace;
     woodBump.colorSpace = THREE.NoColorSpace;
 
-    // Wood Material
-    const woodMaterial = new THREE.MeshStandardMaterial({
+    // Wood Material (Rims)
+    const rimMaterial = new THREE.MeshStandardMaterial({
         map: woodDiffuse,
         roughnessMap: woodRoughness,
         bumpMap: woodBump,
         bumpScale: 0.05,
         color: 0xffffff,
-        roughness: 0.7, // Reduce roughness to allow some specular highlight
+        roughness: 0.7,
         metalness: 0.0
     });
 
-    // Felt Material (using wood bump map for texture)
-    const feltBump = woodBump.clone(); // Clone to allow different repeat
-    feltBump.repeat.set(4, 4);
+    // Worn Wood Material (Rolling Surface)
+    // Darker, more worn looking
+    const surfaceDiffuse = woodDiffuse.clone();
+    const surfaceRoughness = woodRoughness.clone();
+    const surfaceBump = woodBump.clone();
 
-    const feltMaterial = new THREE.MeshStandardMaterial({
-        color: 0x355e3b, // Hunter Green
-        roughness: 0.9,
-        metalness: 0.0,
-        bumpMap: feltBump,
-        bumpScale: 0.02 // Subtle grain
+    // Repeat texture more for the large surface
+    surfaceDiffuse.repeat.set(2, 2);
+    surfaceRoughness.repeat.set(2, 2);
+    surfaceBump.repeat.set(2, 2);
+
+    const surfaceMaterial = new THREE.MeshStandardMaterial({
+        map: surfaceDiffuse,
+        roughnessMap: surfaceRoughness,
+        bumpMap: surfaceBump,
+        bumpScale: 0.08, // Deeper grain
+        color: 0x886644, // Darker, stained wood look
+        roughness: 0.85, // Worn, non-shiny
+        metalness: 0.0
     });
 
     const tableGroup = new THREE.Group();
-    // No group position needed if we position elements globally,
-    // BUT physics expects a "position" for the floor.
-    // Let's keep the group at 0,0,0 and position elements relative to world coordinates
-    // to match how we calculated positions.
-    // Wait, previous implementation put group at `position` (-3).
-    // Let's stick to global coordinates for clarity in mesh creation,
-    // or local coords inside group.
-
-    // Let's use Local Coordinates inside the Group which is at `position`.
+    // Use Local Coordinates inside the Group which is at `position`.
     tableGroup.position.set(position.x, position.y, position.z);
 
     // 1. Floor (The rolling surface)
     // Box centered at 0,0,0 inside the group
     const floorGeometry = new THREE.BoxGeometry(width, height, depth);
-    const floorMesh = new THREE.Mesh(floorGeometry, feltMaterial);
+    const floorMesh = new THREE.Mesh(floorGeometry, surfaceMaterial);
     floorMesh.receiveShadow = true;
     floorMesh.castShadow = true;
     tableGroup.add(floorMesh);
@@ -86,19 +87,19 @@ export function createTable(scene) {
 
     // Side Rims (Left/Right)
     const sideRimGeometry = new THREE.BoxGeometry(rimWidth, rimHeight, depth);
-    const sideMaterial = woodMaterial.clone();
+    const sideMaterial = rimMaterial.clone();
     sideMaterial.map = woodDiffuse.clone();
     sideMaterial.map.wrapS = THREE.RepeatWrapping;
     sideMaterial.map.wrapT = THREE.RepeatWrapping;
     sideMaterial.map.repeat.set(0.5, 4);
 
-    const leftRim = new THREE.Mesh(sideRimGeometry, woodMaterial);
+    const leftRim = new THREE.Mesh(sideRimGeometry, rimMaterial);
     leftRim.position.set(-(width/2 + rimWidth/2), localRimY, 0);
     leftRim.castShadow = true;
     leftRim.receiveShadow = true;
     tableGroup.add(leftRim);
 
-    const rightRim = new THREE.Mesh(sideRimGeometry, woodMaterial);
+    const rightRim = new THREE.Mesh(sideRimGeometry, rimMaterial);
     rightRim.position.set((width/2 + rimWidth/2), localRimY, 0);
     rightRim.castShadow = true;
     rightRim.receiveShadow = true;
@@ -108,17 +109,47 @@ export function createTable(scene) {
     const topBotWidth = width + 2 * rimWidth;
     const topBotRimGeometry = new THREE.BoxGeometry(topBotWidth, rimHeight, rimWidth);
 
-    const topRim = new THREE.Mesh(topBotRimGeometry, woodMaterial);
+    const topRim = new THREE.Mesh(topBotRimGeometry, rimMaterial);
     topRim.position.set(0, localRimY, -(depth/2 + rimWidth/2));
     topRim.castShadow = true;
     topRim.receiveShadow = true;
     tableGroup.add(topRim);
 
-    const botRim = new THREE.Mesh(topBotRimGeometry, woodMaterial);
+    const botRim = new THREE.Mesh(topBotRimGeometry, rimMaterial);
     botRim.position.set(0, localRimY, (depth/2 + rimWidth/2));
     botRim.castShadow = true;
     botRim.receiveShadow = true;
     tableGroup.add(botRim);
+
+    // 3. Legs (Visual Only)
+    // Table bottom is at -0.25 local (-3.25 world).
+    // Room floor is usually around -10 world.
+    // Leg length needed: -3.25 - (-10) = 6.75. Let's make them 7 units long.
+    // Position: Near the corners of the table (not rims).
+    const legSize = 1.5;
+    const legHeight = 7.0;
+    const legGeometry = new THREE.BoxGeometry(legSize, legHeight, legSize);
+    const legMaterial = rimMaterial; // Match rims
+
+    // Center of leg vertically:
+    // Top at -0.25. Center = -0.25 - legHeight/2 = -0.25 - 3.5 = -3.75.
+    const legY = -3.75;
+    const legOffset = width / 2 - legSize / 2; // Inset slightly
+
+    const positions = [
+        { x: -legOffset, z: -legOffset },
+        { x: legOffset, z: -legOffset },
+        { x: -legOffset, z: legOffset },
+        { x: legOffset, z: legOffset }
+    ];
+
+    positions.forEach(pos => {
+        const leg = new THREE.Mesh(legGeometry, legMaterial);
+        leg.position.set(pos.x, legY, pos.z);
+        leg.castShadow = true;
+        leg.receiveShadow = true;
+        tableGroup.add(leg);
+    });
 
     scene.add(tableGroup);
 
