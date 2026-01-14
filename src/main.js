@@ -13,7 +13,7 @@ import { loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDi
 import { initUI } from './ui.js';
 import { initInteraction, updateInteraction } from './interaction.js';
 import { createTable } from './environment/Table.js';
-import { createRoom } from './environment/Room.js';
+import { createTavernWalls } from './environment/TavernWalls.js';
 import { createClutter } from './environment/Clutter.js';
 import { RoomEnvironment } from './environment/RoomEnvironment.js';
 
@@ -104,7 +104,7 @@ async function init() {
         physicsWorld = await initPhysics();
 
         // Environment
-        createRoom(scene);
+        createTavernWalls(scene, physicsWorld);
         const tableConfig = createTable(scene);
         createFloorAndWalls(scene, physicsWorld, tableConfig);
 
