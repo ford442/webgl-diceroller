@@ -19,6 +19,9 @@ export function createClutter(scene, physicsWorld) {
     // 5. Candle
     const flamePosition = createCandle(scene, physicsWorld, ammo);
 
+    // 6. Pencil (New)
+    createPencil(scene, physicsWorld, ammo);
+
     return {
         flamePosition
     };
@@ -205,4 +208,114 @@ function createCandle(scene, physicsWorld, ammo) {
     const flameWorldPos = new THREE.Vector3(posX, posY + height/2 + wickHeight + 0.05, posZ);
 
     return flameWorldPos;
+}
+
+function createPencil(scene, physicsWorld, ammo) {
+    const pencilGroup = new THREE.Group();
+
+    // Dimensions
+    const radius = 0.04; // 4cm thick? No, 0.04 units. If 1 unit = 1 meter, that's 4cm. A pencil is ~7mm = 0.007m.
+    // Wait, let's check scale.
+    // Table is at -2.75. Dice are usually ~0.2 units?
+    // Mug is radius 0.5. Coin is 0.3.
+    // If mug is 10cm radius, then 0.5 units = 10cm -> 1 unit = 20cm.
+    // Pencil radius 0.04 units -> 0.8cm. 8mm. That seems correct for a pencil.
+    // Length: 1.5 units -> 30cm. A bit long, but okay for a dramatic prop.
+
+    const bodyLen = 1.2;
+    const ferruleLen = 0.15;
+    const eraserLen = 0.15;
+    const tipLen = 0.25;
+
+    // Materials
+    const yellowMat = new THREE.MeshStandardMaterial({ color: 0xffbd2e, roughness: 0.6 });
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0xd2b48c, roughness: 0.8 });
+    const metalMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, metalness: 0.8, roughness: 0.2 });
+    const pinkMat = new THREE.MeshStandardMaterial({ color: 0xff69b4, roughness: 0.9 });
+    const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+
+    // 1. Body (Hexagonal Cylinder)
+    // CylinderGeometry(radiusTop, radiusBottom, height, radialSegments)
+    const bodyGeo = new THREE.CylinderGeometry(radius, radius, bodyLen, 6);
+    const bodyMesh = new THREE.Mesh(bodyGeo, yellowMat);
+    bodyMesh.castShadow = true;
+    bodyMesh.receiveShadow = true;
+    // By default cylinder is centered at 0,0,0.
+    pencilGroup.add(bodyMesh);
+
+    // 2. Ferrule (Metal band at top)
+    const ferruleGeo = new THREE.CylinderGeometry(radius, radius, ferruleLen, 32);
+    const ferruleMesh = new THREE.Mesh(ferruleGeo, metalMat);
+    ferruleMesh.castShadow = true;
+    ferruleMesh.receiveShadow = true;
+    // Position: Top of body is at y = bodyLen/2.
+    // Ferrule center should be at bodyLen/2 + ferruleLen/2.
+    ferruleMesh.position.y = bodyLen / 2 + ferruleLen / 2;
+    pencilGroup.add(ferruleMesh);
+
+    // 3. Eraser (Pink cylinder at top)
+    const eraserGeo = new THREE.CylinderGeometry(radius, radius, eraserLen, 32);
+    const eraserMesh = new THREE.Mesh(eraserGeo, pinkMat);
+    eraserMesh.castShadow = true;
+    eraserMesh.receiveShadow = true;
+    // Position: Top of ferrule is at bodyLen/2 + ferruleLen.
+    // Eraser center: bodyLen/2 + ferruleLen + eraserLen/2.
+    eraserMesh.position.y = bodyLen / 2 + ferruleLen + eraserLen / 2;
+    pencilGroup.add(eraserMesh);
+
+    // 4. Wood Tip (Cone at bottom)
+    // CylinderGeometry(radiusTop, radiusBottom, height, ...)
+    // Top radius = radius (connects to body). Bottom radius = 0 (point).
+    const tipGeo = new THREE.CylinderGeometry(radius, 0.015, tipLen, 6); // Not 0, leave room for lead
+    const tipMesh = new THREE.Mesh(tipGeo, woodMat);
+    tipMesh.castShadow = true;
+    tipMesh.receiveShadow = true;
+    // Position: Bottom of body is -bodyLen/2.
+    // Tip center: -bodyLen/2 - tipLen/2.
+    tipMesh.position.y = -(bodyLen / 2 + tipLen / 2);
+    pencilGroup.add(tipMesh);
+
+    // 5. Lead (Small cone at very bottom)
+    const leadLen = 0.05;
+    const leadGeo = new THREE.CylinderGeometry(0.015, 0, leadLen, 6);
+    const leadMesh = new THREE.Mesh(leadGeo, blackMat);
+    leadMesh.castShadow = true;
+    leadMesh.receiveShadow = true;
+    // Position: Bottom of tip is -bodyLen/2 - tipLen.
+    // Lead center: -bodyLen/2 - tipLen - leadLen/2.
+    leadMesh.position.y = -(bodyLen / 2 + tipLen + leadLen / 2);
+    pencilGroup.add(leadMesh);
+
+    // Transform the whole group to lie on table
+    // Table top -2.75.
+    // Radius 0.04.
+    // Y position = -2.75 + 0.04 = -2.71.
+    pencilGroup.position.set(0, -2.71, 4.5);
+
+    // Rotate 90 deg around Z to lie flat, but randomize Y direction first.
+    // We use 'YXZ' order:
+    // 1. Y: Spin around vertical axis (direction).
+    // 2. X: 0.
+    // 3. Z: 90 degrees (Lay flat).
+    pencilGroup.rotation.set(0, Math.random() * Math.PI * 2, Math.PI / 2, 'YXZ');
+
+    scene.add(pencilGroup);
+
+    // Physics
+    // Approximating with a Box is easiest for rolling stability, but Cylinder rolls.
+    // Total length = body + ferrule + eraser + tip + lead.
+    const totalLen = bodyLen + ferruleLen + eraserLen + tipLen + leadLen;
+    // Physics shape aligned with Y axis.
+    const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, totalLen / 2, radius));
+
+    // We need to match the visual offset.
+    // Visual center of mass is roughly (0,0,0) of the group?
+    // No, the body is centered at 0.
+    // Eraser sticks up (+Y), Tip sticks down (-Y).
+    // Eraser part: 0.15 + 0.15 = 0.3 length up.
+    // Tip part: 0.25 + 0.05 = 0.3 length down.
+    // It's perfectly balanced! nice.
+    // So the physics cylinder can be centered on the group.
+
+    createStaticBody(physicsWorld, pencilGroup, shape);
 }
