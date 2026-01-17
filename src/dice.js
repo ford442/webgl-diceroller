@@ -173,9 +173,9 @@ export const throwDice = (scene, world) => {
 
         // Group them near the top center for the throw
         // Use crypto random for position jitter
-        const x = (getSecureRandom() - 0.5) * 2;
-        const y = 8 + (index * 0.5); // Stack them slightly but high up
-        const z = (getSecureRandom() - 0.5) * 2;
+        const x = (getSecureRandom() - 0.5) * 4;
+        const y = 8 + (index * 0.5) + (getSecureRandom() * 3); // Stack them slightly but high up, with random variation
+        const z = (getSecureRandom() - 0.5) * 4;
 
         transform.setIdentity();
         transform.setOrigin(new Ammo.btVector3(x, y, z));
@@ -197,13 +197,13 @@ export const throwDice = (scene, world) => {
 
         // FORCE IMPULSE (The "Throw")
         // Apply random forces to scatter them and create spin
-        const forceX = (getSecureRandom() - 0.5) * 50; // Horizontal scatter
-        const forceY = (getSecureRandom()) * 10 - 20; // Downward/Upward variation
-        const forceZ = (getSecureRandom() - 0.5) * 50;
+        const forceX = (getSecureRandom() - 0.5) * 80; // Horizontal scatter
+        const forceY = (getSecureRandom()) * 20 - 25; // Downward/Upward variation
+        const forceZ = (getSecureRandom() - 0.5) * 80;
 
-        const spinX = (getSecureRandom() - 0.5) * 100;
-        const spinY = (getSecureRandom() - 0.5) * 100;
-        const spinZ = (getSecureRandom() - 0.5) * 100;
+        const spinX = (getSecureRandom() - 0.5) * 400;
+        const spinY = (getSecureRandom() - 0.5) * 400;
+        const spinZ = (getSecureRandom() - 0.5) * 400;
 
         body.applyCentralImpulse(new Ammo.btVector3(forceX, forceY, forceZ));
         body.applyTorqueImpulse(new Ammo.btVector3(spinX, spinY, spinZ));
