@@ -43,20 +43,22 @@ async function init() {
 
     // Warm PointLight (Candle) - Key Light
     // Initial setup, position will be updated by clutter
-    pointLight = new THREE.PointLight(0xffaa55, 2.0, 15); // Range reduced for intimacy
+    // Deeper orange/red for a warmer, cozier feel (0xff9933)
+    pointLight = new THREE.PointLight(0xff9933, 2.5, 20);
     pointLight.position.set(3, 6, 3); // Default if no candle
     pointLight.castShadow = true;
-    pointLight.shadow.bias = -0.0005;
+    pointLight.shadow.bias = -0.001; // Adjusted bias to prevent acne
     pointLight.shadow.mapSize.width = 2048;
     pointLight.shadow.mapSize.height = 2048;
-    pointLight.shadow.radius = 4; // Soft shadows
+    pointLight.shadow.radius = 5; // Softer shadows
     scene.add(pointLight);
 
     // Cool SpotLight (Moonlight/Rim) - Fill/Rim Light
-    const spotLight = new THREE.SpotLight(0x8888ff, 0.8); // Reduced intensity
-    spotLight.position.set(-10, 10, -5);
-    spotLight.angle = Math.PI / 4;
-    spotLight.penumbra = 1.0;
+    // More blue, lower intensity for contrast (0x4444dd)
+    const spotLight = new THREE.SpotLight(0x4444dd, 1.5);
+    spotLight.position.set(-15, 12, -8);
+    spotLight.angle = Math.PI / 5;
+    spotLight.penumbra = 0.5;
     spotLight.castShadow = true;
     spotLight.shadow.bias = -0.0001;
     scene.add(spotLight);
@@ -68,8 +70,11 @@ async function init() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 0.8; // Darker exposure for mood
     document.body.appendChild(renderer.domElement);
+
+    // Fog for depth
+    scene.fog = new THREE.FogExp2(0x111111, 0.02);
 
     // Post-Processing
     composer = new EffectComposer(renderer);
@@ -167,17 +172,23 @@ function animate() {
 
     // Candle Flicker
     if (pointLight && candleFlamePos) {
-        // Flicker intensity
-        // Base 2.0, plus sine wave for breathing, plus noise for flicker
-        const flicker = Math.sin(time * 10) * 0.1 + (Math.random() - 0.5) * 0.2;
-        pointLight.intensity = 2.0 + flicker;
+        // More organic flicker
+        // 1. Low frequency breathing (wind drafts)
+        const breathing = Math.sin(time * 2.0) * 0.2;
+        // 2. High frequency flicker
+        const flicker = (Math.random() - 0.5) * 0.3;
 
-        // Jitter position slightly
-        const jitterX = (Math.random() - 0.5) * 0.02;
-        const jitterZ = (Math.random() - 0.5) * 0.02;
+        pointLight.intensity = 2.5 + breathing + flicker;
+
+        // Jitter position based on flicker intensity (flame moves when it flickers)
+        const jitterAmount = 0.03;
+        const jitterX = (Math.random() - 0.5) * jitterAmount;
+        const jitterY = (Math.random() - 0.5) * jitterAmount * 0.5;
+        const jitterZ = (Math.random() - 0.5) * jitterAmount;
+
         pointLight.position.set(
             candleFlamePos.x + jitterX,
-            candleFlamePos.y + 0.05, // Keep Y mostly stable
+            candleFlamePos.y + 0.1 + jitterY, // Slightly higher above wick
             candleFlamePos.z + jitterZ
         );
     }
