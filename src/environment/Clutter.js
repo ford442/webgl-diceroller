@@ -22,6 +22,9 @@ export function createClutter(scene, physicsWorld) {
     // 6. Pencil (New)
     createPencil(scene, physicsWorld, ammo);
 
+    // 7. D20 Holder (New)
+    createD20Holder(scene, physicsWorld, ammo);
+
     return {
         flamePosition
     };
@@ -149,6 +152,44 @@ function createParchment(scene, physicsWorld, ammo) {
     // Even though it's thin, it needs physics or dice will clip/float oddly if they land on it.
     const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, thickness/2, depth/2));
     createStaticBody(physicsWorld, mesh, shape);
+}
+
+function createD20Holder(scene, physicsWorld, ammo) {
+    const holderGroup = new THREE.Group();
+
+    // Material: Dark polished wood
+    const material = new THREE.MeshStandardMaterial({
+        color: 0x3f1f1f,
+        roughness: 0.3,
+        metalness: 0.1
+    });
+
+    // Base: Hexagonal prism
+    const radius = 0.8;
+    const height = 0.4;
+    const baseGeo = new THREE.CylinderGeometry(radius, radius, height, 6);
+    const baseMesh = new THREE.Mesh(baseGeo, material);
+    baseMesh.castShadow = true;
+    baseMesh.receiveShadow = true;
+    holderGroup.add(baseMesh);
+
+    // Indentation (Visual trick: black circle on top)
+    const indGeo = new THREE.CircleGeometry(0.5, 32);
+    const indMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+    const indMesh = new THREE.Mesh(indGeo, indMat);
+    indMesh.rotation.x = -Math.PI / 2;
+    indMesh.position.y = height / 2 + 0.001;
+    holderGroup.add(indMesh);
+
+    // Position on table
+    // Table -2.75. Height 0.4. Center -2.75 + 0.2 = -2.55.
+    holderGroup.position.set(-2, -2.55, -4);
+
+    scene.add(holderGroup);
+
+    // Physics
+    const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height/2, radius));
+    createStaticBody(physicsWorld, holderGroup, shape);
 }
 
 function createCandle(scene, physicsWorld, ammo) {
