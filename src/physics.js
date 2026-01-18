@@ -82,23 +82,12 @@ export const createFloorAndWalls = (scene, world, tableConfig = null) => {
 
     // Adjust walls based on config if provided (to match visual rims)
     if (tableConfig && tableConfig.walls) {
-        // Use visual rim height + some buffer, OR just use the rim height if we want realistic physics (dice can fly out)
-        // Let's make it match the visual rim exactly for now, but maybe extend slightly upwards if needed.
-        // The user prompt says "The collision box needs to be slightly larger than the visual tray so dice don't clip through walls."
-        // So let's make it taller or thicker?
-        // Let's stick to the config height but maybe verify thickness.
         wallHeight = tableConfig.walls.height;
-        wallThickness = tableConfig.walls.thickness;
-        // Visual Rim Center Y relative to floor center (0 local): tableConfig.walls.offsetY
-        // floorY is World Y of floor center.
-        // So wall center Y = floorY + tableConfig.walls.offsetY
-        // BUT wait, floorY is passed as -3. Visual floor is at -3.
-        // tableConfig.walls.offsetY is 0.75 (relative to -3).
-        // So Wall Y = -3 + 0.75 = -2.25.
-        // This matches our calculation in Table.js.
-
-        // HOWEVER: createBox expects wallY to be center of box.
-        // If we use wallOffsetY from config, we can calculate wallY directly.
+        // Overwrite thickness for physics stability (prevent tunneling).
+        // Visual thickness is ~1. We use 20 to extend outwards.
+        // The positioning logic (halfWidth + wallThickness/2) ensures the inner face
+        // stays at (halfWidth), so the extra thickness extends outwards away from play area.
+        wallThickness = 20;
         wallOffsetY = tableConfig.walls.offsetY;
     }
 
