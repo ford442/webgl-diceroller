@@ -14,6 +14,7 @@ import { initUI } from './ui.js';
 import { initInteraction, updateInteraction } from './interaction.js';
 import { createTable } from './environment/Table.js';
 import { createTavernWalls } from './environment/TavernWalls.js';
+import { createBookshelf } from './environment/Bookshelf.js';
 import { createClutter } from './environment/Clutter.js';
 import { RoomEnvironment } from './environment/RoomEnvironment.js';
 
@@ -112,6 +113,9 @@ async function init() {
         createTavernWalls(scene, physicsWorld);
         const tableConfig = createTable(scene);
         createFloorAndWalls(scene, physicsWorld, tableConfig);
+
+        // Bookshelf (Background Prop)
+        createBookshelf(scene, physicsWorld, { x: -18, y: -10, z: 0 }, Math.PI / 2);
 
         // Clutter & Candle
         const clutterData = createClutter(scene, physicsWorld);
