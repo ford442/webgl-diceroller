@@ -10,9 +10,9 @@ function getMaterials() {
     const loader = new THREE.TextureLoader();
 
     // Wood Material
-    const woodDiffuse = loader.load('/images/wood_diffuse.jpg');
-    const woodBump = loader.load('/images/wood_bump.jpg');
-    const woodRoughness = loader.load('/images/wood_roughness.jpg');
+    const woodDiffuse = loader.load('./images/wood_diffuse.jpg');
+    const woodBump = loader.load('./images/wood_bump.jpg');
+    const woodRoughness = loader.load('./images/wood_roughness.jpg');
 
     [woodDiffuse, woodBump, woodRoughness].forEach(t => {
         t.colorSpace = (t === woodDiffuse) ? THREE.SRGBColorSpace : THREE.NoColorSpace;

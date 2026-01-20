@@ -5,9 +5,9 @@ export function createTavernWalls(scene, physicsWorld) {
     const loader = new THREE.TextureLoader();
 
     // --- Brick Material (Walls & Floor) ---
-    const brickDiffuse = loader.load('/images/brick_diffuse.jpg');
-    const brickBump = loader.load('/images/brick_bump.jpg');
-    const brickRoughness = loader.load('/images/brick_roughness.jpg');
+    const brickDiffuse = loader.load('./images/brick_diffuse.jpg');
+    const brickBump = loader.load('./images/brick_bump.jpg');
+    const brickRoughness = loader.load('./images/brick_roughness.jpg');
 
     [brickDiffuse, brickBump, brickRoughness].forEach(t => {
         t.wrapS = THREE.RepeatWrapping;
@@ -26,9 +26,9 @@ export function createTavernWalls(scene, physicsWorld) {
     });
 
     // --- Wood Material (Beams & Columns) ---
-    const woodDiffuse = loader.load('/images/wood_diffuse.jpg');
-    const woodBump = loader.load('/images/wood_bump.jpg');
-    const woodRoughness = loader.load('/images/wood_roughness.jpg');
+    const woodDiffuse = loader.load('./images/wood_diffuse.jpg');
+    const woodBump = loader.load('./images/wood_bump.jpg');
+    const woodRoughness = loader.load('./images/wood_roughness.jpg');
 
     [woodDiffuse, woodBump, woodRoughness].forEach(t => {
         t.wrapS = THREE.RepeatWrapping;

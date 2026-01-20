@@ -22,9 +22,9 @@ export function createTable(scene) {
     const textureLoader = new THREE.TextureLoader();
 
     // Wood Textures
-    const woodDiffuse = textureLoader.load('/images/wood_diffuse.jpg');
-    const woodRoughness = textureLoader.load('/images/wood_roughness.jpg');
-    const woodBump = textureLoader.load('/images/wood_bump.jpg');
+    const woodDiffuse = textureLoader.load('./images/wood_diffuse.jpg');
+    const woodRoughness = textureLoader.load('./images/wood_roughness.jpg');
+    const woodBump = textureLoader.load('./images/wood_bump.jpg');
 
     [woodDiffuse, woodRoughness, woodBump].forEach(texture => {
         texture.wrapS = THREE.RepeatWrapping;

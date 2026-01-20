@@ -4,9 +4,9 @@ export function createRoom(scene) {
     const loader = new THREE.TextureLoader();
 
     // Load textures
-    const brickDiffuse = loader.load('/images/brick_diffuse.jpg');
-    const brickBump = loader.load('/images/brick_bump.jpg');
-    const brickRoughness = loader.load('/images/brick_roughness.jpg');
+    const brickDiffuse = loader.load('./images/brick_diffuse.jpg');
+    const brickBump = loader.load('./images/brick_bump.jpg');
+    const brickRoughness = loader.load('./images/brick_roughness.jpg');
 
     // Texture settings
     [brickDiffuse, brickBump, brickRoughness].forEach(t => {

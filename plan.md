@@ -23,7 +23,7 @@ The following dice types are required and have been partially implemented in the
 To fully modernize the application, the legacy Collada (`.dae`) assets should be converted to glTF/GLB.
 
 ### Conversion Strategy:
-1.  **Automated Conversion Script:** Create a Node.js script using `gltf-pipeline` or Blender CLI to batch convert all `.dae` files in `public/images/` to `.glb` format.
+1.  **Automated Conversion Script:** Create a Node.js script using `gltf-pipeline` or Blender CLI to batch convert all `.dae` files in `public./images/` to `.glb` format.
 2.  **Draco Compression:** Apply Draco compression to the resulting GLB files to reduce download sizes.
 3.  **Loader Update:** Switch `ColladaLoader` to `GLTFLoader` in `src/dice.js`.
 
