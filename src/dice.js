@@ -7,7 +7,6 @@ export let spawnedDice = [];
 
 const loader = new ColladaLoader();
 
-// Map of dice types to their filenames
 const diceTypes = [
     { type: 'd4', file: 'die_4.dae' },
     { type: 'd6', file: 'die_6.dae' },
@@ -17,16 +16,23 @@ const diceTypes = [
     { type: 'd20', file: 'die_20.dae' }
 ];
 
+// Helper for Crypto Randomness
+const getSecureRandom = () => {
+    const array = new Uint32Array(1);
+    window.crypto.getRandomValues(array);
+    return array[0] / (0xffffffff + 1);
+};
+
 export const loadDiceModels = async () => {
     const promises = diceTypes.map(d => {
         return new Promise((resolve, reject) => {
             let timedOut = false;
-            const url = `./images/${d.file}`; // Serve from public root so dev/build servers (Vite) will find them
+            const url = `./images/${d.file}`;
             const timer = setTimeout(() => {
-                console.warn(`Timeout loading ${url} (file: ${d.file}) - check network/asset path`);
+                console.warn(`Timeout loading ${url}`);
                 timedOut = true;
-                resolve(); // Resolve anyway to unblock
-            }, 15000); // longer timeout for slower networks
+                resolve();
+            }, 15000);
 
             loader.load(url, (collada) => {
                 if (timedOut) return;
@@ -40,10 +46,17 @@ export const loadDiceModels = async () => {
 
                 if (mesh) {
                     const geometry = mesh.geometry.clone();
+
+                    // CRITICAL: Center the geometry to ensure the Center of Mass is correct
+                    geometry.center();
+
                     mesh.updateMatrixWorld(true);
                     geometry.applyMatrix4(mesh.matrixWorld);
                     geometry.rotateX(-Math.PI / 2);
                     
+                    // Re-center again after rotation to be safe
+                    geometry.center();
+
                     let material = mesh.material;
                     // Ensure materials are PBR-ready for the new atmosphere
                     const upgradeMaterial = (mat) => {
@@ -83,13 +96,11 @@ export const loadDiceModels = async () => {
                     diceModels[d.type].userData.physicsShape = createConvexHullShape(cleanMesh);
                     resolve();
                 } else {
-                    console.error(`No mesh found in ${d.file}`);
                     resolve();
                 }
             }, undefined, (e) => {
                 if (timedOut) return;
                 clearTimeout(timer);
-                console.error(`Error loading ${d.file}`, e);
                 resolve();
             });
         });
@@ -99,9 +110,7 @@ export const loadDiceModels = async () => {
     console.log("All dice models loaded");
 };
 
-// Config is { d4: 1, d6: 2, ... }
 export const spawnObjects = (scene, world, config = null) => {
-    // Default config if none provided (backward compatibility)
     if (!config) {
         config = { d4: 1, d6: 1, d8: 1, d10: 1, d12: 1, d20: 1 };
     }
@@ -120,19 +129,17 @@ export const spawnObjects = (scene, world, config = null) => {
 
         const mesh = template.clone();
 
-        // Spread them out a bit randomly around the center but high up
-        const x = (Math.random() - 0.5) * 5;
-        const y = 5 + index * 1.5; // Stagger height to avoid immediate collision
-        const z = (Math.random() - 0.5) * 5;
+        // Initial spawn spread with enhanced randomness
+        const x = (getSecureRandom() - 0.5) * 6; // Increased from 5 to 6
+        const y = 5 + index * 1.5 + (getSecureRandom() * 1); // Added random y variation
+        const z = (getSecureRandom() - 0.5) * 6; // Increased from 5 to 6
 
         mesh.position.set(x, y, z);
-        mesh.rotation.set(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2);
+        mesh.rotation.set(getSecureRandom() * Math.PI * 2, getSecureRandom() * Math.PI * 2, getSecureRandom() * Math.PI * 2);
 
         scene.add(mesh);
 
         const body = spawnDicePhysics(world, mesh, template.userData.physicsShape, {x, y, z}, mesh.rotation);
-
-        // Link mesh and body for interaction
         mesh.userData.body = body;
 
         spawnedDice.push({ mesh, body });
@@ -174,31 +181,31 @@ export const updateDiceSet = (scene, world, config) => {
 };
 
 export const throwDice = (scene, world) => {
-    // For a throw/reset: we can just lift them up and randomize rotation/velocity
     const Ammo = getAmmo();
     const transform = new Ammo.btTransform();
 
     spawnedDice.forEach((die, index) => {
         const body = die.body;
 
-        // Stop current movement
+        // Reset velocity
         body.setLinearVelocity(new Ammo.btVector3(0, 0, 0));
         body.setAngularVelocity(new Ammo.btVector3(0, 0, 0));
 
-        // Reset position to high up
-        const x = (Math.random() - 0.5) * 5;
-        const y = 5 + index * 1.5;
-        const z = (Math.random() - 0.5) * 5;
+        // Group them near the top center for the throw
+        // Use crypto random for position jitter with increased spread
+        const x = (getSecureRandom() - 0.5) * 8; // Increased from 4 to 8 for wider spread
+        const y = 8 + (index * 0.3) + (getSecureRandom() * 5); // Increased height variation from 3 to 5, reduced stacking spacing
+        const z = (getSecureRandom() - 0.5) * 8; // Increased from 4 to 8 for wider spread
 
         transform.setIdentity();
         transform.setOrigin(new Ammo.btVector3(x, y, z));
 
-        // Random rotation
+        // Random starting orientation
         const q = new THREE.Quaternion();
         q.setFromEuler(new THREE.Euler(
-            Math.random() * Math.PI * 2,
-            Math.random() * Math.PI * 2,
-            Math.random() * Math.PI * 2
+            getSecureRandom() * Math.PI * 2,
+            getSecureRandom() * Math.PI * 2,
+            getSecureRandom() * Math.PI * 2
         ));
         transform.setRotation(new Ammo.btQuaternion(q.x, q.y, q.z, q.w));
 
@@ -207,6 +214,19 @@ export const throwDice = (scene, world) => {
 
         // Wake up
         body.activate();
+
+        // FORCE IMPULSE (The "Throw")
+        // Apply random forces to scatter them and create spin with increased variance
+        const forceX = (getSecureRandom() - 0.5) * 120; // Increased horizontal scatter from 80 to 120
+        const forceY = (getSecureRandom()) * 40 - 30; // Increased vertical variation from (20,-25) to (40,-30)
+        const forceZ = (getSecureRandom() - 0.5) * 120; // Increased horizontal scatter from 80 to 120
+
+        const spinX = (getSecureRandom() - 0.5) * 600; // Increased spin from 400 to 600
+        const spinY = (getSecureRandom() - 0.5) * 600; // Increased spin from 400 to 600
+        const spinZ = (getSecureRandom() - 0.5) * 600; // Increased spin from 400 to 600
+
+        body.applyCentralImpulse(new Ammo.btVector3(forceX, forceY, forceZ));
+        body.applyTorqueImpulse(new Ammo.btVector3(spinX, spinY, spinZ));
     });
 
     Ammo.destroy(transform);
