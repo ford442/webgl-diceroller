@@ -109,10 +109,10 @@ export const spawnObjects = (scene, world, config = null) => {
 
         const mesh = template.clone();
 
-        // Initial spawn spread
-        const x = (getSecureRandom() - 0.5) * 5;
-        const y = 5 + index * 1.5;
-        const z = (getSecureRandom() - 0.5) * 5;
+        // Initial spawn spread with enhanced randomness
+        const x = (getSecureRandom() - 0.5) * 6; // Increased from 5 to 6
+        const y = 5 + index * 1.5 + (getSecureRandom() * 1); // Added random y variation
+        const z = (getSecureRandom() - 0.5) * 6; // Increased from 5 to 6
 
         mesh.position.set(x, y, z);
         mesh.rotation.set(getSecureRandom() * Math.PI * 2, getSecureRandom() * Math.PI * 2, getSecureRandom() * Math.PI * 2);
@@ -172,10 +172,10 @@ export const throwDice = (scene, world) => {
         body.setAngularVelocity(new Ammo.btVector3(0, 0, 0));
 
         // Group them near the top center for the throw
-        // Use crypto random for position jitter
-        const x = (getSecureRandom() - 0.5) * 4;
-        const y = 8 + (index * 0.5) + (getSecureRandom() * 3); // Stack them slightly but high up, with random variation
-        const z = (getSecureRandom() - 0.5) * 4;
+        // Use crypto random for position jitter with increased spread
+        const x = (getSecureRandom() - 0.5) * 8; // Increased from 4 to 8 for wider spread
+        const y = 8 + (index * 0.3) + (getSecureRandom() * 5); // Increased height variation from 3 to 5, reduced stacking spacing
+        const z = (getSecureRandom() - 0.5) * 8; // Increased from 4 to 8 for wider spread
 
         transform.setIdentity();
         transform.setOrigin(new Ammo.btVector3(x, y, z));
@@ -196,14 +196,14 @@ export const throwDice = (scene, world) => {
         body.activate();
 
         // FORCE IMPULSE (The "Throw")
-        // Apply random forces to scatter them and create spin
-        const forceX = (getSecureRandom() - 0.5) * 80; // Horizontal scatter
-        const forceY = (getSecureRandom()) * 20 - 25; // Downward/Upward variation
-        const forceZ = (getSecureRandom() - 0.5) * 80;
+        // Apply random forces to scatter them and create spin with increased variance
+        const forceX = (getSecureRandom() - 0.5) * 120; // Increased horizontal scatter from 80 to 120
+        const forceY = (getSecureRandom()) * 40 - 30; // Increased vertical variation from (20,-25) to (40,-30)
+        const forceZ = (getSecureRandom() - 0.5) * 120; // Increased horizontal scatter from 80 to 120
 
-        const spinX = (getSecureRandom() - 0.5) * 400;
-        const spinY = (getSecureRandom() - 0.5) * 400;
-        const spinZ = (getSecureRandom() - 0.5) * 400;
+        const spinX = (getSecureRandom() - 0.5) * 600; // Increased spin from 400 to 600
+        const spinY = (getSecureRandom() - 0.5) * 600; // Increased spin from 400 to 600
+        const spinZ = (getSecureRandom() - 0.5) * 600; // Increased spin from 400 to 600
 
         body.applyCentralImpulse(new Ammo.btVector3(forceX, forceY, forceZ));
         body.applyTorqueImpulse(new Ammo.btVector3(spinX, spinY, spinZ));
