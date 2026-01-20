@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 // WebGPURenderer import path depends on three.js version and build
 import { WebGPURenderer } from 'three/webgpu';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
@@ -10,7 +9,7 @@ import { VignetteShader } from './shaders/VignetteShader.js';
 
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
 import { loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice } from './dice.js';
-import { initUI } from './ui.js';
+import { initUI, createCrosshair } from './ui.js';
 import { initInteraction, updateInteraction } from './interaction.js';
 import { createTable } from './environment/Table.js';
 import { createTavernWalls } from './environment/TavernWalls.js';
@@ -21,7 +20,7 @@ import { RoomEnvironment } from './environment/RoomEnvironment.js';
 let camera, scene, renderer, composer;
 let physicsWorld;
 let clock;
-let ui;
+let ui, crosshairUI;
 let pointLight; // Exposed for flickering
 let candleFlamePos; // Position of the candle flame
 let velocity = new THREE.Vector3();
@@ -30,6 +29,16 @@ const moveSpeed = 5; // Units per second
 const jumpForce = 8;
 const gravity = -20; // Downward acceleration
 
+// Camera Control Variables
+let yaw = 0;
+let pitch = 0;
+const maxPitch = Math.PI / 2 - 0.1;
+const keys = {};
+
+// "Eye-Head" Cursor Logic
+let cursorPos = new THREE.Vector2(0, 0); // Pixel coordinates relative to center
+let isLocked = false;
+let interaction; // Interaction handler
 
 init();
 
@@ -43,37 +52,19 @@ async function init() {
     camera.position.set(0, 1.7, 3); // Standing height near the table
     camera.lookAt(0, 0, 0);
 
-        const keys = {};
-    window.addEventListener('keydown', (event) => {
-        keys[event.code] = true;
-    });
-    window.addEventListener('keyup', (event) => {
-        keys[event.code] = false;
-    });
+    // Renderer setup
+    renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.8; // Darker exposure for mood
+    document.body.appendChild(renderer.domElement);
 
-      renderer.domElement.addEventListener('mousedown', (event) => {
-        if (event.button === 2) { // Right-click for forward movement (while held)
-            keys['RightClick'] = true;
-        } else if (event.button === 0) { // Left-click for look (optional, if not conflicting with dice)
-            isLooking = true;
-        }
-    });
-    renderer.domElement.addEventListener('mouseup', (event) => {
-        if (event.button === 2) {
-            keys['RightClick'] = false;
-        } else if (event.button === 0) {
-            isLooking = false;
-        }
-    });
-    renderer.domElement.addEventListener('mousemove', (event) => {
-        if (isLooking) {
-            const sensitivity = 0.002;
-            yaw -= event.movementX * sensitivity;
-            pitch -= event.movementY * sensitivity;
-            pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
-        }
-    });
-    
+    // Setup Event Listeners
+    setupInput();
+
     // Lights
     // Ambient light (low intensity)
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.05); // Very low ambient to make candle pop
@@ -101,16 +92,6 @@ async function init() {
     spotLight.shadow.bias = -0.0001;
     scene.add(spotLight);
 
-    // Renderer setup
-    renderer = new THREE.WebGLRenderer({ antialias: false });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.8; // Darker exposure for mood
-    document.body.appendChild(renderer.domElement);
-
     // Fog for depth
     scene.fog = new THREE.FogExp2(0x111111, 0.02);
 
@@ -137,10 +118,6 @@ async function init() {
     scene.environment = pmremGenerator.fromScene(roomEnvironment).texture;
     pmremGenerator.dispose();
     roomEnvironment.dispose();
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, -3, 0);
-    controls.update();
 
     // Initialize Physics
     try {
@@ -182,15 +159,93 @@ async function init() {
             throwDice(scene, physicsWorld);
         }
     );
+    crosshairUI = createCrosshair();
 
     // Interaction Setup
-    initInteraction(camera, scene, renderer.domElement, physicsWorld);
+    interaction = initInteraction(camera, scene, physicsWorld);
 
     clock = new THREE.Clock();
 
     window.addEventListener('resize', onWindowResize);
 
     renderer.setAnimationLoop(animate);
+}
+
+function setupInput() {
+    window.addEventListener('keydown', (event) => {
+        keys[event.code] = true;
+    });
+    window.addEventListener('keyup', (event) => {
+        keys[event.code] = false;
+    });
+
+    // Pointer Lock Request
+    renderer.domElement.addEventListener('click', () => {
+        if (!isLocked) {
+            renderer.domElement.requestPointerLock();
+        }
+    });
+
+    document.addEventListener('pointerlockchange', () => {
+        isLocked = document.pointerLockElement === renderer.domElement;
+        crosshairUI.setVisible(isLocked);
+        if (!isLocked) {
+             // Reset cursor to center logic or handle unlock
+        }
+    });
+
+    // Mouse Movement Tracking for "Eye-Head" System
+    document.addEventListener('mousemove', (event) => {
+        if (isLocked) {
+            // Accumulate movement relative to center
+            // We want the cursor to move freely within bounds
+            cursorPos.x += event.movementX;
+            cursorPos.y += event.movementY;
+
+            // Interaction: pass current normalized coords (updated in animate or here)
+            // But dragging requires continuous updates.
+            // We'll update interaction in animate or via a specific call if needed.
+            // Actually, interaction uses normalized coords (-1 to 1).
+            // Let's compute them here for the interaction module's "handleMove"
+
+            // Wait, interaction.handleMove is called with normalized coords.
+            // We will do that in the animate loop or here.
+            // But we need to clamp cursorPos first.
+
+            const halfWidth = window.innerWidth / 2;
+            const halfHeight = window.innerHeight / 2;
+
+            // Clamp cursor to screen bounds
+            cursorPos.x = Math.max(-halfWidth, Math.min(halfWidth, cursorPos.x));
+            cursorPos.y = Math.max(-halfHeight, Math.min(halfHeight, cursorPos.y));
+
+            const normX = cursorPos.x / halfWidth;
+            const normY = cursorPos.y / halfHeight; // Y is usually inverted in 3D, check interaction.js expects -1 to 1?
+            // interaction.js: mouse.y = -(event.clientY / h) * 2 + 1.
+            // Normalized: Top of screen = +1. Bottom = -1.
+            // Our cursorPos.y is pixel offset. Positive is usually DOWN in 2D coords.
+            // So if cursorPos.y is positive (bottom), normY should be negative.
+
+            interaction.handleMove(normX, -normY);
+        }
+    });
+
+    // Pass clicks to interaction
+    document.addEventListener('mousedown', (event) => {
+        if (isLocked) {
+            const halfWidth = window.innerWidth / 2;
+            const halfHeight = window.innerHeight / 2;
+            const normX = cursorPos.x / halfWidth;
+            const normY = cursorPos.y / halfHeight;
+            interaction.handleDown(normX, -normY);
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isLocked) {
+            interaction.handleUp();
+        }
+    });
 }
 
 function onWindowResize() {
@@ -209,6 +264,39 @@ function animate() {
         stepPhysics(physicsWorld, deltaTime);
         updateDiceVisuals();
         updateInteraction();
+    }
+
+    // Update Crosshair UI Position
+    // Center of screen is (window.innerWidth/2, window.innerHeight/2)
+    // cursorPos is offset from that center.
+    const screenCenterX = window.innerWidth / 2;
+    const screenCenterY = window.innerHeight / 2;
+    crosshairUI.updatePosition(screenCenterX + cursorPos.x, screenCenterY + cursorPos.y);
+
+    // "Eye-Head" Camera Logic
+    // If cursor is far from center, rotate camera to bring it back.
+    const deadZone = 50; // Pixels
+    const turnSensitivity = 2.0; // Radians per second at edge of screen
+
+    if (isLocked) {
+        // Yaw (Turning Left/Right)
+        if (Math.abs(cursorPos.x) > deadZone) {
+            const sign = Math.sign(cursorPos.x);
+            const magnitude = (Math.abs(cursorPos.x) - deadZone) / (screenCenterX - deadZone); // 0 to 1
+            yaw -= sign * magnitude * turnSensitivity * deltaTime;
+        }
+
+        // Pitch (Looking Up/Down)
+        if (Math.abs(cursorPos.y) > deadZone) {
+            const sign = Math.sign(cursorPos.y); // Positive Y is down
+            const magnitude = (Math.abs(cursorPos.y) - deadZone) / (screenCenterY - deadZone);
+            pitch -= sign * magnitude * turnSensitivity * deltaTime; // Looking down (positive Y) means decreasing pitch?
+            // Usually pitch: up is positive, down is negative.
+            // Mouse down -> decrease pitch.
+        }
+
+        // Clamp pitch
+        pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
     }
 
     // Candle Flicker
@@ -237,11 +325,10 @@ function animate() {
   
     // Movement logic
     const direction = new THREE.Vector3();
-    if (keys['KeyW']) direction.z -= 1; // Back (towards camera)
-    if (keys['KeyS']) direction.z += 1; // Forward (away from camera)
+    if (keys['KeyW']) direction.z -= 1; // Back (towards camera) -> Forward
+    if (keys['KeyS']) direction.z += 1; // Forward (away from camera) -> Backward
     if (keys['KeyA']) direction.x -= 1; // Left
     if (keys['KeyD']) direction.x += 1; // Right
-    if (keys['RightClick']) direction.z += 1; // Forward on right-click
     if (keys['Space'] && isOnGround) {
         velocity.y = jumpForce;
         isOnGround = false;
