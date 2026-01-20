@@ -58,10 +58,30 @@ export const loadDiceModels = async () => {
                     geometry.center();
 
                     let material = mesh.material;
+                    // Ensure materials are PBR-ready for the new atmosphere
+                    const upgradeMaterial = (mat) => {
+                        return new THREE.MeshStandardMaterial({
+                            color: mat.color || 0xeeeeee,
+                            map: mat.map || null,
+                            roughness: 0.2, // Shiny plastic/resin
+                            metalness: 0.0,
+                            envMapIntensity: 1.0
+                        });
+                    };
+
                     if (material) {
-                        material = Array.isArray(material) ? material.map(m => m.clone()) : material.clone();
+                        if (Array.isArray(material)) {
+                            material = material.map(m => upgradeMaterial(m));
+                        } else {
+                            material = upgradeMaterial(material);
+                        }
                     } else {
-                        material = new THREE.MeshStandardMaterial({ color: 0xff00ff });
+                        console.warn(`No material found for ${d.file}, using default material`);
+                        material = new THREE.MeshStandardMaterial({
+                            color: 0xff00ff,
+                            roughness: 0.2,
+                            metalness: 0.0
+                        });
                     }
                     const cleanMesh = new THREE.Mesh(geometry, material);
                     
