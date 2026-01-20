@@ -24,6 +24,12 @@ let clock;
 let ui;
 let pointLight; // Exposed for flickering
 let candleFlamePos; // Position of the candle flame
+let velocity = new THREE.Vector3();
+let isOnGround = true;
+const moveSpeed = 5; // Units per second
+const jumpForce = 8;
+const gravity = -20; // Downward acceleration
+
 
 init();
 
@@ -34,9 +40,40 @@ async function init() {
 
     // Camera setup
     camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(5, 5, -5);
-    camera.lookAt(0, -3, 0);
+    camera.position.set(0, 1.7, 3); // Standing height near the table
+    camera.lookAt(0, 0, 0);
 
+        const keys = {};
+    window.addEventListener('keydown', (event) => {
+        keys[event.code] = true;
+    });
+    window.addEventListener('keyup', (event) => {
+        keys[event.code] = false;
+    });
+
+      renderer.domElement.addEventListener('mousedown', (event) => {
+        if (event.button === 2) { // Right-click for forward movement (while held)
+            keys['RightClick'] = true;
+        } else if (event.button === 0) { // Left-click for look (optional, if not conflicting with dice)
+            isLooking = true;
+        }
+    });
+    renderer.domElement.addEventListener('mouseup', (event) => {
+        if (event.button === 2) {
+            keys['RightClick'] = false;
+        } else if (event.button === 0) {
+            isLooking = false;
+        }
+    });
+    renderer.domElement.addEventListener('mousemove', (event) => {
+        if (isLooking) {
+            const sensitivity = 0.002;
+            yaw -= event.movementX * sensitivity;
+            pitch -= event.movementY * sensitivity;
+            pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
+        }
+    });
+    
     // Lights
     // Ambient light (low intensity)
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.05); // Very low ambient to make candle pop
@@ -196,6 +233,51 @@ function animate() {
             candleFlamePos.z + jitterZ
         );
     }
+
+  
+    // Movement logic
+    const direction = new THREE.Vector3();
+    if (keys['KeyW']) direction.z -= 1; // Back (towards camera)
+    if (keys['KeyS']) direction.z += 1; // Forward (away from camera)
+    if (keys['KeyA']) direction.x -= 1; // Left
+    if (keys['KeyD']) direction.x += 1; // Right
+    if (keys['RightClick']) direction.z += 1; // Forward on right-click
+    if (keys['Space'] && isOnGround) {
+        velocity.y = jumpForce;
+        isOnGround = false;
+    }
+
+    // Normalize direction and apply to velocity
+    if (direction.length() > 0) {
+        direction.normalize();
+        // Rotate direction by camera yaw for forward/back relative to view
+        direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+        velocity.x = direction.x * moveSpeed;
+        velocity.z = direction.z * moveSpeed;
+    } else {
+        velocity.x = 0;
+        velocity.z = 0;
+    }
+
+    // Apply gravity
+    velocity.y += gravity * deltaTime;
+
+    // Update position
+    camera.position.add(velocity.clone().multiplyScalar(deltaTime));
+
+    // Ground collision (simple: prevent going below y=1.7)
+    if (camera.position.y <= 1.7) {
+        camera.position.y = 1.7;
+        velocity.y = 0;
+        isOnGround = true;
+    }
+
+    // Optional: Simple bounds to stay in room (adjust based on your room size)
+    camera.position.x = Math.max(-10, Math.min(10, camera.position.x));
+    camera.position.z = Math.max(-10, Math.min(10, camera.position.z));
+
+    // Update camera rotation
+    camera.rotation.set(pitch, yaw, 0, 'YXZ');
 
     composer.render();
 }
