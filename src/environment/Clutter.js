@@ -25,6 +25,9 @@ export function createClutter(scene, physicsWorld) {
     // 7. D20 Holder
     createD20Holder(scene, physicsWorld, ammo);
 
+    // 8. Potion Bottle
+    createPotionBottle(scene, physicsWorld, ammo);
+
     return {
         flamePosition
     };
@@ -395,4 +398,99 @@ function createPencil(scene, physicsWorld, ammo) {
     const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, totalLen / 2, radius));
 
     createStaticBody(physicsWorld, pencilGroup, shape);
+}
+
+function createPotionBottle(scene, physicsWorld, ammo) {
+    const bottleGroup = new THREE.Group();
+    bottleGroup.name = 'PotionBottle';
+
+    // --- Visuals ---
+
+    // 1. Glass Bottle (Lathe)
+    // Points for a round-bottom flask
+    const points = [];
+    for (let i = 0; i <= 10; i++) {
+        // Bottom sphere part (radius 0.6)
+        const angle = (Math.PI / 2) * (i / 10); // 0 to 90 degrees
+        points.push(new THREE.Vector2(Math.sin(angle) * 0.6, -Math.cos(angle) * 0.6));
+    }
+    // Neck
+    points.push(new THREE.Vector2(0.2, 0.2)); // Top of sphere part
+    points.push(new THREE.Vector2(0.2, 0.8)); // Top of neck
+    // Rim
+    points.push(new THREE.Vector2(0.25, 0.8));
+    points.push(new THREE.Vector2(0.25, 0.9));
+    points.push(new THREE.Vector2(0.15, 0.9)); // Inner rim
+
+    const bottleGeo = new THREE.LatheGeometry(points, 16);
+
+    // Glass Material
+    const glassMat = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        metalness: 0,
+        roughness: 0.1,
+        transmission: 0.95, // Glass transparency
+        thickness: 0.1, // Volume rendering
+        ior: 1.5,
+        transparent: true,
+        opacity: 1.0,
+        side: THREE.DoubleSide
+    });
+
+    const bottleMesh = new THREE.Mesh(bottleGeo, glassMat);
+    bottleMesh.castShadow = true;
+    bottleMesh.receiveShadow = true;
+    bottleGroup.add(bottleMesh);
+
+    // 2. Liquid (Red Health Potion)
+    // Slightly smaller version of the bottom part
+    const liquidPoints = [];
+    for (let i = 0; i <= 8; i++) { // Not full
+        const angle = (Math.PI / 2) * (i / 10);
+        liquidPoints.push(new THREE.Vector2(Math.sin(angle) * 0.55, -Math.cos(angle) * 0.55));
+    }
+    // Top surface of liquid
+    liquidPoints.push(new THREE.Vector2(0, -Math.cos((Math.PI/2) * 0.8) * 0.55));
+
+    const liquidGeo = new THREE.LatheGeometry(liquidPoints, 16);
+    const liquidMat = new THREE.MeshPhysicalMaterial({
+        color: 0xff0000, // Red
+        emissive: 0x220000,
+        metalness: 0.1,
+        roughness: 0.2,
+        transmission: 0.6,
+        transparent: true
+    });
+    const liquidMesh = new THREE.Mesh(liquidGeo, liquidMat);
+    bottleGroup.add(liquidMesh);
+
+    // 3. Cork
+    const corkGeo = new THREE.CylinderGeometry(0.18, 0.15, 0.3, 16);
+    const corkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 });
+    const corkMesh = new THREE.Mesh(corkGeo, corkMat);
+    corkMesh.position.y = 0.85;
+    bottleMesh.add(corkMesh);
+
+    // --- Position ---
+    // Table top at -2.75.
+    // Bottle bottom is at local -0.6 (from lathe points).
+    // To sit on table:
+    // We want local -0.6 to be at World -2.75.
+    // Center Y = -2.75 + 0.6 = -2.15.
+
+    bottleGroup.position.set(6, -2.15, -2);
+    // Slight random rotation
+    bottleGroup.rotation.y = Math.random() * Math.PI * 2;
+
+    scene.add(bottleGroup);
+
+    // --- Physics ---
+    // Approximating with a Cylinder
+    const shape = new ammo.btCylinderShape(new ammo.btVector3(0.6, 0.8, 0.6)); // Radius 0.6, Height ~1.6 (full height)
+    // Actually height is from -0.6 to 0.9 = 1.5.
+    // Cylinder is centered.
+    // The bottle center of mass is roughly around 0 in local space (middle of bulb/neck transition).
+    // Let's use a simpler shape.
+
+    createStaticBody(physicsWorld, bottleGroup, shape);
 }
