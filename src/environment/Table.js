@@ -21,7 +21,7 @@ export function createTable(scene) {
     // Texture Loader
     const textureLoader = new THREE.TextureLoader();
 
-    // Wood Textures
+    // Wood Textures (Rims & Legs)
     const woodDiffuse = textureLoader.load('./images/wood_diffuse.jpg');
     const woodRoughness = textureLoader.load('./images/wood_roughness.jpg');
     const woodBump = textureLoader.load('./images/wood_bump.jpg');
@@ -35,6 +35,25 @@ export function createTable(scene) {
     woodRoughness.colorSpace = THREE.NoColorSpace;
     woodBump.colorSpace = THREE.NoColorSpace;
 
+    // Table Textures (Rolling Surface)
+    // Using high-quality textures with Normal and AO maps
+    const tableDiffuse = textureLoader.load('./images/table_diff.jpg');
+    const tableRoughness = textureLoader.load('./images/table_rough.jpg');
+    const tableNormal = textureLoader.load('./images/table_nor.jpg');
+    const tableAO = textureLoader.load('./images/table_ao.jpg');
+
+    [tableDiffuse, tableRoughness, tableNormal, tableAO].forEach(texture => {
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.colorSpace = THREE.NoColorSpace;
+    });
+    tableDiffuse.colorSpace = THREE.SRGBColorSpace;
+
+    // Repeat textures
+    const repeatX = 2;
+    const repeatY = 2;
+    [tableDiffuse, tableRoughness, tableNormal, tableAO].forEach(t => t.repeat.set(repeatX, repeatY));
+
     // Wood Material (Rims)
     const rimMaterial = new THREE.MeshStandardMaterial({
         map: woodDiffuse,
@@ -46,24 +65,16 @@ export function createTable(scene) {
         metalness: 0.0
     });
 
-    // Worn Wood Material (Rolling Surface)
-    // Darker, more worn looking
-    const surfaceDiffuse = woodDiffuse.clone();
-    const surfaceRoughness = woodRoughness.clone();
-    const surfaceBump = woodBump.clone();
-
-    // Repeat texture more for the large surface
-    surfaceDiffuse.repeat.set(2, 2);
-    surfaceRoughness.repeat.set(2, 2);
-    surfaceBump.repeat.set(2, 2);
-
+    // Table Surface Material
     const surfaceMaterial = new THREE.MeshStandardMaterial({
-        map: surfaceDiffuse,
-        roughnessMap: surfaceRoughness,
-        bumpMap: surfaceBump,
-        bumpScale: 0.08, // Deeper grain
-        color: 0x886644, // Darker, stained wood look
-        roughness: 0.85, // Worn, non-shiny
+        map: tableDiffuse,
+        roughnessMap: tableRoughness,
+        normalMap: tableNormal,
+        normalScale: new THREE.Vector2(1, 1),
+        aoMap: tableAO,
+        aoMapIntensity: 1.0,
+        color: 0xffffff,
+        roughness: 1.0, // Texture controlled
         metalness: 0.0
     });
 
@@ -74,6 +85,9 @@ export function createTable(scene) {
     // 1. Floor (The rolling surface)
     // Box centered at 0,0,0 inside the group
     const floorGeometry = new THREE.BoxGeometry(width, height, depth);
+    // Add uv2 for AO Map
+    floorGeometry.attributes.uv2 = floorGeometry.attributes.uv;
+
     const floorMesh = new THREE.Mesh(floorGeometry, surfaceMaterial);
     floorMesh.receiveShadow = true;
     floorMesh.castShadow = true;
