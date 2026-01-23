@@ -15,6 +15,7 @@ import { createTable } from './environment/Table.js';
 import { createTavernWalls } from './environment/TavernWalls.js';
 import { createBookshelf } from './environment/Bookshelf.js';
 import { createClutter } from './environment/Clutter.js';
+import { createAtmosphere, updateAtmosphere } from './environment/Atmosphere.js';
 import { RoomEnvironment } from './environment/RoomEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -140,6 +141,9 @@ async function init() {
             // Slightly above the wick visual
             pointLight.position.y += 0.05;
         }
+
+        // Atmosphere (Dust Motes)
+        createAtmosphere(scene);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
@@ -298,6 +302,9 @@ function animate() {
         // Clamp pitch
         pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
     }
+
+    // Update Atmosphere
+    updateAtmosphere(time);
 
     // Candle Flicker
     if (pointLight && candleFlamePos) {
