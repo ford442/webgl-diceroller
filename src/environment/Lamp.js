@@ -36,7 +36,7 @@ export async function createLamp(scene) {
 
     const matGlass = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
-        map: texGlass, // or use for transmission?
+        map: texGlass,
         metalness: 0,
         roughness: 0.1,
         transmission: 0.9,
@@ -50,52 +50,58 @@ export async function createLamp(scene) {
     const lampGroup = new THREE.Group();
     lampGroup.name = 'BilliardLamp';
 
-    const object = await loader.loadAsync('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj');
+    let object;
+    try {
+        object = await loader.loadAsync('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj');
+    } catch (e) {
+        console.error("Failed to load lamp OBJ:", e);
+        return { group: lampGroup, toggle: () => {} };
+    }
 
-    // 3. Process Geometry
-    // Calculate Center
-    const box = new THREE.Box3().setFromObject(object);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
+    // 3. Clean and Sanitize Geometry (Fix for Precision Errors and Division by Zero)
+    // The raw OBJ likely has huge coordinates or degenerate data causing X4122/X4008 errors.
 
-    // Move object to center (0,0,0) locally
-    // Adjust Y so the top of the lamp is at 0 (hanging point)
-    // The model is likely way off origin.
-    // The "top" is box.max.y.
-    const topY = box.max.y;
+    // Step A: Calculate Initial Bounding Box of the Raw Object
+    const initialBox = new THREE.Box3().setFromObject(object);
+    const center = initialBox.getCenter(new THREE.Vector3());
+    const size = initialBox.getSize(new THREE.Vector3());
 
-    object.position.set(-center.x, -topY, -center.z);
+    // Target Dimensions
+    const targetWidth = 10.0;
+    // Prevent division by zero if size is invalid
+    const rawWidth = size.x > 0.001 ? size.x : 1.0;
+    const scaleFactor = targetWidth / rawWidth;
 
-    // Add object to group
-    lampGroup.add(object);
+    // We want the 'Top' of the lamp (hanging point) to be at Y=0.
+    // In raw coords, Top Y is initialBox.max.y.
+    // We want to translate such that:
+    // (Vertex - Center) * Scale ... wait.
+    // If we just Center, the origin is at Center.
+    // We want origin at Top Center.
+    // So we translate by (-center.x, -initialBox.max.y, -center.z).
 
-    // Apply Materials
+    const translation = new THREE.Vector3(-center.x, -initialBox.max.y, -center.z);
+
+    // Apply Transformation to GEOMETRY directly
     object.traverse((child) => {
         if (child.isMesh) {
+            // 1. Translate
+            child.geometry.translate(translation.x, translation.y, translation.z);
+
+            // 2. Scale
+            child.geometry.scale(scaleFactor, scaleFactor, scaleFactor);
+
+            // 3. Recompute Normals (Fixes potential 0,0,0 normals causing div by zero)
+            child.geometry.computeVertexNormals();
+
+            // 4. Ensure Bounding Sphere/Box are updated
+            child.geometry.computeBoundingBox();
+            child.geometry.computeBoundingSphere();
+
+            // 5. Apply Materials
             child.castShadow = true;
             child.receiveShadow = true;
 
-            // Heuristic material assignment based on mesh names?
-            // If OBJ doesn't have named groups, this might be tricky.
-            // But usually export preserves names.
-            // If no names, we might have to just apply a default.
-            // Let's assume we can try to guess or just use steel/copper mix.
-            // Since we can't see the structure, let's look at the texture usage.
-            // The object is "triple billiard lamp".
-            // It probably has shades (glass/metal) and a bar (wood/metal).
-
-            // As a fallback, use Copper for everything except if we detect 'Glass'.
-            // If the OBJ is a single mesh, we are stuck with one material unless we use multi-material based on groups.
-            // OBJLoader creates groups for 'g' tags.
-
-            // Let's log the child name to console if we could (we can't see it).
-            // Default to Copper for metal parts, Glass for shades.
-            // Since we can't distinguish easily without inspection,
-            // we will make a best guess:
-            // If multiple meshes exist, hopefully they are named.
-            // If not, we might apply a generic "Lamp" material.
-
-            // Let's try to map names.
             const name = child.name.toLowerCase();
             if (name.includes('glass') || name.includes('shade')) {
                 child.material = matGlass;
@@ -104,70 +110,43 @@ export async function createLamp(scene) {
             } else if (name.includes('steel') || name.includes('chain')) {
                 child.material = matSteel;
             } else {
-                // Default
                 child.material = matCopper;
             }
         }
     });
 
+    lampGroup.add(object);
     scene.add(lampGroup);
 
     // 4. Lights
-    // Add 3 SpotLights along the X axis (assuming X is the long axis)
-    // Box dimensions: size.x, size.y, size.z
-    // We centered the object.
-    // The lights should be inside the shades.
-    // Shades are likely hanging down.
-    // Center is at 0, -size.y/2, 0 roughly? No, we aligned Top to 0.
-    // So center Y is -size.y/2.
-    // If it is a triple lamp, the lights are at x = -spacing, 0, +spacing.
-    // Spacing approx size.x / 3 ?
+    // Now the object is normalized.
+    // Width is exactly targetWidth (10.0).
+    // Height and Depth are scaled proportionally.
+    // We can rely on these numbers.
+
+    const scaledHeight = size.y * scaleFactor;
+
+    // Lights are spaced along X.
+    // Spacing: 30% of width?
+    const spacing = targetWidth * 0.30;
+    const lightY = -scaledHeight * 0.2; // Estimate inside the shade
 
     const lights = [];
-    const spacing = size.x * 0.25; // Guess
-    const lightY = -size.y * 0.5; // Halfway down? Maybe lower?
-
-    // Check if box dimensions are sane. If model scale is huge/tiny, we might need to scale lampGroup.
-    // The vertices in OBJ were ~2000. If units are mm, that's 2 meters. Reasonable.
-    // If units are cm, that's 20 meters. Too big.
-    // If units are meters, that's 2km.
-    // Most standard Three.js scenes are in meters.
-    // Vertices ~2000 suggests scale might be huge (e.g. mm).
-    // Our room is ~20 units high. 2000 is way too big.
-    // We likely need to scale down by 0.01 or 0.001.
-    // Let's scale based on assumption that a billiard lamp is ~1.5 meters wide.
-    const targetWidth = 10.0; // 1.5m is too small for our physics units?
-    // In our scene: Table is ~10x10?
-    // Table.js: Surface 13 width.
-    // So Lamp should be around 10-12 width.
-
-    const scaleFactor = targetWidth / size.x;
-    lampGroup.scale.set(scaleFactor, scaleFactor, scaleFactor);
-
-    // Re-calculate local offsets for lights based on SCALED size logic (or apply to group)
-    // Lights are children of lampGroup, so they scale with it?
-    // PointLights scale? No, PointLight range scales if in a scaled group? No.
-    // We should compute positions in local space.
-
-    // Spacing in unscaled local space:
-    const localSpacing = size.x * 0.30;
-    const localLightY = -size.y * 0.2; // Near the top inside the shade?
-
-    const positions = [-localSpacing, 0, localSpacing];
+    const positions = [-spacing, 0, spacing];
 
     positions.forEach(x => {
         const light = new THREE.PointLight(0xffffee, 100, 30); // Intensity, Distance
-        light.position.set(x, localLightY, 0);
+        light.position.set(x, lightY, 0);
         light.castShadow = true;
         light.shadow.bias = -0.0001;
         light.shadow.mapSize.width = 1024;
         light.shadow.mapSize.height = 1024;
 
-        // Emissive Bulb Mesh (Visual)
-        const bulbGeo = new THREE.SphereGeometry(size.x * 0.02, 16, 16);
+        // Emissive Bulb Mesh
+        const bulbGeo = new THREE.SphereGeometry(targetWidth * 0.02, 16, 16);
         const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffffee });
         const bulb = new THREE.Mesh(bulbGeo, bulbMat);
-        bulb.position.set(x, localLightY, 0);
+        bulb.position.set(x, lightY, 0);
 
         lampGroup.add(light);
         lampGroup.add(bulb);
