@@ -10,12 +10,13 @@ import { VignetteShader } from './shaders/VignetteShader.js';
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
 import { loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice } from './dice.js';
 import { initUI, createCrosshair } from './ui.js';
-import { initInteraction, updateInteraction } from './interaction.js';
+import { initInteraction, updateInteraction, registerInteractiveObject } from './interaction.js';
 import { createTable } from './environment/Table.js';
 import { createTavernWalls } from './environment/TavernWalls.js';
 import { createBookshelf } from './environment/Bookshelf.js';
 import { createClutter } from './environment/Clutter.js';
 import { createAtmosphere, updateAtmosphere } from './environment/Atmosphere.js';
+import { createLamp } from './environment/Lamp.js';
 import { RoomEnvironment } from './environment/RoomEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -141,6 +142,13 @@ async function init() {
             // Slightly above the wick visual
             pointLight.position.y += 0.05;
         }
+
+        // Billiard Lamp
+        const lampData = await createLamp(scene);
+        // Position high up
+        lampData.group.position.set(0, 15, 0);
+        // Add to interactive objects
+        registerInteractiveObject(lampData.group, lampData.toggle);
 
         // Atmosphere (Dust Motes)
         createAtmosphere(scene);
