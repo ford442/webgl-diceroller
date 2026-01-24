@@ -50,7 +50,7 @@ async function init() {
 
     // Camera setup
     camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 1.7, 3); // Standing height near the table
+    camera.position.set(0, 2.0, 3); // Standing height near the table
     camera.lookAt(0, 0, 0);
 
     // Renderer setup
