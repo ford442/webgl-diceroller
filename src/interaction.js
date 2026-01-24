@@ -11,6 +11,9 @@ let lastClickTime = 0;
 let lastClickObject = null;
 const DOUBLE_CLICK_DELAY = 300;
 
+// Interactive Objects Registry
+const interactiveObjects = [];
+
 export const initInteraction = (camera, scene, physicsWorld) => {
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
@@ -22,11 +25,36 @@ export const initInteraction = (camera, scene, physicsWorld) => {
     };
 };
 
+export const registerInteractiveObject = (mesh, callback) => {
+    interactiveObjects.push({ mesh, callback });
+};
+
 function onPointerDown(x, y, camera, scene, physicsWorld) {
     updateMouse(x, y);
     raycaster.setFromCamera(mouse, camera);
 
-    // Get meshes from spawnedDice
+    // 1. Check Interactive Objects (Static props like Lamps)
+    // We check this first or concurrently. If we hit one, we trigger the callback.
+    if (interactiveObjects.length > 0) {
+        const interactiveMeshes = interactiveObjects.map(obj => obj.mesh);
+        const intersectsInteractive = raycaster.intersectObjects(interactiveMeshes, true); // recursive
+
+        if (intersectsInteractive.length > 0) {
+            const hit = intersectsInteractive[0];
+            // Find which registered object this hit belongs to
+            // It could be the mesh itself or a child
+            const registered = interactiveObjects.find(io => {
+                return io.mesh === hit.object || isDescendant(hit.object, io.mesh);
+            });
+
+            if (registered) {
+                registered.callback();
+                return; // Consume click
+            }
+        }
+    }
+
+    // 2. Check Physics Objects (Dice)
     const meshes = spawnedDice.map(d => d.mesh);
     const intersects = raycaster.intersectObjects(meshes);
 
@@ -52,6 +80,15 @@ function onPointerDown(x, y, camera, scene, physicsWorld) {
             startDrag(object.userData.body, point, physicsWorld);
         }
     }
+}
+
+function isDescendant(child, parent) {
+    let curr = child.parent;
+    while (curr) {
+        if (curr === parent) return true;
+        curr = curr.parent;
+    }
+    return false;
 }
 
 function onPointerMove(x, y, camera) {
