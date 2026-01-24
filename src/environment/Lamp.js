@@ -6,12 +6,12 @@ export async function createLamp(scene) {
     const textureLoader = new THREE.TextureLoader();
 
     // 1. Load Textures
-    const texCopper = textureLoader.load('/images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_cooper.jpg');
-    const texGlass = textureLoader.load('/images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_glass.jpg');
-    // const texGlassBlend = textureLoader.load('/images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_glass_blend.jpg');
-    // const texGlassBump = textureLoader.load('/images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_glass_bump.jpg');
-    const texSteel = textureLoader.load('/images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_steel.jpg');
-    const texWood = textureLoader.load('/images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_wood.jpg');
+    const texCopper = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_cooper.jpg');
+    const texGlass = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_glass.jpg');
+    // const texGlassBlend = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_glass_blend.jpg');
+    // const texGlassBump = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_glass_bump.jpg');
+    const texSteel = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_steel.jpg');
+    const texWood = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_wood.jpg');
 
     // Materials
     const matCopper = new THREE.MeshStandardMaterial({
@@ -50,7 +50,7 @@ export async function createLamp(scene) {
     const lampGroup = new THREE.Group();
     lampGroup.name = 'BilliardLamp';
 
-    const object = await loader.loadAsync('/images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj');
+    const object = await loader.loadAsync('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj');
 
     // 3. Process Geometry
     // Calculate Center
