@@ -28,6 +28,9 @@ export function createClutter(scene, physicsWorld) {
     // 8. Potion Bottle
     createPotionBottle(scene, physicsWorld, ammo);
 
+    // 9. Dungeon Master Screen
+    createDMScreen(scene, physicsWorld, ammo);
+
     return {
         flamePosition
     };
@@ -493,4 +496,155 @@ function createPotionBottle(scene, physicsWorld, ammo) {
     // Let's use a simpler shape.
 
     createStaticBody(physicsWorld, bottleGroup, shape);
+}
+
+function createDMScreen(scene, physicsWorld, ammo) {
+    // Dimensions
+    const centerWidth = 8;
+    const wingWidth = 4;
+    const height = 3;
+    const thickness = 0.2;
+
+    // Materials
+    // Wood for back
+    const woodMat = new THREE.MeshStandardMaterial({
+        color: 0x5c4033, // Dark Wood
+        roughness: 0.8
+    });
+
+    // Charts for front (inner side)
+    const chartsTexture = generateDMChartsTexture();
+    const chartsMat = new THREE.MeshStandardMaterial({
+        map: chartsTexture,
+        roughness: 0.9,
+        color: 0xffffff
+    });
+
+    // Geometries
+    const centerGeo = new THREE.BoxGeometry(centerWidth, height, thickness);
+    const wingGeo = new THREE.BoxGeometry(wingWidth, height, thickness);
+
+    // Materials Array (Charts on Front +Z, Wood elsewhere)
+    // BoxGeometry materials indices:
+    // 0: Right (+x), 1: Left (-x), 2: Top (+y), 3: Bottom (-y), 4: Front (+z), 5: Back (-z)
+    const materials = [woodMat, woodMat, woodMat, woodMat, chartsMat, woodMat];
+
+    // Position parameters
+    // Table Top Y = -2.75 (approx). Screen sits on top.
+    // Screen Height 3. Center Y = -2.75 + 1.5 = -1.25.
+    const screenY = -1.25;
+    const screenZ = -8;
+
+    // 1. Center Panel
+    const centerMesh = new THREE.Mesh(centerGeo, materials);
+    centerMesh.position.set(0, screenY, screenZ);
+    centerMesh.castShadow = true;
+    centerMesh.receiveShadow = true;
+    scene.add(centerMesh);
+
+    const centerShape = new ammo.btBoxShape(new ammo.btVector3(centerWidth/2, height/2, thickness/2));
+    createStaticBody(physicsWorld, centerMesh, centerShape);
+
+    // Wings Angle
+    const angleRad = Math.PI / 6; // 30 degrees
+
+    // 2. Left Wing
+    const leftWingMesh = new THREE.Mesh(wingGeo, materials);
+    leftWingMesh.rotation.y = angleRad; // +30 deg
+
+    // Position Calculation
+    // Hinge at (-4, -8). Tip at Left.
+    // Center X = HingeX - (width/2)*cos(angle)
+    // Center Z = HingeZ - (width/2)*sin(angle)
+    // Note: angle is -30. cos(-30)=0.866. sin(-30)=-0.5.
+    // X = -4 - 2*(0.866) = -5.732
+    // Z = -8 - 2*(-0.5) = -7
+    const lx = -centerWidth/2 - (wingWidth/2) * Math.cos(angleRad); // cos(30) = cos(-30)
+    const lz = screenZ + (wingWidth/2) * Math.sin(angleRad); // - (-0.5) = +0.5? No.
+    // Formula: Z = -8 - 2*sin(-30) = -8 - (-1) = -7.
+    // So Z = screenZ - (wingWidth/2) * Math.sin(-angleRad).
+    // Or Z = screenZ + (wingWidth/2) * Math.sin(angleRad) IF angle was positive?
+    // Let's stick to the numbers. We want Z = -7.
+    // screenZ = -8. Need +1.
+    // sin(30) = 0.5. 2 * 0.5 = 1.
+
+    leftWingMesh.position.set(lx, screenY, screenZ + (wingWidth/2) * Math.sin(angleRad)); // -8 + 1 = -7
+    scene.add(leftWingMesh);
+
+    const leftShape = new ammo.btBoxShape(new ammo.btVector3(wingWidth/2, height/2, thickness/2));
+    createStaticBody(physicsWorld, leftWingMesh, leftShape);
+
+    // 3. Right Wing
+    const rightWingMesh = new THREE.Mesh(wingGeo, materials);
+    rightWingMesh.rotation.y = -angleRad; // -30 deg
+
+    // Position
+    // Hinge at (4, -8). Tip at Right.
+    // Center X = HingeX + (width/2)*cos(angle)
+    // Center Z = HingeZ + (width/2)*sin(angle) ? No.
+    // We want Z = -7 (Forward). Hinge at -8.
+    // Center Z > Hinge Z.
+    // X = 4 + 2*cos(30) = 5.732.
+    // Z = -8 + 1 = -7.
+
+    // My previous math check said:
+    // Right Rot +30.
+    // Hinge is Left Edge (local -2).
+    // Center = Hinge + 2*(cos 30, sin 30).
+    // CenterZ = -8 + 2*0.5 = -7.
+    // Correct.
+
+    const rx = centerWidth/2 + (wingWidth/2) * Math.cos(angleRad);
+    const rz = screenZ + (wingWidth/2) * Math.sin(angleRad);
+
+    rightWingMesh.position.set(rx, screenY, rz);
+    scene.add(rightWingMesh);
+
+    const rightShape = new ammo.btBoxShape(new ammo.btVector3(wingWidth/2, height/2, thickness/2));
+    createStaticBody(physicsWorld, rightWingMesh, rightShape);
+}
+
+function generateDMChartsTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+
+    // Background
+    ctx.fillStyle = '#fdf5e6';
+    ctx.fillRect(0, 0, 1024, 512);
+
+    // Grid/Tables
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 30px serif';
+    ctx.fillText('RANDOM ENCOUNTERS', 50, 50);
+
+    // Draw some lines
+    ctx.beginPath();
+    ctx.lineWidth = 2;
+    ctx.moveTo(50, 60);
+    ctx.lineTo(400, 60);
+    ctx.stroke();
+
+    ctx.font = '24px monospace';
+    for(let i=0; i<10; i++) {
+        ctx.fillText(`1d20 + ${i}: Goblin Skirmisher`, 50, 90 + i*30);
+    }
+
+    ctx.font = 'bold 30px serif';
+    ctx.fillText('WEAPON STATS', 500, 50);
+    ctx.beginPath();
+    ctx.moveTo(500, 60);
+    ctx.lineTo(900, 60);
+    ctx.stroke();
+
+    ctx.font = '24px monospace';
+    const weapons = ['Dagger      1d4', 'Shortsword  1d6', 'Longsword   1d8', 'Greataxe    1d12'];
+    weapons.forEach((w, i) => {
+        ctx.fillText(w, 500, 90 + i*30);
+    });
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
 }
