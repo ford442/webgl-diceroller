@@ -50,8 +50,8 @@ async function init() {
 
     // Camera setup
     camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 2.0, 3); // Standing height near the table
-    camera.lookAt(0, 0, 0);
+    camera.position.set(0, 6.0, 18); // Standing height proportional to room
+    camera.lookAt(0, -3, 0);
 
     // Renderer setup
     renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -359,9 +359,9 @@ function animate() {
     // Update position
     camera.position.add(velocity.clone().multiplyScalar(deltaTime));
 
-    // Ground collision (simple: prevent going below y=1.7)
-    if (camera.position.y <= 1.7) {
-        camera.position.y = 1.7;
+    // Ground collision (simple: prevent going below y=6.0)
+    if (camera.position.y <= 6.0) {
+        camera.position.y = 6.0;
         velocity.y = 0;
         isOnGround = true;
     }

@@ -47,6 +47,25 @@ export const stepPhysics = (world, deltaTime) => {
 };
 
 export const createFloorAndWalls = (scene, world, tableConfig = null) => {
+    if (tableConfig && tableConfig.physicsBodies) {
+        console.log("Physics: Creating floor and walls from explicit physicsBodies config", tableConfig.physicsBodies);
+        tableConfig.physicsBodies.forEach(bodyDef => {
+            if (bodyDef.type === 'box') {
+                createPhysicsBox(
+                    world,
+                    bodyDef.size.x, bodyDef.size.y, bodyDef.size.z,
+                    bodyDef.position.x, bodyDef.position.y, bodyDef.position.z,
+                    bodyDef.mass,
+                    {
+                        friction: bodyDef.friction,
+                        restitution: bodyDef.restitution
+                    }
+                );
+            }
+        });
+        return;
+    }
+
     // Floor
     let floorY = -5;
     let width = 25;
@@ -124,7 +143,7 @@ export const createFloorAndWalls = (scene, world, tableConfig = null) => {
     createBox(scene, world, topBotWidth, wallHeight, wallThickness, 0, wallY, -halfDepth - wallThickness/2, 0, 0x000000, null, true);
 };
 
-const createPhysicsBox = (world, sx, sy, sz, px, py, pz, mass) => {
+const createPhysicsBox = (world, sx, sy, sz, px, py, pz, mass, options = {}) => {
     const shape = new AmmoInstance.btBoxShape(new AmmoInstance.btVector3(sx * 0.5, sy * 0.5, sz * 0.5));
     const transform = new AmmoInstance.btTransform();
     transform.setIdentity();
@@ -141,8 +160,11 @@ const createPhysicsBox = (world, sx, sy, sz, px, py, pz, mass) => {
     const body = new AmmoInstance.btRigidBody(rbInfo);
 
     // Floor properties
-    body.setFriction(0.6);
-    body.setRestitution(0.5); // Bouncy floor
+    const friction = options.friction !== undefined ? options.friction : 0.6;
+    const restitution = options.restitution !== undefined ? options.restitution : 0.5;
+
+    body.setFriction(friction);
+    body.setRestitution(restitution); // Bouncy floor
 
     world.addRigidBody(body);
 };
