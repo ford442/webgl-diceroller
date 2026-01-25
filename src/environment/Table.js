@@ -198,12 +198,18 @@ export function createTable(scene) {
 
     // 4. Legs (Visual)
     const legSize = 1.5;
-    const legHeight = 7.0;
+    // Leg Top at -0.25 (Table Floor Bottom).
+    // Floor Visual Top is -9.5 (-10 + 0.5 thickness).
+    // Distance from -0.25 to -9.5 is 9.25? No. Table Group is at -3.
+    // Table Floor Bottom World = -3 - 0.25 = -3.25.
+    // Room Floor Top World = -9.5.
+    // Height = |-3.25 - (-9.5)| = 6.25.
+    const legHeight = 6.25;
     const legGeometry = new THREE.BoxGeometry(legSize, legHeight, legSize);
 
-    // Leg Top at -0.25 (Floor Bottom).
-    // Leg Center = -0.25 - 3.5 = -3.75.
-    const legY = -3.75;
+    // Leg Center World = -3.25 - (6.25/2) = -6.375.
+    // Leg Center Local (Group at -3) = -6.375 - (-3) = -3.375.
+    const legY = -3.375;
     const legOffset = width / 2 - legSize / 2;
 
     const positions = [

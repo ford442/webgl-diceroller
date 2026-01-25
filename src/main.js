@@ -8,7 +8,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { VignetteShader } from './shaders/VignetteShader.js';
 
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
-import { loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice } from './dice.js';
+import { loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice, spawnedDice } from './dice.js';
 import { initUI, createCrosshair } from './ui.js';
 import { initInteraction, updateInteraction, registerInteractiveObject } from './interaction.js';
 import { createTable } from './environment/Table.js';
@@ -41,6 +41,23 @@ const keys = {};
 let cursorPos = new THREE.Vector2(0, 0); // Pixel coordinates relative to center
 let isLocked = false;
 let interaction; // Interaction handler
+
+// Dice Focus Logic
+const DiceFocusState = {
+    IDLE: 'IDLE',
+    WAITING_FOR_STOP: 'WAITING_FOR_STOP',
+    FOCUSING: 'FOCUSING',
+    HOLDING: 'HOLDING',
+    RETURNING: 'RETURNING'
+};
+let diceFocusState = DiceFocusState.IDLE;
+let focusTimer = 0;
+let savedCameraState = { position: new THREE.Vector3(), rotation: new THREE.Euler() };
+let focusTargetPosition = new THREE.Vector3();
+let focusStartPos = new THREE.Vector3();
+let focusStartRot = new THREE.Quaternion();
+let focusEndRot = new THREE.Quaternion();
+let focusProgress = 0;
 
 init();
 
@@ -169,6 +186,7 @@ async function init() {
         },
         () => {
             throwDice(scene, physicsWorld);
+            diceFocusState = DiceFocusState.WAITING_FOR_STOP;
         }
     );
     crosshairUI = createCrosshair();
@@ -208,7 +226,7 @@ function setupInput() {
 
     // Mouse Movement Tracking for "Eye-Head" System
     document.addEventListener('mousemove', (event) => {
-        if (isLocked) {
+        if (isLocked && diceFocusState === DiceFocusState.IDLE) {
             // Accumulate movement relative to center
             // We want the cursor to move freely within bounds
             cursorPos.x += event.movementX;
@@ -244,7 +262,7 @@ function setupInput() {
 
     // Pass clicks to interaction
     document.addEventListener('mousedown', (event) => {
-        if (isLocked) {
+        if (isLocked && diceFocusState === DiceFocusState.IDLE) {
             const halfWidth = window.innerWidth / 2;
             const halfHeight = window.innerHeight / 2;
             const normX = cursorPos.x / halfWidth;
@@ -267,6 +285,18 @@ function onWindowResize() {
     composer.setSize(window.innerWidth, window.innerHeight);
 }
 
+function checkDiceStability() {
+    if (spawnedDice.length === 0) return true;
+    let allStable = true;
+    spawnedDice.forEach(d => {
+        if (!d.body) return;
+        const vel = d.body.getLinearVelocity().length();
+        const ang = d.body.getAngularVelocity().length();
+        if (vel > 0.1 || ang > 0.1) allStable = false;
+    });
+    return allStable;
+}
+
 function animate() {
     const deltaTime = clock.getDelta();
     const time = clock.getElapsedTime();
@@ -284,32 +314,6 @@ function animate() {
     const screenCenterX = window.innerWidth / 2;
     const screenCenterY = window.innerHeight / 2;
     crosshairUI.updatePosition(screenCenterX + cursorPos.x, screenCenterY + cursorPos.y);
-
-    // "Eye-Head" Camera Logic
-    // If cursor is far from center, rotate camera to bring it back.
-    const deadZone = 50; // Pixels
-    const turnSensitivity = 2.0; // Radians per second at edge of screen
-
-    if (isLocked) {
-        // Yaw (Turning Left/Right)
-        if (Math.abs(cursorPos.x) > deadZone) {
-            const sign = Math.sign(cursorPos.x);
-            const magnitude = (Math.abs(cursorPos.x) - deadZone) / (screenCenterX - deadZone); // 0 to 1
-            yaw -= sign * magnitude * turnSensitivity * deltaTime;
-        }
-
-        // Pitch (Looking Up/Down)
-        if (Math.abs(cursorPos.y) > deadZone) {
-            const sign = Math.sign(cursorPos.y); // Positive Y is down
-            const magnitude = (Math.abs(cursorPos.y) - deadZone) / (screenCenterY - deadZone);
-            pitch -= sign * magnitude * turnSensitivity * deltaTime; // Looking down (positive Y) means decreasing pitch?
-            // Usually pitch: up is positive, down is negative.
-            // Mouse down -> decrease pitch.
-        }
-
-        // Clamp pitch
-        pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
-    }
 
     // Update Atmosphere
     updateAtmosphere(time);
@@ -338,48 +342,153 @@ function animate() {
     }
 
   
-    // Movement logic
-    const direction = new THREE.Vector3();
-    if (keys['KeyW']) direction.z -= 1; // Back (towards camera) -> Forward
-    if (keys['KeyS']) direction.z += 1; // Forward (away from camera) -> Backward
-    if (keys['KeyA']) direction.x -= 1; // Left
-    if (keys['KeyD']) direction.x += 1; // Right
-    if (keys['Space'] && isOnGround) {
-        velocity.y = jumpForce;
-        isOnGround = false;
+    // --- Camera & Movement Logic ---
+
+    // Dice Focus State Machine
+    if (diceFocusState === DiceFocusState.WAITING_FOR_STOP) {
+        if (checkDiceStability()) {
+            diceFocusState = DiceFocusState.FOCUSING;
+
+            // Save current state
+            savedCameraState.position.copy(camera.position);
+            savedCameraState.rotation.copy(camera.rotation);
+
+            // Calculate target
+            const center = new THREE.Vector3();
+            spawnedDice.forEach(d => center.add(d.mesh.position));
+            if (spawnedDice.length > 0) center.divideScalar(spawnedDice.length);
+
+            // Target position: Above and slightly back
+            focusTargetPosition.copy(center).add(new THREE.Vector3(0, 5, 2));
+
+            // Setup Tween
+            focusStartPos.copy(camera.position);
+            focusStartRot.setFromEuler(camera.rotation);
+
+            // Calculate look rotation
+            const dummyCam = camera.clone();
+            dummyCam.position.copy(focusTargetPosition);
+            dummyCam.lookAt(center);
+            focusEndRot.copy(dummyCam.quaternion);
+
+            focusProgress = 0;
+        }
+    } else if (diceFocusState === DiceFocusState.FOCUSING) {
+        focusProgress += deltaTime * 2.0; // 0.5s transition
+        if (focusProgress > 1) focusProgress = 1;
+
+        // Slerp/Lerp
+        camera.position.lerpVectors(focusStartPos, focusTargetPosition, focusProgress);
+        camera.quaternion.slerpQuaternions(focusStartRot, focusEndRot, focusProgress);
+
+        if (focusProgress === 1) {
+            diceFocusState = DiceFocusState.HOLDING;
+            focusTimer = 2.0; // Hold for 2s
+        }
+    } else if (diceFocusState === DiceFocusState.HOLDING) {
+        focusTimer -= deltaTime;
+        if (focusTimer <= 0) {
+            diceFocusState = DiceFocusState.RETURNING;
+            focusStartPos.copy(camera.position);
+            focusStartRot.copy(camera.quaternion);
+
+            focusTargetPosition.copy(savedCameraState.position);
+            const dummyCam = camera.clone();
+            dummyCam.rotation.copy(savedCameraState.rotation); // Euler to Quat
+            focusEndRot.copy(dummyCam.quaternion);
+
+            focusProgress = 0;
+        }
+    } else if (diceFocusState === DiceFocusState.RETURNING) {
+        focusProgress += deltaTime * 2.0;
+        if (focusProgress > 1) focusProgress = 1;
+
+        camera.position.lerpVectors(focusStartPos, focusTargetPosition, focusProgress);
+        camera.quaternion.slerpQuaternions(focusStartRot, focusEndRot, focusProgress);
+
+        if (focusProgress === 1) {
+            diceFocusState = DiceFocusState.IDLE;
+            // Restore exact Euler to prevent gimbal issues or drift
+            camera.rotation.copy(savedCameraState.rotation);
+            // Sync pitch/yaw vars
+            pitch = camera.rotation.x;
+            yaw = camera.rotation.y;
+        }
     }
 
-    // Normalize direction and apply to velocity
-    if (direction.length() > 0) {
-        direction.normalize();
-        // Rotate direction by camera yaw for forward/back relative to view
-        direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-        velocity.x = direction.x * moveSpeed;
-        velocity.z = direction.z * moveSpeed;
-    } else {
-        velocity.x = 0;
-        velocity.z = 0;
+    // Only allow player control if IDLE
+    if (diceFocusState === DiceFocusState.IDLE) {
+        // "Eye-Head" Camera Logic
+        // If cursor is far from center, rotate camera to bring it back.
+        const deadZone = 50; // Pixels
+        const turnSensitivity = 2.0; // Radians per second at edge of screen
+
+        if (isLocked) {
+            // Yaw (Turning Left/Right)
+            if (Math.abs(cursorPos.x) > deadZone) {
+                const sign = Math.sign(cursorPos.x);
+                const magnitude = (Math.abs(cursorPos.x) - deadZone) / (screenCenterX - deadZone); // 0 to 1
+                yaw -= sign * magnitude * turnSensitivity * deltaTime;
+            }
+
+            // Pitch (Looking Up/Down)
+            if (Math.abs(cursorPos.y) > deadZone) {
+                const sign = Math.sign(cursorPos.y); // Positive Y is down
+                const magnitude = (Math.abs(cursorPos.y) - deadZone) / (screenCenterY - deadZone);
+                pitch -= sign * magnitude * turnSensitivity * deltaTime; // Looking down (positive Y) means decreasing pitch?
+                // Usually pitch: up is positive, down is negative.
+                // Mouse down -> decrease pitch.
+            }
+
+            // Clamp pitch
+            pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
+        }
+
+        // Movement logic
+        const direction = new THREE.Vector3();
+        if (keys['KeyW']) direction.z -= 1; // Back (towards camera) -> Forward
+        if (keys['KeyS']) direction.z += 1; // Forward (away from camera) -> Backward
+        if (keys['KeyA']) direction.x -= 1; // Left
+        if (keys['KeyD']) direction.x += 1; // Right
+        if (keys['Space'] && isOnGround) {
+            velocity.y = jumpForce;
+            isOnGround = false;
+        }
+
+        // Normalize direction and apply to velocity
+        if (direction.length() > 0) {
+            direction.normalize();
+            // Rotate direction by camera yaw for forward/back relative to view
+            direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+            velocity.x = direction.x * moveSpeed;
+            velocity.z = direction.z * moveSpeed;
+        } else {
+            velocity.x = 0;
+            velocity.z = 0;
+        }
+
+        // Apply gravity
+        velocity.y += gravity * deltaTime;
+
+        // Update position
+        camera.position.add(velocity.clone().multiplyScalar(deltaTime));
+
+    // Ground collision
+    // 6.0 is the standing eye height relative to the floor.
+    // (Floor Y = -9.5, Table Y = -3.0. Standing height ~15.5 units above floor -> -9.5 + 15.5 = 6.0)
+        if (camera.position.y <= 6.0) {
+            camera.position.y = 6.0;
+            velocity.y = 0;
+            isOnGround = true;
+        }
+
+        // Optional: Simple bounds to stay in room (adjust based on your room size)
+        camera.position.x = Math.max(-18, Math.min(18, camera.position.x));
+        camera.position.z = Math.max(-18, Math.min(18, camera.position.z));
+
+        // Update camera rotation
+        camera.rotation.set(pitch, yaw, 0, 'YXZ');
     }
-
-    // Apply gravity
-    velocity.y += gravity * deltaTime;
-
-    // Update position
-    camera.position.add(velocity.clone().multiplyScalar(deltaTime));
-
-    // Ground collision (simple: prevent going below y=6.0)
-    if (camera.position.y <= 6.0) {
-        camera.position.y = 6.0;
-        velocity.y = 0;
-        isOnGround = true;
-    }
-
-    // Optional: Simple bounds to stay in room (adjust based on your room size)
-    camera.position.x = Math.max(-10, Math.min(10, camera.position.x));
-    camera.position.z = Math.max(-10, Math.min(10, camera.position.z));
-
-    // Update camera rotation
-    camera.rotation.set(pitch, yaw, 0, 'YXZ');
 
     composer.render();
 }

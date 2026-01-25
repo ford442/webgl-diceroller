@@ -217,13 +217,13 @@ export const throwDice = (scene, world) => {
 
         // FORCE IMPULSE (The "Throw")
         // Apply random forces to scatter them and create spin with increased variance
-        const forceX = (getSecureRandom() - 0.5) * 120; // Increased horizontal scatter from 80 to 120
-        const forceY = (getSecureRandom()) * 40 - 30; // Increased vertical variation from (20,-25) to (40,-30)
-        const forceZ = (getSecureRandom() - 0.5) * 120; // Increased horizontal scatter from 80 to 120
+        const forceX = (getSecureRandom() - 0.5) * 80; // Reduced from 120
+        const forceY = (getSecureRandom()) * 25 - 20; // Reduced vertical variation from (40,-30) to (25,-20)
+        const forceZ = (getSecureRandom() - 0.5) * 80; // Reduced from 120
 
-        const spinX = (getSecureRandom() - 0.5) * 600; // Increased spin from 400 to 600
-        const spinY = (getSecureRandom() - 0.5) * 600; // Increased spin from 400 to 600
-        const spinZ = (getSecureRandom() - 0.5) * 600; // Increased spin from 400 to 600
+        const spinX = (getSecureRandom() - 0.5) * 350; // Reduced spin from 600
+        const spinY = (getSecureRandom() - 0.5) * 350; // Reduced spin from 600
+        const spinZ = (getSecureRandom() - 0.5) * 350; // Reduced spin from 600
 
         body.applyCentralImpulse(new Ammo.btVector3(forceX, forceY, forceZ));
         body.applyTorqueImpulse(new Ammo.btVector3(spinX, spinY, spinZ));
