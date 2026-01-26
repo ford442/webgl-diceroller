@@ -67,7 +67,7 @@ export async function createLamp(scene) {
     const size = initialBox.getSize(new THREE.Vector3());
 
     // Target Dimensions
-    const targetWidth = 10.0;
+    const targetWidth = 22.0;
     // Prevent division by zero if size is invalid
     const rawWidth = size.x > 0.001 ? size.x : 1.0;
     const scaleFactor = targetWidth / rawWidth;

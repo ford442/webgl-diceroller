@@ -111,17 +111,20 @@ export const loadDiceModels = async () => {
 };
 
 export const spawnObjects = (scene, world, config = null) => {
-    if (!config) {
-        config = { d4: 1, d6: 1, d8: 1, d10: 1, d12: 1, d20: 1 };
+    // If config is an object (counts), flatten it.
+    // If it's a list (array of strings), use it directly.
+    let diceToSpawn = [];
+    if (config && !Array.isArray(config)) {
+        Object.keys(config).forEach(type => {
+            const count = config[type];
+            for (let i = 0; i < count; i++) diceToSpawn.push(type);
+        });
+    } else if (Array.isArray(config)) {
+        diceToSpawn = config;
+    } else {
+        // Default
+        diceToSpawn = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
     }
-
-    const diceToSpawn = [];
-    Object.keys(config).forEach(type => {
-        const count = config[type];
-        for (let i = 0; i < count; i++) {
-            diceToSpawn.push(type);
-        }
-    });
 
     diceToSpawn.forEach((type, index) => {
         const template = diceModels[type];
@@ -129,20 +132,21 @@ export const spawnObjects = (scene, world, config = null) => {
 
         const mesh = template.clone();
 
-        // Initial spawn spread with enhanced randomness
-        const x = (getSecureRandom() - 0.5) * 6; // Increased from 5 to 6
-        const y = 5 + index * 1.5 + (getSecureRandom() * 1); // Added random y variation
-        const z = (getSecureRandom() - 0.5) * 6; // Increased from 5 to 6
+        // Lower spawn height (was 5 + index) to reduce "drop hardness"
+        const x = (getSecureRandom() - 0.5) * 4;
+        const y = 3 + (index * 0.5) + (getSecureRandom() * 1);
+        const z = (getSecureRandom() - 0.5) * 4;
 
         mesh.position.set(x, y, z);
-        mesh.rotation.set(getSecureRandom() * Math.PI * 2, getSecureRandom() * Math.PI * 2, getSecureRandom() * Math.PI * 2);
+        mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
 
         scene.add(mesh);
 
         const body = spawnDicePhysics(world, mesh, template.userData.physicsShape, {x, y, z}, mesh.rotation);
         mesh.userData.body = body;
 
-        spawnedDice.push({ mesh, body });
+        // Store type for smart updating
+        spawnedDice.push({ mesh, body, type });
     });
 };
 
@@ -175,9 +179,42 @@ export const clearDice = (scene, world) => {
     spawnedDice = [];
 };
 
-export const updateDiceSet = (scene, world, config) => {
-    clearDice(scene, world);
-    spawnObjects(scene, world, config);
+export const updateDiceSet = (scene, world, targetCounts) => {
+    // 1. Count current dice
+    const currentCounts = {};
+    spawnedDice.forEach(d => {
+        currentCounts[d.type] = (currentCounts[d.type] || 0) + 1;
+    });
+
+    // 2. Calculate Difference
+    Object.keys(targetCounts).forEach(type => {
+        const target = targetCounts[type];
+        const current = currentCounts[type] || 0;
+        const diff = target - current;
+
+        if (diff > 0) {
+            // Add 'diff' amount of this type
+            const toAdd = [];
+            for(let i=0; i<diff; i++) toAdd.push(type);
+            spawnObjects(scene, world, toAdd);
+        } else if (diff < 0) {
+            // Remove 'abs(diff)' amount of this type
+            let toRemove = Math.abs(diff);
+            // Iterate backwards to safely remove
+            for (let i = spawnedDice.length - 1; i >= 0; i--) {
+                if (toRemove === 0) break;
+                if (spawnedDice[i].type === type) {
+                    // Remove physics
+                    world.removeRigidBody(spawnedDice[i].body);
+                    // Remove visual
+                    scene.remove(spawnedDice[i].mesh);
+                    // Remove from array
+                    spawnedDice.splice(i, 1);
+                    toRemove--;
+                }
+            }
+        }
+    });
 };
 
 export const throwDice = (scene, world) => {
@@ -192,10 +229,10 @@ export const throwDice = (scene, world) => {
         body.setAngularVelocity(new Ammo.btVector3(0, 0, 0));
 
         // Group them near the top center for the throw
-        // Use crypto random for position jitter with increased spread
-        const x = (getSecureRandom() - 0.5) * 8; // Increased from 4 to 8 for wider spread
-        const y = 8 + (index * 0.3) + (getSecureRandom() * 5); // Increased height variation from 3 to 5, reduced stacking spacing
-        const z = (getSecureRandom() - 0.5) * 8; // Increased from 4 to 8 for wider spread
+        // Reduced spread
+        const x = (getSecureRandom() - 0.5) * 4;
+        const y = 4 + (index * 0.5); // Lower start height
+        const z = (getSecureRandom() - 0.5) * 4;
 
         transform.setIdentity();
         transform.setOrigin(new Ammo.btVector3(x, y, z));
@@ -215,15 +252,14 @@ export const throwDice = (scene, world) => {
         // Wake up
         body.activate();
 
-        // FORCE IMPULSE (The "Throw")
-        // Apply random forces to scatter them and create spin with increased variance
-        const forceX = (getSecureRandom() - 0.5) * 80; // Reduced from 120
-        const forceY = (getSecureRandom()) * 25 - 20; // Reduced vertical variation from (40,-30) to (25,-20)
-        const forceZ = (getSecureRandom() - 0.5) * 80; // Reduced from 120
+        // Much softer throw forces
+        const forceX = (getSecureRandom() - 0.5) * 25; // Was 80
+        const forceY = (getSecureRandom()) * 10 - 5;   // Gentle vertical toss
+        const forceZ = (getSecureRandom() - 0.5) * 25; // Was 80
 
-        const spinX = (getSecureRandom() - 0.5) * 350; // Reduced spin from 600
-        const spinY = (getSecureRandom() - 0.5) * 350; // Reduced spin from 600
-        const spinZ = (getSecureRandom() - 0.5) * 350; // Reduced spin from 600
+        const spinX = (getSecureRandom() - 0.5) * 100; // Was 350
+        const spinY = (getSecureRandom() - 0.5) * 100; // Was 350
+        const spinZ = (getSecureRandom() - 0.5) * 100; // Was 350
 
         body.applyCentralImpulse(new Ammo.btVector3(forceX, forceY, forceZ));
         body.applyTorqueImpulse(new Ammo.btVector3(spinX, spinY, spinZ));
