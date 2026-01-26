@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getAmmo } from '../physics.js';
 
 export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }, rotationY = 0) {
     const chairGroup = new THREE.Group();
@@ -87,6 +88,7 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     // Physics
     // Simple Box Collider for the whole chair approx
     if (physicsWorld) {
+        const Ammo = getAmmo();
         const transform = new Ammo.btTransform();
         transform.setIdentity();
         // Center the collider vertically based on total height

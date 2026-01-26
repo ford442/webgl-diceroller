@@ -102,15 +102,20 @@ async function init() {
     pointLight.shadow.radius = 5; // Softer shadows
     scene.add(pointLight);
 
-    // Cool SpotLight (Moonlight/Rim) - Fill/Rim Light
+    // Cool SpotLight (Moonlight) - Shining through the window
     // More blue, lower intensity for contrast (0x4444dd)
-    const spotLight = new THREE.SpotLight(0x4444dd, 1.5);
-    spotLight.position.set(-15, 12, -8);
-    spotLight.angle = Math.PI / 5;
+    const spotLight = new THREE.SpotLight(0x4444dd, 5.0);
+    spotLight.position.set(-45, 15, -5); // Outside the window
+    spotLight.target.position.set(0, -3, 0); // Aim at table center
+    spotLight.angle = Math.PI / 10;
+    spotLight.distance = 100;
     spotLight.penumbra = 0.5;
     spotLight.castShadow = true;
     spotLight.shadow.bias = -0.0001;
+    spotLight.shadow.mapSize.width = 2048;
+    spotLight.shadow.mapSize.height = 2048;
     scene.add(spotLight);
+    scene.add(spotLight.target);
 
     // Fog for depth
     scene.fog = new THREE.FogExp2(0x111111, 0.02);
