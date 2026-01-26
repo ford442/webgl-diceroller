@@ -173,7 +173,7 @@ async function init() {
         // Billiard Lamp
         const lampData = await createLamp(scene);
         // Position high up
-        lampData.group.position.set(0, 15, 0);
+        lampData.group.position.set(0, 25, 0);
         // Add to interactive objects
         registerInteractiveObject(lampData.group, lampData.toggle);
 
@@ -214,6 +214,10 @@ async function init() {
 function setupInput() {
     window.addEventListener('keydown', (event) => {
         keys[event.code] = true;
+        if (event.code === 'KeyR') {
+            throwDice(scene, physicsWorld);
+            diceFocusState = DiceFocusState.WAITING_FOR_STOP;
+        }
     });
     window.addEventListener('keyup', (event) => {
         keys[event.code] = false;
@@ -363,13 +367,23 @@ function animate() {
             savedCameraState.position.copy(camera.position);
             savedCameraState.rotation.copy(camera.rotation);
 
-            // Calculate target
+            // Calculate center
             const center = new THREE.Vector3();
             spawnedDice.forEach(d => center.add(d.mesh.position));
             if (spawnedDice.length > 0) center.divideScalar(spawnedDice.length);
 
-            // Target position: Above and slightly back
-            focusTargetPosition.copy(center).add(new THREE.Vector3(0, 5, 2));
+            // Calculate Spread (Standard Deviation-ish) to determine camera distance
+            let maxDist = 0;
+            spawnedDice.forEach(d => {
+                const dist = d.mesh.position.distanceTo(center);
+                if (dist > maxDist) maxDist = dist;
+            });
+
+            // Dynamic camera offset:
+            // Higher (y) and further back (z) if dice are spread out.
+            // Base offset (0, 8, 4) + spread factor
+            const zoomOut = Math.max(1, maxDist * 0.8);
+            focusTargetPosition.copy(center).add(new THREE.Vector3(0, 8 + zoomOut, 4 + zoomOut));
 
             // Setup Tween
             focusStartPos.copy(camera.position);
@@ -430,8 +444,8 @@ function animate() {
     if (diceFocusState === DiceFocusState.IDLE) {
         // "Eye-Head" Camera Logic
         // If cursor is far from center, rotate camera to bring it back.
-        const deadZone = 50; // Pixels
-        const turnSensitivity = 2.0; // Radians per second at edge of screen
+        const deadZone = 10; // Reduced from 50 for tighter response
+        const turnSensitivity = 2.5; // Slightly faster
 
         if (isLocked) {
             // Yaw (Turning Left/Right)

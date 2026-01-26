@@ -29,7 +29,7 @@ export const initPhysics = async () => {
     const overlappingPairCache = new AmmoInstance.btDbvtBroadphase();
     const solver = new AmmoInstance.btSequentialImpulseConstraintSolver();
     const dynamicsWorld = new AmmoInstance.btDiscreteDynamicsWorld(dispatcher, overlappingPairCache, solver, collisionConfiguration);
-    dynamicsWorld.setGravity(new AmmoInstance.btVector3(0, -20, 0)); // Increased gravity for heavier feel
+    dynamicsWorld.setGravity(new AmmoInstance.btVector3(0, -15, 0)); // Reduced from -20
 
     return dynamicsWorld;
 };
@@ -161,7 +161,7 @@ const createPhysicsBox = (world, sx, sy, sz, px, py, pz, mass, options = {}) => 
 
     // Floor properties
     const friction = options.friction !== undefined ? options.friction : 0.6;
-    const restitution = options.restitution !== undefined ? options.restitution : 0.5;
+    const restitution = options.restitution !== undefined ? options.restitution : 0.3; // Was 0.5
 
     body.setFriction(friction);
     body.setRestitution(restitution); // Bouncy floor
@@ -221,7 +221,7 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
     // PHYSICS TUNING
     body.setFriction(0.6);        // Prevent sliding too much
     body.setRollingFriction(0.1); // Help them stop rolling
-    body.setRestitution(0.3);     // Bounciness (0 = no bounce, 1 = super ball)
+    body.setRestitution(0.2);     // Bounciness (0 = no bounce, 1 = super ball)
 
     // Damping simulates air resistance/heavy feel
     // Linear 0.05, Angular 0.1 helps them stop spinning eventually
