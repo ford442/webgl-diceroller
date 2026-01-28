@@ -81,6 +81,14 @@ export function createTavernWalls(scene, physicsWorld) {
     // Physics
     if (Ammo) createStaticBody(physicsWorld, backWall, new Ammo.btBoxShape(new Ammo.btVector3(width/2, height/2, thickness/2)));
 
+    // Front Wall (Behind Camera)
+    const frontWall = new THREE.Mesh(new THREE.BoxGeometry(width, height, thickness), wallMaterial);
+    frontWall.position.set(0, wallCenterY, depth/2 + thickness/2);
+    frontWall.receiveShadow = true;
+    roomGroup.add(frontWall);
+    // Physics
+    if (Ammo) createStaticBody(physicsWorld, frontWall, new Ammo.btBoxShape(new Ammo.btVector3(width/2, height/2, thickness/2)));
+
     // Right Wall (Solid)
     const rightWall = new THREE.Mesh(new THREE.BoxGeometry(thickness, height, depth + thickness*2), wallMaterial);
     rightWall.position.set(width/2 + thickness/2, wallCenterY, 0);
@@ -104,9 +112,15 @@ export function createTavernWalls(scene, physicsWorld) {
     beamBack.position.set(0, 10, -depth/2 + beamThick/2); // Mid-height beam
     roomGroup.add(beamBack);
 
+    // Horizontal Beam Front
+    const beamFront = new THREE.Mesh(new THREE.BoxGeometry(width, beamThick, beamThick), woodMaterial);
+    beamFront.position.set(0, 10, depth/2 - beamThick/2);
+    roomGroup.add(beamFront);
+
     // Vertical Columns in corners
     const colGeo = new THREE.BoxGeometry(beamThick, height, beamThick);
 
+    // Back Corners
     const col1 = new THREE.Mesh(colGeo, woodMaterial);
     col1.position.set(-width/2 + beamThick/2, wallCenterY, -depth/2 + beamThick/2);
     roomGroup.add(col1);
@@ -114,6 +128,15 @@ export function createTavernWalls(scene, physicsWorld) {
     const col2 = new THREE.Mesh(colGeo, woodMaterial);
     col2.position.set(width/2 - beamThick/2, wallCenterY, -depth/2 + beamThick/2);
     roomGroup.add(col2);
+
+    // Front Corners
+    const col3 = new THREE.Mesh(colGeo, woodMaterial);
+    col3.position.set(-width/2 + beamThick/2, wallCenterY, depth/2 - beamThick/2);
+    roomGroup.add(col3);
+
+    const col4 = new THREE.Mesh(colGeo, woodMaterial);
+    col4.position.set(width/2 - beamThick/2, wallCenterY, depth/2 - beamThick/2);
+    roomGroup.add(col4);
 
     scene.add(roomGroup);
 }
