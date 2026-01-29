@@ -62,7 +62,7 @@ export function createDagger(scene, physicsWorld) {
     // Position the whole dagger on the table
     // Table is at y = -3 roughly.
     // We want it lying flat.
-    group.position.set(5, -2.95, -2);
+    group.position.set(5, -2.45, -2);
     group.rotation.y = Math.PI / 4; // Angled casually
 
     scene.add(group);

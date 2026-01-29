@@ -16,6 +16,7 @@ import { createTavernWalls } from './environment/TavernWalls.js';
 import { createBookshelf } from './environment/Bookshelf.js';
 import { createChair } from './environment/Chair.js';
 import { createClutter } from './environment/Clutter.js';
+import { createDagger } from './environment/Dagger.js';
 import { createAtmosphere, updateAtmosphere } from './environment/Atmosphere.js';
 import { createLamp } from './environment/Lamp.js';
 import { RoomEnvironment } from './environment/RoomEnvironment.js';
@@ -169,6 +170,9 @@ async function init() {
             // Slightly above the wick visual
             pointLight.position.y += 0.05;
         }
+
+        // Dagger
+        createDagger(scene, physicsWorld);
 
         // Billiard Lamp
         const lampData = await createLamp(scene);
