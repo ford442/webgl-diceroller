@@ -17,6 +17,7 @@ import { createBookshelf } from './environment/Bookshelf.js';
 import { createChair } from './environment/Chair.js';
 import { createClutter } from './environment/Clutter.js';
 import { createDagger } from './environment/Dagger.js';
+import { createDiceBag } from './environment/DiceBag.js';
 import { createAtmosphere, updateAtmosphere } from './environment/Atmosphere.js';
 import { createLamp } from './environment/Lamp.js';
 import { RoomEnvironment } from './environment/RoomEnvironment.js';
@@ -173,6 +174,9 @@ async function init() {
 
         // Dagger
         createDagger(scene, physicsWorld);
+
+        // Leather Dice Bag
+        createDiceBag(scene, physicsWorld);
 
         // Billiard Lamp
         const lampData = await createLamp(scene);
