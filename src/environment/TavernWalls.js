@@ -138,7 +138,12 @@ export function createTavernWalls(scene, physicsWorld) {
     col4.position.set(width/2 - beamThick/2, wallCenterY, depth/2 - beamThick/2);
     roomGroup.add(col4);
 
+    // Fireplace (New)
+    const fireplaceLight = createFireplace(roomGroup, physicsWorld, Ammo, wallMaterial);
+
     scene.add(roomGroup);
+
+    return { fireplaceLight };
 }
 
 function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight, wallDepth, thickness, wallMat, woodMat) {
@@ -321,4 +326,93 @@ function createGodRays(group, x, y, z) {
     mesh.translateY(-length/2 + 2); // Shift along local Y (which is the ray axis now)
 
     group.add(mesh);
+}
+
+function createFireplace(group, physicsWorld, Ammo, wallMat) {
+    // Reuse wall material but override color for soot look
+    const stoneMat = wallMat.clone();
+    stoneMat.color.setHex(0x555555); // Dark gray
+
+    // Hearth Dimensions: Width Z=6, Depth X=3, Height Y=5
+    const widthZ = 6;
+    const depthX = 3;
+    const heightY = 5;
+
+    // Position on Right Wall (X ~ 21). Protruding inward.
+    // Wall X = 20 + 1 = 21. Inner surface = 20.
+    // Hearth center X = 20 - depthX/2 = 20 - 1.5 = 18.5.
+    // Floor = -10. Hearth Y = -10 + heightY/2 = -7.5.
+    const hX = 18.5;
+    const hY = -7.5;
+    const hZ = 0;
+
+    // Construct Hearth with Pillars and Lintel for visuals
+    const pillWidth = 1.5;
+    const pillHeight = 3.5;
+
+    // Left Pillar (Z < 0)
+    const p1 = new THREE.Mesh(new THREE.BoxGeometry(depthX, pillHeight, pillWidth), stoneMat);
+    // Y = -10 + 1.75 = -8.25
+    // Z = -3 + 0.75 = -2.25
+    p1.position.set(hX, -8.25, -2.25);
+    p1.castShadow = true;
+    p1.receiveShadow = true;
+    group.add(p1);
+
+    // Right Pillar (Z > 0)
+    const p2 = new THREE.Mesh(new THREE.BoxGeometry(depthX, pillHeight, pillWidth), stoneMat);
+    p2.position.set(hX, -8.25, 2.25);
+    p2.castShadow = true;
+    p2.receiveShadow = true;
+    group.add(p2);
+
+    // Lintel (Top)
+    const lintelHeight = 1.5;
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(depthX, lintelHeight, widthZ), stoneMat);
+    // Y = -10 + 3.5 + 0.75 = -5.75
+    lintel.position.set(hX, -5.75, 0);
+    lintel.castShadow = true;
+    lintel.receiveShadow = true;
+    group.add(lintel);
+
+    // Fire Visual (Inside Niche)
+    const fireGeo = new THREE.ConeGeometry(0.5, 1.0, 8);
+    const fireMat = new THREE.MeshBasicMaterial({ color: 0xff5500 });
+    const fire = new THREE.Mesh(fireGeo, fireMat);
+    // Y = Floor -10 + 0.5 = -9.5 (sitting on floor)
+    fire.position.set(hX, -9.5, 0);
+    group.add(fire);
+
+    // Light
+    const light = new THREE.PointLight(0xff4400, 5, 40);
+    light.position.copy(fire.position);
+    light.position.y += 1.0; // Slightly higher
+    light.castShadow = true;
+    light.shadow.bias = -0.001;
+    group.add(light);
+
+    // Physics
+    // Simple Box Shape for the whole hearth to prevent dice entering (simplifies collision)
+    if (Ammo) {
+        const shape = new Ammo.btBoxShape(new Ammo.btVector3(depthX/2, heightY/2, widthZ/2));
+        const pMesh = new THREE.Mesh(new THREE.BoxGeometry(depthX, heightY, widthZ));
+        pMesh.position.set(hX, hY, 0);
+        pMesh.visible = false;
+        group.add(pMesh);
+        createStaticBody(physicsWorld, pMesh, shape);
+    }
+
+    // Chimney (Visual only, high up)
+    const cW = 2; // X depth
+    const cH = 25;
+    const cD = 4; // Z width
+    const chimney = new THREE.Mesh(new THREE.BoxGeometry(cW, cH, cD), stoneMat);
+    // Above Hearth: Y = -5 + 12.5 = 7.5.
+    // X attached to wall: 19.
+    chimney.position.set(19, 7.5, 0);
+    chimney.castShadow = true;
+    chimney.receiveShadow = true;
+    group.add(chimney);
+
+    return light;
 }
