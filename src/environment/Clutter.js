@@ -31,6 +31,9 @@ export function createClutter(scene, physicsWorld) {
     // 9. Dungeon Master Screen
     createDMScreen(scene, physicsWorld, ammo);
 
+    // 10. Iron Key
+    createKey(scene, physicsWorld, ammo);
+
     return {
         flamePosition
     };
@@ -222,6 +225,88 @@ function generateCharacterSheetTexture() {
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
+}
+
+function createKey(scene, physicsWorld, ammo) {
+    const keyGroup = new THREE.Group();
+    keyGroup.name = 'IronKey';
+
+    // Material: Dark, rough metal
+    const material = new THREE.MeshStandardMaterial({
+        color: 0x222222,
+        roughness: 0.7,
+        metalness: 0.9,
+    });
+
+    // 1. Bow (Handle)
+    // Ring shape
+    const bowRadius = 0.3;
+    const bowTube = 0.06;
+    const bowGeo = new THREE.TorusGeometry(bowRadius, bowTube, 8, 16);
+    const bowMesh = new THREE.Mesh(bowGeo, material);
+    bowMesh.rotation.x = Math.PI / 2; // Lie flat
+    bowMesh.castShadow = true;
+    bowMesh.receiveShadow = true;
+    keyGroup.add(bowMesh);
+
+    // 2. Shaft
+    const shaftLen = 1.0;
+    const shaftRadius = 0.06;
+    const shaftGeo = new THREE.CylinderGeometry(shaftRadius, shaftRadius, shaftLen, 8);
+    const shaftMesh = new THREE.Mesh(shaftGeo, material);
+    // Cylinder is Y-up. Rotate to Z.
+    shaftMesh.rotation.x = Math.PI / 2;
+    // Position: End of shaft at edge of bow.
+    // Bow center is 0,0,0. Radius 0.3.
+    // Shaft starts at 0.3. Center at 0.3 + 0.5 = 0.8.
+    shaftMesh.position.z = bowRadius + shaftLen / 2 - 0.05; // -0.05 overlap
+    shaftMesh.castShadow = true;
+    shaftMesh.receiveShadow = true;
+    keyGroup.add(shaftMesh);
+
+    // 3. Collar (Decorative ring on shaft)
+    const collarGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.1, 8);
+    const collarMesh = new THREE.Mesh(collarGeo, material);
+    collarMesh.rotation.x = Math.PI / 2;
+    collarMesh.position.z = bowRadius + 0.2;
+    collarMesh.castShadow = true;
+    keyGroup.add(collarMesh);
+
+    // 4. Bit (Teeth)
+    // We want it to lie flat. So it should stick out in X.
+    // Dimension X should be the "stick out" length.
+    const bitGeo = new THREE.BoxGeometry(0.3, 0.1, 0.2);
+    const bitMesh = new THREE.Mesh(bitGeo, material);
+
+    // Position near end of shaft.
+    bitMesh.position.set(shaftRadius + 0.15, 0, bowRadius + shaftLen - 0.2); // Offset X
+    bitMesh.castShadow = true;
+    bitMesh.receiveShadow = true;
+    keyGroup.add(bitMesh);
+
+    // Complex shape bit? Add another small tooth.
+    const bit2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.1), material);
+    bit2.position.set(shaftRadius + 0.1, 0, bowRadius + shaftLen - 0.35);
+    bit2.castShadow = true;
+    bit2.receiveShadow = true;
+    keyGroup.add(bit2);
+
+
+    // Position on Table
+    // Table Top -2.75.
+    // Key Thickness (Tube) 0.06. Radius 0.06.
+    // Center Y = -2.75 + 0.06 = -2.69.
+    keyGroup.position.set(2, -2.69, -5);
+    // Random Y rotation
+    keyGroup.rotation.y = Math.random() * Math.PI * 2;
+
+    scene.add(keyGroup);
+
+    // Physics
+    // Box Shape for simplicity and stability.
+    // Size: Width(X) ~ 0.6 (Bow), Height(Y) ~ 0.12, Depth(Z) ~ 1.3.
+    const shape = new ammo.btBoxShape(new ammo.btVector3(0.3, 0.06, 0.7));
+    createStaticBody(physicsWorld, keyGroup, shape);
 }
 
 function createD20Holder(scene, physicsWorld, ammo) {
