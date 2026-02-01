@@ -27,6 +27,7 @@ let physicsWorld;
 let clock;
 let ui, crosshairUI;
 let pointLight; // Exposed for flickering
+let fireplaceLight; // Fireplace light
 let candleFlamePos; // Position of the candle flame
 let velocity = new THREE.Vector3();
 let isOnGround = true;
@@ -151,7 +152,11 @@ async function init() {
         physicsWorld = await initPhysics();
 
         // Environment
-        createTavernWalls(scene, physicsWorld);
+        const wallData = createTavernWalls(scene, physicsWorld);
+        if (wallData && wallData.fireplaceLight) {
+            fireplaceLight = wallData.fireplaceLight;
+        }
+
         const tableConfig = createTable(scene);
         createFloorAndWalls(scene, physicsWorld, tableConfig);
 
@@ -361,6 +366,15 @@ function animate() {
             candleFlamePos.y + 0.1 + jitterY, // Slightly higher above wick
             candleFlamePos.z + jitterZ
         );
+    }
+
+    // Fireplace Flicker
+    if (fireplaceLight) {
+        // Slower, deeper flicker for a big fire
+        const deepPulse = Math.sin(time * 3.0) * 0.5; // Slow breath
+        const crackle = (Math.random() - 0.5) * 1.0; // Random intense crackle
+
+        fireplaceLight.intensity = 5.0 + deepPulse + crackle;
     }
 
   
