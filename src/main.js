@@ -5,6 +5,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { VignetteShader } from './shaders/VignetteShader.js';
 
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
@@ -20,6 +21,7 @@ import { createDagger } from './environment/Dagger.js';
 import { createDiceBag } from './environment/DiceBag.js';
 import { createAtmosphere, updateAtmosphere } from './environment/Atmosphere.js';
 import { createLamp } from './environment/Lamp.js';
+import { createRug } from './environment/Rug.js';
 import { RoomEnvironment } from './environment/RoomEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -129,6 +131,13 @@ async function init() {
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
 
+    // Bloom
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+    bloomPass.threshold = 0.6; // High threshold to only catch flames/lights
+    bloomPass.strength = 0.6; // Soft glow
+    bloomPass.radius = 0.4;
+    composer.addPass(bloomPass);
+
     // Vignette
     const vignettePass = new ShaderPass(VignetteShader);
     vignettePass.uniforms['offset'].value = 1.2;
@@ -192,6 +201,9 @@ async function init() {
 
         // Atmosphere (Dust Motes)
         createAtmosphere(scene);
+
+        // Rug
+        createRug(scene);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
