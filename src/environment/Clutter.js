@@ -34,6 +34,9 @@ export function createClutter(scene, physicsWorld) {
     // 10. Iron Key
     createKey(scene, physicsWorld, ammo);
 
+    // 11. Quill
+    createQuill(scene, physicsWorld, ammo);
+
     return {
         flamePosition
     };
@@ -225,6 +228,97 @@ function generateCharacterSheetTexture() {
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
+}
+
+function createQuill(scene, physicsWorld, ammo) {
+    const group = new THREE.Group();
+    group.name = 'Quill';
+
+    // --- Inkwell ---
+    const potHeight = 0.4;
+    const potRadiusTop = 0.25;
+    const potRadiusBot = 0.3;
+
+    // Material: Ceramic/Glass
+    const potMat = new THREE.MeshStandardMaterial({
+        color: 0x222222,
+        roughness: 0.2,
+        metalness: 0.5
+    });
+
+    const potGeo = new THREE.CylinderGeometry(potRadiusTop, potRadiusBot, potHeight, 16);
+    const potMesh = new THREE.Mesh(potGeo, potMat);
+    potMesh.castShadow = true;
+    potMesh.receiveShadow = true;
+    group.add(potMesh);
+
+    // Ink Surface
+    const inkGeo = new THREE.CircleGeometry(potRadiusTop - 0.02, 16);
+    const inkMat = new THREE.MeshStandardMaterial({
+        color: 0x000000,
+        roughness: 0.0,
+        metalness: 0.2
+    });
+    const inkMesh = new THREE.Mesh(inkGeo, inkMat);
+    inkMesh.rotation.x = -Math.PI / 2;
+    inkMesh.position.y = potHeight / 2 + 0.001;
+    group.add(inkMesh);
+
+    // --- Quill ---
+    const quillGroup = new THREE.Group();
+
+    // Shaft
+    const shaftLen = 1.2;
+    const shaftGeo = new THREE.CylinderGeometry(0.02, 0.01, shaftLen, 8);
+    const shaftMat = new THREE.MeshStandardMaterial({ color: 0xf5f5dc, roughness: 0.8 }); // Beige
+    const shaftMesh = new THREE.Mesh(shaftGeo, shaftMat);
+    shaftMesh.castShadow = true;
+    // Pivot is at group origin. Move mesh up so bottom is at origin.
+    shaftMesh.position.y = shaftLen / 2;
+    quillGroup.add(shaftMesh);
+
+    // Feather Vane
+    const featherShape = new THREE.Shape();
+    featherShape.moveTo(0, 0);
+    featherShape.quadraticCurveTo(0.15, 0.3, 0.15, 0.9); // Right side
+    featherShape.quadraticCurveTo(0.1, 1.1, 0, 1.2);     // Tip
+    featherShape.quadraticCurveTo(-0.1, 1.1, -0.15, 0.9); // Left side
+    featherShape.quadraticCurveTo(-0.15, 0.3, 0, 0);      // Base
+
+    const featherGeo = new THREE.ShapeGeometry(featherShape);
+    const featherMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.9,
+        side: THREE.DoubleSide
+    });
+    const featherMesh = new THREE.Mesh(featherGeo, featherMat);
+    featherMesh.castShadow = true;
+    featherMesh.receiveShadow = true;
+    featherMesh.position.y = 0.2; // Start feathering a bit up the shaft
+    quillGroup.add(featherMesh);
+
+    // Orient Quill in Inkwell
+    // Tilt slightly randomly
+    quillGroup.rotation.z = -Math.PI / 6 - (Math.random() * 0.1);
+    quillGroup.rotation.y = Math.random() * Math.PI * 2;
+
+    // Position quill relative to pot center (sticking out)
+    quillGroup.position.set(0, potHeight/2 - 0.1, 0); // -0.1 to sit inside ink
+
+    group.add(quillGroup);
+
+    // --- Position on Table ---
+    // Table Top -2.75.
+    // Pot Height 0.4. Center at -2.75 + 0.2 = -2.55.
+    // Position near Parchment (4, -2.74, -3)
+    group.position.set(5.5, -2.55, -2.0);
+
+    scene.add(group);
+
+    // --- Physics ---
+    // Cylinder shape for the pot
+    const shape = new ammo.btCylinderShape(new ammo.btVector3(potRadiusBot, potHeight/2, potRadiusBot));
+    createStaticBody(physicsWorld, group, shape);
 }
 
 function createKey(scene, physicsWorld, ammo) {
