@@ -22,7 +22,7 @@ import { createDiceBag } from './environment/DiceBag.js';
 import { createAtmosphere, updateAtmosphere } from './environment/Atmosphere.js';
 import { createLamp } from './environment/Lamp.js';
 import { createRug } from './environment/Rug.js';
-import { RoomEnvironment } from './environment/RoomEnvironment.js';
+import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
 let physicsWorld;
@@ -151,10 +151,10 @@ async function init() {
     // Environment Map
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
-    const roomEnvironment = new RoomEnvironment();
-    scene.environment = pmremGenerator.fromScene(roomEnvironment).texture;
+    const tavernEnvironment = new TavernEnvironment();
+    scene.environment = pmremGenerator.fromScene(tavernEnvironment).texture;
     pmremGenerator.dispose();
-    roomEnvironment.dispose();
+    tavernEnvironment.dispose();
 
     // Initialize Physics
     try {
