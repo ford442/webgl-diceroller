@@ -19,6 +19,7 @@ import { createChair } from './environment/Chair.js';
 import { createClutter } from './environment/Clutter.js';
 import { createDagger } from './environment/Dagger.js';
 import { createDiceBag } from './environment/DiceBag.js';
+import { createHourglass } from './environment/Hourglass.js';
 import { createAtmosphere, updateAtmosphere } from './environment/Atmosphere.js';
 import { createLamp } from './environment/Lamp.js';
 import { createRug } from './environment/Rug.js';
@@ -191,6 +192,9 @@ async function init() {
 
         // Leather Dice Bag
         createDiceBag(scene, physicsWorld);
+
+        // Hourglass
+        createHourglass(scene, physicsWorld);
 
         // Billiard Lamp
         const lampData = await createLamp(scene);
