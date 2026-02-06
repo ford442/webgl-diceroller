@@ -37,6 +37,9 @@ export function createClutter(scene, physicsWorld) {
     // 11. Quill
     createQuill(scene, physicsWorld, ammo);
 
+    // 12. Smoking Pipe
+    createPipe(scene, physicsWorld, ammo);
+
     return {
         flamePosition
     };
@@ -228,6 +231,116 @@ function generateCharacterSheetTexture() {
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
+}
+
+function createPipe(scene, physicsWorld, ammo) {
+    const group = new THREE.Group();
+    group.name = 'SmokingPipe';
+
+    // Materials
+    const woodMat = new THREE.MeshStandardMaterial({
+        color: 0x3f1f1f, // Dark Mahogany
+        roughness: 0.6,
+        metalness: 0.1
+    });
+
+    const blackMat = new THREE.MeshStandardMaterial({
+        color: 0x111111,
+        roughness: 0.8
+    });
+
+    const ashMat = new THREE.MeshStandardMaterial({
+        color: 0x333333,
+        roughness: 1.0
+    });
+
+    const emberMat = new THREE.MeshBasicMaterial({
+        color: 0xff4400
+    });
+
+    // 1. Bowl (Lathe)
+    const points = [];
+    // Outer profile
+    points.push(new THREE.Vector2(0, -0.4)); // Bottom center
+    points.push(new THREE.Vector2(0.25, -0.35)); // Bottom curve
+    points.push(new THREE.Vector2(0.35, -0.1)); // Side
+    points.push(new THREE.Vector2(0.35, 0.1)); // Side top
+    points.push(new THREE.Vector2(0.25, 0.15)); // Rim outer
+    points.push(new THREE.Vector2(0.15, 0.15)); // Rim inner
+    points.push(new THREE.Vector2(0.15, -0.2)); // Inner bowl bottom
+    points.push(new THREE.Vector2(0, -0.2)); // Center inner
+
+    const bowlGeo = new THREE.LatheGeometry(points, 16);
+    const bowlMesh = new THREE.Mesh(bowlGeo, woodMat);
+    bowlMesh.castShadow = true;
+    bowlMesh.receiveShadow = true;
+    group.add(bowlMesh);
+
+    // Ash/Embers inside
+    const ashGeo = new THREE.CircleGeometry(0.14, 16);
+    const ashMesh = new THREE.Mesh(ashGeo, ashMat);
+    ashMesh.rotation.x = -Math.PI / 2;
+    ashMesh.position.y = 0.1; // Just below rim
+    group.add(ashMesh);
+
+    const emberGeo = new THREE.CircleGeometry(0.05, 8);
+    const emberMesh = new THREE.Mesh(emberGeo, emberMat);
+    emberMesh.rotation.x = -Math.PI / 2;
+    emberMesh.position.y = 0.101;
+    emberMesh.position.x = 0.04; // Offset
+    group.add(emberMesh);
+
+
+    // 2. Shank & Stem (Tube)
+    const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0.3, -0.1, 0), // Start at bowl side (low)
+        new THREE.Vector3(0.6, -0.05, 0), // Shank
+        new THREE.Vector3(1.0, 0.1, 0), // Stem curve up
+        new THREE.Vector3(1.5, 0.2, 0)  // End
+    ]);
+
+    const stemGeo = new THREE.TubeGeometry(curve, 16, 0.05, 8, false);
+    const stemMesh = new THREE.Mesh(stemGeo, woodMat);
+    stemMesh.castShadow = true;
+    stemMesh.receiveShadow = true;
+    group.add(stemMesh);
+
+    // 3. Bit (Mouthpiece)
+    const bitGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.4, 8);
+    const bitMesh = new THREE.Mesh(bitGeo, blackMat);
+    bitMesh.rotation.z = -Math.PI / 2 + 0.2; // Angle slightly up
+    bitMesh.scale.z = 0.5; // Flatten
+    bitMesh.position.set(1.7, 0.25, 0); // Position at end of stem
+    bitMesh.castShadow = true;
+    bitMesh.receiveShadow = true;
+    group.add(bitMesh);
+
+
+    // --- Position on Table ---
+    // Table Top -2.75.
+    // Bowl bottom is at -0.4 (local).
+    // So Group Y = -2.75 + 0.4 = -2.35.
+
+    // Position near the book/candle.
+    // Book at (-6, -2.5, -6). Candle (-2, -2.0, -6).
+    // Let's put pipe between them or slightly forward.
+    group.position.set(-3.5, -2.35, -5);
+    group.rotation.y = Math.PI / 3; // Angle towards user
+
+    scene.add(group);
+
+    // --- Physics ---
+    // Let's use a Cylinder for the bowl as the main collision shape.
+    const bowlShape = new ammo.btCylinderShape(new ammo.btVector3(0.35, 0.3, 0.35));
+    // Bowl mesh is centered at 0,0,0 but geometry is offset (-0.4 to +0.15).
+    // Center of geometry is at Y = (-0.4 + 0.15)/2 = -0.125.
+    // So if we attach body to mesh (at 0,0,0), the shape will be centered at 0,0,0.
+    // The visual bowl is mostly below 0.
+    // Physics body at 0,0,0 with height 0.6 spans -0.3 to +0.3.
+    // Visual spans -0.4 to +0.15.
+    // It's close enough.
+
+    createStaticBody(physicsWorld, group, bowlShape);
 }
 
 function createQuill(scene, physicsWorld, ammo) {
