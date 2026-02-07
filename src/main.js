@@ -17,6 +17,7 @@ import { createTavernWalls } from './environment/TavernWalls.js';
 import { createBookshelf } from './environment/Bookshelf.js';
 import { createChair } from './environment/Chair.js';
 import { createClutter } from './environment/Clutter.js';
+import { createTavernMeal } from './environment/TavernMeal.js';
 import { createDagger } from './environment/Dagger.js';
 import { createDiceBag } from './environment/DiceBag.js';
 import { createHourglass } from './environment/Hourglass.js';
@@ -186,6 +187,9 @@ async function init() {
             // Slightly above the wick visual
             pointLight.position.y += 0.05;
         }
+
+        // Tavern Meal (Tankard & Plate)
+        createTavernMeal(scene, physicsWorld);
 
         // Dagger
         createDagger(scene, physicsWorld);
