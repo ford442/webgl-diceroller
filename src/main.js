@@ -203,7 +203,7 @@ async function init() {
         // Billiard Lamp
         const lampData = await createLamp(scene);
         // Position high up
-        lampData.group.position.set(0, 25, 0);
+        lampData.group.position.set(0, 42, 0);
         // Add to interactive objects
         registerInteractiveObject(lampData.group, lampData.toggle);
 
