@@ -40,6 +40,9 @@ export function createClutter(scene, physicsWorld) {
     // 12. Smoking Pipe
     createPipe(scene, physicsWorld, ammo);
 
+    // 13. Brass Spyglass
+    createSpyglass(scene, physicsWorld, ammo);
+
     return {
         flamePosition
     };
@@ -231,6 +234,112 @@ function generateCharacterSheetTexture() {
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
+}
+
+function createSpyglass(scene, physicsWorld, ammo) {
+    const group = new THREE.Group();
+    group.name = 'Spyglass';
+
+    // Materials
+    const brassMat = new THREE.MeshStandardMaterial({
+        color: 0xb5a642, // Brass
+        metalness: 1.0,
+        roughness: 0.2
+    });
+
+    const glassMat = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        metalness: 0,
+        roughness: 0,
+        transmission: 0.9,
+        transparent: true
+    });
+
+    const leatherMat = new THREE.MeshStandardMaterial({
+        color: 0x3f1f1f, // Dark Leather
+        roughness: 0.8
+    });
+
+    // 1. Main Tube (Y-axis aligned)
+    const mainLen = 1.5;
+    const mainRad = 0.15;
+    const mainGeo = new THREE.CylinderGeometry(mainRad, mainRad, mainLen, 16);
+    const mainMesh = new THREE.Mesh(mainGeo, leatherMat); // Leather wrapped
+    mainMesh.castShadow = true;
+    mainMesh.receiveShadow = true;
+    group.add(mainMesh);
+
+    // Brass Rings (Ends of main tube)
+    const ringGeo = new THREE.CylinderGeometry(mainRad + 0.01, mainRad + 0.01, 0.1, 16);
+    const ring1 = new THREE.Mesh(ringGeo, brassMat);
+    ring1.position.y = -mainLen/2 + 0.05;
+    group.add(ring1);
+
+    const ring2 = new THREE.Mesh(ringGeo, brassMat);
+    ring2.position.y = mainLen/2 - 0.05;
+    group.add(ring2);
+
+    // 2. Draw Tube (Inner) - Extended (Y+)
+    const drawLen = 1.2;
+    const drawRad = 0.12;
+    const drawGeo = new THREE.CylinderGeometry(drawRad, drawRad, drawLen, 16);
+    const drawMesh = new THREE.Mesh(drawGeo, brassMat);
+    // Position: Stick out from top (Y+)
+    // Main tube ends at y = 0.75.
+    // Draw tube center should be at y = 0.75 + drawLen/2 - overlap.
+    drawMesh.position.y = mainLen/2 + drawLen/2 - 0.3;
+    drawMesh.castShadow = true;
+    drawMesh.receiveShadow = true;
+    group.add(drawMesh);
+
+    // Lens (Glass) at end
+    const lensGeo = new THREE.CylinderGeometry(drawRad - 0.01, drawRad - 0.01, 0.02, 16);
+    const lensMesh = new THREE.Mesh(lensGeo, glassMat);
+    lensMesh.position.y = mainLen/2 + drawLen - 0.3;
+    group.add(lensMesh);
+
+    // Eyepiece (Bottom)
+    const eyeRad = 0.08;
+    const eyeLen = 0.2;
+    const eyeGeo = new THREE.CylinderGeometry(eyeRad, eyeRad, eyeLen, 16);
+    const eyeMesh = new THREE.Mesh(eyeGeo, brassMat);
+    eyeMesh.position.y = -mainLen/2 - 0.1;
+    group.add(eyeMesh);
+
+    // Position on Table
+    // Table Top -2.75.
+    // Radius ~0.16.
+    // Center Y = -2.75 + 0.16 = -2.59.
+
+    // Group Rotation: Lie flat on Z-axis (90 degrees).
+    // Y-axis (Up) becomes -X (Left).
+    // Or X-axis (Right) becomes Y (Up).
+    // We want the spyglass to lie flat.
+    // Rotation Z=90 -> Up becomes Left.
+    // Rotation X=90 -> Up becomes Forward.
+
+    group.position.set(0, -2.59, 6);
+    // Apply initial rotation to lie flat
+    group.rotation.set(0, Math.random() * Math.PI * 2, Math.PI / 2, 'YXZ');
+
+    scene.add(group);
+
+    // Physics
+    // btCylinderShape is Y-axis aligned.
+    // Since the group is rotated (visual mesh Y -> physics Y), and the physics body
+    // inherits the group rotation, the physics cylinder will also rotate.
+    // So visual and physics match.
+
+    const totalLen = mainLen + drawLen - 0.3;
+    // Note: totalLen calculation might be slightly off center relative to (0,0,0) of main tube,
+    // but the physics shape is centered on the group origin (main tube center).
+    // This is an approximation. Ideally we offset the physics shape center,
+    // but createStaticBody assumes center of mass at origin.
+    // Given it's static clutter, this is acceptable.
+
+    const shape = new ammo.btCylinderShape(new ammo.btVector3(mainRad, totalLen/2, mainRad));
+
+    createStaticBody(physicsWorld, group, shape);
 }
 
 function createPipe(scene, physicsWorld, ammo) {
