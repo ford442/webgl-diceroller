@@ -3,6 +3,7 @@ import { getAmmo } from '../physics.js';
 
 export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }, rotationY = 0) {
     const chairGroup = new THREE.Group();
+    chairGroup.name = 'Chair'; // Name for verification
 
     // Dimensions
     const seatHeight = 4.0;
@@ -11,15 +12,25 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     const legWidth = 0.4;
     const backHeight = 5.0;
 
-    // Texture Loading (Reuse existing wood textures if available, otherwise fallback)
+    // Texture Loading
     const textureLoader = new THREE.TextureLoader();
     const woodDiffuse = textureLoader.load('/images/wood_diffuse.jpg');
-    const woodNormal = textureLoader.load('/images/wood_normal.jpg');
-    const woodRoughness = textureLoader.load('/images/wood_rough.jpg');
+    // Using Bump map as normal map is missing
+    const woodBump = textureLoader.load('/images/wood_bump.jpg');
+    // Corrected roughness filename
+    const woodRoughness = textureLoader.load('/images/wood_roughness.jpg');
+
+    [woodDiffuse, woodBump, woodRoughness].forEach(t => {
+        t.wrapS = THREE.RepeatWrapping;
+        t.wrapT = THREE.RepeatWrapping;
+        // Fix color space
+        t.colorSpace = (t === woodDiffuse) ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    });
 
     const material = new THREE.MeshStandardMaterial({
         map: woodDiffuse,
-        normalMap: woodNormal,
+        bumpMap: woodBump,
+        bumpScale: 0.05,
         roughnessMap: woodRoughness,
         roughness: 0.8,
         color: 0x553311 // Darker wood tint
@@ -105,8 +116,13 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
 
         const localInertia = new Ammo.btVector3(0, 0, 0);
         const motionState = new Ammo.btDefaultMotionState(transform);
+        // Mass 0 = static
         const rbInfo = new Ammo.btRigidBodyConstructionInfo(0, motionState, shape, localInertia);
         const body = new Ammo.btRigidBody(rbInfo);
+
+        // Add friction
+        body.setFriction(0.5);
+        body.setRestitution(0.1);
 
         physicsWorld.addRigidBody(body);
     }
