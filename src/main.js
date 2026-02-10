@@ -19,6 +19,8 @@ import { createChair } from './environment/Chair.js';
 import { createClutter } from './environment/Clutter.js';
 import { createTavernMeal } from './environment/TavernMeal.js';
 import { createDagger } from './environment/Dagger.js';
+import { createShield } from './environment/Shield.js';
+import { createBattleAxe } from './environment/BattleAxe.js';
 import { createDiceBag } from './environment/DiceBag.js';
 import { createHourglass } from './environment/Hourglass.js';
 import { createAtmosphere, updateAtmosphere } from './environment/Atmosphere.js';
@@ -194,6 +196,12 @@ async function init() {
 
         // Dagger
         createDagger(scene, physicsWorld);
+
+        // Shield (Wall Mount)
+        createShield(scene, physicsWorld);
+
+        // Battle Axe (Leaning)
+        createBattleAxe(scene, physicsWorld);
 
         // Leather Dice Bag
         createDiceBag(scene, physicsWorld);
