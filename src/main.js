@@ -211,8 +211,8 @@ async function init() {
 
         // Billiard Lamp
         const lampData = await createLamp(scene);
-        // Position high up
-        lampData.group.position.set(0, 42, 0);
+        // Position high up (hanging from ceiling at Y=20)
+        lampData.group.position.set(0, 19, 0);
         // Add to interactive objects
         registerInteractiveObject(lampData.group, lampData.toggle);
 
@@ -568,5 +568,9 @@ function animate() {
         camera.rotation.set(pitch, yaw, 0, 'YXZ');
     }
 
-    composer.render();
+    if (composer) {
+        composer.render();
+    } else {
+        renderer.render(scene, camera);
+    }
 }
