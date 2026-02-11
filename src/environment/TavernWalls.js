@@ -141,9 +141,48 @@ export function createTavernWalls(scene, physicsWorld) {
     // Fireplace (New)
     const fireplaceLight = createFireplace(roomGroup, physicsWorld, Ammo, wallMaterial);
 
+    // Ceiling & Rafters (New)
+    createCeiling(roomGroup, physicsWorld, Ammo, wallMaterial, woodMaterial, width, depth, floorY + height);
+
     scene.add(roomGroup);
 
     return { fireplaceLight };
+}
+
+function createCeiling(group, physicsWorld, Ammo, wallMat, woodMat, width, depth, topY) {
+    const thickness = 2;
+
+    // 1. Ceiling Mesh (The roof)
+    const ceilGeo = new THREE.BoxGeometry(width, thickness, depth);
+    const ceilMesh = new THREE.Mesh(ceilGeo, wallMat);
+    // Position so bottom face is at topY
+    ceilMesh.position.set(0, topY + thickness / 2, 0);
+    ceilMesh.receiveShadow = true;
+    group.add(ceilMesh);
+
+    // Physics
+    if (Ammo) {
+        const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, thickness / 2, depth / 2));
+        createStaticBody(physicsWorld, ceilMesh, shape);
+    }
+
+    // 2. Rafters (Beams)
+    // Run along X axis, spaced along Z
+    const beamSize = 1.2;
+    const numBeams = 6;
+    const spacing = depth / (numBeams + 1);
+
+    const beamGeo = new THREE.BoxGeometry(width, beamSize, beamSize);
+
+    for (let i = 1; i <= numBeams; i++) {
+        const z = -depth / 2 + i * spacing;
+        const beam = new THREE.Mesh(beamGeo, woodMat);
+        // Position just below ceiling
+        beam.position.set(0, topY - beamSize / 2, z);
+        beam.castShadow = true;
+        beam.receiveShadow = true;
+        group.add(beam);
+    }
 }
 
 function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight, wallDepth, thickness, wallMat, woodMat) {
