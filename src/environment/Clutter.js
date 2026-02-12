@@ -7,8 +7,8 @@ export function createClutter(scene, physicsWorld) {
     // 1. Mug
     createMug(scene, physicsWorld, ammo);
 
-    // 2. Coin
-    createCoin(scene, physicsWorld, ammo);
+    // 2. Coins (Pile)
+    createCoins(scene, physicsWorld, ammo);
 
     // 3. Book
     createBook(scene, physicsWorld, ammo);
@@ -42,6 +42,12 @@ export function createClutter(scene, physicsWorld) {
 
     // 13. Brass Spyglass
     createSpyglass(scene, physicsWorld, ammo);
+
+    // 14. Gemstone (Ruby)
+    createGemstone(scene, physicsWorld, ammo);
+
+    // 15. Wanted Poster
+    createWantedPoster(scene, physicsWorld, ammo);
 
     return {
         flamePosition
@@ -88,8 +94,8 @@ function createMug(scene, physicsWorld, ammo) {
     createStaticBody(physicsWorld, mugGroup, shape);
 }
 
-function createCoin(scene, physicsWorld, ammo) {
-    // Visuals
+function createCoins(scene, physicsWorld, ammo) {
+    // Visuals for a single coin type
     const radius = 0.3;
     const thickness = 0.05;
     const geometry = new THREE.CylinderGeometry(radius, radius, thickness, 32);
@@ -98,21 +104,56 @@ function createCoin(scene, physicsWorld, ammo) {
         metalness: 1.0,
         roughness: 0.3
     });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
 
-    // Position
-    // Table top -2.75.
-    // Coin thickness 0.05. Center at -2.75 + 0.025 = -2.725.
-    mesh.position.set(-4, -2.725, 3);
-    mesh.rotation.y = Math.random() * Math.PI * 2;
+    // Create a pile of 15 coins
+    const count = 15;
+    const centerX = -4;
+    const centerZ = 3;
+    const baseY = -2.75; // Table top
 
-    scene.add(mesh);
+    for (let i = 0; i < count; i++) {
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
 
-    // Physics
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, thickness / 2, radius));
-    createStaticBody(physicsWorld, mesh, shape);
+        // Random Scatter
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * 1.5; // Within 1.5 units
+        const x = centerX + Math.cos(angle) * dist;
+        const z = centerZ + Math.sin(angle) * dist;
+
+        // Stack height randomness
+        // Coins might stack. Simple approach: random Y offset slightly above table.
+        // Or just let them float slightly and fall? No, they are static bodies.
+        // We'll place them at different heights to simulate a messy pile.
+        // Some on table, some on top of others.
+        // Since we use static bodies, we must place them carefully or they will just float.
+        // Let's place them on the table with slight variations in Y and rotation.
+
+        // Simulating a pile visually:
+        // Level 0: On table (y = -2.75 + thickness/2 = -2.725)
+        // Level 1: On top of another coin (y = -2.725 + thickness)
+
+        let y = baseY + thickness/2;
+        if (i > 5) y += thickness; // Second layer
+        if (i > 10) y += thickness; // Third layer
+
+        mesh.position.set(x, y, z);
+        mesh.rotation.y = Math.random() * Math.PI * 2;
+
+        // Occasional tilted coin
+        if (Math.random() > 0.8) {
+            mesh.rotation.x = (Math.random() - 0.5) * 0.5;
+            mesh.rotation.z = (Math.random() - 0.5) * 0.5;
+            mesh.position.y += 0.05; // Lift up slightly
+        }
+
+        scene.add(mesh);
+
+        // Physics for each coin
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, thickness / 2, radius));
+        createStaticBody(physicsWorld, mesh, shape);
+    }
 }
 
 function createBook(scene, physicsWorld, ammo) {
@@ -1044,6 +1085,136 @@ function generateDMChartsTexture() {
     weapons.forEach((w, i) => {
         ctx.fillText(w, 500, 90 + i*30);
     });
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+function createGemstone(scene, physicsWorld, ammo) {
+    const group = new THREE.Group();
+    group.name = 'RubyGem';
+
+    // Geometry: Octahedron for a classic gem shape
+    const radius = 0.5;
+    const geometry = new THREE.OctahedronGeometry(radius, 0);
+
+    // Material: Ruby
+    const material = new THREE.MeshPhysicalMaterial({
+        color: 0xff0000,
+        emissive: 0x330000,
+        metalness: 0.1,
+        roughness: 0.0,
+        transmission: 0.8,
+        thickness: 0.5,
+        ior: 1.76, // Ruby IOR
+        clearcoat: 1.0,
+        transparent: true
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+
+    // Position
+    // Table Top -2.75.
+    // Gem radius 0.5. Center at -2.75 + 0.5 = -2.25.
+    // But octahedron sits on a point if aligned.
+    // Let's position it slightly randomly.
+    group.position.set(-5, -2.25, 0);
+    group.rotation.set(Math.random(), Math.random(), Math.random());
+
+    scene.add(group);
+
+    // Physics
+    // Octahedron is convex hull, but let's approximate with a Sphere for simplicity and rolling,
+    // or Box if we want it static.
+    // Ideally ConvexHullShape but createStaticBody takes simpler shapes usually.
+    // Let's use a Sphere shape, it's close enough for a gem.
+    const shape = new ammo.btSphereShape(radius * 0.8); // Slightly smaller to match volume
+
+    createStaticBody(physicsWorld, group, shape);
+}
+
+function createWantedPoster(scene, physicsWorld, ammo) {
+    const width = 2.5;
+    const height = 3.5;
+    const thickness = 0.02;
+
+    const geometry = new THREE.BoxGeometry(width, thickness, height);
+
+    const texture = generateWantedPosterTexture();
+    const material = new THREE.MeshStandardMaterial({
+        map: texture,
+        roughness: 0.9,
+        metalness: 0.0,
+        color: 0xffffff
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.receiveShadow = true;
+    mesh.castShadow = true; // Paper casts shadow? Yes.
+
+    // Position
+    // Table Top -2.75.
+    // Center Y = -2.75 + 0.01 = -2.74.
+    mesh.position.set(0, -2.74, -2);
+    mesh.rotation.y = 0.1; // Slightly askew
+
+    scene.add(mesh);
+
+    // Physics
+    const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, thickness/2, height/2));
+    createStaticBody(physicsWorld, mesh, shape);
+}
+
+function generateWantedPosterTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 700;
+    const ctx = canvas.getContext('2d');
+
+    // Background (Paper)
+    ctx.fillStyle = '#f5deb3';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Text "WANTED"
+    ctx.fillStyle = '#2c1b0e';
+    ctx.font = 'bold 80px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('WANTED', canvas.width / 2, 100);
+
+    ctx.font = 'bold 40px serif';
+    ctx.fillText('DEAD OR ALIVE', canvas.width / 2, 160);
+
+    // Portrait Box
+    ctx.strokeRect(100, 200, 312, 300);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(110, 210, 292, 280); // Silhouette background
+
+    // Silhouette (Circle head + Shoulders)
+    ctx.fillStyle = '#333'; // Dark grey
+    ctx.beginPath();
+    ctx.arc(canvas.width/2, 300, 80, 0, Math.PI*2); // Head
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(canvas.width/2, 550, 120, Math.PI, 0); // Shoulders
+    ctx.fill();
+
+    // Eyes (Glowing Red?)
+    ctx.fillStyle = '#ff0000';
+    ctx.beginPath();
+    ctx.arc(canvas.width/2 - 30, 300, 10, 0, Math.PI*2);
+    ctx.arc(canvas.width/2 + 30, 300, 10, 0, Math.PI*2);
+    ctx.fill();
+
+    // Reward
+    ctx.fillStyle = '#2c1b0e';
+    ctx.font = 'bold 60px serif';
+    ctx.fillText('REWARD', canvas.width / 2, 580);
+    ctx.font = 'bold 80px serif';
+    ctx.fillText('10,000 GP', canvas.width / 2, 660);
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
