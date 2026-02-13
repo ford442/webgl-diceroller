@@ -16,6 +16,7 @@ import { createTable } from './environment/Table.js';
 import { createTavernWalls } from './environment/TavernWalls.js';
 import { createBookshelf } from './environment/Bookshelf.js';
 import { createChair } from './environment/Chair.js';
+import { createChest } from './environment/Chest.js';
 import { createClutter } from './environment/Clutter.js';
 import { createTavernMeal } from './environment/TavernMeal.js';
 import { createDagger } from './environment/Dagger.js';
@@ -131,27 +132,30 @@ async function init() {
     scene.fog = new THREE.FogExp2(0x111111, 0.02);
 
     // Post-Processing
-    composer = new EffectComposer(renderer);
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('no-post')) {
+        composer = new EffectComposer(renderer);
 
-    const renderPass = new RenderPass(scene, camera);
-    composer.addPass(renderPass);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
 
-    // Bloom
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-    bloomPass.threshold = 0.6; // High threshold to only catch flames/lights
-    bloomPass.strength = 0.6; // Soft glow
-    bloomPass.radius = 0.4;
-    composer.addPass(bloomPass);
+        // Bloom
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.6; // High threshold to only catch flames/lights
+        bloomPass.strength = 0.6; // Soft glow
+        bloomPass.radius = 0.4;
+        composer.addPass(bloomPass);
 
-    // Vignette
-    const vignettePass = new ShaderPass(VignetteShader);
-    vignettePass.uniforms['offset'].value = 1.2;
-    vignettePass.uniforms['darkness'].value = 1.8; // Darker vignette
-    composer.addPass(vignettePass);
+        // Vignette
+        const vignettePass = new ShaderPass(VignetteShader);
+        vignettePass.uniforms['offset'].value = 1.2;
+        vignettePass.uniforms['darkness'].value = 1.8; // Darker vignette
+        composer.addPass(vignettePass);
 
-    // Output Pass
-    const outputPass = new OutputPass();
-    composer.addPass(outputPass);
+        // Output Pass
+        const outputPass = new OutputPass();
+        composer.addPass(outputPass);
+    }
 
     // Environment Map
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -180,6 +184,9 @@ async function init() {
         // Chairs (Background Props)
         createChair(scene, physicsWorld, { x: -14, y: -9.5, z: 6 }, Math.PI / 3);
         createChair(scene, physicsWorld, { x: 14, y: -9.5, z: -6 }, -Math.PI / 3);
+
+        // Wooden Chest (Background Prop)
+        createChest(scene, physicsWorld, { x: -10, y: -9.5, z: -18 }, Math.PI / 8);
 
         // Clutter & Candle
         const clutterData = createClutter(scene, physicsWorld);
@@ -250,6 +257,11 @@ async function init() {
     interaction = initInteraction(camera, scene, physicsWorld);
 
     clock = new THREE.Clock();
+
+    // Expose for debugging/verification
+    window.camera = camera;
+    window.scene = scene;
+    window.physicsWorld = physicsWorld;
 
     window.addEventListener('resize', onWindowResize);
 
