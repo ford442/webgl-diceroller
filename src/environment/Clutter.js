@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { createFire } from './Fire.js';
 
 export function createClutter(scene, physicsWorld) {
     const ammo = getAmmo();
@@ -17,7 +18,7 @@ export function createClutter(scene, physicsWorld) {
     createParchment(scene, physicsWorld, ammo);
 
     // 5. Candle
-    const flamePosition = createCandle(scene, physicsWorld, ammo);
+    const candleData = createCandle(scene, physicsWorld, ammo);
 
     // 6. Pencil
     createPencil(scene, physicsWorld, ammo);
@@ -50,7 +51,8 @@ export function createClutter(scene, physicsWorld) {
     createWantedPoster(scene, physicsWorld, ammo);
 
     return {
-        flamePosition
+        flamePosition: candleData.flamePosition,
+        update: candleData.update
     };
 }
 
@@ -731,13 +733,15 @@ function createCandle(scene, physicsWorld, ammo) {
     wickMesh.position.set(0, height/2 + wickHeight/2, 0);
     candleMesh.add(wickMesh); // Attach to candle mesh so it moves with it
 
-    // Flame (Visual Only)
-    // We can use a Sprite or a small emissive mesh
-    const flameGeo = new THREE.SphereGeometry(0.1, 8, 8);
-    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-    const flameMesh = new THREE.Mesh(flameGeo, flameMat);
-    flameMesh.position.set(0, height/2 + wickHeight + 0.05, 0);
-    candleMesh.add(flameMesh);
+    // Fire Particles
+    const fire = createFire({
+        scale: 0.5,
+        color: 0xffaa00,
+        particleCount: 25,
+        spread: 0.1
+    });
+    fire.mesh.position.set(0, height/2 + wickHeight + 0.05, 0);
+    candleMesh.add(fire.mesh);
 
     // Position
     // Table top -2.75. Height 1.5. Center at -2.75 + 0.75 = -2.0.
@@ -760,7 +764,10 @@ function createCandle(scene, physicsWorld, ammo) {
     // = -2.0 + 0.75 + 0.2 + 0.05 = -1.0
     const flameWorldPos = new THREE.Vector3(posX, posY + height/2 + wickHeight + 0.05, posZ);
 
-    return flameWorldPos;
+    return {
+        flamePosition: flameWorldPos,
+        update: fire.update
+    };
 }
 
 function createPencil(scene, physicsWorld, ammo) {

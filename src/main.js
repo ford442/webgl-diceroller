@@ -36,6 +36,8 @@ let ui, crosshairUI;
 let pointLight; // Exposed for flickering
 let fireplaceLight; // Fireplace light
 let candleFlamePos; // Position of the candle flame
+let clutterUpdate; // Update function for clutter (fire)
+let wallsUpdate; // Update function for walls (fireplace)
 let velocity = new THREE.Vector3();
 let isOnGround = true;
 const moveSpeed = 5; // Units per second
@@ -131,27 +133,30 @@ async function init() {
     scene.fog = new THREE.FogExp2(0x111111, 0.02);
 
     // Post-Processing
-    composer = new EffectComposer(renderer);
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('no-post')) {
+        composer = new EffectComposer(renderer);
 
-    const renderPass = new RenderPass(scene, camera);
-    composer.addPass(renderPass);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
 
-    // Bloom
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-    bloomPass.threshold = 0.6; // High threshold to only catch flames/lights
-    bloomPass.strength = 0.6; // Soft glow
-    bloomPass.radius = 0.4;
-    composer.addPass(bloomPass);
+        // Bloom
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.6; // High threshold to only catch flames/lights
+        bloomPass.strength = 0.6; // Soft glow
+        bloomPass.radius = 0.4;
+        composer.addPass(bloomPass);
 
-    // Vignette
-    const vignettePass = new ShaderPass(VignetteShader);
-    vignettePass.uniforms['offset'].value = 1.2;
-    vignettePass.uniforms['darkness'].value = 1.8; // Darker vignette
-    composer.addPass(vignettePass);
+        // Vignette
+        const vignettePass = new ShaderPass(VignetteShader);
+        vignettePass.uniforms['offset'].value = 1.2;
+        vignettePass.uniforms['darkness'].value = 1.8; // Darker vignette
+        composer.addPass(vignettePass);
 
-    // Output Pass
-    const outputPass = new OutputPass();
-    composer.addPass(outputPass);
+        // Output Pass
+        const outputPass = new OutputPass();
+        composer.addPass(outputPass);
+    }
 
     // Environment Map
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -167,8 +172,9 @@ async function init() {
 
         // Environment
         const wallData = createTavernWalls(scene, physicsWorld);
-        if (wallData && wallData.fireplaceLight) {
-            fireplaceLight = wallData.fireplaceLight;
+        if (wallData) {
+            if (wallData.fireplaceLight) fireplaceLight = wallData.fireplaceLight;
+            if (wallData.update) wallsUpdate = wallData.update;
         }
 
         const tableConfig = createTable(scene);
@@ -183,12 +189,15 @@ async function init() {
 
         // Clutter & Candle
         const clutterData = createClutter(scene, physicsWorld);
-        if (clutterData && clutterData.flamePosition) {
-            candleFlamePos = clutterData.flamePosition;
-            // Move light to flame
-            pointLight.position.copy(candleFlamePos);
-            // Slightly above the wick visual
-            pointLight.position.y += 0.05;
+        if (clutterData) {
+            if (clutterData.flamePosition) {
+                candleFlamePos = clutterData.flamePosition;
+                // Move light to flame
+                pointLight.position.copy(candleFlamePos);
+                // Slightly above the wick visual
+                pointLight.position.y += 0.05;
+            }
+            if (clutterData.update) clutterUpdate = clutterData.update;
         }
 
         // Tavern Meal (Tankard & Plate)
@@ -376,6 +385,8 @@ function animate() {
 
     // Update Atmosphere
     updateAtmosphere(time);
+    if (clutterUpdate) clutterUpdate(deltaTime);
+    if (wallsUpdate) wallsUpdate(deltaTime);
 
     // Candle Flicker
     if (pointLight && candleFlamePos) {
