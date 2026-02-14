@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
+import { createFire } from './Fire.js';
 
 export function createTavernWalls(scene, physicsWorld) {
     const loader = new THREE.TextureLoader();
@@ -139,14 +140,17 @@ export function createTavernWalls(scene, physicsWorld) {
     roomGroup.add(col4);
 
     // Fireplace (New)
-    const fireplaceLight = createFireplace(roomGroup, physicsWorld, Ammo, wallMaterial);
+    const fireplaceData = createFireplace(roomGroup, physicsWorld, Ammo, wallMaterial);
 
     // Ceiling & Rafters (New)
     createCeiling(roomGroup, physicsWorld, Ammo, wallMaterial, woodMaterial, width, depth, floorY + height);
 
     scene.add(roomGroup);
 
-    return { fireplaceLight };
+    return {
+        fireplaceLight: fireplaceData.light,
+        update: fireplaceData.update
+    };
 }
 
 function createCeiling(group, physicsWorld, Ammo, wallMat, woodMat, width, depth, topY) {
@@ -414,17 +418,20 @@ function createFireplace(group, physicsWorld, Ammo, wallMat) {
     lintel.receiveShadow = true;
     group.add(lintel);
 
-    // Fire Visual (Inside Niche)
-    const fireGeo = new THREE.ConeGeometry(0.5, 1.0, 8);
-    const fireMat = new THREE.MeshBasicMaterial({ color: 0xff5500 });
-    const fire = new THREE.Mesh(fireGeo, fireMat);
+    // Fire Particles
+    const fire = createFire({
+        scale: 2.0,
+        color: 0xff4400,
+        particleCount: 60,
+        spread: 0.8
+    });
     // Y = Floor -10 + 0.5 = -9.5 (sitting on floor)
-    fire.position.set(hX, -9.5, 0);
-    group.add(fire);
+    fire.mesh.position.set(hX, -9.5, 0);
+    group.add(fire.mesh);
 
     // Light
     const light = new THREE.PointLight(0xff4400, 5, 40);
-    light.position.copy(fire.position);
+    light.position.copy(fire.mesh.position);
     light.position.y += 1.0; // Slightly higher
     light.castShadow = true;
     light.shadow.bias = -0.001;
@@ -453,5 +460,8 @@ function createFireplace(group, physicsWorld, Ammo, wallMat) {
     chimney.receiveShadow = true;
     group.add(chimney);
 
-    return light;
+    return {
+        light: light,
+        update: fire.update
+    };
 }

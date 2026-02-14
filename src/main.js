@@ -37,6 +37,8 @@ let ui, crosshairUI;
 let pointLight; // Exposed for flickering
 let fireplaceLight; // Fireplace light
 let candleFlamePos; // Position of the candle flame
+let clutterUpdate; // Update function for clutter (fire)
+let wallsUpdate; // Update function for walls (fireplace)
 let velocity = new THREE.Vector3();
 let isOnGround = true;
 const moveSpeed = 5; // Units per second
@@ -171,8 +173,9 @@ async function init() {
 
         // Environment
         const wallData = createTavernWalls(scene, physicsWorld);
-        if (wallData && wallData.fireplaceLight) {
-            fireplaceLight = wallData.fireplaceLight;
+        if (wallData) {
+            if (wallData.fireplaceLight) fireplaceLight = wallData.fireplaceLight;
+            if (wallData.update) wallsUpdate = wallData.update;
         }
 
         const tableConfig = createTable(scene);
@@ -190,12 +193,15 @@ async function init() {
 
         // Clutter & Candle
         const clutterData = createClutter(scene, physicsWorld);
-        if (clutterData && clutterData.flamePosition) {
-            candleFlamePos = clutterData.flamePosition;
-            // Move light to flame
-            pointLight.position.copy(candleFlamePos);
-            // Slightly above the wick visual
-            pointLight.position.y += 0.05;
+        if (clutterData) {
+            if (clutterData.flamePosition) {
+                candleFlamePos = clutterData.flamePosition;
+                // Move light to flame
+                pointLight.position.copy(candleFlamePos);
+                // Slightly above the wick visual
+                pointLight.position.y += 0.05;
+            }
+            if (clutterData.update) clutterUpdate = clutterData.update;
         }
 
         // Tavern Meal (Tankard & Plate)
@@ -388,6 +394,8 @@ function animate() {
 
     // Update Atmosphere
     updateAtmosphere(time);
+    if (clutterUpdate) clutterUpdate(deltaTime);
+    if (wallsUpdate) wallsUpdate(deltaTime);
 
     // Candle Flicker
     if (pointLight && candleFlamePos) {
