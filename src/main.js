@@ -28,6 +28,7 @@ import { createAtmosphere, updateAtmosphere } from './environment/Atmosphere.js'
 import { createLamp } from './environment/Lamp.js';
 import { createRug } from './environment/Rug.js';
 import { createMap } from './environment/Map.js';
+import { createCrystalBall } from './environment/CrystalBall.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -237,6 +238,9 @@ async function init() {
 
         // Map
         createMap(scene, physicsWorld);
+
+        // Crystal Ball
+        createCrystalBall(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
