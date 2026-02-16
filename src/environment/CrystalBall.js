@@ -5,41 +5,20 @@ export function createCrystalBall(scene, physicsWorld) {
     const group = new THREE.Group();
     group.name = 'CrystalBall';
 
-    // 1. Stand Geometry & Material
+    // Dimensions
+    const ballRadius = 0.5;
+    const standHeight = 0.4;
+    const standRadiusTop = 0.35;
+    const standRadiusBot = 0.4;
+
+    // Materials
     const goldMat = new THREE.MeshStandardMaterial({
-        color: 0xffd700,
+        color: 0xffd700, // Brighter gold
         roughness: 0.3,
         metalness: 0.8
     });
 
-    // Base
-    const baseRadius = 0.4;
-    const baseHeight = 0.1;
-    const baseGeo = new THREE.CylinderGeometry(baseRadius * 0.8, baseRadius, baseHeight, 16);
-    const baseMesh = new THREE.Mesh(baseGeo, goldMat);
-    baseMesh.receiveShadow = true;
-    baseMesh.castShadow = true;
-    group.add(baseMesh);
-
-    // Stem
-    const stemHeight = 0.3;
-    const stemGeo = new THREE.CylinderGeometry(0.1, 0.15, stemHeight, 8);
-    const stemMesh = new THREE.Mesh(stemGeo, goldMat);
-    stemMesh.receiveShadow = true;
-    stemMesh.castShadow = true;
-    group.add(stemMesh);
-
-    // Holder Cup (Torus Rim)
-    const cupRadius = 0.35;
-    const rimGeo = new THREE.TorusGeometry(cupRadius, 0.04, 8, 16);
-    const rimMesh = new THREE.Mesh(rimGeo, goldMat);
-    rimMesh.rotation.x = Math.PI / 2;
-    group.add(rimMesh);
-
-    // 2. Crystal Sphere
-    const sphereRadius = 0.5;
-    const sphereGeo = new THREE.SphereGeometry(sphereRadius, 32, 32);
-    const crystalMat = new THREE.MeshPhysicalMaterial({
+    const glassMat = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
         metalness: 0.0,
         roughness: 0.05,
@@ -47,76 +26,101 @@ export function createCrystalBall(scene, physicsWorld) {
         thickness: 1.0,
         ior: 1.5,
         clearcoat: 1.0,
-        transparent: true
+        transparent: true,
+        side: THREE.DoubleSide
     });
-    const sphereMesh = new THREE.Mesh(sphereGeo, crystalMat);
-    sphereMesh.receiveShadow = true;
-    group.add(sphereMesh);
 
-    // 3. Inner Glow (Point Light)
-    const glowLight = new THREE.PointLight(0xaa00ff, 2.0, 3.0);
+    // 1. Detailed Stand (Base + Stem + Rim from branch)
+    const baseHeight = 0.1;
+    const stemHeight = 0.25;
+    
+    // Base
+    const baseGeo = new THREE.CylinderGeometry(standRadiusBot * 0.8, standRadiusBot, baseHeight, 16);
+    const baseMesh = new THREE.Mesh(baseGeo, goldMat);
+    baseMesh.position.y = baseHeight / 2;
+    baseMesh.castShadow = true;
+    baseMesh.receiveShadow = true;
+    group.add(baseMesh);
+
+    // Stem
+    const stemGeo = new THREE.CylinderGeometry(0.1, 0.15, stemHeight, 8);
+    const stemMesh = new THREE.Mesh(stemGeo, goldMat);
+    stemMesh.position.y = baseHeight + stemHeight / 2;
+    stemMesh.castShadow = true;
+    stemMesh.receiveShadow = true;
+    group.add(stemMesh);
+
+    // Holder Cup (Torus Rim)
+    const rimGeo = new THREE.TorusGeometry(standRadiusTop, 0.04, 8, 16);
+    const rimMesh = new THREE.Mesh(rimGeo, goldMat);
+    rimMesh.rotation.x = Math.PI / 2;
+    rimMesh.position.y = baseHeight + stemHeight;
+    group.add(rimMesh);
+
+    // 2. The Crystal Ball
+    const ballGeo = new THREE.SphereGeometry(ballRadius, 32, 32);
+    const ballMesh = new THREE.Mesh(ballGeo, glassMat);
+    // Sit on top of the stand (slightly embedded like in main)
+    ballMesh.position.y = baseHeight + stemHeight + ballRadius * 0.7;
+    ballMesh.castShadow = true;
+    group.add(ballMesh);
+
+    // 3. Magical Glow (Point Light + Inner Core)
+    const lightColor = 0xaa00ff; // Mystical purple from branch
+    const glowLight = new THREE.PointLight(lightColor, 2.0, 3.0);
+    glowLight.position.copy(ballMesh.position);
     glowLight.castShadow = false;
     group.add(glowLight);
 
-    // 4. Inner Core (Emissive)
+    // Inner glowing core (Icosahedron from branch for more interesting shape)
     const coreGeo = new THREE.IcosahedronGeometry(0.15, 0);
     const coreMat = new THREE.MeshStandardMaterial({
         color: 0xff00ff,
-        emissive: 0xaa00ff,
+        emissive: lightColor,
         emissiveIntensity: 2.0,
         roughness: 0.8,
         transparent: true,
         opacity: 0.8
     });
     const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+    coreMesh.position.copy(ballMesh.position);
     group.add(coreMesh);
 
-
-    // --- Positioning & Physics Alignment ---
-
-    // Target World Position (On Table)
-    // Table Top Y = -2.75.
-    const targetY = -2.75;
-    const targetX = 6;
-    const targetZ = -4;
-
-    // Relative positions calculations
-    // Base bottom at Y=0 (relative to local start)
-    const baseY = baseHeight / 2; // 0.05
-    const stemY = baseHeight + stemHeight / 2; // 0.25
-    const rimY = baseHeight + stemHeight; // 0.4
-    const sphereY = baseHeight + stemHeight + sphereRadius - 0.1; // 0.8 (overlap 0.1)
-
-    // Apply calculated positions
-    baseMesh.position.y = baseY;
-    stemMesh.position.y = stemY;
-    rimMesh.position.y = rimY;
-    sphereMesh.position.y = sphereY;
-    glowLight.position.y = sphereY;
-    coreMesh.position.y = sphereY;
-
-    // Calculate Center Offset for Physics
-    // Total Height approx = sphereY + sphereRadius = 0.8 + 0.5 = 1.3.
-    const totalHeight = 1.3;
-    const centerOffset = totalHeight / 2; // 0.65
-
-    // Adjust Visuals DOWN
-    baseMesh.position.y -= centerOffset;
-    stemMesh.position.y -= centerOffset;
-    rimMesh.position.y -= centerOffset;
-    sphereMesh.position.y -= centerOffset;
-    glowLight.position.y -= centerOffset;
-    coreMesh.position.y -= centerOffset;
-
-    // Adjust Group Position UP
-    group.position.set(targetX, targetY + centerOffset, targetZ);
+    // Position on Table
+    // Table Top is at Y = -2.75
+    group.position.set(6, -2.75, -4);
 
     scene.add(group);
 
-    // Physics
+    // Physics - Using main's approach with separate collision shapes for better accuracy
     const ammo = getAmmo();
-    // Cylinder shape (halfExtents)
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(sphereRadius, centerOffset, sphereRadius));
+    if (ammo) {
+        // Sphere shape for the ball
+        const ballPhysMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(ballRadius), 
+            new THREE.MeshBasicMaterial({ visible: false })
+        );
+        ballPhysMesh.position.copy(group.position);
+        ballPhysMesh.position.y += ballMesh.position.y;
+        scene.add(ballPhysMesh);
 
-    createStaticBody(physicsWorld, group, shape);
+        const ballShape = new ammo.btSphereShape(ballRadius);
+        createStaticBody(physicsWorld, ballPhysMesh, ballShape);
+
+        // Cylinder shape for the stand base
+        const standPhysMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(standRadiusBot, standRadiusBot, baseHeight),
+            new THREE.MeshBasicMaterial({ visible: false })
+        );
+        standPhysMesh.position.copy(group.position);
+        standPhysMesh.position.y += baseHeight / 2;
+        scene.add(standPhysMesh);
+
+        const standShape = new ammo.btCylinderShape(
+            new ammo.btVector3(standRadiusBot, baseHeight / 2, standRadiusBot)
+        );
+        createStaticBody(physicsWorld, standPhysMesh, standShape);
+    }
+
+    return group;
 }
