@@ -30,6 +30,7 @@ import { createRug } from './environment/Rug.js';
 import { createMap } from './environment/Map.js';
 import { createCrystalBall } from './environment/CrystalBall.js';
 import { createDiceTower } from './environment/DiceTower.js';
+import { createDiceJail } from './environment/DiceJail.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -208,6 +209,9 @@ async function init() {
 
         // Dice Tower
         createDiceTower(scene, physicsWorld);
+
+        // Dice Jail
+        createDiceJail(scene, physicsWorld);
 
         // Tavern Meal (Tankard & Plate)
         createTavernMeal(scene, physicsWorld);
