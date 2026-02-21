@@ -31,6 +31,7 @@ import { createMap } from './environment/Map.js';
 import { createCrystalBall } from './environment/CrystalBall.js';
 import { createDiceTower } from './environment/DiceTower.js';
 import { createDiceJail } from './environment/DiceJail.js';
+import { createPotionSet } from './environment/PotionSet.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -249,6 +250,9 @@ async function init() {
 
         // Crystal Ball
         createCrystalBall(scene, physicsWorld);
+
+        // Alchemist's Potion Set
+        createPotionSet(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
