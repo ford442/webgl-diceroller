@@ -50,6 +50,9 @@ export function createClutter(scene, physicsWorld) {
     // 15. Wanted Poster
     createWantedPoster(scene, physicsWorld, ammo);
 
+    // 16. Tarot Cards
+    createTarotCards(scene, physicsWorld, ammo);
+
     return {
         flamePosition: candleData.flamePosition,
         update: candleData.update
@@ -272,6 +275,116 @@ function generateCharacterSheetTexture() {
     ctx.lineWidth = 10;
     ctx.beginPath();
     ctx.arc(350, 500, 40, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+function createTarotCards(scene, physicsWorld, ammo) {
+    const group = new THREE.Group();
+    group.name = 'TarotCards';
+
+    // Dimensions
+    const width = 1.2;
+    const height = 2.0;
+    const thickness = 0.01;
+
+    const geometry = new THREE.BoxGeometry(width, thickness, height);
+
+    // Cards Data
+    const cards = [
+        { name: 'THE FOOL', number: '0', color: '#ffcc00' },
+        { name: 'DEATH', number: 'XIII', color: '#333333' },
+        { name: 'THE TOWER', number: 'XVI', color: '#8b0000' }
+    ];
+
+    // Base Position
+    // Table Top -2.75.
+    // Center Y = -2.75 + 0.005 = -2.745.
+    const baseX = -7;
+    const baseZ = 6;
+
+    cards.forEach((card, i) => {
+        const texture = generateTarotTexture(card.name, card.number, card.color);
+        const material = new THREE.MeshStandardMaterial({
+            map: texture,
+            roughness: 0.8,
+            metalness: 0.0
+        });
+
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        // Position spread out
+        const x = baseX + (i * 1.5) + (Math.random() - 0.5) * 0.5;
+        const z = baseZ + (Math.random() - 0.5) * 0.5;
+        const y = -2.745 + (i * 0.002); // Stack slightly to avoid z-fighting if overlapping
+
+        mesh.position.set(x, y, z);
+        mesh.rotation.y = (Math.random() - 0.5) * 0.5; // Slight rotation
+
+        group.add(mesh);
+
+        // Physics for each card
+        // Note: Adding individual physics bodies for items in a group
+        // If we add group to scene, we must create bodies for children relative to world,
+        // OR creating a body for the group only works if it's one rigid object.
+        // Here cards are separate loose objects visually.
+        // We will create static bodies for each mesh.
+        // Note: createStaticBody uses mesh.position/quaternion.
+        // Since mesh is child of group, if group has position (0,0,0), then mesh.position is world position.
+        // Group will be at 0,0,0.
+
+        createStaticBody(physicsWorld, mesh, new ammo.btBoxShape(new ammo.btVector3(width/2, thickness/2, height/2)));
+    });
+
+    scene.add(group);
+}
+
+function generateTarotTexture(name, number, color) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 426; // ~1:1.66 ratio
+    const ctx = canvas.getContext('2d');
+
+    // Background (Cardstock)
+    ctx.fillStyle = '#f0e6d2';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Border
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+
+    // Inner Box Color
+    ctx.fillStyle = color;
+    ctx.fillRect(20, 50, canvas.width - 40, canvas.height - 100);
+
+    // Title
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 24px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(name, canvas.width / 2, 40);
+
+    // Number
+    ctx.fillText(number, canvas.width / 2, canvas.height - 15);
+
+    // Symbol/Art (Abstract)
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.beginPath();
+    ctx.arc(canvas.width/2, canvas.height/2, 60, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(canvas.width/2, 60);
+    ctx.lineTo(canvas.width/2, canvas.height - 60);
+    ctx.moveTo(30, canvas.height/2);
+    ctx.lineTo(canvas.width - 30, canvas.height/2);
     ctx.stroke();
 
     const texture = new THREE.CanvasTexture(canvas);
