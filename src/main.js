@@ -411,7 +411,7 @@ function animate() {
     // Update Atmosphere
     updateAtmosphere(time);
     if (clutterUpdate) clutterUpdate(deltaTime);
-    if (wallsUpdate) wallsUpdate(deltaTime);
+    if (wallsUpdate) wallsUpdate(deltaTime, time);
 
     // Candle Flicker
     if (pointLight && candleFlamePos) {
