@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 import { createFire } from './Fire.js';
+import { GodRayShader } from '../shaders/GodRayShader.js';
 
 export function createTavernWalls(scene, physicsWorld) {
     const loader = new THREE.TextureLoader();
@@ -99,7 +100,7 @@ export function createTavernWalls(scene, physicsWorld) {
 
     // Left Wall (Windowed)
     const leftWallX = -width/2 - thickness/2;
-    createWindowedWall(roomGroup, physicsWorld, Ammo, leftWallX, floorY, height, depth, thickness, wallMaterial, woodMaterial);
+    const godRayUpdate = createWindowedWall(roomGroup, physicsWorld, Ammo, leftWallX, floorY, height, depth, thickness, wallMaterial, woodMaterial);
 
 
     // Beams / Decorations
@@ -149,7 +150,10 @@ export function createTavernWalls(scene, physicsWorld) {
 
     return {
         fireplaceLight: fireplaceData.light,
-        update: fireplaceData.update
+        update: (deltaTime, time) => {
+            if (fireplaceData.update) fireplaceData.update(deltaTime);
+            if (godRayUpdate) godRayUpdate(time);
+        }
     };
 }
 
@@ -282,7 +286,7 @@ function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight,
     group.add(frameGroup);
 
     // --- God Rays ---
-    createGodRays(group, xPos, winY, winZ);
+    const godRayUpdate = createGodRays(group, xPos, winY, winZ);
 
 
     // --- Physics ---
@@ -304,71 +308,88 @@ function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight,
         const shape = new Ammo.btBoxShape(new Ammo.btVector3(thickness/2, physHeight/2, physDepth/2));
         createStaticBody(physicsWorld, dummyMesh, shape);
     }
+
+    return godRayUpdate;
 }
 
 function createGodRays(group, x, y, z) {
-    // Texture
-    const canvas = document.createElement('canvas');
-    canvas.width = 128;
-    canvas.height = 128;
-    const context = canvas.getContext('2d');
+    // Generate Noise Texture for Volumetric Effect
+    const noiseTexture = generateNoiseTexture();
 
-    // Gradient: Transparent -> White -> Transparent
-    const gradient = context.createLinearGradient(0, 0, 0, 128);
-    gradient.addColorStop(0, 'rgba(200, 220, 255, 0)');
-    gradient.addColorStop(0.2, 'rgba(200, 220, 255, 0.15)'); // Subtle blue-ish
-    gradient.addColorStop(1, 'rgba(200, 220, 255, 0)');
-
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, 128, 128);
-
-    const texture = new THREE.CanvasTexture(canvas);
-
-    // Material
-    const material = new THREE.MeshBasicMaterial({
-        map: texture,
+    // Shader Material
+    const material = new THREE.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0.0 },
+            tNoise: { value: noiseTexture },
+            uColor: { value: new THREE.Color(0xddeeff) },
+            uSpeed: { value: 0.1 }
+        },
+        vertexShader: GodRayShader.vertexShader,
+        fragmentShader: GodRayShader.fragmentShader,
         transparent: true,
-        opacity: 0.8,
         side: THREE.DoubleSide,
         depthWrite: false,
         blending: THREE.AdditiveBlending
     });
 
     // Geometry: Cone/Cylinder
-    // Light is at (-40, 15, -5). Window at (-21, 4, -5). Target (0, -3, 0).
-    // Ray direction is roughly (+1, -0.5, 0).
     const length = 40;
     const radiusTop = 3;   // Window size approx
-    const radiusBottom = 6; // Spread
+    const radiusBottom = 8; // Spread (Wider at bottom for atmosphere)
     const geometry = new THREE.CylinderGeometry(radiusTop, radiusBottom, length, 32, 1, true);
-
-    // Cylinder is Y-up. We need to rotate it to point from Window to Room Center.
-    // Window pos: (x, y, z) ~ (-21, 4, -5).
-    // Target: (0, -3, 0).
-    // Vector: (21, -7, 5).
 
     const mesh = new THREE.Mesh(geometry, material);
 
-    // Position: Center of the ray.
-    // Start: (-21, 4, -5). End: (0, -3, 0) extended?
-    // Let's place it at Window and LookAt Target.
-    // Cylinder center is at (0,0,0). Top is +height/2. Bottom is -height/2.
-    // We want Top to be at window (or outside).
-    // We want the light to flow DOWN.
-    // So rotate X -90?
-
+    // Position and Orient
     mesh.position.set(x, y, z); // Window center
     mesh.lookAt(0, -3, 0);      // Look at table
-    mesh.rotateX(-Math.PI / 2); // Rotate cylinder to align with look vector?
-    // Cylinder axis is Y. LookAt aligns Z axis.
-    // To align Y axis with Z axis: Rotate X 90 degrees.
+    mesh.rotateX(-Math.PI / 2); // Rotate cylinder to align with look vector
 
-    // Also, we want the window end (Top) to be at the window position.
-    // Currently mesh center is at window. So it sticks out half way.
-    // Shift geometry or mesh.
-    mesh.translateY(-length/2 + 2); // Shift along local Y (which is the ray axis now)
+    // Shift geometry so Top is at window
+    mesh.translateY(-length/2 + 2);
 
     group.add(mesh);
+
+    // Update Function
+    return (time) => {
+        if (material.uniforms) {
+            material.uniforms.uTime.value = time;
+        }
+    };
+}
+
+function generateNoiseTexture() {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // Fill with Perlin-ish noise (simulated with random circles)
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, size, size);
+
+    for (let i = 0; i < 400; i++) {
+        const x = Math.random() * size;
+        const y = Math.random() * size;
+        const r = Math.random() * 20 + 5;
+        const alpha = Math.random() * 0.1;
+
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.fill();
+    }
+
+    // Blur to make it cloudy (Optional)
+    // const texture = new THREE.CanvasTexture(canvas);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.colorSpace = THREE.NoColorSpace;
+
+    return texture;
 }
 
 function createFireplace(group, physicsWorld, Ammo, wallMat) {
