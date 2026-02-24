@@ -25,7 +25,7 @@ import { createBattleAxe } from './environment/BattleAxe.js';
 import { createDiceBag } from './environment/DiceBag.js';
 import { createHourglass } from './environment/Hourglass.js';
 import { createAtmosphere, updateAtmosphere } from './environment/Atmosphere.js';
-import { createLamp } from './environment/Lamp.js';
+import { createLamp, LampMode } from './environment/Lamp.js';
 import { createRug } from './environment/Rug.js';
 import { createMap } from './environment/Map.js';
 import { createCrystalBall } from './environment/CrystalBall.js';
@@ -234,10 +234,13 @@ async function init() {
 
         // Billiard Lamp
         const lampData = await createLamp(scene);
-        // Position high up (hanging from ceiling at Y=20)
-        lampData.group.position.set(0, 19, 0);
+        // Position high up (hanging from ceiling)
+        // Lamp is now properly scaled and capped at max height
+        lampData.group.position.set(0, 18, 0);
         // Add to interactive objects
         registerInteractiveObject(lampData.group, lampData.toggle);
+        // Store lamp reference for updates
+        window.lampData = lampData;
 
         // Atmosphere (Dust Motes)
         createAtmosphere(scene);
@@ -296,6 +299,14 @@ function setupInput() {
         if (event.code === 'KeyR') {
             throwDice(scene, physicsWorld);
             diceFocusState = DiceFocusState.WAITING_FOR_STOP;
+            // Trigger lamp strobe/rolling effect
+            if (window.lampData) {
+                window.lampData.setRolling(true);
+            }
+        }
+        // Lamp mode controls
+        if (window.lampData) {
+            window.lampData.handleKey(event.key);
         }
     });
     window.addEventListener('keyup', (event) => {
@@ -387,6 +398,12 @@ function checkDiceStability() {
         const ang = d.body.getAngularVelocity().length();
         if (vel > 0.1 || ang > 0.1) allStable = false;
     });
+    
+    // Update lamp rolling state when dice stop
+    if (allStable && window.lampData && window.lampData.getMode() === LampMode.NORMAL) {
+        window.lampData.setRolling(false);
+    }
+    
     return allStable;
 }
 
@@ -412,6 +429,11 @@ function animate() {
     updateAtmosphere(time);
     if (clutterUpdate) clutterUpdate(deltaTime);
     if (wallsUpdate) wallsUpdate(deltaTime, time);
+    
+    // Update Lamp Effects
+    if (window.lampData) {
+        window.lampData.update(deltaTime, time);
+    }
 
     // Candle Flicker
     if (pointLight && candleFlamePos) {
