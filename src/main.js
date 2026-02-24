@@ -32,6 +32,7 @@ import { createCrystalBall } from './environment/CrystalBall.js';
 import { createDiceTower } from './environment/DiceTower.js';
 import { createDiceJail } from './environment/DiceJail.js';
 import { createPotionSet } from './environment/PotionSet.js';
+import { createSkull } from './environment/Skull.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -256,6 +257,12 @@ async function init() {
 
         // Alchemist's Potion Set
         createPotionSet(scene, physicsWorld);
+
+        // Skull Prop (Interactive)
+        const skullData = createSkull(scene, physicsWorld);
+        if (skullData && skullData.toggleGlow) {
+            registerInteractiveObject(skullData.group, skullData.toggleGlow);
+        }
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
