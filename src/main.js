@@ -33,6 +33,7 @@ import { createDiceTower } from './environment/DiceTower.js';
 import { createDiceJail } from './environment/DiceJail.js';
 import { createPotionSet } from './environment/PotionSet.js';
 import { createSkull } from './environment/Skull.js';
+import { createPocketWatch } from './environment/PocketWatch.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -263,6 +264,9 @@ async function init() {
         if (skullData && skullData.toggleGlow) {
             registerInteractiveObject(skullData.group, skullData.toggleGlow);
         }
+
+        // Vintage Pocket Watch
+        createPocketWatch(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
