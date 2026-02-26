@@ -34,6 +34,7 @@ import { createDiceJail } from './environment/DiceJail.js';
 import { createPotionSet } from './environment/PotionSet.js';
 import { createSkull } from './environment/Skull.js';
 import { createPocketWatch } from './environment/PocketWatch.js';
+import { createScroll } from './environment/Scroll.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -252,6 +253,9 @@ async function init() {
 
         // Map
         createMap(scene, physicsWorld);
+
+        // Sealed Scroll
+        createScroll(scene, physicsWorld);
 
         // Crystal Ball
         createCrystalBall(scene, physicsWorld);
