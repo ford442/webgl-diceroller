@@ -35,6 +35,7 @@ import { createPotionSet } from './environment/PotionSet.js';
 import { createSkull } from './environment/Skull.js';
 import { createPocketWatch } from './environment/PocketWatch.js';
 import { createScroll } from './environment/Scroll.js';
+import { createMerchantScale } from './environment/MerchantScale.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -46,6 +47,7 @@ let fireplaceLight; // Fireplace light
 let candleFlamePos; // Position of the candle flame
 let clutterUpdate; // Update function for clutter (fire)
 let wallsUpdate; // Update function for walls (fireplace)
+let scaleUpdate; // Update function for merchant scale
 let velocity = new THREE.Vector3();
 let isOnGround = true;
 const moveSpeed = 5; // Units per second
@@ -238,8 +240,8 @@ async function init() {
         // Billiard Lamp
         const lampData = await createLamp(scene);
         // Position high up (hanging from ceiling)
-        // Lamp is now properly scaled and capped at max height
-        lampData.group.position.set(0, 18, 0);
+        // Lowered to y=10 to fix inverted glow look and be more visible
+        lampData.group.position.set(0, 10, 0);
         // Add to interactive objects
         registerInteractiveObject(lampData.group, lampData.toggle);
         // Store lamp reference for updates
@@ -271,6 +273,12 @@ async function init() {
 
         // Vintage Pocket Watch
         createPocketWatch(scene, physicsWorld);
+
+        // Merchant Scale
+        const scaleData = createMerchantScale(scene, physicsWorld);
+        if (scaleData && scaleData.update) {
+            scaleUpdate = scaleData.update;
+        }
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
@@ -444,6 +452,7 @@ function animate() {
     updateAtmosphere(time);
     if (clutterUpdate) clutterUpdate(deltaTime);
     if (wallsUpdate) wallsUpdate(deltaTime, time);
+    if (scaleUpdate) scaleUpdate(time);
     
     // Update Lamp Effects
     if (window.lampData) {
