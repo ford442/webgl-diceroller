@@ -36,6 +36,7 @@ import { createSkull } from './environment/Skull.js';
 import { createPocketWatch } from './environment/PocketWatch.js';
 import { createScroll } from './environment/Scroll.js';
 import { createMerchantScale } from './environment/MerchantScale.js';
+import { createCompass } from './environment/Compass.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -273,6 +274,9 @@ async function init() {
 
         // Vintage Pocket Watch
         createPocketWatch(scene, physicsWorld);
+
+        // Compass Prop
+        createCompass(scene, physicsWorld);
 
         // Merchant Scale
         const scaleData = createMerchantScale(scene, physicsWorld);
