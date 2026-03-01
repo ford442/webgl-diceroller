@@ -37,6 +37,7 @@ import { createPocketWatch } from './environment/PocketWatch.js';
 import { createScroll } from './environment/Scroll.js';
 import { createMerchantScale } from './environment/MerchantScale.js';
 import { createCompass } from './environment/Compass.js';
+import { createSpellbook } from './environment/Spellbook.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -277,6 +278,9 @@ async function init() {
 
         // Compass Prop
         createCompass(scene, physicsWorld);
+
+        // Spellbook Prop
+        createSpellbook(scene, physicsWorld);
 
         // Merchant Scale
         const scaleData = createMerchantScale(scene, physicsWorld);
