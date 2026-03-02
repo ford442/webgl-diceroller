@@ -174,6 +174,7 @@ async function init() {
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
     const tavernEnvironment = new TavernEnvironment();
+    await tavernEnvironment.load();
     scene.environment = pmremGenerator.fromScene(tavernEnvironment).texture;
     pmremGenerator.dispose();
     tavernEnvironment.dispose();
