@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import {
 	BackSide,
 	BoxGeometry,
@@ -12,7 +13,7 @@ import {
  * TavernEnvironment
  * A custom environment map scene designed to simulate a dimly lit tavern.
  * Features:
- * - Dark ambient surroundings (Wood/Stone).
+ * - Dark ambient surroundings (Wood/Stone) with PBR textures.
  * - Warm orange glow from the right (Fireplace).
  * - Cool blue glow from the left (Moonlit Window).
  * - Bright warm point near center (Candle).
@@ -20,20 +21,43 @@ import {
 class TavernEnvironment extends Scene {
 
 	constructor() {
-
 		super();
-
 		this.name = 'TavernEnvironment';
+	}
 
+	async load() {
 		const geometry = new BoxGeometry();
-		geometry.deleteAttribute( 'uv' );
+		// We DO NOT delete UVs because we need them for textures!
+		// geometry.deleteAttribute( 'uv' );
+
+		const loader = new THREE.TextureLoader();
+
+		// Load Textures asynchronously
+		const [brickDiffuse, brickBump, brickRoughness] = await Promise.all([
+			loader.loadAsync('./images/brick_diffuse.jpg'),
+			loader.loadAsync('./images/brick_bump.jpg'),
+			loader.loadAsync('./images/brick_roughness.jpg')
+		]);
+
+		[brickDiffuse, brickBump, brickRoughness].forEach(t => {
+			t.wrapS = THREE.RepeatWrapping;
+			t.wrapT = THREE.RepeatWrapping;
+			t.repeat.set(4, 3);
+		});
+
+		brickDiffuse.colorSpace = THREE.SRGBColorSpace;
+		brickBump.colorSpace = THREE.NoColorSpace;
+		brickRoughness.colorSpace = THREE.NoColorSpace;
 
 		// 1. The Room (Backdrop)
-		// Dark, rough material to simulate wood/stone walls in shadow.
+		// textured material to simulate stone walls in shadow.
 		const roomMaterial = new MeshStandardMaterial( {
 			side: BackSide,
-			color: 0x221100, // Very dark brown
-			roughness: 1.0
+			map: brickDiffuse,
+			bumpMap: brickBump,
+			bumpScale: 0.2,
+			roughnessMap: brickRoughness,
+			color: 0x221100 // Very dark brown tint for shadow
 		} );
 
 		const room = new Mesh( geometry, roomMaterial );
@@ -75,6 +99,10 @@ class TavernEnvironment extends Scene {
 			if ( object.isMesh ) {
 				resources.add( object.geometry );
 				resources.add( object.material );
+				// Also dispose textures if any
+				if (object.material.map) resources.add(object.material.map);
+				if (object.material.bumpMap) resources.add(object.material.bumpMap);
+				if (object.material.roughnessMap) resources.add(object.material.roughnessMap);
 			}
 		} );
 		for ( const resource of resources ) {
