@@ -53,6 +53,9 @@ export function createClutter(scene, physicsWorld) {
     // 16. Tarot Cards
     createTarotCards(scene, physicsWorld, ammo);
 
+    // 17. Character Miniature
+    createMiniature(scene, physicsWorld, ammo);
+
     return {
         flamePosition: candleData.flamePosition,
         update: candleData.update
@@ -280,6 +283,78 @@ function generateCharacterSheetTexture() {
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
+}
+
+function createMiniature(scene, physicsWorld, ammo) {
+    const group = new THREE.Group();
+    group.name = 'MiniaturePawn';
+
+    // Material: Pewter/Lead
+    const material = new THREE.MeshStandardMaterial({
+        color: 0x8c92ac,
+        roughness: 0.6,
+        metalness: 0.8
+    });
+
+    // 1. Base (Cylinder)
+    const baseRadius = 0.4;
+    const baseHeight = 0.1;
+    const baseGeo = new THREE.CylinderGeometry(baseRadius, baseRadius, baseHeight, 16);
+    const baseMesh = new THREE.Mesh(baseGeo, material);
+    baseMesh.position.y = baseHeight / 2;
+    baseMesh.castShadow = true;
+    baseMesh.receiveShadow = true;
+    group.add(baseMesh);
+
+    // 2. Body (Cone/Cylinder mix)
+    const bodyHeight = 0.8;
+    const bodyRadiusBottom = 0.3;
+    const bodyRadiusTop = 0.15;
+    const bodyGeo = new THREE.CylinderGeometry(bodyRadiusTop, bodyRadiusBottom, bodyHeight, 16);
+    const bodyMesh = new THREE.Mesh(bodyGeo, material);
+    bodyMesh.position.y = baseHeight + bodyHeight / 2;
+    bodyMesh.castShadow = true;
+    bodyMesh.receiveShadow = true;
+    group.add(bodyMesh);
+
+    // 3. Head (Sphere)
+    const headRadius = 0.25;
+    const headGeo = new THREE.SphereGeometry(headRadius, 16, 16);
+    const headMesh = new THREE.Mesh(headGeo, material);
+    headMesh.position.y = baseHeight + bodyHeight + headRadius;
+    headMesh.castShadow = true;
+    headMesh.receiveShadow = true;
+    group.add(headMesh);
+
+    // Total Height for Physics
+    const totalHeight = baseHeight + bodyHeight + headRadius * 2;
+
+    // Position on table
+    // Table Top -2.75.
+    // Base is at y=0 local, so set group y to -2.75.
+    group.position.set(-2, -2.75, 2);
+    // Randomize rotation slightly
+    group.rotation.y = Math.random() * Math.PI * 2;
+
+    scene.add(group);
+
+    // Physics
+    // Approximating with a Cylinder shape covering the whole miniature
+    const shape = new ammo.btCylinderShape(new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius));
+
+    // We need to offset the collision body to match the visual center.
+    // The group's origin is at the bottom (y=0).
+    // The physics shape origin should be at y = totalHeight / 2.
+    // Instead of dealing with offset body, let's move the group center visually and logically.
+    // Actually, createStaticBody places the center of mass at the group's position.
+    // Let's adjust the group to be centered.
+
+    group.position.y = -2.75 + totalHeight / 2;
+    baseMesh.position.y -= totalHeight / 2;
+    bodyMesh.position.y -= totalHeight / 2;
+    headMesh.position.y -= totalHeight / 2;
+
+    createStaticBody(physicsWorld, group, shape);
 }
 
 function createTarotCards(scene, physicsWorld, ammo) {
