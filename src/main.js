@@ -39,6 +39,7 @@ import { createMerchantScale } from './environment/MerchantScale.js';
 import { createCompass } from './environment/Compass.js';
 import { createSpellbook } from './environment/Spellbook.js';
 import { createChalice } from './environment/Chalice.js';
+import { createMiniature } from './environment/Miniature.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -292,6 +293,9 @@ async function init() {
 
         // Chalice Prop
         createChalice(scene, physicsWorld);
+
+        // Character Miniature Prop
+        createMiniature(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
