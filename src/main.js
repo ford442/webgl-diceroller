@@ -40,6 +40,8 @@ import { createCompass } from './environment/Compass.js';
 import { createSpellbook } from './environment/Spellbook.js';
 import { createChalice } from './environment/Chalice.js';
 import { createMiniature } from './environment/Miniature.js';
+import { createCharacterSheet } from './environment/CharacterSheet.js';
+import { createPencil } from './environment/Pencil.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -296,6 +298,12 @@ async function init() {
 
         // Character Miniature Prop
         createMiniature(scene, physicsWorld);
+
+        // Character Sheet Prop
+        createCharacterSheet(scene, physicsWorld);
+
+        // Pencil Prop
+        createPencil(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
