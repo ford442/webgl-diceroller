@@ -42,6 +42,7 @@ import { createChalice } from './environment/Chalice.js';
 import { createMiniature } from './environment/Miniature.js';
 import { createCharacterSheet } from './environment/CharacterSheet.js';
 import { createPencil } from './environment/Pencil.js';
+import { createCoinPouch } from './environment/CoinPouch.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -304,6 +305,9 @@ async function init() {
 
         // Pencil Prop
         createPencil(scene, physicsWorld);
+
+        // Coin Pouch Prop
+        createCoinPouch(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
