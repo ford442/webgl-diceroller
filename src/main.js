@@ -43,6 +43,7 @@ import { createMiniature } from './environment/Miniature.js';
 import { createCharacterSheet } from './environment/CharacterSheet.js';
 import { createPencil } from './environment/Pencil.js';
 import { createCoinPouch } from './environment/CoinPouch.js';
+import { createLantern } from './environment/Lantern.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -55,6 +56,7 @@ let candleFlamePos; // Position of the candle flame
 let clutterUpdate; // Update function for clutter (fire)
 let wallsUpdate; // Update function for walls (fireplace)
 let scaleUpdate; // Update function for merchant scale
+let lanternUpdate; // Update function for lantern
 let velocity = new THREE.Vector3();
 let isOnGround = true;
 const moveSpeed = 5; // Units per second
@@ -309,6 +311,12 @@ async function init() {
         // Coin Pouch Prop
         createCoinPouch(scene, physicsWorld);
 
+        // Lantern Prop
+        const lanternData = createLantern(scene, physicsWorld);
+        if (lanternData && lanternData.update) {
+            lanternUpdate = lanternData.update;
+        }
+
     } catch (e) {
         console.error("Failed to initialize physics", e);
         return;
@@ -339,6 +347,8 @@ async function init() {
     window.camera = camera;
     window.scene = scene;
     window.physicsWorld = physicsWorld;
+    window.THREE = THREE;
+    window.renderer = renderer;
 
     window.addEventListener('resize', onWindowResize);
 
@@ -482,6 +492,7 @@ function animate() {
     if (clutterUpdate) clutterUpdate(deltaTime);
     if (wallsUpdate) wallsUpdate(deltaTime, time);
     if (scaleUpdate) scaleUpdate(time);
+    if (lanternUpdate) lanternUpdate(time);
     
     // Update Lamp Effects
     if (window.lampData) {
