@@ -45,6 +45,7 @@ import { createPencil } from './environment/Pencil.js';
 import { createCoinPouch } from './environment/CoinPouch.js';
 import { createLantern } from './environment/Lantern.js';
 import { createLute } from './environment/Lute.js';
+import { createRunestones } from './environment/Runestones.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -320,6 +321,9 @@ async function init() {
 
         // Lute Prop (Tabletop Atmosphere)
         createLute(scene, physicsWorld, { x: -8, y: -1.85, z: 2 }, Math.PI / 6);
+
+        // Runestones Prop
+        createRunestones(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
