@@ -47,6 +47,7 @@ import { createLantern } from './environment/Lantern.js';
 import { createLute } from './environment/Lute.js';
 import { createRunestones } from './environment/Runestones.js';
 import { createCheeseWheel } from './environment/CheeseWheel.js';
+import { createMug } from './environment/Mug.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -328,6 +329,9 @@ async function init() {
 
         // Cheese Wheel Prop
         createCheeseWheel(scene, physicsWorld);
+
+        // Mug Prop
+        createMug(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
