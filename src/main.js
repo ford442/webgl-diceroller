@@ -47,6 +47,7 @@ import { createLantern } from './environment/Lantern.js';
 import { createLute } from './environment/Lute.js';
 import { createRunestones } from './environment/Runestones.js';
 import { createCheeseWheel } from './environment/CheeseWheel.js';
+import { createMug } from './environment/Mug.js';
 import { createWaxSeal } from './environment/WaxSeal.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
@@ -330,6 +331,8 @@ async function init() {
         // Cheese Wheel Prop
         createCheeseWheel(scene, physicsWorld);
 
+        // Mug Prop
+        createMug(scene, physicsWorld);
         // Wax Seal Stamp Prop
         createWaxSeal(scene, physicsWorld);
 
