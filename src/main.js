@@ -15,6 +15,7 @@ import { initInteraction, updateInteraction, registerInteractiveObject } from '.
 import { createTable } from './environment/Table.js';
 import { createTavernWalls } from './environment/TavernWalls.js';
 import { createBookshelf } from './environment/Bookshelf.js';
+import { createRoom } from './environment/Room.js';
 import { createChair } from './environment/Chair.js';
 import { createChest } from './environment/Chest.js';
 import { createClutter } from './environment/Clutter.js';
@@ -201,6 +202,8 @@ async function init() {
             if (wallData.fireplaceLight) fireplaceLight = wallData.fireplaceLight;
             if (wallData.update) wallsUpdate = wallData.update;
         }
+
+        createRoom(scene);
 
         const tableConfig = createTable(scene);
         createFloorAndWalls(scene, physicsWorld, tableConfig);
