@@ -22,6 +22,7 @@ import { createClutter } from './environment/Clutter.js';
 import { createTavernMeal } from './environment/TavernMeal.js';
 import { createDagger } from './environment/Dagger.js';
 import { createShield } from './environment/Shield.js';
+import { createBell } from './environment/Bell.js';
 import { createBattleAxe } from './environment/BattleAxe.js';
 import { createDiceBag } from './environment/DiceBag.js';
 import { createHourglass } from './environment/Hourglass.js';
@@ -217,6 +218,9 @@ async function init() {
 
         // Wooden Chest (Background Prop)
         createChest(scene, physicsWorld, { x: -10, y: -9.5, z: -18 }, Math.PI / 8);
+
+        // Bell
+        createBell(scene);
 
         // Clutter & Candle
         const clutterData = createClutter(scene, physicsWorld);
