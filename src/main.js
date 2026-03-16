@@ -51,6 +51,7 @@ import { createRunestones } from './environment/Runestones.js';
 import { createCheeseWheel } from './environment/CheeseWheel.js';
 import { createMug } from './environment/Mug.js';
 import { createWaxSeal } from './environment/WaxSeal.js';
+import { createCrown } from './environment/Crown.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -342,6 +343,9 @@ async function init() {
         createMug(scene, physicsWorld);
         // Wax Seal Stamp Prop
         createWaxSeal(scene, physicsWorld);
+
+        // Kings Crown Prop
+        createCrown(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
