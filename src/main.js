@@ -262,9 +262,9 @@ async function init() {
 
         // Billiard Lamp
         const lampData = await createLamp(scene);
-        // Position high up (hanging from ceiling)
-        // Lowered to y=10 to fix inverted glow look and be more visible
-        lampData.group.position.set(0, 10, 0);
+        // Hang above table surface (~3 units) for proper downward lighting
+        // Table surface is at y ≈ -2.75, so position lamp at y = 0 for ~2.75 unit clearance
+        lampData.group.position.set(0, 0, 0);
         // Add to interactive objects
         registerInteractiveObject(lampData.group, lampData.toggle);
         // Store lamp reference for updates
