@@ -138,14 +138,14 @@ export async function createLamp(scene) {
 
     // Lights - position inside the lamp shade
     const finalSize = finalBox.getSize(new THREE.Vector3());
-    const lightY = -finalSize.y * 0.3; // Inside the shade, not at bottom
+    const lightY = -finalSize.y * 0.2; // 20% down from top for better downward casting
     const spacing = targetWidth * 0.25;
 
     const lights = [];
     const positions = [-spacing, 0, spacing];
 
     positions.forEach(x => {
-        const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 80, 25);
+        const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 100, 30);
         light.position.set(x, lightY, 0);
         light.castShadow = true;
         light.shadow.bias = -0.0001;
