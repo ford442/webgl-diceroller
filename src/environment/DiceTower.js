@@ -8,9 +8,9 @@ export function createDiceTower(scene, physicsWorld) {
 
     // Materials
     const loader = new THREE.TextureLoader();
-    const woodDiffuse = loader.load('/images/wood_diffuse.jpg');
-    const woodBump = loader.load('/images/wood_bump.jpg');
-    const woodRoughness = loader.load('/images/wood_roughness.jpg');
+    const woodDiffuse = loader.load('./images/wood_diffuse.jpg');
+    const woodBump = loader.load('./images/wood_bump.jpg');
+    const woodRoughness = loader.load('./images/wood_roughness.jpg');
 
     [woodDiffuse, woodBump, woodRoughness].forEach(t => {
         t.wrapS = THREE.RepeatWrapping;
