@@ -17,7 +17,7 @@ export function createClutter(scene, physicsWorld) {
     // 4. Parchment
     createParchment(scene, physicsWorld, ammo);
 
-    // 5. Candle
+    // 5. Candle (Enhanced)
     const candleData = createCandle(scene, physicsWorld, ammo);
 
     // 6. Pencil
@@ -68,11 +68,12 @@ function createMug(scene, physicsWorld, ammo) {
 
     // Cup body
     const bodyGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
-    // Dark ceramic material
+    // Enhanced ceramic material with better PBR
     const material = new THREE.MeshStandardMaterial({
         color: 0x4a3c31,
-        roughness: 0.2,
-        metalness: 0.1
+        roughness: 0.3,      // Smoother ceramic
+        metalness: 0.05,
+        envMapIntensity: 0.8
     });
     const bodyMesh = new THREE.Mesh(bodyGeo, material);
     bodyMesh.castShadow = true;
@@ -89,6 +90,17 @@ function createMug(scene, physicsWorld, ammo) {
     handleMesh.castShadow = true;
     mugGroup.add(handleMesh);
 
+    // Inner shadow (darkened inside)
+    const innerGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.9, 32);
+    const innerMat = new THREE.MeshStandardMaterial({
+        color: 0x2a1c11,
+        roughness: 0.9,
+        metalness: 0.0
+    });
+    const innerMesh = new THREE.Mesh(innerGeo, innerMat);
+    innerMesh.position.y = 0.05;
+    mugGroup.add(innerMesh);
+
     // Position Mug on table
     // Table top is -2.75. Mug height 1. Center at -2.75 + 0.5 = -2.25.
     mugGroup.position.set(5, -2.25, 5);
@@ -103,15 +115,36 @@ function createMug(scene, physicsWorld, ammo) {
 }
 
 function createCoins(scene, physicsWorld, ammo) {
-    // Visuals for a single coin type
+    // Enhanced coin materials with better metalness
     const radius = 0.3;
     const thickness = 0.05;
     const geometry = new THREE.CylinderGeometry(radius, radius, thickness, 32);
-    const material = new THREE.MeshStandardMaterial({
+    
+    // Gold coins with better PBR
+    const goldMaterial = new THREE.MeshStandardMaterial({
         color: 0xffd700,
         metalness: 1.0,
-        roughness: 0.3
+        roughness: 0.25,     // Smoother gold
+        envMapIntensity: 1.2
     });
+
+    // Silver coins for variety
+    const silverMaterial = new THREE.MeshStandardMaterial({
+        color: 0xc0c0c0,
+        metalness: 1.0,
+        roughness: 0.3,
+        envMapIntensity: 1.0
+    });
+
+    // Copper coins
+    const copperMaterial = new THREE.MeshStandardMaterial({
+        color: 0xb87333,
+        metalness: 0.95,
+        roughness: 0.35,
+        envMapIntensity: 0.9
+    });
+
+    const materials = [goldMaterial, silverMaterial, copperMaterial];
 
     // Create a pile of 15 coins
     const count = 15;
@@ -120,6 +153,7 @@ function createCoins(scene, physicsWorld, ammo) {
     const baseY = -2.75; // Table top
 
     for (let i = 0; i < count; i++) {
+        const material = materials[Math.floor(Math.random() * materials.length)];
         const mesh = new THREE.Mesh(geometry, material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
@@ -131,17 +165,6 @@ function createCoins(scene, physicsWorld, ammo) {
         const z = centerZ + Math.sin(angle) * dist;
 
         // Stack height randomness
-        // Coins might stack. Simple approach: random Y offset slightly above table.
-        // Or just let them float slightly and fall? No, they are static bodies.
-        // We'll place them at different heights to simulate a messy pile.
-        // Some on table, some on top of others.
-        // Since we use static bodies, we must place them carefully or they will just float.
-        // Let's place them on the table with slight variations in Y and rotation.
-
-        // Simulating a pile visually:
-        // Level 0: On table (y = -2.75 + thickness/2 = -2.725)
-        // Level 1: On top of another coin (y = -2.725 + thickness)
-
         let y = baseY + thickness/2;
         if (i > 5) y += thickness; // Second layer
         if (i > 10) y += thickness; // Third layer
@@ -170,10 +193,15 @@ function createBook(scene, physicsWorld, ammo) {
     const height = 0.5;
     const depth = 4;
     const geometry = new THREE.BoxGeometry(width, height, depth);
+    
+    // Enhanced leather material
     const material = new THREE.MeshStandardMaterial({
         color: 0x8b0000, // Dark red
-        roughness: 0.6
+        roughness: 0.7,
+        metalness: 0.1,
+        bumpScale: 0.02
     });
+    
     const mesh = new THREE.Mesh(geometry, material);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -289,11 +317,12 @@ function createMiniature(scene, physicsWorld, ammo) {
     const group = new THREE.Group();
     group.name = 'MiniaturePawn';
 
-    // Material: Pewter/Lead
+    // Enhanced Material: Pewter with better metal properties
     const material = new THREE.MeshStandardMaterial({
         color: 0x8c92ac,
-        roughness: 0.6,
-        metalness: 0.8
+        roughness: 0.5,
+        metalness: 0.85,
+        envMapIntensity: 1.0
     });
 
     // 1. Base (Cylinder)
@@ -385,8 +414,8 @@ function createTarotCards(scene, physicsWorld, ammo) {
         const texture = generateTarotTexture(card.name, card.number, card.color);
         const material = new THREE.MeshStandardMaterial({
             map: texture,
-            roughness: 0.8,
-            metalness: 0.0
+            roughness: 0.6,
+            metalness: 0.1
         });
 
         const mesh = new THREE.Mesh(geometry, material);
@@ -471,11 +500,12 @@ function createSpyglass(scene, physicsWorld, ammo) {
     const group = new THREE.Group();
     group.name = 'Spyglass';
 
-    // Materials
+    // Enhanced Materials with better PBR
     const brassMat = new THREE.MeshStandardMaterial({
         color: 0xb5a642, // Brass
         metalness: 1.0,
-        roughness: 0.2
+        roughness: 0.2,
+        envMapIntensity: 1.2
     });
 
     const glassMat = new THREE.MeshPhysicalMaterial({
@@ -488,7 +518,8 @@ function createSpyglass(scene, physicsWorld, ammo) {
 
     const leatherMat = new THREE.MeshStandardMaterial({
         color: 0x3f1f1f, // Dark Leather
-        roughness: 0.8
+        roughness: 0.8,
+        metalness: 0.1
     });
 
     // 1. Main Tube (Y-axis aligned)
@@ -577,10 +608,10 @@ function createPipe(scene, physicsWorld, ammo) {
     const group = new THREE.Group();
     group.name = 'SmokingPipe';
 
-    // Materials
+    // Enhanced Materials
     const woodMat = new THREE.MeshStandardMaterial({
         color: 0x3f1f1f, // Dark Mahogany
-        roughness: 0.6,
+        roughness: 0.5,
         metalness: 0.1
     });
 
@@ -594,8 +625,12 @@ function createPipe(scene, physicsWorld, ammo) {
         roughness: 1.0
     });
 
-    const emberMat = new THREE.MeshBasicMaterial({
-        color: 0xff4400
+    // Enhanced ember material with subtle glow
+    const emberMat = new THREE.MeshStandardMaterial({
+        color: 0xff4400,
+        emissive: 0xff2200,
+        emissiveIntensity: 0.5,
+        roughness: 1.0
     });
 
     // 1. Bowl (Lathe)
@@ -692,11 +727,12 @@ function createQuill(scene, physicsWorld, ammo) {
     const potRadiusTop = 0.25;
     const potRadiusBot = 0.3;
 
-    // Material: Ceramic/Glass
+    // Enhanced Material: Dark ceramic with slight gloss
     const potMat = new THREE.MeshStandardMaterial({
         color: 0x222222,
-        roughness: 0.2,
-        metalness: 0.5
+        roughness: 0.3,
+        metalness: 0.4,
+        envMapIntensity: 0.8
     });
 
     const potGeo = new THREE.CylinderGeometry(potRadiusTop, potRadiusBot, potHeight, 16);
@@ -705,12 +741,13 @@ function createQuill(scene, physicsWorld, ammo) {
     potMesh.receiveShadow = true;
     group.add(potMesh);
 
-    // Ink Surface
+    // Ink Surface with slight reflectivity
     const inkGeo = new THREE.CircleGeometry(potRadiusTop - 0.02, 16);
     const inkMat = new THREE.MeshStandardMaterial({
         color: 0x000000,
-        roughness: 0.0,
-        metalness: 0.2
+        roughness: 0.1,
+        metalness: 0.3,
+        envMapIntensity: 0.5
     });
     const inkMesh = new THREE.Mesh(inkGeo, inkMat);
     inkMesh.rotation.x = -Math.PI / 2;
@@ -723,7 +760,11 @@ function createQuill(scene, physicsWorld, ammo) {
     // Shaft
     const shaftLen = 1.2;
     const shaftGeo = new THREE.CylinderGeometry(0.02, 0.01, shaftLen, 8);
-    const shaftMat = new THREE.MeshStandardMaterial({ color: 0xf5f5dc, roughness: 0.8 }); // Beige
+    const shaftMat = new THREE.MeshStandardMaterial({ 
+        color: 0xf5f5dc, 
+        roughness: 0.7,
+        metalness: 0.0
+    });
     const shaftMesh = new THREE.Mesh(shaftGeo, shaftMat);
     shaftMesh.castShadow = true;
     // Pivot is at group origin. Move mesh up so bottom is at origin.
@@ -741,7 +782,7 @@ function createQuill(scene, physicsWorld, ammo) {
     const featherGeo = new THREE.ShapeGeometry(featherShape);
     const featherMat = new THREE.MeshStandardMaterial({
         color: 0xffffff,
-        roughness: 0.9,
+        roughness: 0.8,
         side: THREE.DoubleSide
     });
     const featherMesh = new THREE.Mesh(featherGeo, featherMat);
@@ -778,11 +819,12 @@ function createKey(scene, physicsWorld, ammo) {
     const keyGroup = new THREE.Group();
     keyGroup.name = 'IronKey';
 
-    // Material: Dark, rough metal
+    // Enhanced Material: Dark iron with better metal properties
     const material = new THREE.MeshStandardMaterial({
-        color: 0x222222,
-        roughness: 0.7,
-        metalness: 0.9,
+        color: 0x2a2a2a,
+        roughness: 0.6,
+        metalness: 0.85,
+        envMapIntensity: 0.9
     });
 
     // 1. Bow (Handle)
@@ -859,11 +901,12 @@ function createKey(scene, physicsWorld, ammo) {
 function createD20Holder(scene, physicsWorld, ammo) {
     const holderGroup = new THREE.Group();
 
-    // Material: Dark polished wood
+    // Enhanced Material: Dark polished wood
     const material = new THREE.MeshStandardMaterial({
         color: 0x3f1f1f,
         roughness: 0.3,
-        metalness: 0.1
+        metalness: 0.15,
+        envMapIntensity: 0.6
     });
 
     // Base: Hexagonal prism
@@ -894,34 +937,76 @@ function createD20Holder(scene, physicsWorld, ammo) {
     createStaticBody(physicsWorld, holderGroup, shape);
 }
 
+/**
+ * Enhanced Candle with:
+ * - Better wax material (subsurface-like appearance)
+ * - Improved flame with flickering animation
+ * - Melting wax drips
+ */
 function createCandle(scene, physicsWorld, ammo) {
     const candleGroup = new THREE.Group();
 
-    // Candle Body
+    // Enhanced Wax Material - creamy white with slight translucency effect
     const radius = 0.4;
     const height = 1.5;
     const geometry = new THREE.CylinderGeometry(radius, radius, height, 32);
-    const material = new THREE.MeshStandardMaterial({
-        color: 0xeeeecc, // Off-white wax
+    
+    // Wax material with better PBR properties
+    const waxMaterial = new THREE.MeshStandardMaterial({
+        color: 0xf5f5e0,      // Warm off-white wax
         roughness: 0.4,
-        metalness: 0.0
-        // SSS is hard in standard Three.js without transmission or custom shader,
-        // but simple standard material is fine.
+        metalness: 0.0,
+        emissive: 0x221a10,   // Slight warm subsurface glow
+        emissiveIntensity: 0.1
     });
-    const candleMesh = new THREE.Mesh(geometry, material);
+    
+    const candleMesh = new THREE.Mesh(geometry, waxMaterial);
     candleMesh.castShadow = true;
     candleMesh.receiveShadow = true;
     candleGroup.add(candleMesh);
 
-    // Wick
+    // Add melting wax drips
+    const dripCount = 5;
+    for (let i = 0; i < dripCount; i++) {
+        const angle = (i / dripCount) * Math.PI * 2 + Math.random() * 0.5;
+        const dripHeight = 0.3 + Math.random() * 0.4;
+        const dripGeo = new THREE.CapsuleGeometry(0.06, dripHeight, 4, 8);
+        const drip = new THREE.Mesh(dripGeo, waxMaterial);
+        
+        // Position on side of candle
+        const dripX = Math.cos(angle) * (radius - 0.02);
+        const dripZ = Math.sin(angle) * (radius - 0.02);
+        drip.position.set(dripX, height/2 - dripHeight/2 - 0.1, dripZ);
+        
+        // Rotate to hang down
+        drip.rotation.x = Math.cos(angle) * 0.2;
+        drip.rotation.z = -Math.sin(angle) * 0.2;
+        
+        drip.castShadow = true;
+        candleMesh.add(drip);
+    }
+
+    // Puddle at base
+    const puddleGeo = new THREE.CylinderGeometry(radius + 0.15, radius + 0.1, 0.03, 32);
+    const puddle = new THREE.Mesh(puddleGeo, waxMaterial);
+    puddle.position.y = -height/2 - 0.015;
+    puddle.scale.y = 0.5;
+    candleMesh.add(puddle);
+
+    // Enhanced Wick with slight emissive glow
     const wickHeight = 0.2;
-    const wickGeo = new THREE.CylinderGeometry(0.05, 0.05, wickHeight, 8);
-    const wickMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 1.0 });
+    const wickGeo = new THREE.CylinderGeometry(0.04, 0.04, wickHeight, 8);
+    const wickMat = new THREE.MeshStandardMaterial({ 
+        color: 0x1a1a1a, 
+        roughness: 1.0,
+        emissive: 0x331100,
+        emissiveIntensity: 0.3
+    });
     const wickMesh = new THREE.Mesh(wickGeo, wickMat);
     wickMesh.position.set(0, height/2 + wickHeight/2, 0);
-    candleMesh.add(wickMesh); // Attach to candle mesh so it moves with it
+    candleMesh.add(wickMesh);
 
-    // Fire Particles
+    // Fire Particles with enhanced settings
     const fire = createFire({
         scale: 0.5,
         color: 0xffaa00,
@@ -945,16 +1030,46 @@ function createCandle(scene, physicsWorld, ammo) {
     createStaticBody(physicsWorld, candleGroup, shape);
 
     // Calculate flame world position
-    // Group pos + candle internal offset
-    // Candle mesh is at 0,0,0 inside group.
-    // Flame is at (0, height/2 + wickHeight + 0.05, 0) inside candle mesh.
-    // So world Y = posY + height/2 + wickHeight + 0.05
-    // = -2.0 + 0.75 + 0.2 + 0.05 = -1.0
     const flameWorldPos = new THREE.Vector3(posX, posY + height/2 + wickHeight + 0.05, posZ);
+
+    // Store references for animation
+    const flameLight = new THREE.PointLight(0xff6600, 1, 8);
+    flameLight.position.copy(fire.mesh.position);
+    flameLight.position.y += 0.1;
+    candleMesh.add(flameLight);
+
+    // Update function for flickering
+    function update(deltaTime, time) {
+        // Update fire particles
+        fire.update(deltaTime);
+        
+        // Enhanced flickering with multiple frequencies
+        // 1. Low frequency breathing (wind drafts)
+        const breathing = Math.sin(time * 1.5) * 0.15;
+        // 2. Medium frequency flicker
+        const flicker = Math.sin(time * 8) * 0.1;
+        // 3. High frequency jitter
+        const jitter = (Math.random() - 0.5) * 0.2;
+        
+        // Combined intensity
+        const intensity = 1.0 + breathing + flicker + jitter;
+        flameLight.intensity = Math.max(0.5, intensity);
+        
+        // Color variation (shift between orange and yellow)
+        const hueShift = Math.sin(time * 3) * 0.05;
+        flameLight.color.setHSL(0.08 + hueShift, 1.0, 0.5);
+        
+        // Scale flame slightly with intensity
+        const flameScale = 0.5 + (intensity - 1.0) * 0.1;
+        fire.mesh.scale.setScalar(flameScale);
+        
+        // Wick glow intensity follows flame
+        wickMat.emissiveIntensity = 0.3 + (intensity - 1.0) * 0.2;
+    }
 
     return {
         flamePosition: flameWorldPos,
-        update: fire.update
+        update: update
     };
 }
 
@@ -968,12 +1083,33 @@ function createPencil(scene, physicsWorld, ammo) {
     const eraserLen = 0.15;
     const tipLen = 0.25;
 
-    // Materials
-    const yellowMat = new THREE.MeshStandardMaterial({ color: 0xffbd2e, roughness: 0.6 });
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0xd2b48c, roughness: 0.8 });
-    const metalMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, metalness: 0.8, roughness: 0.2 });
-    const pinkMat = new THREE.MeshStandardMaterial({ color: 0xff69b4, roughness: 0.9 });
-    const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+    // Enhanced Materials
+    const yellowMat = new THREE.MeshStandardMaterial({ 
+        color: 0xffbd2e, 
+        roughness: 0.5,
+        metalness: 0.0
+    });
+    const woodMat = new THREE.MeshStandardMaterial({ 
+        color: 0xd2b48c, 
+        roughness: 0.7,
+        metalness: 0.0
+    });
+    const metalMat = new THREE.MeshStandardMaterial({ 
+        color: 0xc0c0c0, 
+        metalness: 0.9, 
+        roughness: 0.15,
+        envMapIntensity: 1.0
+    });
+    const pinkMat = new THREE.MeshStandardMaterial({ 
+        color: 0xff69b4, 
+        roughness: 0.8,
+        metalness: 0.0
+    });
+    const blackMat = new THREE.MeshStandardMaterial({ 
+        color: 0x111111, 
+        roughness: 0.9,
+        metalness: 0.0
+    });
 
     // 1. Body (Hexagonal Cylinder)
     const bodyGeo = new THREE.CylinderGeometry(radius, radius, bodyLen, 6);
@@ -1064,7 +1200,7 @@ function createPotionBottle(scene, physicsWorld, ammo) {
 
     const bottleGeo = new THREE.LatheGeometry(points, 16);
 
-    // Glass Material
+    // Enhanced Glass Material
     const glassMat = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
         metalness: 0,
@@ -1095,7 +1231,7 @@ function createPotionBottle(scene, physicsWorld, ammo) {
     const liquidGeo = new THREE.LatheGeometry(liquidPoints, 16);
     const liquidMat = new THREE.MeshPhysicalMaterial({
         color: 0xff0000, // Red
-        emissive: 0x220000,
+        emissive: 0x330000,
         metalness: 0.1,
         roughness: 0.2,
         transmission: 0.6,
@@ -1106,7 +1242,11 @@ function createPotionBottle(scene, physicsWorld, ammo) {
 
     // 3. Cork
     const corkGeo = new THREE.CylinderGeometry(0.18, 0.15, 0.3, 16);
-    const corkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 });
+    const corkMat = new THREE.MeshStandardMaterial({ 
+        color: 0x8B4513, 
+        roughness: 0.9,
+        metalness: 0.0
+    });
     const corkMesh = new THREE.Mesh(corkGeo, corkMat);
     corkMesh.position.y = 0.85;
     bottleMesh.add(corkMesh);
@@ -1143,17 +1283,19 @@ function createDMScreen(scene, physicsWorld, ammo) {
     const thickness = 0.2;
 
     // Materials
-    // Wood for back
+    // Enhanced wood for back
     const woodMat = new THREE.MeshStandardMaterial({
         color: 0x5c4033, // Dark Wood
-        roughness: 0.8
+        roughness: 0.6,
+        metalness: 0.1
     });
 
     // Charts for front (inner side)
     const chartsTexture = generateDMChartsTexture();
     const chartsMat = new THREE.MeshStandardMaterial({
         map: chartsTexture,
-        roughness: 0.9,
+        roughness: 0.7,
+        metalness: 0.05,
         color: 0xffffff
     });
 
@@ -1196,16 +1338,11 @@ function createDMScreen(scene, physicsWorld, ammo) {
     // Note: angle is -30. cos(-30)=0.866. sin(-30)=-0.5.
     // X = -4 - 2*(0.866) = -5.732
     // Z = -8 - 2*(-0.5) = -7
-    const lx = -centerWidth/2 - (wingWidth/2) * Math.cos(angleRad); // cos(30) = cos(-30)
-    const lz = screenZ + (wingWidth/2) * Math.sin(angleRad); // - (-0.5) = +0.5? No.
-    // Formula: Z = -8 - 2*sin(-30) = -8 - (-1) = -7.
-    // So Z = screenZ - (wingWidth/2) * Math.sin(-angleRad).
-    // Or Z = screenZ + (wingWidth/2) * Math.sin(angleRad) IF angle was positive?
-    // Let's stick to the numbers. We want Z = -7.
-    // screenZ = -8. Need +1.
-    // sin(30) = 0.5. 2 * 0.5 = 1.
 
-    leftWingMesh.position.set(lx, screenY, screenZ + (wingWidth/2) * Math.sin(angleRad)); // -8 + 1 = -7
+    const lx = -centerWidth/2 - (wingWidth/2) * Math.cos(angleRad);
+    const lz = screenZ + (wingWidth/2) * Math.sin(angleRad);
+
+    leftWingMesh.position.set(lx, screenY, lz);
     scene.add(leftWingMesh);
 
     const leftShape = new ammo.btBoxShape(new ammo.btVector3(wingWidth/2, height/2, thickness/2));
@@ -1216,21 +1353,6 @@ function createDMScreen(scene, physicsWorld, ammo) {
     rightWingMesh.rotation.y = -angleRad; // -30 deg
 
     // Position
-    // Hinge at (4, -8). Tip at Right.
-    // Center X = HingeX + (width/2)*cos(angle)
-    // Center Z = HingeZ + (width/2)*sin(angle) ? No.
-    // We want Z = -7 (Forward). Hinge at -8.
-    // Center Z > Hinge Z.
-    // X = 4 + 2*cos(30) = 5.732.
-    // Z = -8 + 1 = -7.
-
-    // My previous math check said:
-    // Right Rot +30.
-    // Hinge is Left Edge (local -2).
-    // Center = Hinge + 2*(cos 30, sin 30).
-    // CenterZ = -8 + 2*0.5 = -7.
-    // Correct.
-
     const rx = centerWidth/2 + (wingWidth/2) * Math.cos(angleRad);
     const rz = screenZ + (wingWidth/2) * Math.sin(angleRad);
 
@@ -1294,16 +1416,18 @@ function createGemstone(scene, physicsWorld, ammo) {
     const radius = 0.5;
     const geometry = new THREE.OctahedronGeometry(radius, 0);
 
-    // Material: Ruby
+    // Enhanced Material: Ruby with better physical properties
     const material = new THREE.MeshPhysicalMaterial({
         color: 0xff0000,
         emissive: 0x330000,
+        emissiveIntensity: 0.2,
         metalness: 0.1,
         roughness: 0.0,
         transmission: 0.8,
         thickness: 0.5,
         ior: 1.76, // Ruby IOR
         clearcoat: 1.0,
+        clearcoatRoughness: 0.0,
         transparent: true
     });
 
@@ -1323,11 +1447,7 @@ function createGemstone(scene, physicsWorld, ammo) {
     scene.add(group);
 
     // Physics
-    // Octahedron is convex hull, but let's approximate with a Sphere for simplicity and rolling,
-    // or Box if we want it static.
-    // Ideally ConvexHullShape but createStaticBody takes simpler shapes usually.
-    // Let's use a Sphere shape, it's close enough for a gem.
-    const shape = new ammo.btSphereShape(radius * 0.8); // Slightly smaller to match volume
+    const shape = new ammo.btSphereShape(radius * 0.8);
 
     createStaticBody(physicsWorld, group, shape);
 }
@@ -1349,7 +1469,7 @@ function createWantedPoster(scene, physicsWorld, ammo) {
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.receiveShadow = true;
-    mesh.castShadow = true; // Paper casts shadow? Yes.
+    mesh.castShadow = true;
 
     // Position
     // Table Top -2.75.

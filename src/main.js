@@ -48,10 +48,18 @@ import { createCoinPouch } from './environment/CoinPouch.js';
 import { createLantern } from './environment/Lantern.js';
 import { createLute } from './environment/Lute.js';
 import { createRunestones } from './environment/Runestones.js';
+import { createSmokingPipe } from './environment/SmokingPipe.js';
+import { createGemstones } from './environment/Gemstones.js';
+import { createWritingSet } from './environment/WritingSet.js';
 import { createCheeseWheel } from './environment/CheeseWheel.js';
+import { createFloatingCandles } from './environment/FloatingCandles.js';
+import { createRunecircle } from './environment/Runecircle.js';
 import { createMug } from './environment/Mug.js';
+import { createTankard } from './environment/Tankard.js';
 import { createWaxSeal } from './environment/WaxSeal.js';
 import { createCrown } from './environment/Crown.js';
+import { createGong } from './environment/Gong.js';
+import { createMysticOrb } from './environment/MysticOrb.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -62,9 +70,17 @@ let pointLight; // Exposed for flickering
 let fireplaceLight; // Fireplace light
 let candleFlamePos; // Position of the candle flame
 let clutterUpdate; // Update function for clutter (fire)
+let mugUpdate; // Update function for mug steam
+let chestUpdate; // Update function for chest lock glow
+let tankardUpdate; // Update function for tankard froth
 let wallsUpdate; // Update function for walls (fireplace)
 let scaleUpdate; // Update function for merchant scale
 let lanternUpdate; // Update function for lantern
+let gongUpdate; // Update function for gong
+let gongFlashIntensity = 0; // Screen flash from gong
+let mysticOrbUpdate; // Update function for mystic orb
+let floatingCandlesUpdate; // Update function for floating candles
+let runecircleUpdate; // Update function for arcane runecircle
 let velocity = new THREE.Vector3();
 let isOnGround = true;
 const moveSpeed = 5; // Units per second
@@ -217,8 +233,11 @@ async function init() {
         createChair(scene, physicsWorld, { x: -14, y: -9.5, z: 6 }, Math.PI / 3);
         createChair(scene, physicsWorld, { x: 14, y: -9.5, z: -6 }, -Math.PI / 3);
 
-        // Wooden Chest (Background Prop)
-        createChest(scene, physicsWorld, { x: -10, y: -9.5, z: -18 }, Math.PI / 8);
+        // Wooden Chest (Background Prop with enhanced materials)
+        const chestData = createChest(scene, physicsWorld, { x: -10, y: -9.5, z: -18 }, Math.PI / 8);
+        if (chestData && chestData.update) {
+            chestUpdate = chestData.update;
+        }
 
         // Bell
         createBell(scene);
@@ -336,16 +355,71 @@ async function init() {
         // Runestones Prop
         createRunestones(scene, physicsWorld);
 
+        // Smoking Pipe and Tobacco Pouch
+        const pipeData = createSmokingPipe(scene, physicsWorld, { x: -6, y: -2.73, z: 5 }, Math.PI / 8);
+        if (pipeData && pipeData.update) {
+            window.pipeUpdate = pipeData.update;
+        }
+
+        // Gemstones Collection
+        const gemsData = createGemstones(scene, physicsWorld, { x: 6, y: -2.73, z: -5 }, -Math.PI / 12);
+        if (gemsData && gemsData.update) {
+            window.gemsUpdate = gemsData.update;
+        }
+
+        // Writing Set (Quill and Inkwell)
+        const writingData = createWritingSet(scene, physicsWorld, { x: 4, y: -2.73, z: 4 }, -Math.PI / 6);
+        if (writingData && writingData.update) {
+            window.writingUpdate = writingData.update;
+        }
+
         // Cheese Wheel Prop
         createCheeseWheel(scene, physicsWorld);
 
-        // Mug Prop
-        createMug(scene, physicsWorld);
+        // Floating Candles (Magical)
+        const floatingCandlesData = createFloatingCandles(scene);
+        if (floatingCandlesData && floatingCandlesData.update) {
+            floatingCandlesUpdate = floatingCandlesData.update;
+        }
+
+        // Arcane Runecircle (Magical)
+        const runecircleData = createRunecircle(scene);
+        if (runecircleData && runecircleData.update) {
+            runecircleUpdate = runecircleData.update;
+        }
+
+        // Mug Prop (Enhanced with steam animation)
+        const mugData = createMug(scene, physicsWorld, { x: 4, y: -2.75, z: 2 }, Math.PI / 4);
+        if (mugData && mugData.update) {
+            mugUpdate = mugData.update;
+        }
+
+        // Tankard Prop (New - detailed drinking tankard)
+        const tankardData = createTankard(scene, physicsWorld, { x: 6.5, y: -2.75, z: 3 }, -Math.PI / 6);
+        if (tankardData && tankardData.update) {
+            tankardUpdate = tankardData.update;
+        }
         // Wax Seal Stamp Prop
         createWaxSeal(scene, physicsWorld);
 
         // Kings Crown Prop
         createCrown(scene, physicsWorld);
+
+        // Gong Prop (Interactive)
+        const gongData = createGong(scene, physicsWorld);
+        if (gongData) {
+            registerInteractiveObject(gongData.group, gongData.interact);
+            gongUpdate = gongData.update;
+            // Store reference for flash effect
+            window.gongData = gongData;
+        }
+
+        // Mystic Orb Prop (Interactive)
+        const mysticOrbData = createMysticOrb(scene, physicsWorld);
+        if (mysticOrbData) {
+            registerInteractiveObject(mysticOrbData.group, mysticOrbData.interact);
+            mysticOrbUpdate = mysticOrbData.update;
+        }
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
@@ -519,10 +593,38 @@ function animate() {
 
     // Update Atmosphere
     updateAtmosphere(time);
-    if (clutterUpdate) clutterUpdate(deltaTime);
+    if (clutterUpdate) clutterUpdate(deltaTime, time);
+    if (mugUpdate) mugUpdate(time);
+    if (chestUpdate) chestUpdate(time);
+    if (tankardUpdate) tankardUpdate(time);
     if (wallsUpdate) wallsUpdate(deltaTime, time);
     if (scaleUpdate) scaleUpdate(time);
     if (lanternUpdate) lanternUpdate(time);
+    
+    // Update Tabletop Decorations
+    if (window.pipeUpdate) window.pipeUpdate(time);
+    if (window.gemsUpdate) window.gemsUpdate(time);
+    if (window.writingUpdate) window.writingUpdate(time);
+    
+    // Update Gong Effects
+    if (gongUpdate) {
+        gongUpdate(deltaTime, time);
+        // Get flash intensity for screen effect
+        if (window.gongData && window.gongData.getFlashIntensity) {
+            gongFlashIntensity = window.gongData.getFlashIntensity();
+        }
+    }
+    
+    // Update Mystic Orb
+    if (mysticOrbUpdate) {
+        mysticOrbUpdate(deltaTime, time);
+    }
+    
+    // Update Floating Candles
+    if (floatingCandlesUpdate) floatingCandlesUpdate(deltaTime, time);
+    
+    // Update Arcane Runecircle
+    if (runecircleUpdate) runecircleUpdate(deltaTime, time);
     
     // Update Lamp Effects
     if (window.lampData) {
