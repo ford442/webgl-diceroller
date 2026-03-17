@@ -25,9 +25,9 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     // Load wood textures with error handling
     let woodDiffuse, woodBump, woodRoughness;
     try {
-        woodDiffuse = loader.load('/images/wood_diffuse.jpg');
-        woodBump = loader.load('/images/wood_bump.jpg');
-        woodRoughness = loader.load('/images/wood_roughness.jpg');
+        woodDiffuse = loader.load('./images/wood_diffuse.jpg');
+        woodBump = loader.load('./images/wood_bump.jpg');
+        woodRoughness = loader.load('./images/wood_roughness.jpg');
 
         [woodDiffuse, woodBump, woodRoughness].forEach(t => {
             t.wrapS = THREE.RepeatWrapping;
