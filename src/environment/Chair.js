@@ -14,11 +14,11 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
 
     // Texture Loading
     const textureLoader = new THREE.TextureLoader();
-    const woodDiffuse = textureLoader.load('/images/wood_diffuse.jpg');
+    const woodDiffuse = textureLoader.load('./images/wood_diffuse.jpg');
     // Using Bump map as normal map is missing
-    const woodBump = textureLoader.load('/images/wood_bump.jpg');
+    const woodBump = textureLoader.load('./images/wood_bump.jpg');
     // Corrected roughness filename
-    const woodRoughness = textureLoader.load('/images/wood_roughness.jpg');
+    const woodRoughness = textureLoader.load('./images/wood_roughness.jpg');
 
     [woodDiffuse, woodBump, woodRoughness].forEach(t => {
         t.wrapS = THREE.RepeatWrapping;
