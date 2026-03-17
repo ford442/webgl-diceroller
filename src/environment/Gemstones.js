@@ -143,12 +143,13 @@ function createGem(config) {
         ior: 1.5
     });
 
-    // Special handling for opal's iridescence
+    // Special handling for opal's shimmer effect
     if (config.isOpal) {
-        material.iridescence = 1.0;
-        material.iridescenceIOR = 1.3;
-        material.iridescenceThicknessRange = [100, 400];
         material.color = new THREE.Color(0xffffff);
+        material.emissive = new THREE.Color(0x88ccff);
+        material.emissiveIntensity = 0.2;
+        // Use dispersion instead of iridescence for better compatibility
+        material.dispersion = 0.5;
     }
 
     // Add subtle emissive for sparkle effect

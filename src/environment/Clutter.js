@@ -1205,8 +1205,8 @@ function createPotionBottle(scene, physicsWorld, ammo) {
         color: 0xffffff,
         metalness: 0,
         roughness: 0.1,
-        transmission: 0.95, // Glass transparency
-        thickness: 0.1, // Volume rendering
+        transmission: 0.9, // Glass transparency
+        thickness: 0.5, // Volume rendering
         ior: 1.5,
         transparent: true,
         opacity: 1.0,

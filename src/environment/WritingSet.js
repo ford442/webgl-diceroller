@@ -24,8 +24,8 @@ export function createWritingSet(scene, physicsWorld, position = { x: 4, y: -2.7
         color: 0x88ccff,
         metalness: 0,
         roughness: 0.05,
-        transmission: 0.95,
-        thickness: 0.1,
+        transmission: 0.9,
+        thickness: 0.5,
         transparent: true,
         ior: 1.5
     });
