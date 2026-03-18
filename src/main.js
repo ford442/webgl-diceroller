@@ -60,6 +60,7 @@ import { createWaxSeal } from './environment/WaxSeal.js';
 import { createCrown } from './environment/Crown.js';
 import { createGong } from './environment/Gong.js';
 import { createMysticOrb } from './environment/MysticOrb.js';
+import { createDragonScale } from './environment/DragonScale.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -420,6 +421,9 @@ async function init() {
             registerInteractiveObject(mysticOrbData.group, mysticOrbData.interact);
             mysticOrbUpdate = mysticOrbData.update;
         }
+
+        // Dragon Scale Prop
+        createDragonScale(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
