@@ -501,23 +501,14 @@ function setupInput() {
         }
     });
 
-    // Mouse Movement Tracking for "Eye-Head" System
+    // Mouse Movement Tracking for "Eye-Head" System AND normal interaction
     document.addEventListener('mousemove', (event) => {
-        if (isLocked && diceFocusState === DiceFocusState.IDLE) {
+        if (diceFocusState !== DiceFocusState.IDLE) return;
+
+        if (isLocked) {
             // Accumulate movement relative to center
-            // We want the cursor to move freely within bounds
             cursorPos.x += event.movementX;
             cursorPos.y += event.movementY;
-
-            // Interaction: pass current normalized coords (updated in animate or here)
-            // But dragging requires continuous updates.
-            // We'll update interaction in animate or via a specific call if needed.
-            // Actually, interaction uses normalized coords (-1 to 1).
-            // Let's compute them here for the interaction module's "handleMove"
-
-            // Wait, interaction.handleMove is called with normalized coords.
-            // We will do that in the animate loop or here.
-            // But we need to clamp cursorPos first.
 
             const halfWidth = window.innerWidth / 2;
             const halfHeight = window.innerHeight / 2;
@@ -527,31 +518,38 @@ function setupInput() {
             cursorPos.y = Math.max(-halfHeight, Math.min(halfHeight, cursorPos.y));
 
             const normX = cursorPos.x / halfWidth;
-            const normY = cursorPos.y / halfHeight; // Y is usually inverted in 3D, check interaction.js expects -1 to 1?
-            // interaction.js: mouse.y = -(event.clientY / h) * 2 + 1.
-            // Normalized: Top of screen = +1. Bottom = -1.
-            // Our cursorPos.y is pixel offset. Positive is usually DOWN in 2D coords.
-            // So if cursorPos.y is positive (bottom), normY should be negative.
+            const normY = cursorPos.y / halfHeight;
 
             interaction.handleMove(normX, -normY);
+        } else {
+            // Unlocked: Use standard system cursor coordinates for dragging
+            const normX = (event.clientX / window.innerWidth) * 2 - 1;
+            const normY = -(event.clientY / window.innerHeight) * 2 + 1;
+            interaction.handleMove(normX, normY);
         }
     });
 
     // Pass clicks to interaction
     document.addEventListener('mousedown', (event) => {
-        if (isLocked && diceFocusState === DiceFocusState.IDLE) {
-            const halfWidth = window.innerWidth / 2;
-            const halfHeight = window.innerHeight / 2;
-            const normX = cursorPos.x / halfWidth;
-            const normY = cursorPos.y / halfHeight;
-            interaction.handleDown(normX, -normY);
+        if (diceFocusState === DiceFocusState.IDLE) {
+            if (isLocked) {
+                const halfWidth = window.innerWidth / 2;
+                const halfHeight = window.innerHeight / 2;
+                const normX = cursorPos.x / halfWidth;
+                const normY = cursorPos.y / halfHeight;
+                interaction.handleDown(normX, -normY);
+            } else {
+                // Unlocked: Allow clicking dice with standard cursor
+                const normX = (event.clientX / window.innerWidth) * 2 - 1;
+                const normY = -(event.clientY / window.innerHeight) * 2 + 1;
+                interaction.handleDown(normX, normY);
+            }
         }
     });
 
     document.addEventListener('mouseup', () => {
-        if (isLocked) {
-            interaction.handleUp();
-        }
+        // Always trigger handleUp so we can drop dice regardless of lock state
+        interaction.handleUp();
     });
 }
 
@@ -567,11 +565,17 @@ function checkDiceStability() {
     let allStable = true;
     spawnedDice.forEach(d => {
         if (!d.body) return;
-        const vel = d.body.getLinearVelocity().length();
-        const ang = d.body.getAngularVelocity().length();
-        if (vel > 0.1 || ang > 0.1) allStable = false;
+        const v = d.body.getLinearVelocity();
+        const a = d.body.getAngularVelocity();
+
+        // Calculate squared length manually to avoid Ammo.js missing method crashes
+        const velSq = v.x() * v.x() + v.y() * v.y() + v.z() * v.z();
+        const angSq = a.x() * a.x() + a.y() * a.y() + a.z() * a.z();
+
+        // Increased threshold to 1.0 (squared) to account for physics resting micro-jitters
+        if (velSq > 1.0 || angSq > 1.0) allStable = false;
     });
-    
+
     // Update lamp rolling state when dice stop
     if (allStable && window.lampData && window.lampData.getMode() === LampMode.NORMAL) {
         window.lampData.setRolling(false);
