@@ -62,6 +62,7 @@ import { createGong } from './environment/Gong.js';
 import { createMysticOrb } from './environment/MysticOrb.js';
 import { createDMScreen } from './environment/DMScreen.js';
 import { createDragonScale } from './environment/DragonScale.js';
+import { createSpyglass } from './environment/Spyglass.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -427,6 +428,8 @@ async function init() {
         createDMScreen(scene, physicsWorld, { x: 0, y: -2.75, z: -8 }, 0);
         // Dragon Scale Prop
         createDragonScale(scene, physicsWorld);
+        // Spyglass Prop
+        createSpyglass(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
