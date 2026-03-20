@@ -63,6 +63,7 @@ import { createMysticOrb } from './environment/MysticOrb.js';
 import { createDMScreen } from './environment/DMScreen.js';
 import { createDragonScale } from './environment/DragonScale.js';
 import { createSpyglass } from './environment/Spyglass.js';
+import { createPlayingCards } from './environment/PlayingCards.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -430,6 +431,9 @@ async function init() {
         createDragonScale(scene, physicsWorld);
         // Spyglass Prop
         createSpyglass(scene, physicsWorld);
+
+        // Playing Cards Prop
+        createPlayingCards(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
