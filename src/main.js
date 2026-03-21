@@ -64,6 +64,7 @@ import { createDMScreen } from './environment/DMScreen.js';
 import { createDragonScale } from './environment/DragonScale.js';
 import { createSpyglass } from './environment/Spyglass.js';
 import { createPlayingCards } from './environment/PlayingCards.js';
+import { createKey } from './environment/Key.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -434,6 +435,9 @@ async function init() {
 
         // Playing Cards Prop
         createPlayingCards(scene, physicsWorld);
+
+        // Old Rusty Key Prop
+        createKey(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
