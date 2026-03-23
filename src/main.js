@@ -142,9 +142,6 @@ async function init() {
     renderer.toneMappingExposure = 0.8; // Darker exposure for mood
     document.body.appendChild(renderer.domElement);
 
-    // Setup Event Listeners
-    setupInput();
-
     // Lights
     // Ambient light (low intensity)
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.05); // Very low ambient to make candle pop
@@ -284,6 +281,7 @@ async function init() {
 
     // Interaction Setup
     interaction = initInteraction(camera, scene, physicsWorld);
+    setupInput();
 
     clock = new THREE.Clock();
 
