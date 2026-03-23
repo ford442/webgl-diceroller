@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-// WebGPURenderer import path depends on three.js version and build
-import { WebGPURenderer } from 'three/webgpu';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
@@ -76,18 +74,18 @@ let ui, crosshairUI;
 let pointLight; // Exposed for flickering
 let fireplaceLight; // Fireplace light
 let candleFlamePos; // Position of the candle flame
-let clutterUpdate; // Update function for clutter (fire)
-let mugUpdate; // Update function for mug steam
-let chestUpdate; // Update function for chest lock glow
-let tankardUpdate; // Update function for tankard froth
-let wallsUpdate; // Update function for walls (fireplace)
-let scaleUpdate; // Update function for merchant scale
-let lanternUpdate; // Update function for lantern
-let gongUpdate; // Update function for gong
+let lampData; // Lamp reference for key handling and rolling state
+let gongData; // Gong reference for flash intensity
 let gongFlashIntensity = 0; // Screen flash from gong
-let mysticOrbUpdate; // Update function for mystic orb
-let floatingCandlesUpdate; // Update function for floating candles
-let runecircleUpdate; // Update function for arcane runecircle
+
+// Update registry - centralizes all per-frame update functions
+const updateRegistry = {
+    updates: [],
+    register(name, fn) { this.updates.push({ name, fn }); },
+    runAll(deltaTime, time) {
+        for (const { fn } of this.updates) fn(deltaTime, time);
+    }
+};
 let velocity = new THREE.Vector3();
 let isOnGround = true;
 const moveSpeed = 5; // Units per second
@@ -159,9 +157,11 @@ async function init() {
     pointLight.position.set(3, 6, 3); // Default if no candle
     pointLight.castShadow = true;
     pointLight.shadow.bias = -0.001; // Adjusted bias to prevent acne
-    pointLight.shadow.mapSize.width = 2048;
-    pointLight.shadow.mapSize.height = 2048;
+    pointLight.shadow.mapSize.width = 1024;
+    pointLight.shadow.mapSize.height = 1024;
     pointLight.shadow.radius = 5; // Softer shadows
+    pointLight.shadow.camera.near = 0.5;
+    pointLight.shadow.camera.far = 15;
     scene.add(pointLight);
 
     // Cool SpotLight (Moonlight) - Shining through the window
@@ -174,8 +174,8 @@ async function init() {
     spotLight.penumbra = 0.5;
     spotLight.castShadow = true;
     spotLight.shadow.bias = -0.0001;
-    spotLight.shadow.mapSize.width = 2048;
-    spotLight.shadow.mapSize.height = 2048;
+    spotLight.shadow.mapSize.width = 1024;
+    spotLight.shadow.mapSize.height = 1024;
     scene.add(spotLight);
     scene.add(spotLight.target);
 
@@ -217,245 +217,58 @@ async function init() {
     pmremGenerator.dispose();
     tavernEnvironment.dispose();
 
+    // Helper to yield to browser between loading tiers
+    const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
+    function updateLoadingBar(percent) {
+        const bar = document.getElementById('loading-bar');
+        if (bar) bar.style.width = percent + '%';
+    }
+
+    // ==========================================
+    // TIER 0: Critical (must exist before first render)
+    // ==========================================
+    updateLoadingBar(10);
+
     // Initialize Physics
     try {
         physicsWorld = await initPhysics();
-
-        // Environment
-        const wallData = createTavernWalls(scene, physicsWorld);
-        if (wallData) {
-            if (wallData.fireplaceLight) fireplaceLight = wallData.fireplaceLight;
-            if (wallData.update) wallsUpdate = wallData.update;
-        }
-
-        createRoom(scene);
-
-        const tableConfig = createTable(scene);
-        createFloorAndWalls(scene, physicsWorld, tableConfig);
-
-        // Bookshelf (Background Prop)
-        createBookshelf(scene, physicsWorld, { x: -18, y: -10, z: 0 }, Math.PI / 2);
-
-        // Chairs (Background Props)
-        createChair(scene, physicsWorld, { x: -14, y: -9.5, z: 6 }, Math.PI / 3);
-        createChair(scene, physicsWorld, { x: 14, y: -9.5, z: -6 }, -Math.PI / 3);
-
-        // Wooden Chest (Background Prop with enhanced materials)
-        const chestData = createChest(scene, physicsWorld, { x: -10, y: -9.5, z: -18 }, Math.PI / 8);
-        if (chestData && chestData.update) {
-            chestUpdate = chestData.update;
-        }
-
-        // Bell
-        createBell(scene);
-
-        // Clutter & Candle
-        const clutterData = createClutter(scene, physicsWorld);
-        if (clutterData) {
-            if (clutterData.flamePosition) {
-                candleFlamePos = clutterData.flamePosition;
-                // Move light to flame
-                pointLight.position.copy(candleFlamePos);
-                // Slightly above the wick visual
-                pointLight.position.y += 0.05;
-            }
-            if (clutterData.update) clutterUpdate = clutterData.update;
-        }
-
-        // Dice Tower
-        createDiceTower(scene, physicsWorld);
-
-        // Dice Jail
-        createDiceJail(scene, physicsWorld);
-
-        // Tavern Meal (Tankard & Plate)
-        createTavernMeal(scene, physicsWorld);
-
-        // Dagger
-        createDagger(scene, physicsWorld);
-
-        // Shield (Wall Mount)
-        createShield(scene, physicsWorld);
-
-        // Battle Axe (Leaning)
-        createBattleAxe(scene, physicsWorld);
-
-        // Leather Dice Bag
-        createDiceBag(scene, physicsWorld);
-
-        // Hourglass
-        createHourglass(scene, physicsWorld);
-
-        // Billiard Lamp
-        const lampData = await createLamp(scene);
-        // Hang above table surface (~3 units) for proper downward lighting
-        // Table surface is at y ≈ -2.75, so position lamp at y = 0 for ~2.75 unit clearance
-        lampData.group.position.set(0, 0, 0);
-        // Add to interactive objects
-        registerInteractiveObject(lampData.group, lampData.toggle);
-        // Store lamp reference for updates
-        window.lampData = lampData;
-
-        // Atmosphere (Dust Motes)
-        createAtmosphere(scene);
-
-        // Rug
-        createRug(scene);
-
-        // Map
-        createMap(scene, physicsWorld);
-
-        // Sealed Scroll
-        createScroll(scene, physicsWorld);
-
-        // Crystal Ball
-        createCrystalBall(scene, physicsWorld);
-
-        // Alchemist's Potion Set
-        createPotionSet(scene, physicsWorld);
-
-        // Skull Prop (Interactive)
-        const skullData = createSkull(scene, physicsWorld);
-        if (skullData && skullData.toggleGlow) {
-            registerInteractiveObject(skullData.group, skullData.toggleGlow);
-        }
-
-        // Vintage Pocket Watch
-        createPocketWatch(scene, physicsWorld);
-
-        // Compass Prop
-        createCompass(scene, physicsWorld);
-
-        // Spellbook Prop
-        createSpellbook(scene, physicsWorld);
-
-        // Merchant Scale
-        const scaleData = createMerchantScale(scene, physicsWorld);
-        if (scaleData && scaleData.update) {
-            scaleUpdate = scaleData.update;
-        }
-
-        // Chalice Prop
-        createChalice(scene, physicsWorld);
-
-        // Character Miniature Prop
-        createMiniature(scene, physicsWorld);
-
-        // Character Sheet Prop
-        createCharacterSheet(scene, physicsWorld);
-
-        // Pencil Prop
-        createPencil(scene, physicsWorld);
-
-        // Coin Pouch Prop
-        createCoinPouch(scene, physicsWorld);
-
-        // Lantern Prop
-        const lanternData = createLantern(scene, physicsWorld);
-        if (lanternData && lanternData.update) {
-            lanternUpdate = lanternData.update;
-        }
-
-        // Lute Prop (Tabletop Atmosphere)
-        createLute(scene, physicsWorld, { x: -8, y: -1.85, z: 2 }, Math.PI / 6);
-
-        // Runestones Prop
-        createRunestones(scene, physicsWorld);
-
-        // Smoking Pipe and Tobacco Pouch
-        const pipeData = createSmokingPipe(scene, physicsWorld, { x: -6, y: -2.73, z: 5 }, Math.PI / 8);
-        if (pipeData && pipeData.update) {
-            window.pipeUpdate = pipeData.update;
-        }
-
-        // Gemstones Collection
-        const gemsData = createGemstones(scene, physicsWorld, { x: 6, y: -2.73, z: -5 }, -Math.PI / 12);
-        if (gemsData && gemsData.update) {
-            window.gemsUpdate = gemsData.update;
-        }
-
-        // Writing Set (Quill and Inkwell)
-        const writingData = createWritingSet(scene, physicsWorld, { x: 4, y: -2.73, z: 4 }, -Math.PI / 6);
-        if (writingData && writingData.update) {
-            window.writingUpdate = writingData.update;
-        }
-
-        // Cheese Wheel Prop
-        createCheeseWheel(scene, physicsWorld);
-
-        // Floating Candles (Magical)
-        const floatingCandlesData = createFloatingCandles(scene);
-        if (floatingCandlesData && floatingCandlesData.update) {
-            floatingCandlesUpdate = floatingCandlesData.update;
-        }
-
-        // Arcane Runecircle (Magical)
-        const runecircleData = createRunecircle(scene);
-        if (runecircleData && runecircleData.update) {
-            runecircleUpdate = runecircleData.update;
-        }
-
-        // Mug Prop (Enhanced with steam animation)
-        const mugData = createMug(scene, physicsWorld, { x: 4, y: -2.75, z: 2 }, Math.PI / 4);
-        if (mugData && mugData.update) {
-            mugUpdate = mugData.update;
-        }
-
-        // Tankard Prop (New - detailed drinking tankard)
-        const tankardData = createTankard(scene, physicsWorld, { x: 6.5, y: -2.75, z: 3 }, -Math.PI / 6);
-        if (tankardData && tankardData.update) {
-            tankardUpdate = tankardData.update;
-        }
-        // Wax Seal Stamp Prop
-        createWaxSeal(scene, physicsWorld);
-
-        // Kings Crown Prop
-        createCrown(scene, physicsWorld);
-
-        // Gong Prop (Interactive)
-        const gongData = createGong(scene, physicsWorld);
-        if (gongData) {
-            registerInteractiveObject(gongData.group, gongData.interact);
-            gongUpdate = gongData.update;
-            // Store reference for flash effect
-            window.gongData = gongData;
-        }
-
-        // Mystic Orb Prop (Interactive)
-        const mysticOrbData = createMysticOrb(scene, physicsWorld);
-        if (mysticOrbData) {
-            registerInteractiveObject(mysticOrbData.group, mysticOrbData.interact);
-            mysticOrbUpdate = mysticOrbData.update;
-        }
-
-        // Dungeon Master Screen
-        createDMScreen(scene, physicsWorld, { x: 0, y: -2.75, z: -8 }, 0);
-        // Dragon Scale Prop
-        createDragonScale(scene, physicsWorld);
-        // Spyglass Prop
-        createSpyglass(scene, physicsWorld);
-
-        // Playing Cards Prop
-        createPlayingCards(scene, physicsWorld);
-
-        // Old Rusty Key Prop
-        createKey(scene, physicsWorld);
-
-        // Drinking Horn Prop
-        // Positioned at X: 2, Z: -2 on table top (Y=-2.75)
-        createDrinkingHorn(scene, physicsWorld, { x: 2, y: -2.75, z: -2 }, -Math.PI / 4);
-
-        // Magic Wand Prop (Interactive)
-        createWand(scene, physicsWorld);
-
     } catch (e) {
         console.error("Failed to initialize physics", e);
         return;
     }
 
-    // Load Models and Spawn Dice
+    updateLoadingBar(20);
+
+    // Core environment (walls, room, table, candle light)
+    const wallData = createTavernWalls(scene, physicsWorld);
+    if (wallData) {
+        if (wallData.fireplaceLight) fireplaceLight = wallData.fireplaceLight;
+        if (wallData.update) updateRegistry.register('walls', wallData.update);
+    }
+
+    createRoom(scene);
+
+    const tableConfig = createTable(scene);
+    createFloorAndWalls(scene, physicsWorld, tableConfig);
+
+    // Clutter & Candle (positions the key candle light)
+    const clutterData = createClutter(scene, physicsWorld);
+    if (clutterData) {
+        if (clutterData.flamePosition) {
+            candleFlamePos = clutterData.flamePosition;
+            pointLight.position.copy(candleFlamePos);
+            pointLight.position.y += 0.05;
+        }
+        if (clutterData.update) updateRegistry.register('clutter', clutterData.update);
+    }
+
+    updateLoadingBar(30);
+
+    // Load dice models and spawn (core gameplay)
     await loadDiceModels();
     spawnObjects(scene, physicsWorld);
+
+    updateLoadingBar(40);
 
     // UI Setup
     ui = initUI(
@@ -483,7 +296,250 @@ async function init() {
 
     window.addEventListener('resize', onWindowResize);
 
+    // Start rendering immediately after Tier 0 - scene is playable
     renderer.setAnimationLoop(animate);
+
+    // ==========================================
+    // TIER 1: Important (visible from default camera, yield first)
+    // ==========================================
+    await yieldToMain();
+    updateLoadingBar(55);
+
+    // Bookshelf (Background Prop)
+    createBookshelf(scene, physicsWorld, { x: -18, y: -10, z: 0 }, Math.PI / 2);
+
+    // Chairs (Background Props)
+    createChair(scene, physicsWorld, { x: -14, y: -9.5, z: 6 }, Math.PI / 3);
+    createChair(scene, physicsWorld, { x: 14, y: -9.5, z: -6 }, -Math.PI / 3);
+
+    // Wooden Chest (Background Prop with enhanced materials)
+    const chestData = createChest(scene, physicsWorld, { x: -10, y: -9.5, z: -18 }, Math.PI / 8);
+    if (chestData && chestData.update) {
+        updateRegistry.register('chest', chestData.update);
+    }
+
+    // Rug
+    createRug(scene);
+
+    // Atmosphere (Dust Motes)
+    createAtmosphere(scene);
+
+    // Billiard Lamp (async OBJ load)
+    const lampResult = await createLamp(scene);
+    lampResult.group.position.set(0, 0, 0);
+    registerInteractiveObject(lampResult.group, lampResult.toggle);
+    lampData = lampResult;
+    updateRegistry.register('lamp', lampResult.update);
+
+    // Floating Candles (Magical)
+    const floatingCandlesData = createFloatingCandles(scene);
+    if (floatingCandlesData && floatingCandlesData.update) {
+        updateRegistry.register('floatingCandles', floatingCandlesData.update);
+    }
+
+    // Arcane Runecircle (Magical)
+    const runecircleData = createRunecircle(scene);
+    if (runecircleData && runecircleData.update) {
+        updateRegistry.register('runecircle', runecircleData.update);
+    }
+
+    updateLoadingBar(70);
+
+    // ==========================================
+    // TIER 2: Secondary tabletop props (yield first)
+    // ==========================================
+    await yieldToMain();
+
+    // Dice Tower
+    createDiceTower(scene, physicsWorld);
+
+    // Dice Jail
+    createDiceJail(scene, physicsWorld);
+
+    // Dice Bag
+    createDiceBag(scene, physicsWorld);
+
+    // Bell
+    createBell(scene);
+
+    // Tavern Meal (Tankard & Plate)
+    createTavernMeal(scene, physicsWorld);
+
+    // Hourglass
+    createHourglass(scene, physicsWorld);
+
+    // Map
+    createMap(scene, physicsWorld);
+
+    // Sealed Scroll
+    createScroll(scene, physicsWorld);
+
+    // Crystal Ball
+    createCrystalBall(scene, physicsWorld);
+
+    // Alchemist's Potion Set
+    createPotionSet(scene, physicsWorld);
+
+    // Skull Prop (Interactive)
+    const skullData = createSkull(scene, physicsWorld);
+    if (skullData && skullData.toggleGlow) {
+        registerInteractiveObject(skullData.group, skullData.toggleGlow);
+    }
+
+    // Merchant Scale
+    const scaleData = createMerchantScale(scene, physicsWorld);
+    if (scaleData && scaleData.update) {
+        updateRegistry.register('scale', scaleData.update);
+    }
+
+    // Lantern Prop
+    const lanternData = createLantern(scene, physicsWorld);
+    if (lanternData && lanternData.update) {
+        updateRegistry.register('lantern', lanternData.update);
+    }
+
+    // Spellbook Prop
+    createSpellbook(scene, physicsWorld);
+
+    // Mug Prop (Enhanced with steam animation)
+    const mugData = createMug(scene, physicsWorld, { x: 4, y: -2.75, z: 2 }, Math.PI / 4);
+    if (mugData && mugData.update) {
+        updateRegistry.register('mug', mugData.update);
+    }
+
+    // Tankard Prop (detailed drinking tankard)
+    const tankardData = createTankard(scene, physicsWorld, { x: 6.5, y: -2.75, z: 3 }, -Math.PI / 6);
+    if (tankardData && tankardData.update) {
+        updateRegistry.register('tankard', tankardData.update);
+    }
+
+    updateLoadingBar(85);
+
+    // ==========================================
+    // TIER 3: Background / decorative props (yield first)
+    // ==========================================
+    await yieldToMain();
+
+    // Dagger
+    createDagger(scene, physicsWorld);
+
+    // Shield (Wall Mount)
+    createShield(scene, physicsWorld);
+
+    // Battle Axe (Leaning)
+    createBattleAxe(scene, physicsWorld);
+
+    // Vintage Pocket Watch
+    createPocketWatch(scene, physicsWorld);
+
+    // Compass Prop
+    createCompass(scene, physicsWorld);
+
+    // Chalice Prop
+    createChalice(scene, physicsWorld);
+
+    // Character Miniature Prop
+    createMiniature(scene, physicsWorld);
+
+    // Character Sheet Prop
+    createCharacterSheet(scene, physicsWorld);
+
+    // Pencil Prop
+    createPencil(scene, physicsWorld);
+
+    // Coin Pouch Prop
+    createCoinPouch(scene, physicsWorld);
+
+    // Lute Prop (Tabletop Atmosphere)
+    createLute(scene, physicsWorld, { x: -8, y: -1.85, z: 2 }, Math.PI / 6);
+
+    // Runestones Prop
+    createRunestones(scene, physicsWorld);
+
+    // Smoking Pipe and Tobacco Pouch
+    const pipeData = createSmokingPipe(scene, physicsWorld, { x: -6, y: -2.73, z: 5 }, Math.PI / 8);
+    if (pipeData && pipeData.update) {
+        updateRegistry.register('pipe', pipeData.update);
+    }
+
+    // Gemstones Collection
+    const gemsData = createGemstones(scene, physicsWorld, { x: 6, y: -2.73, z: -5 }, -Math.PI / 12);
+    if (gemsData && gemsData.update) {
+        updateRegistry.register('gems', gemsData.update);
+    }
+
+    // Writing Set (Quill and Inkwell)
+    const writingData = createWritingSet(scene, physicsWorld, { x: 4, y: -2.73, z: 4 }, -Math.PI / 6);
+    if (writingData && writingData.update) {
+        updateRegistry.register('writing', writingData.update);
+    }
+
+    // Cheese Wheel Prop
+    createCheeseWheel(scene, physicsWorld);
+
+    // Wax Seal Stamp Prop
+    createWaxSeal(scene, physicsWorld);
+
+    // Kings Crown Prop
+    createCrown(scene, physicsWorld);
+
+    // Gong Prop (Interactive)
+    const gongResult = createGong(scene, physicsWorld);
+    if (gongResult) {
+        registerInteractiveObject(gongResult.group, gongResult.interact);
+        gongData = gongResult;
+        updateRegistry.register('gong', gongResult.update);
+    }
+
+    // Mystic Orb Prop (Interactive)
+    const mysticOrbData = createMysticOrb(scene, physicsWorld);
+    if (mysticOrbData) {
+        registerInteractiveObject(mysticOrbData.group, mysticOrbData.interact);
+        updateRegistry.register('mysticOrb', mysticOrbData.update);
+    }
+
+    // Dungeon Master Screen
+    createDMScreen(scene, physicsWorld, { x: 0, y: -2.75, z: -8 }, 0);
+
+    // Dragon Scale Prop
+    createDragonScale(scene, physicsWorld);
+
+    // Spyglass Prop
+    createSpyglass(scene, physicsWorld);
+
+    // Playing Cards Prop
+    createPlayingCards(scene, physicsWorld);
+
+    // Old Rusty Key Prop
+    createKey(scene, physicsWorld);
+
+    // Drinking Horn Prop
+    createDrinkingHorn(scene, physicsWorld, { x: 2, y: -2.75, z: -2 }, -Math.PI / 4);
+
+    // Magic Wand Prop (Interactive)
+    createWand(scene, physicsWorld);
+
+    updateLoadingBar(95);
+
+    // Disable castShadow on small decorative props to reduce shadow pass draw calls
+    const noShadowNames = ['Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
+        'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet',
+        'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll'];
+    scene.traverse(child => {
+        if (child.isMesh && child.parent && noShadowNames.some(n => child.parent.name && child.parent.name.includes(n))) {
+            child.castShadow = false;
+        }
+    });
+
+    // Fade out loading overlay
+    updateLoadingBar(100);
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.style.transition = 'opacity 0.5s';
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.remove(), 500);
+    }
 }
 
 function setupInput() {
@@ -493,13 +549,13 @@ function setupInput() {
             throwDice(scene, physicsWorld);
             diceFocusState = DiceFocusState.WAITING_FOR_STOP;
             // Trigger lamp strobe/rolling effect
-            if (window.lampData) {
-                window.lampData.setRolling(true);
+            if (lampData) {
+                lampData.setRolling(true);
             }
         }
         // Lamp mode controls
-        if (window.lampData) {
-            window.lampData.handleKey(event.key);
+        if (lampData) {
+            lampData.handleKey(event.key);
         }
     });
     window.addEventListener('keyup', (event) => {
@@ -540,12 +596,12 @@ function setupInput() {
             const normX = cursorPos.x / halfWidth;
             const normY = cursorPos.y / halfHeight;
 
-            interaction.handleMove(normX, -normY);
+            if (interaction) interaction.handleMove(normX, -normY);
         } else {
             // Unlocked: Use standard system cursor coordinates for dragging
             const normX = (event.clientX / window.innerWidth) * 2 - 1;
             const normY = -(event.clientY / window.innerHeight) * 2 + 1;
-            interaction.handleMove(normX, normY);
+            if (interaction) interaction.handleMove(normX, normY);
         }
     });
 
@@ -557,19 +613,19 @@ function setupInput() {
                 const halfHeight = window.innerHeight / 2;
                 const normX = cursorPos.x / halfWidth;
                 const normY = cursorPos.y / halfHeight;
-                interaction.handleDown(normX, -normY);
+                if (interaction) interaction.handleDown(normX, -normY);
             } else {
                 // Unlocked: Allow clicking dice with standard cursor
                 const normX = (event.clientX / window.innerWidth) * 2 - 1;
                 const normY = -(event.clientY / window.innerHeight) * 2 + 1;
-                interaction.handleDown(normX, normY);
+                if (interaction) interaction.handleDown(normX, normY);
             }
         }
     });
 
     document.addEventListener('mouseup', () => {
         // Always trigger handleUp so we can drop dice regardless of lock state
-        interaction.handleUp();
+        if (interaction) interaction.handleUp();
     });
 }
 
@@ -597,8 +653,8 @@ function checkDiceStability() {
     });
 
     // Update lamp rolling state when dice stop
-    if (allStable && window.lampData && window.lampData.getMode() === LampMode.NORMAL) {
-        window.lampData.setRolling(false);
+    if (allStable && lampData && lampData.getMode() === LampMode.NORMAL) {
+        lampData.setRolling(false);
     }
     
     return allStable;
@@ -624,42 +680,15 @@ function animate() {
 
     // Update Atmosphere
     updateAtmosphere(time);
-    if (clutterUpdate) clutterUpdate(deltaTime, time);
-    if (mugUpdate) mugUpdate(time);
-    if (chestUpdate) chestUpdate(time);
-    if (tankardUpdate) tankardUpdate(time);
-    if (wallsUpdate) wallsUpdate(deltaTime, time);
-    if (scaleUpdate) scaleUpdate(time);
-    if (lanternUpdate) lanternUpdate(time);
-    
-    // Update Tabletop Decorations
-    if (window.pipeUpdate) window.pipeUpdate(time);
-    if (window.gemsUpdate) window.gemsUpdate(time);
-    if (window.writingUpdate) window.writingUpdate(time);
-    
-    // Update Gong Effects
-    if (gongUpdate) {
-        gongUpdate(deltaTime, time);
-        // Get flash intensity for screen effect
-        if (window.gongData && window.gongData.getFlashIntensity) {
-            gongFlashIntensity = window.gongData.getFlashIntensity();
-        }
-    }
-    
-    // Update Mystic Orb
-    if (mysticOrbUpdate) {
-        mysticOrbUpdate(deltaTime, time);
-    }
-    
-    // Update Floating Candles
-    if (floatingCandlesUpdate) floatingCandlesUpdate(deltaTime, time);
-    
-    // Update Arcane Runecircle
-    if (runecircleUpdate) runecircleUpdate(deltaTime, time);
-    
-    // Update Lamp Effects
-    if (window.lampData) {
-        window.lampData.update(deltaTime, time);
+
+    // Run all registered update functions (clutter, walls, mug, chest, tankard,
+    // scale, lantern, pipe, gems, writing, gong, mysticOrb, floatingCandles,
+    // runecircle, lamp)
+    updateRegistry.runAll(deltaTime, time);
+
+    // Get gong flash intensity for screen effect
+    if (gongData && gongData.getFlashIntensity) {
+        gongFlashIntensity = gongData.getFlashIntensity();
     }
 
     // Candle Flicker
