@@ -66,6 +66,7 @@ import { createSpyglass } from './environment/Spyglass.js';
 import { createPlayingCards } from './environment/PlayingCards.js';
 import { createKey } from './environment/Key.js';
 import { createDrinkingHorn } from './environment/DrinkingHorn.js';
+import { createWand } from './environment/Wand.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -443,6 +444,9 @@ async function init() {
         // Drinking Horn Prop
         // Positioned at X: 2, Z: -2 on table top (Y=-2.75)
         createDrinkingHorn(scene, physicsWorld, { x: 2, y: -2.75, z: -2 }, -Math.PI / 4);
+
+        // Magic Wand Prop (Interactive)
+        createWand(scene, physicsWorld);
 
     } catch (e) {
         console.error("Failed to initialize physics", e);
