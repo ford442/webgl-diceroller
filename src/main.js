@@ -65,6 +65,7 @@ import { createPlayingCards } from './environment/PlayingCards.js';
 import { createKey } from './environment/Key.js';
 import { createDrinkingHorn } from './environment/DrinkingHorn.js';
 import { createWand } from './environment/Wand.js';
+import { createCoin } from './environment/Coin.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -517,13 +518,16 @@ async function init() {
     // Magic Wand Prop (Interactive)
     createWand(scene, physicsWorld);
 
+    // Scattered Coins Prop
+    createCoin(scene, physicsWorld);
+
     updateLoadingBar(95);
 
     // Disable castShadow on small decorative props to reduce shadow pass draw calls
     const noShadowNames = ['Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin'];
     scene.traverse(child => {
         if (child.isMesh && child.parent && noShadowNames.some(n => child.parent.name && child.parent.name.includes(n))) {
             child.castShadow = false;
