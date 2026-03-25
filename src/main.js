@@ -66,6 +66,7 @@ import { createKey } from './environment/Key.js';
 import { createDrinkingHorn } from './environment/DrinkingHorn.js';
 import { createWand } from './environment/Wand.js';
 import { createCoin } from './environment/Coin.js';
+import { createTarotDeck } from './environment/TarotDeck.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -251,6 +252,9 @@ async function init() {
 
     // Clutter & Candle (positions the key candle light)
     const clutterData = createClutter(scene, physicsWorld);
+
+    // Tarot Deck scattered on the table
+    createTarotDeck(scene, physicsWorld);
     if (clutterData) {
         if (clutterData.flamePosition) {
             candleFlamePos = clutterData.flamePosition;
