@@ -66,6 +66,7 @@ import { createKey } from './environment/Key.js';
 import { createDrinkingHorn } from './environment/DrinkingHorn.js';
 import { createWand } from './environment/Wand.js';
 import { createCoin } from './environment/Coin.js';
+import { createBountyPoster } from './environment/BountyPoster.js';
 import { createTarotDeck } from './environment/TarotDeck.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
@@ -447,6 +448,9 @@ async function init() {
     // Character Sheet Prop
     createCharacterSheet(scene, physicsWorld);
 
+    // Bounty Poster Prop
+    createBountyPoster(scene, physicsWorld);
+
     // Pencil Prop
     createPencil(scene, physicsWorld);
 
@@ -529,7 +533,7 @@ async function init() {
 
     // Disable castShadow on small decorative props to reduce shadow pass draw calls
     const noShadowNames = ['Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
-        'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet',
+        'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
         'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin'];
     scene.traverse(child => {
