@@ -68,6 +68,7 @@ import { createWand } from './environment/Wand.js';
 import { createCoin } from './environment/Coin.js';
 import { createBountyPoster } from './environment/BountyPoster.js';
 import { createTarotDeck } from './environment/TarotDeck.js';
+import { createAmulet } from './environment/Amulet.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -529,13 +530,16 @@ async function init() {
     // Scattered Coins Prop
     createCoin(scene, physicsWorld);
 
+    // Amulet Prop
+    createAmulet(scene, physicsWorld);
+
     updateLoadingBar(95);
 
     // Disable castShadow on small decorative props to reduce shadow pass draw calls
     const noShadowNames = ['Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet'];
     scene.traverse(child => {
         if (child.isMesh && child.parent && noShadowNames.some(n => child.parent.name && child.parent.name.includes(n))) {
             child.castShadow = false;
