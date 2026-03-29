@@ -69,6 +69,7 @@ import { createCoin } from './environment/Coin.js';
 import { createBountyPoster } from './environment/BountyPoster.js';
 import { createTarotDeck } from './environment/TarotDeck.js';
 import { createAmulet } from './environment/Amulet.js';
+import { createDiceTray } from './environment/DiceTray.js';
 import { createAbacus } from './environment/Abacus.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
@@ -358,6 +359,9 @@ async function init() {
 
     // Dice Tower
     createDiceTower(scene, physicsWorld);
+
+    // Dice Tray
+    createDiceTray(scene, physicsWorld, { x: 3, y: -2.75, z: 0 }, Math.PI / 8);
 
     // Dice Jail
     createDiceJail(scene, physicsWorld);
