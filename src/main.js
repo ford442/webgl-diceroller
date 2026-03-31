@@ -71,6 +71,7 @@ import { createTarotDeck } from './environment/TarotDeck.js';
 import { createAmulet } from './environment/Amulet.js';
 import { createDiceTray } from './environment/DiceTray.js';
 import { createAbacus } from './environment/Abacus.js';
+import { createPadlock } from './environment/Padlock.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -526,6 +527,9 @@ async function init() {
     // Old Rusty Key Prop
     createKey(scene, physicsWorld);
 
+    // Heavy Iron Padlock Prop
+    createPadlock(scene, physicsWorld, { x: 5, y: -2.75, z: 1 }, Math.PI / 6);
+
     // Drinking Horn Prop
     createDrinkingHorn(scene, physicsWorld, { x: 2, y: -2.75, z: -2 }, -Math.PI / 4);
 
@@ -547,7 +551,7 @@ async function init() {
     const noShadowNames = ['Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock'];
     scene.traverse(child => {
         if (child.isMesh && child.parent && noShadowNames.some(n => child.parent.name && child.parent.name.includes(n))) {
             child.castShadow = false;
