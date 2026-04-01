@@ -72,6 +72,7 @@ import { createAmulet } from './environment/Amulet.js';
 import { createDiceTray } from './environment/DiceTray.js';
 import { createAbacus } from './environment/Abacus.js';
 import { createPadlock } from './environment/Padlock.js';
+import { createSpectacles } from './environment/Spectacles.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -530,6 +531,9 @@ async function init() {
     // Heavy Iron Padlock Prop
     createPadlock(scene, physicsWorld, { x: 5, y: -2.75, z: 1 }, Math.PI / 6);
 
+    // Spectacles Prop
+    createSpectacles(scene, physicsWorld);
+
     // Drinking Horn Prop
     createDrinkingHorn(scene, physicsWorld, { x: 2, y: -2.75, z: -2 }, -Math.PI / 4);
 
@@ -551,10 +555,21 @@ async function init() {
     const noShadowNames = ['Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles'];
     scene.traverse(child => {
-        if (child.isMesh && child.parent && noShadowNames.some(n => child.parent.name && child.parent.name.includes(n))) {
-            child.castShadow = false;
+        if (child.isMesh) {
+            let p = child.parent;
+            let shouldDisableShadow = false;
+            while(p && p !== scene) {
+                if (p.name && noShadowNames.some(n => p.name.includes(n))) {
+                    shouldDisableShadow = true;
+                    break;
+                }
+                p = p.parent;
+            }
+            if (shouldDisableShadow) {
+                child.castShadow = false;
+            }
         }
     });
 
