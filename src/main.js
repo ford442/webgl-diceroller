@@ -73,6 +73,7 @@ import { createDiceTray } from './environment/DiceTray.js';
 import { createAbacus } from './environment/Abacus.js';
 import { createPadlock } from './environment/Padlock.js';
 import { createSpectacles } from './environment/Spectacles.js';
+import { createLockpicks } from './environment/Lockpicks.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -531,6 +532,9 @@ async function init() {
     // Heavy Iron Padlock Prop
     createPadlock(scene, physicsWorld, { x: 5, y: -2.75, z: 1 }, Math.PI / 6);
 
+    // Lockpicks Prop
+    createLockpicks(scene, physicsWorld, { x: 4.5, y: -2.75, z: 0.5 }, Math.PI / 8);
+
     // Spectacles Prop
     createSpectacles(scene, physicsWorld);
 
@@ -555,7 +559,7 @@ async function init() {
     const noShadowNames = ['Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks'];
     scene.traverse(child => {
         if (child.isMesh) {
             let p = child.parent;
