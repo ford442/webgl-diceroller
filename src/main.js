@@ -71,6 +71,7 @@ import { createTarotDeck } from './environment/TarotDeck.js';
 import { createAmulet } from './environment/Amulet.js';
 import { createDiceTray } from './environment/DiceTray.js';
 import { createAbacus } from './environment/Abacus.js';
+import { createLeatherJournal } from './environment/LeatherJournal.js';
 import { createPadlock } from './environment/Padlock.js';
 import { createSpectacles } from './environment/Spectacles.js';
 import { createLockpicks } from './environment/Lockpicks.js';
@@ -552,6 +553,9 @@ async function init() {
 
     // Abacus Prop
     createAbacus(scene, physicsWorld);
+
+    // Leather Journal Prop
+    createLeatherJournal(scene, physicsWorld);
 
     updateLoadingBar(95);
 
