@@ -75,7 +75,7 @@ import { createLeatherJournal } from './environment/LeatherJournal.js';
 import { createPadlock } from './environment/Padlock.js';
 import { createSpectacles } from './environment/Spectacles.js';
 import { createLockpicks } from './environment/Lockpicks.js';
-import { createLeatherJournal } from './environment/LeatherJournal.js';
+import { createDart } from './environment/Dart.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -561,10 +561,13 @@ async function init() {
     // Leather Journal Prop
     createLeatherJournal(scene, physicsWorld);
 
+    // Dart Prop
+    createDart(scene, physicsWorld, { x: 2, y: -2.75, z: 2 }, Math.PI / 4);
+
     updateLoadingBar(95);
 
     // Disable castShadow on small decorative props to reduce shadow pass draw calls
-    const noShadowNames = ['Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
+    const noShadowNames = ['Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
         'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal'];
