@@ -1,5 +1,8 @@
 import * as THREE from 'three';
+import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import { createConvexHullShape, spawnDicePhysics, getAmmo } from './physics.js';
+
+const loader = new ColladaLoader();
 
 let diceModels = {};
 export let spawnedDice = [];
@@ -23,6 +26,92 @@ export const diceTypes = [
 
 // Export diceModels so main.js can populate it
 export { diceModels };
+
+export const loadDiceModels = async (onProgress) => {
+    let done = 0;
+    const total = diceTypes.length;
+
+    const report = (label) => {
+        if (typeof onProgress === 'function') onProgress(done, total, label);
+    };
+
+    for (const d of diceTypes) {
+        report(d.type);
+
+        await new Promise((resolve) => {
+            let timedOut = false;
+            const url = `./images/${d.file}`;
+            const timer = setTimeout(() => {
+                console.warn(`Timeout loading ${url}`);
+                timedOut = true;
+                done++;
+                report(d.type);
+                resolve();
+            }, 15000);
+
+            loader.load(url, (collada) => {
+                if (timedOut) return;
+                clearTimeout(timer);
+
+                let mesh = null;
+                collada.scene.traverse((child) => {
+                    if (child.isMesh) mesh = child;
+                });
+
+                if (mesh) {
+                    const geometry = mesh.geometry.clone();
+                    geometry.center();
+                    mesh.updateMatrixWorld(true);
+                    geometry.applyMatrix4(mesh.matrixWorld);
+                    geometry.rotateX(-Math.PI / 2);
+                    geometry.center();
+
+                    let material = mesh.material;
+                    const upgradeMaterial = (mat) => new THREE.MeshStandardMaterial({
+                        color: mat.color || 0xeeeeee,
+                        map: mat.map || null,
+                        roughness: 0.2,
+                        metalness: 0.0,
+                        envMapIntensity: 1.0
+                    });
+
+                    if (material) {
+                        material = Array.isArray(material) ? material.map(upgradeMaterial) : upgradeMaterial(material);
+                    } else {
+                        console.warn(`No material found for ${d.file}, using default material`);
+                        material = new THREE.MeshStandardMaterial({ color: 0xff00ff, roughness: 0.2, metalness: 0.0 });
+                    }
+
+                    const cleanMesh = new THREE.Mesh(geometry, material);
+                    cleanMesh.position.set(0, 0, 0);
+                    cleanMesh.rotation.set(0, 0, 0);
+                    cleanMesh.scale.set(1, 1, 1);
+
+                    diceModels[d.type] = cleanMesh;
+                    cleanMesh.castShadow = true;
+                    cleanMesh.receiveShadow = true;
+                    diceModels[d.type].userData.physicsShape = createConvexHullShape(cleanMesh);
+                }
+
+                done++;
+                report(d.type);
+                resolve();
+            }, undefined, (error) => {
+                if (timedOut) return;
+                clearTimeout(timer);
+                console.warn(`Error loading ${url}:`, error);
+                done++;
+                report(d.type);
+                resolve();
+            });
+        });
+
+        // Yield to event loop between dice loads to let the UI paint
+        await new Promise(r => setTimeout(r, 0));
+    }
+
+    console.log("All dice models loaded");
+};
 
 export const spawnObjects = (scene, world, config = null) => {
     // If config is an object (counts), flatten it.

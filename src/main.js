@@ -7,9 +7,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { VignetteShader } from './shaders/VignetteShader.js';
 
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
-import { diceTypes, diceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice, spawnedDice } from './dice.js';
-import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
-import { createConvexHullShape } from './physics.js';
+import { diceTypes, diceModels, loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice, spawnedDice } from './dice.js';
 import { initUI, createCrosshair } from './ui.js';
 import { initInteraction, updateInteraction, registerInteractiveObject } from './interaction.js';
 import { createTable } from './environment/Table.js';
@@ -238,89 +236,6 @@ async function init() {
         if (el) el.textContent = text;
     }
 
-    // Sequential dice model loader with granular progress updates
-    const loader = new ColladaLoader();
-    const loadDiceModelsSequential = async (onProgress) => {
-        for (let i = 0; i < diceTypes.length; i++) {
-            const d = diceTypes[i];
-            await new Promise((resolve) => {
-                let timedOut = false;
-                const url = `./images/${d.file}`;
-                const timer = setTimeout(() => {
-                    console.warn(`Timeout loading ${url}`);
-                    timedOut = true;
-                    resolve();
-                }, 15000);
-
-                loader.load(url, (collada) => {
-                    if (timedOut) return;
-                    clearTimeout(timer);
-                    let mesh = null;
-                    collada.scene.traverse((child) => {
-                        if (child.isMesh) {
-                            mesh = child;
-                        }
-                    });
-
-                    if (mesh) {
-                        const geometry = mesh.geometry.clone();
-                        geometry.center();
-                        mesh.updateMatrixWorld(true);
-                        geometry.applyMatrix4(mesh.matrixWorld);
-                        geometry.rotateX(-Math.PI / 2);
-                        geometry.center();
-
-                        let material = mesh.material;
-                        const upgradeMaterial = (mat) => {
-                            return new THREE.MeshStandardMaterial({
-                                color: mat.color || 0xeeeeee,
-                                map: mat.map || null,
-                                roughness: 0.2,
-                                metalness: 0.0,
-                                envMapIntensity: 1.0
-                            });
-                        };
-
-                        if (material) {
-                            if (Array.isArray(material)) {
-                                material = material.map(m => upgradeMaterial(m));
-                            } else {
-                                material = upgradeMaterial(material);
-                            }
-                        } else {
-                            console.warn(`No material found for ${d.file}, using default material`);
-                            material = new THREE.MeshStandardMaterial({
-                                color: 0xff00ff,
-                                roughness: 0.2,
-                                metalness: 0.0
-                            });
-                        }
-                        const cleanMesh = new THREE.Mesh(geometry, material);
-                        cleanMesh.position.set(0, 0, 0);
-                        cleanMesh.rotation.set(0, 0, 0);
-                        cleanMesh.scale.set(1, 1, 1);
-
-                        diceModels[d.type] = cleanMesh;
-                        cleanMesh.castShadow = true;
-                        cleanMesh.receiveShadow = true;
-                        diceModels[d.type].userData.physicsShape = createConvexHullShape(cleanMesh);
-                    }
-                    resolve();
-                }, undefined, (e) => {
-                    if (timedOut) return;
-                    clearTimeout(timer);
-                    console.warn(`Error loading ${url}:`, e);
-                    resolve();
-                });
-            });
-            // Update progress after each dice model loads
-            if (onProgress) onProgress(i + 1, diceTypes.length);
-            // Yield to browser to prevent UI freezing
-            await yieldToMain();
-        }
-        console.log("All dice models loaded");
-    };
-
     // ==========================================
     // TIER 0: Critical (must exist before first render)
     // ==========================================
@@ -366,13 +281,12 @@ async function init() {
     }
 
     updateLoadingText("Loading dice models...");
+    updateLoadingBar(30);
     // Load dice models sequentially with granular progress (30% to 40%)
-    const diceProgressStart = 30;
-    const diceProgressEnd = 40;
-    await loadDiceModelsSequential((loaded, total) => {
-        const percent = diceProgressStart + ((loaded / total) * (diceProgressEnd - diceProgressStart));
+    await loadDiceModels((done, total, label) => {
+        const percent = 30 + ((done / total) * 10);
         updateLoadingBar(percent);
-        updateLoadingText(`Loading dice models... (${loaded}/${total})`);
+        if (label) updateLoadingText(`Loading dice models... (${label})`);
     });
     spawnObjects(scene, physicsWorld);
 
