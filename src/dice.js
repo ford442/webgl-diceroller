@@ -1,20 +1,8 @@
 import * as THREE from 'three';
-import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import { createConvexHullShape, spawnDicePhysics, getAmmo } from './physics.js';
 
 let diceModels = {};
 export let spawnedDice = [];
-
-const loader = new ColladaLoader();
-
-const diceTypes = [
-    { type: 'd4', file: 'die_4.dae' },
-    { type: 'd6', file: 'die_6.dae' },
-    { type: 'd8', file: 'die_8.dae' },
-    { type: 'd10', file: 'die_10.dae' },
-    { type: 'd12', file: 'die_12.dae' },
-    { type: 'd20', file: 'die_20.dae' }
-];
 
 // Helper for Crypto Randomness
 const getSecureRandom = () => {
@@ -23,92 +11,18 @@ const getSecureRandom = () => {
     return array[0] / (0xffffffff + 1);
 };
 
-export const loadDiceModels = async () => {
-    const promises = diceTypes.map(d => {
-        return new Promise((resolve, reject) => {
-            let timedOut = false;
-            const url = `./images/${d.file}`;
-            const timer = setTimeout(() => {
-                console.warn(`Timeout loading ${url}`);
-                timedOut = true;
-                resolve();
-            }, 15000);
+// Exported for main.js to use during sequential loading
+export const diceTypes = [
+    { type: 'd4', file: 'die_4.dae' },
+    { type: 'd6', file: 'die_6.dae' },
+    { type: 'd8', file: 'die_8.dae' },
+    { type: 'd10', file: 'die_10.dae' },
+    { type: 'd12', file: 'die_12.dae' },
+    { type: 'd20', file: 'die_20.dae' }
+];
 
-            loader.load(url, (collada) => {
-                if (timedOut) return;
-                clearTimeout(timer);
-                let mesh = null;
-                collada.scene.traverse((child) => {
-                    if (child.isMesh) {
-                        mesh = child;
-                    }
-                });
-
-                if (mesh) {
-                    const geometry = mesh.geometry.clone();
-
-                    // CRITICAL: Center the geometry to ensure the Center of Mass is correct
-                    geometry.center();
-
-                    mesh.updateMatrixWorld(true);
-                    geometry.applyMatrix4(mesh.matrixWorld);
-                    geometry.rotateX(-Math.PI / 2);
-                    
-                    // Re-center again after rotation to be safe
-                    geometry.center();
-
-                    let material = mesh.material;
-                    // Ensure materials are PBR-ready for the new atmosphere
-                    const upgradeMaterial = (mat) => {
-                        return new THREE.MeshStandardMaterial({
-                            color: mat.color || 0xeeeeee,
-                            map: mat.map || null,
-                            roughness: 0.2, // Shiny plastic/resin
-                            metalness: 0.0,
-                            envMapIntensity: 1.0
-                        });
-                    };
-
-                    if (material) {
-                        if (Array.isArray(material)) {
-                            material = material.map(m => upgradeMaterial(m));
-                        } else {
-                            material = upgradeMaterial(material);
-                        }
-                    } else {
-                        console.warn(`No material found for ${d.file}, using default material`);
-                        material = new THREE.MeshStandardMaterial({
-                            color: 0xff00ff,
-                            roughness: 0.2,
-                            metalness: 0.0
-                        });
-                    }
-                    const cleanMesh = new THREE.Mesh(geometry, material);
-                    
-                    cleanMesh.position.set(0, 0, 0);
-                    cleanMesh.rotation.set(0, 0, 0);
-                    cleanMesh.scale.set(1, 1, 1);
-
-                    diceModels[d.type] = cleanMesh;
-                    cleanMesh.castShadow = true;
-                    cleanMesh.receiveShadow = true;
-
-                    diceModels[d.type].userData.physicsShape = createConvexHullShape(cleanMesh);
-                    resolve();
-                } else {
-                    resolve();
-                }
-            }, undefined, (e) => {
-                if (timedOut) return;
-                clearTimeout(timer);
-                resolve();
-            });
-        });
-    });
-
-    await Promise.all(promises);
-    console.log("All dice models loaded");
-};
+// Export diceModels so main.js can populate it
+export { diceModels };
 
 export const spawnObjects = (scene, world, config = null) => {
     // If config is an object (counts), flatten it.
