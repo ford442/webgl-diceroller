@@ -636,6 +636,12 @@ function setupInput() {
                 lampData.setRolling(true);
             }
         }
+        // ESC to exit pointer lock / enter UI mode
+        if (event.code === 'Escape') {
+            if (document.pointerLockElement) {
+                document.exitPointerLock();
+            }
+        }
         // Lamp mode controls
         if (lampData) {
             lampData.handleKey(event.key);
@@ -668,29 +674,17 @@ function setupInput() {
         return container ? container.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
     };
 
-    // Mouse Movement Tracking for "Eye-Head" System AND normal interaction
+    // Mouse Movement Tracking for FPS camera AND normal interaction
     document.addEventListener('mousemove', (event) => {
         if (diceFocusState !== DiceFocusState.IDLE) return;
 
         if (isLocked) {
-            // Accumulate movement relative to center
+            // FPS mode: accumulate raw mouse movement for camera rotation
             cursorPos.x += event.movementX;
             cursorPos.y += event.movementY;
-
-            const rect = getContainerRect();
-            const halfWidth = rect.width / 2;
-            const halfHeight = rect.height / 2;
-
-            // Clamp cursor to canvas bounds
-            cursorPos.x = Math.max(-halfWidth, Math.min(halfWidth, cursorPos.x));
-            cursorPos.y = Math.max(-halfHeight, Math.min(halfHeight, cursorPos.y));
-
-            const normX = cursorPos.x / halfWidth;
-            const normY = cursorPos.y / halfHeight;
-
-            if (interaction) interaction.handleMove(normX, -normY);
+            // Note: rotation is applied in animate() loop, then cursorPos is reset
         } else {
-            // Unlocked: Use coordinates relative to canvas container
+            // Unlocked: Use coordinates relative to canvas container for dice interaction
             const rect = getContainerRect();
             const relX = event.clientX - rect.left;
             const relY = event.clientY - rect.top;
@@ -776,13 +770,12 @@ function animate() {
         updateInteraction();
     }
 
-    // Update Crosshair UI Position
-    // Center of the canvas container (container-relative coordinates since crosshair is inside container)
+    // Update Crosshair UI Position - always centered in FPS mode
     const container = document.getElementById('canvas-container');
     const rect = container ? container.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
     const screenCenterX = rect.width / 2;
     const screenCenterY = rect.height / 2;
-    crosshairUI.updatePosition(screenCenterX + cursorPos.x, screenCenterY + cursorPos.y);
+    crosshairUI.updatePosition(screenCenterX, screenCenterY);
 
     // Update Atmosphere
     updateAtmosphere(time);
@@ -916,29 +909,19 @@ function animate() {
 
     // Only allow player control if IDLE
     if (diceFocusState === DiceFocusState.IDLE) {
-        // "Eye-Head" Camera Logic
-        // If cursor is far from center, rotate camera to bring it back.
-        const deadZone = 10; // Reduced from 50 for tighter response
-        const turnSensitivity = 2.5; // Slightly faster
+        // FPS Camera Logic - direct mouse-to-rotation mapping
+        const turnSensitivity = 0.002; // Mouse sensitivity
 
         if (isLocked) {
-            // Yaw (Turning Left/Right)
-            if (Math.abs(cursorPos.x) > deadZone) {
-                const sign = Math.sign(cursorPos.x);
-                const magnitude = (Math.abs(cursorPos.x) - deadZone) / (screenCenterX - deadZone); // 0 to 1
-                yaw -= sign * magnitude * turnSensitivity * deltaTime;
-            }
+            // Apply accumulated mouse movement directly to rotation
+            // Mouse X controls yaw (left/right), Mouse Y controls pitch (up/down)
+            yaw -= cursorPos.x * turnSensitivity;
+            pitch -= cursorPos.y * turnSensitivity;
+            
+            // Reset cursor position since we've consumed the movement
+            cursorPos.set(0, 0);
 
-            // Pitch (Looking Up/Down)
-            if (Math.abs(cursorPos.y) > deadZone) {
-                const sign = Math.sign(cursorPos.y); // Positive Y is down
-                const magnitude = (Math.abs(cursorPos.y) - deadZone) / (screenCenterY - deadZone);
-                pitch -= sign * magnitude * turnSensitivity * deltaTime; // Looking down (positive Y) means decreasing pitch?
-                // Usually pitch: up is positive, down is negative.
-                // Mouse down -> decrease pitch.
-            }
-
-            // Clamp pitch
+            // Clamp pitch to prevent flipping
             pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
         }
 
