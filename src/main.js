@@ -653,10 +653,12 @@ function setupInput() {
     });
 
     document.addEventListener('pointerlockchange', () => {
+        const wasLocked = isLocked;
         isLocked = document.pointerLockElement === renderer.domElement;
         crosshairUI.setVisible(isLocked);
-        if (!isLocked) {
-             // Reset cursor to center logic or handle unlock
+        if (isLocked && !wasLocked) {
+             // Reset cursor to center when locking
+             cursorPos.set(0, 0);
         }
     });
 
@@ -775,12 +777,12 @@ function animate() {
     }
 
     // Update Crosshair UI Position
-    // Center of the canvas container
+    // Center of the canvas container (container-relative coordinates since crosshair is inside container)
     const container = document.getElementById('canvas-container');
     const rect = container ? container.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
     const screenCenterX = rect.width / 2;
     const screenCenterY = rect.height / 2;
-    crosshairUI.updatePosition(rect.left + screenCenterX + cursorPos.x, rect.top + screenCenterY + cursorPos.y);
+    crosshairUI.updatePosition(screenCenterX + cursorPos.x, screenCenterY + cursorPos.y);
 
     // Update Atmosphere
     updateAtmosphere(time);
