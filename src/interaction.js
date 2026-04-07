@@ -14,9 +14,32 @@ const DOUBLE_CLICK_DELAY = 300;
 // Interactive Objects Registry
 const interactiveObjects = [];
 
+// Pre-warm shader cache to prevent freeze on first levitation
+let prewarmedLight = null;
+let prewarmedMaterial = null;
+
 export const initInteraction = (camera, scene, physicsWorld) => {
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
+
+    // Pre-warm: create a light and material to force shader compilation
+    // This prevents the freeze on first levitation
+    if (!prewarmedLight) {
+        prewarmedLight = new THREE.PointLight(0x0088ff, 0, 0);
+        prewarmedMaterial = new THREE.MeshBasicMaterial({ color: 0x0088ff });
+        // Add briefly to scene to trigger shader compile, then remove
+        const tempMesh = new THREE.Mesh(new THREE.SphereGeometry(0.01, 4, 4), prewarmedMaterial);
+        tempMesh.add(prewarmedLight);
+        scene.add(tempMesh);
+        // Remove after a frame - use timeout to ensure render happens
+        setTimeout(() => {
+            scene.remove(tempMesh);
+            prewarmedLight.dispose();
+            prewarmedMaterial.dispose();
+            prewarmedLight = null;
+            prewarmedMaterial = null;
+        }, 100);
+    }
 
     return {
         handleDown: (x, y) => onPointerDown(x, y, camera, scene, physicsWorld),

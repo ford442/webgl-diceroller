@@ -145,12 +145,12 @@ export async function createLamp(scene) {
     const positions = [-spacing, 0, spacing];
 
     positions.forEach(x => {
-        const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 100, 30);
+        const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 40, 25);
         light.position.set(x, lightY, 0);
         light.castShadow = true;
         light.shadow.bias = -0.0001;
-        light.shadow.mapSize.width = 1024;
-        light.shadow.mapSize.height = 1024;
+        light.shadow.mapSize.width = 512;
+        light.shadow.mapSize.height = 512;
 
         const bulbGeo = new THREE.SphereGeometry(0.3, 16, 16);
         const bulbMat = new THREE.MeshBasicMaterial({ color: MODE_COLORS[LampMode.NORMAL] });
@@ -159,7 +159,7 @@ export async function createLamp(scene) {
 
         lampGroup.add(light);
         lampGroup.add(bulb);
-        lights.push({ light, bulb, originalIntensity: 80 });
+        lights.push({ light, bulb, originalIntensity: 35 });
     });
 
     // Laser beams

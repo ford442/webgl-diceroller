@@ -352,7 +352,7 @@ async function init() {
 
     // Billiard Lamp (async OBJ load)
     const lampResult = await createLamp(scene);
-    lampResult.group.position.set(0, 11, 0);
+    lampResult.group.position.set(0, 13.5, 0);
     registerInteractiveObject(lampResult.group, lampResult.toggle);
     lampData = lampResult;
     updateRegistry.register('lamp', lampResult.update);
