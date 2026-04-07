@@ -2,19 +2,10 @@ import * as THREE from 'three';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import { createConvexHullShape, spawnDicePhysics, getAmmo } from './physics.js';
 
-let diceModels = {};
-export let spawnedDice = [];
-
 const loader = new ColladaLoader();
 
-const diceTypes = [
-    { type: 'd4', file: 'die_4.dae' },
-    { type: 'd6', file: 'die_6.dae' },
-    { type: 'd8', file: 'die_8.dae' },
-    { type: 'd10', file: 'die_10.dae' },
-    { type: 'd12', file: 'die_12.dae' },
-    { type: 'd20', file: 'die_20.dae' }
-];
+let diceModels = {};
+export let spawnedDice = [];
 
 // Helper for Crypto Randomness
 const getSecureRandom = () => {
@@ -23,68 +14,75 @@ const getSecureRandom = () => {
     return array[0] / (0xffffffff + 1);
 };
 
-export const loadDiceModels = async () => {
-    const promises = diceTypes.map(d => {
-        return new Promise((resolve, reject) => {
+// Exported for main.js to use during sequential loading
+export const diceTypes = [
+    { type: 'd4', file: 'die_4.dae' },
+    { type: 'd6', file: 'die_6.dae' },
+    { type: 'd8', file: 'die_8.dae' },
+    { type: 'd10', file: 'die_10.dae' },
+    { type: 'd12', file: 'die_12.dae' },
+    { type: 'd20', file: 'die_20.dae' }
+];
+
+// Export diceModels so main.js can populate it
+export { diceModels };
+
+export const loadDiceModels = async (onProgress) => {
+    let done = 0;
+    const total = diceTypes.length;
+
+    const report = (label) => {
+        if (typeof onProgress === 'function') onProgress(done, total, label);
+    };
+
+    for (const d of diceTypes) {
+        report(d.type);
+
+        await new Promise((resolve) => {
             let timedOut = false;
             const url = `./images/${d.file}`;
             const timer = setTimeout(() => {
                 console.warn(`Timeout loading ${url}`);
                 timedOut = true;
+                done++;
+                report(d.type);
                 resolve();
             }, 15000);
 
             loader.load(url, (collada) => {
                 if (timedOut) return;
                 clearTimeout(timer);
+
                 let mesh = null;
                 collada.scene.traverse((child) => {
-                    if (child.isMesh) {
-                        mesh = child;
-                    }
+                    if (child.isMesh) mesh = child;
                 });
 
                 if (mesh) {
                     const geometry = mesh.geometry.clone();
-
-                    // CRITICAL: Center the geometry to ensure the Center of Mass is correct
                     geometry.center();
-
                     mesh.updateMatrixWorld(true);
                     geometry.applyMatrix4(mesh.matrixWorld);
                     geometry.rotateX(-Math.PI / 2);
-                    
-                    // Re-center again after rotation to be safe
                     geometry.center();
 
                     let material = mesh.material;
-                    // Ensure materials are PBR-ready for the new atmosphere
-                    const upgradeMaterial = (mat) => {
-                        return new THREE.MeshStandardMaterial({
-                            color: mat.color || 0xeeeeee,
-                            map: mat.map || null,
-                            roughness: 0.2, // Shiny plastic/resin
-                            metalness: 0.0,
-                            envMapIntensity: 1.0
-                        });
-                    };
+                    const upgradeMaterial = (mat) => new THREE.MeshStandardMaterial({
+                        color: mat.color || 0xeeeeee,
+                        map: mat.map || null,
+                        roughness: 0.2,
+                        metalness: 0.0,
+                        envMapIntensity: 1.0
+                    });
 
                     if (material) {
-                        if (Array.isArray(material)) {
-                            material = material.map(m => upgradeMaterial(m));
-                        } else {
-                            material = upgradeMaterial(material);
-                        }
+                        material = Array.isArray(material) ? material.map(upgradeMaterial) : upgradeMaterial(material);
                     } else {
                         console.warn(`No material found for ${d.file}, using default material`);
-                        material = new THREE.MeshStandardMaterial({
-                            color: 0xff00ff,
-                            roughness: 0.2,
-                            metalness: 0.0
-                        });
+                        material = new THREE.MeshStandardMaterial({ color: 0xff00ff, roughness: 0.2, metalness: 0.0 });
                     }
+
                     const cleanMesh = new THREE.Mesh(geometry, material);
-                    
                     cleanMesh.position.set(0, 0, 0);
                     cleanMesh.rotation.set(0, 0, 0);
                     cleanMesh.scale.set(1, 1, 1);
@@ -92,21 +90,26 @@ export const loadDiceModels = async () => {
                     diceModels[d.type] = cleanMesh;
                     cleanMesh.castShadow = true;
                     cleanMesh.receiveShadow = true;
-
                     diceModels[d.type].userData.physicsShape = createConvexHullShape(cleanMesh);
-                    resolve();
-                } else {
-                    resolve();
                 }
-            }, undefined, (e) => {
+
+                done++;
+                report(d.type);
+                resolve();
+            }, undefined, (error) => {
                 if (timedOut) return;
                 clearTimeout(timer);
+                console.warn(`Error loading ${url}:`, error);
+                done++;
+                report(d.type);
                 resolve();
             });
         });
-    });
 
-    await Promise.all(promises);
+        // Yield to event loop between dice loads to let the UI paint
+        await new Promise(r => setTimeout(r, 0));
+    }
+
     console.log("All dice models loaded");
 };
 

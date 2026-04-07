@@ -1,0 +1,22 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]: Loading Tavern...
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - generic [ref=e9]: "D4:"
+      - spinbutton [ref=e10]: "1"
+    - generic [ref=e11]:
+      - generic [ref=e12]: "D6:"
+      - spinbutton [ref=e13]: "1"
+    - generic [ref=e14]:
+      - generic [ref=e15]: "D8:"
+      - spinbutton [ref=e16]: "1"
+    - generic [ref=e17]:
+      - generic [ref=e18]: "D10:"
+      - spinbutton [ref=e19]: "1"
+    - generic [ref=e20]:
+      - generic [ref=e21]: "D12:"
+      - spinbutton [ref=e22]: "1"
+    - generic [ref=e23]:
+      - generic [ref=e24]: "D20:"
+      - spinbutton [ref=e25]: "1"
+    - button "Roll All" [ref=e26] [cursor=pointer]

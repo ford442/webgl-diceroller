@@ -7,7 +7,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { VignetteShader } from './shaders/VignetteShader.js';
 
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
-import { loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice, spawnedDice } from './dice.js';
+import { diceTypes, diceModels, loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice, spawnedDice } from './dice.js';
 import { initUI, createCrosshair } from './ui.js';
 import { initInteraction, updateInteraction, registerInteractiveObject } from './interaction.js';
 import { createTable } from './environment/Table.js';
@@ -232,10 +232,15 @@ async function init() {
         const bar = document.getElementById('loading-bar');
         if (bar) bar.style.width = percent + '%';
     }
+    function updateLoadingText(text) {
+        const el = document.getElementById('loading-text');
+        if (el) el.textContent = text;
+    }
 
     // ==========================================
     // TIER 0: Critical (must exist before first render)
     // ==========================================
+    updateLoadingText("Initializing physics engine...");
     updateLoadingBar(10);
 
     // Initialize Physics
@@ -243,9 +248,11 @@ async function init() {
         physicsWorld = await initPhysics();
     } catch (e) {
         console.error("Failed to initialize physics", e);
+        updateLoadingText("Error: Physics failed to load");
         return;
     }
 
+    updateLoadingText("Building tavern environment...");
     updateLoadingBar(20);
 
     // Core environment (walls, room, table, candle light)
@@ -274,12 +281,17 @@ async function init() {
         if (clutterData.update) updateRegistry.register('clutter', clutterData.update);
     }
 
+    updateLoadingText("Loading dice models...");
     updateLoadingBar(30);
-
-    // Load dice models and spawn (core gameplay)
-    await loadDiceModels();
+    // Load dice models sequentially with granular progress (30% to 40%)
+    await loadDiceModels((done, total, label) => {
+        const percent = 30 + ((done / total) * 10);
+        updateLoadingBar(percent);
+        if (label) updateLoadingText(`Loading dice models... (${label})`);
+    });
     spawnObjects(scene, physicsWorld);
 
+    updateLoadingText("Setting up game...");
     updateLoadingBar(40);
 
     // UI Setup
@@ -315,6 +327,7 @@ async function init() {
     // ==========================================
     // TIER 1: Important (visible from default camera, yield first)
     // ==========================================
+    updateLoadingText("Loading furniture and props...");
     await yieldToMain();
     updateLoadingBar(55);
 
@@ -339,7 +352,7 @@ async function init() {
 
     // Billiard Lamp (async OBJ load)
     const lampResult = await createLamp(scene);
-    lampResult.group.position.set(0, 0, 0);
+    lampResult.group.position.set(0, 11, 0);
     registerInteractiveObject(lampResult.group, lampResult.toggle);
     lampData = lampResult;
     updateRegistry.register('lamp', lampResult.update);
@@ -361,6 +374,7 @@ async function init() {
     // ==========================================
     // TIER 2: Secondary tabletop props (yield first)
     // ==========================================
+    updateLoadingText("Adding tabletop items...");
     await yieldToMain();
 
     // Dice Tower
@@ -434,6 +448,7 @@ async function init() {
     // ==========================================
     // TIER 3: Background / decorative props (yield first)
     // ==========================================
+    updateLoadingText("Adding decorative items...");
     await yieldToMain();
 
     // Dagger
@@ -568,6 +583,7 @@ async function init() {
     // Magnifying Glass Prop
     createMagnifyingGlass(scene, physicsWorld, { x: 6, y: -2.75, z: 5 }, Math.PI / 3);
 
+    updateLoadingText("Finalizing...");
     updateLoadingBar(95);
 
     // Disable castShadow on small decorative props to reduce shadow pass draw calls
@@ -593,7 +609,9 @@ async function init() {
     });
 
     // Fade out loading overlay
+    updateLoadingText("Ready!");
     updateLoadingBar(100);
+    await yieldToMain();
     const overlay = document.getElementById('loading-overlay');
     if (overlay) {
         overlay.style.transition = 'opacity 0.5s';
