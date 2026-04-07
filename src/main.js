@@ -377,73 +377,75 @@ async function init() {
     updateLoadingBar(70);
 
     // ==========================================
-    // TIER 2: Secondary tabletop props (yield first)
+    // TIER 2: Secondary tabletop props - arranged around dice zone edges
+    // Table is 36x36, dice zone is 16x16 in center (±8 from center)
+    // Place decorations between x/z = ±9 and ±16 (edge zone)
     // ==========================================
     updateLoadingText("Adding tabletop items...");
     await yieldToMain();
 
-    // Dice Tower
-    createDiceTower(scene, physicsWorld);
+    // Dice Tower - back edge
+    createDiceTower(scene, physicsWorld, { x: 0, y: -3.0, z: -14 }, 0);
 
-    // Dice Tray
-    createDiceTray(scene, physicsWorld, { x: 3, y: -2.75, z: 0 }, Math.PI / 8);
+    // Dice Tray - front right
+    createDiceTray(scene, physicsWorld, { x: 12, y: -2.75, z: 10 }, Math.PI / 6);
 
-    // Dice Jail
-    createDiceJail(scene, physicsWorld);
+    // Dice Jail - back left corner
+    createDiceJail(scene, physicsWorld, { x: -13, y: -2.75, z: -13 }, -Math.PI / 4);
 
-    // Dice Bag
-    createDiceBag(scene, physicsWorld);
+    // Dice Bag - front left
+    createDiceBag(scene, physicsWorld, { x: -10, y: -1.95, z: 12 }, Math.PI / 8);
 
-    // Bell
-    createBell(scene);
+    // Bell - front center edge
+    createBell(scene, { x: 0, y: -2.75, z: 15 });
 
-    // Tavern Meal (Tankard & Plate)
-    createTavernMeal(scene, physicsWorld);
+    // Tavern Meal (Tankard & Plate) - right edge
+    createTavernMeal(scene, physicsWorld, { x: 14, y: -2.75, z: 5 }, -Math.PI / 6);
 
-    // Hourglass
-    createHourglass(scene, physicsWorld);
+    // Hourglass - back right
+    createHourglass(scene, physicsWorld, { x: 11, y: -1.75, z: -11 }, Math.PI / 12);
 
-    // Map
-    createMap(scene, physicsWorld);
+    // Map - left edge
+    createMap(scene, physicsWorld, { x: -14, y: -2.75, z: 0 }, Math.PI / 3);
 
-    // Sealed Scroll
-    createScroll(scene, physicsWorld);
+    // Sealed Scroll - front right
+    createScroll(scene, physicsWorld, { x: 10, y: -2.4, z: 13 }, -Math.PI / 8);
 
-    // Crystal Ball
-    createCrystalBall(scene, physicsWorld);
+    // Crystal Ball - back right corner
+    createCrystalBall(scene, physicsWorld, { x: 13, y: -2.75, z: -13 }, 0);
 
-    // Alchemist's Potion Set
-    createPotionSet(scene, physicsWorld);
+    // Alchemist's Potion Set - left edge
+    createPotionSet(scene, physicsWorld, { x: -13, y: -2.75, z: -6 }, Math.PI / 5);
 
-    // Skull Prop (Interactive)
-    const skullData = createSkull(scene, physicsWorld);
+    // Skull Prop (Interactive) - front left corner
+    const skullData = createSkull(scene, physicsWorld, { x: -11, y: -2.4, z: 11 }, Math.PI / 6);
     if (skullData && skullData.toggleGlow) {
         registerInteractiveObject(skullData.group, skullData.toggleGlow);
     }
 
-    // Merchant Scale
-    const scaleData = createMerchantScale(scene, physicsWorld);
+    // Merchant Scale - right edge
+    const scaleData = createMerchantScale(scene, physicsWorld, { x: 14, y: -2.75, z: -3 }, -Math.PI / 4);
     if (scaleData && scaleData.update) {
         updateRegistry.register('scale', scaleData.update);
     }
 
-    // Lantern Prop
-    const lanternData = createLantern(scene, physicsWorld);
+    // Lantern Prop - back edge
+    const lanternData = createLantern(scene, physicsWorld, { x: -6, y: -2.75, z: -14 }, 0);
     if (lanternData && lanternData.update) {
         updateRegistry.register('lantern', lanternData.update);
     }
 
-    // Spellbook Prop
-    createSpellbook(scene, physicsWorld);
+    // Spellbook Prop - left edge
+    createSpellbook(scene, physicsWorld, { x: -14, y: -2.35, z: 7 }, Math.PI / 2);
 
-    // Mug Prop (Enhanced with steam animation)
-    const mugData = createMug(scene, physicsWorld, { x: 4, y: -2.75, z: 2 }, Math.PI / 4);
+    // Mug Prop - front edge
+    const mugData = createMug(scene, physicsWorld, { x: -5, y: -2.75, z: 14 }, Math.PI / 4);
     if (mugData && mugData.update) {
         updateRegistry.register('mug', mugData.update);
     }
 
-    // Tankard Prop (detailed drinking tankard)
-    const tankardData = createTankard(scene, physicsWorld, { x: 6.5, y: -2.75, z: 3 }, -Math.PI / 6);
+    // Tankard Prop - right front
+    const tankardData = createTankard(scene, physicsWorld, { x: 12, y: -2.75, z: 9 }, -Math.PI / 6);
     if (tankardData && tankardData.update) {
         updateRegistry.register('tankard', tankardData.update);
     }
@@ -451,142 +453,139 @@ async function init() {
     updateLoadingBar(85);
 
     // ==========================================
-    // TIER 3: Background / decorative props (yield first)
+    // TIER 3: Background / decorative props - edges only
     // ==========================================
     updateLoadingText("Adding decorative items...");
     await yieldToMain();
 
-    // Dagger
-    createDagger(scene, physicsWorld);
+    // Dagger - right front
+    createDagger(scene, physicsWorld, { x: 13, y: -2.45, z: 11 }, Math.PI / 3);
 
-    // Shield (Wall Mount)
-    createShield(scene, physicsWorld);
+    // Shield (Wall Mount) - on back wall
+    createShield(scene, physicsWorld, { x: 0, y: 2, z: -24 }, 0);
 
-    // Battle Axe (Leaning)
-    createBattleAxe(scene, physicsWorld);
+    // Battle Axe (Leaning) - left back corner
+    createBattleAxe(scene, physicsWorld, { x: -16, y: -6, z: -16 }, -Math.PI / 3);
 
-    // Vintage Pocket Watch
-    createPocketWatch(scene, physicsWorld);
+    // Vintage Pocket Watch - right edge
+    createPocketWatch(scene, physicsWorld, { x: 14, y: -2.65, z: 3 }, 0);
 
-    // Compass Prop
-    createCompass(scene, physicsWorld);
+    // Compass Prop - front edge
+    createCompass(scene, physicsWorld, { x: 7, y: -2.65, z: 14 }, Math.PI / 8);
 
-    // Chalice Prop
-    createChalice(scene, physicsWorld);
+    // Chalice Prop - back edge
+    createChalice(scene, physicsWorld, { x: 6, y: -2.75, z: -13 }, 0);
 
-    // Character Miniature Prop
-    createMiniature(scene, physicsWorld);
+    // Character Miniature Prop - left edge
+    createMiniature(scene, physicsWorld, { x: -13, y: -2.75, z: -8 }, Math.PI / 4);
 
-    // Character Sheet Prop
-    createCharacterSheet(scene, physicsWorld);
+    // Character Sheet Prop - right edge
+    createCharacterSheet(scene, physicsWorld, { x: 14, y: -2.75, z: 8 }, -Math.PI / 6);
 
-    // Bounty Poster Prop
-    createBountyPoster(scene, physicsWorld);
+    // Bounty Poster Prop - wall
+    createBountyPoster(scene, physicsWorld, { x: -20, y: 4, z: -20 }, Math.PI / 4);
 
-    // Pencil Prop
-    createPencil(scene, physicsWorld);
+    // Pencil Prop - front edge
+    createPencil(scene, physicsWorld, { x: -8, y: -2.75, z: 14 }, Math.PI / 5);
 
-    // Coin Pouch Prop
-    createCoinPouch(scene, physicsWorld);
+    // Coin Pouch Prop - front edge
+    createCoinPouch(scene, physicsWorld, { x: 9, y: -2.75, z: 13 }, -Math.PI / 8);
 
-    // Lute Prop (Tabletop Atmosphere)
-    createLute(scene, physicsWorld, { x: -8, y: -1.85, z: 2 }, Math.PI / 6);
+    // Lute Prop (Tabletop) - left back
+    createLute(scene, physicsWorld, { x: -14, y: -1.85, z: -10 }, Math.PI / 4);
 
-    // Runestones Prop
-    createRunestones(scene, physicsWorld);
+    // Runestones Prop - right back
+    createRunestones(scene, physicsWorld, { x: 12, y: -2.75, z: -12 }, -Math.PI / 12);
 
-    // Smoking Pipe and Tobacco Pouch
-    const pipeData = createSmokingPipe(scene, physicsWorld, { x: -6, y: -2.73, z: 5 }, Math.PI / 8);
+    // Smoking Pipe and Tobacco Pouch - front edge
+    const pipeData = createSmokingPipe(scene, physicsWorld, { x: -4, y: -2.73, z: 14 }, Math.PI / 8);
     if (pipeData && pipeData.update) {
         updateRegistry.register('pipe', pipeData.update);
     }
 
-    // Gemstones Collection
-    const gemsData = createGemstones(scene, physicsWorld, { x: 6, y: -2.73, z: -5 }, -Math.PI / 12);
+    // Gemstones Collection - right edge
+    const gemsData = createGemstones(scene, physicsWorld, { x: 14, y: -2.73, z: -8 }, -Math.PI / 12);
     if (gemsData && gemsData.update) {
         updateRegistry.register('gems', gemsData.update);
     }
 
-    // Writing Set (Quill and Inkwell)
-    const writingData = createWritingSet(scene, physicsWorld, { x: 4, y: -2.73, z: 4 }, -Math.PI / 6);
+    // Writing Set (Quill and Inkwell) - back edge
+    const writingData = createWritingSet(scene, physicsWorld, { x: -10, y: -2.73, z: -14 }, Math.PI / 6);
     if (writingData && writingData.update) {
         updateRegistry.register('writing', writingData.update);
     }
 
-    // Cheese Wheel Prop
-    createCheeseWheel(scene, physicsWorld);
+    // Cheese Wheel Prop - left front
+    createCheeseWheel(scene, physicsWorld, { x: -12, y: -2.75, z: 11 }, Math.PI / 4);
 
-    // Wax Seal Stamp Prop
-    createWaxSeal(scene, physicsWorld);
+    // Wax Seal Stamp Prop - front edge
+    createWaxSeal(scene, physicsWorld, { x: 4, y: -2.75, z: 14 }, 0);
 
-    // Kings Crown Prop
-    createCrown(scene, physicsWorld);
+    // Kings Crown Prop - back edge center
+    createCrown(scene, physicsWorld, { x: 0, y: -2.75, z: -13 }, 0);
 
-    // Gong Prop (Interactive)
-    const gongResult = createGong(scene, physicsWorld);
+    // Gong Prop (Interactive) - back wall
+    const gongResult = createGong(scene, physicsWorld, { x: 0, y: 0, z: -24 }, 0);
     if (gongResult) {
         registerInteractiveObject(gongResult.group, gongResult.interact);
         gongData = gongResult;
         updateRegistry.register('gong', gongResult.update);
     }
 
-    // Mystic Orb Prop (Interactive)
-    const mysticOrbData = createMysticOrb(scene, physicsWorld);
+    // Mystic Orb Prop (Interactive) - right back corner
+    const mysticOrbData = createMysticOrb(scene, physicsWorld, { x: 15, y: -2.75, z: -15 }, 0);
     if (mysticOrbData) {
         registerInteractiveObject(mysticOrbData.group, mysticOrbData.interact);
         updateRegistry.register('mysticOrb', mysticOrbData.update);
     }
 
-    // Dungeon Master Screen
-    createDMScreen(scene, physicsWorld, { x: 0, y: -2.75, z: -8 }, 0);
+    // Dungeon Master Screen - back edge
+    createDMScreen(scene, physicsWorld, { x: 0, y: -2.75, z: -16 }, 0);
 
-    // Dragon Scale Prop
-    createDragonScale(scene, physicsWorld);
+    // Dragon Scale Prop - left edge
+    createDragonScale(scene, physicsWorld, { x: -14, y: -2.75, z: 0 }, Math.PI / 3);
 
-    // Spyglass Prop
-    createSpyglass(scene, physicsWorld);
+    // Spyglass Prop - right edge
+    createSpyglass(scene, physicsWorld, { x: 14, y: -2.75, z: 6 }, -Math.PI / 6);
 
-    // Playing Cards Prop
-    createPlayingCards(scene, physicsWorld);
+    // Playing Cards Prop - scattered on front edge
+    createPlayingCards(scene, physicsWorld, { x: -2, y: -2.75, z: 13 }, Math.PI / 8);
 
-    // Old Rusty Key Prop
-    createKey(scene, physicsWorld);
+    // Old Rusty Key Prop - front edge
+    createKey(scene, physicsWorld, { x: 10, y: -2.75, z: 13 }, Math.PI / 4);
 
-    // Heavy Iron Padlock Prop
-    createPadlock(scene, physicsWorld, { x: 5, y: -2.75, z: 1 }, Math.PI / 6);
+    // Heavy Iron Padlock Prop - left edge
+    createPadlock(scene, physicsWorld, { x: -14, y: -2.75, z: -4 }, Math.PI / 6);
 
-    // Lockpicks Prop
-    createLockpicks(scene, physicsWorld, { x: 4.5, y: -2.75, z: 0.5 }, Math.PI / 8);
+    // Lockpicks Prop - near padlock
+    createLockpicks(scene, physicsWorld, { x: -13, y: -2.75, z: -3 }, Math.PI / 8);
 
-    // Spectacles Prop
-    createSpectacles(scene, physicsWorld);
+    // Spectacles Prop - front edge
+    createSpectacles(scene, physicsWorld, { x: 3, y: -2.75, z: 14 }, 0);
 
-    // Leather Journal Prop
-    createLeatherJournal(scene, physicsWorld, { x: 7, y: -2.5, z: 6 }, Math.PI / 5);
+    // Leather Journal Prop - back right
+    createLeatherJournal(scene, physicsWorld, { x: 12, y: -2.5, z: -13 }, Math.PI / 5);
 
-    // Drinking Horn Prop
-    createDrinkingHorn(scene, physicsWorld, { x: 2, y: -2.75, z: -2 }, -Math.PI / 4);
+    // Drinking Horn Prop - right edge
+    createDrinkingHorn(scene, physicsWorld, { x: 14, y: -2.75, z: 2 }, -Math.PI / 4);
 
-    // Magic Wand Prop (Interactive)
-    createWand(scene, physicsWorld);
+    // Magic Wand Prop (Interactive) - left edge
+    createWand(scene, physicsWorld, { x: -14, y: -2.70, z: 9 }, Math.PI / 3);
 
-    // Scattered Coins Prop
-    createCoin(scene, physicsWorld);
+    // Scattered Coins Prop - scattered around edges
+    createCoin(scene, physicsWorld, { x: 11, y: -2.75, z: 11 }, 0);
 
-    // Amulet Prop
-    createAmulet(scene, physicsWorld);
+    // Amulet Prop - back edge
+    createAmulet(scene, physicsWorld, { x: -8, y: -2.74, z: -14 }, Math.PI / 6);
 
-    // Abacus Prop
-    createAbacus(scene, physicsWorld);
+    // Abacus Prop - right back
+    createAbacus(scene, physicsWorld, { x: 13, y: -2.75, z: -10 }, -Math.PI / 8);
 
-    // Leather Journal Prop
-    createLeatherJournal(scene, physicsWorld);
+    // Dart Prop - front edge
+    createDart(scene, physicsWorld, { x: 8, y: -2.75, z: 14 }, Math.PI / 4);
 
-    // Dart Prop
-    createDart(scene, physicsWorld, { x: 2, y: -2.75, z: 2 }, Math.PI / 4);
-
-    // Magnifying Glass Prop
-    createMagnifyingGlass(scene, physicsWorld, { x: 6, y: -2.75, z: 5 }, Math.PI / 3);
+    // Magnifying Glass Prop - back edge
+    createMagnifyingGlass(scene, physicsWorld, { x: 9, y: -2.75, z: -14 }, Math.PI / 3);
 
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
