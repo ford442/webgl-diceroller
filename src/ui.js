@@ -1,4 +1,5 @@
 export const initUI = (onUpdateDice, onRollAll) => {
+    const canvasContainer = document.getElementById('canvas-container') || document.body;
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.top = '10px';
@@ -64,7 +65,7 @@ export const initUI = (onUpdateDice, onRollAll) => {
 
 
     container.appendChild(rollBtn);
-    document.body.appendChild(container);
+    canvasContainer.appendChild(container);
 
     return {
         updateCounts: (newCounts) => {
@@ -79,6 +80,7 @@ export const initUI = (onUpdateDice, onRollAll) => {
 };
 
 export const createCrosshair = () => {
+    const canvasContainer = document.getElementById('canvas-container') || document.body;
     const crosshair = document.createElement('div');
     crosshair.style.position = 'absolute';
     crosshair.style.width = '20px';
@@ -106,7 +108,7 @@ export const createCrosshair = () => {
     dot.style.transform = 'translate(-50%, -50%)';
     crosshair.appendChild(dot);
 
-    document.body.appendChild(crosshair);
+    canvasContainer.appendChild(crosshair);
 
     return {
         updatePosition: (x, y) => {

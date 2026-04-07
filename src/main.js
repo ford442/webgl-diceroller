@@ -135,24 +135,29 @@ let focusProgress = 0;
 init();
 
 async function init() {
+    // Get canvas container
+    const container = document.getElementById('canvas-container');
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+
     // Scene setup
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111111); // Darker for atmosphere
 
-    // Camera setup
-    camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 1000);
+    // Camera setup - 1:1 aspect ratio
+    camera = new THREE.PerspectiveCamera(80, 1, 0.1, 1000);
     camera.position.set(0, 6.0, 18); // Standing height proportional to room
     camera.lookAt(0, -3, 0);
 
     // Renderer setup
     renderer = new THREE.WebGLRenderer({ antialias: false });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap pixel ratio for performance
+    renderer.setSize(containerWidth, containerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.8; // Darker exposure for mood
-    document.body.appendChild(renderer.domElement);
+    container.appendChild(renderer.domElement);
 
     // Lights
     // Ambient light (low intensity)
@@ -200,7 +205,7 @@ async function init() {
         composer.addPass(renderPass);
 
         // Bloom
-        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(containerWidth, containerHeight), 1.5, 0.4, 0.85);
         bloomPass.threshold = 0.6; // High threshold to only catch flames/lights
         bloomPass.strength = 0.6; // Soft glow
         bloomPass.radius = 0.4;
@@ -655,6 +660,12 @@ function setupInput() {
         }
     });
 
+    // Get container dimensions helper
+    const getContainerRect = () => {
+        const container = document.getElementById('canvas-container');
+        return container ? container.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
+    };
+
     // Mouse Movement Tracking for "Eye-Head" System AND normal interaction
     document.addEventListener('mousemove', (event) => {
         if (diceFocusState !== DiceFocusState.IDLE) return;
@@ -664,10 +675,11 @@ function setupInput() {
             cursorPos.x += event.movementX;
             cursorPos.y += event.movementY;
 
-            const halfWidth = window.innerWidth / 2;
-            const halfHeight = window.innerHeight / 2;
+            const rect = getContainerRect();
+            const halfWidth = rect.width / 2;
+            const halfHeight = rect.height / 2;
 
-            // Clamp cursor to screen bounds
+            // Clamp cursor to canvas bounds
             cursorPos.x = Math.max(-halfWidth, Math.min(halfWidth, cursorPos.x));
             cursorPos.y = Math.max(-halfHeight, Math.min(halfHeight, cursorPos.y));
 
@@ -676,9 +688,12 @@ function setupInput() {
 
             if (interaction) interaction.handleMove(normX, -normY);
         } else {
-            // Unlocked: Use standard system cursor coordinates for dragging
-            const normX = (event.clientX / window.innerWidth) * 2 - 1;
-            const normY = -(event.clientY / window.innerHeight) * 2 + 1;
+            // Unlocked: Use coordinates relative to canvas container
+            const rect = getContainerRect();
+            const relX = event.clientX - rect.left;
+            const relY = event.clientY - rect.top;
+            const normX = (relX / rect.width) * 2 - 1;
+            const normY = -(relY / rect.height) * 2 + 1;
             if (interaction) interaction.handleMove(normX, normY);
         }
     });
@@ -687,15 +702,19 @@ function setupInput() {
     document.addEventListener('mousedown', (event) => {
         if (diceFocusState === DiceFocusState.IDLE) {
             if (isLocked) {
-                const halfWidth = window.innerWidth / 2;
-                const halfHeight = window.innerHeight / 2;
+                const rect = getContainerRect();
+                const halfWidth = rect.width / 2;
+                const halfHeight = rect.height / 2;
                 const normX = cursorPos.x / halfWidth;
                 const normY = cursorPos.y / halfHeight;
                 if (interaction) interaction.handleDown(normX, -normY);
             } else {
-                // Unlocked: Allow clicking dice with standard cursor
-                const normX = (event.clientX / window.innerWidth) * 2 - 1;
-                const normY = -(event.clientY / window.innerHeight) * 2 + 1;
+                // Unlocked: Allow clicking dice with coordinates relative to canvas
+                const rect = getContainerRect();
+                const relX = event.clientX - rect.left;
+                const relY = event.clientY - rect.top;
+                const normX = (relX / rect.width) * 2 - 1;
+                const normY = -(relY / rect.height) * 2 + 1;
                 if (interaction) interaction.handleDown(normX, normY);
             }
         }
@@ -708,10 +727,16 @@ function setupInput() {
 }
 
 function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const container = document.getElementById('canvas-container');
+    if (!container) return;
+    
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    
+    camera.aspect = 1; // Fixed 1:1 aspect ratio
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    composer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(width, height);
+    if (composer) composer.setSize(width, height);
 }
 
 function checkDiceStability() {
@@ -750,11 +775,12 @@ function animate() {
     }
 
     // Update Crosshair UI Position
-    // Center of screen is (window.innerWidth/2, window.innerHeight/2)
-    // cursorPos is offset from that center.
-    const screenCenterX = window.innerWidth / 2;
-    const screenCenterY = window.innerHeight / 2;
-    crosshairUI.updatePosition(screenCenterX + cursorPos.x, screenCenterY + cursorPos.y);
+    // Center of the canvas container
+    const container = document.getElementById('canvas-container');
+    const rect = container ? container.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
+    const screenCenterX = rect.width / 2;
+    const screenCenterY = rect.height / 2;
+    crosshairUI.updatePosition(rect.left + screenCenterX + cursorPos.x, rect.top + screenCenterY + cursorPos.y);
 
     // Update Atmosphere
     updateAtmosphere(time);
