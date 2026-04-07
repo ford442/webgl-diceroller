@@ -76,6 +76,7 @@ import { createPadlock } from './environment/Padlock.js';
 import { createSpectacles } from './environment/Spectacles.js';
 import { createLockpicks } from './environment/Lockpicks.js';
 import { createDart } from './environment/Dart.js';
+import { createMagnifyingGlass } from './environment/MagnifyingGlass.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -579,6 +580,9 @@ async function init() {
     // Dart Prop
     createDart(scene, physicsWorld, { x: 2, y: -2.75, z: 2 }, Math.PI / 4);
 
+    // Magnifying Glass Prop
+    createMagnifyingGlass(scene, physicsWorld, { x: 6, y: -2.75, z: 5 }, Math.PI / 3);
+
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
 
@@ -586,7 +590,7 @@ async function init() {
     const noShadowNames = ['Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass'];
     scene.traverse(child => {
         if (child.isMesh) {
             let p = child.parent;
