@@ -77,6 +77,7 @@ import { createSpectacles } from './environment/Spectacles.js';
 import { createLockpicks } from './environment/Lockpicks.js';
 import { createDart } from './environment/Dart.js';
 import { createMagnifyingGlass } from './environment/MagnifyingGlass.js';
+import { createRope } from './environment/Rope.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -587,6 +588,9 @@ async function init() {
     // Magnifying Glass Prop - back edge
     createMagnifyingGlass(scene, physicsWorld, { x: 9, y: -2.75, z: -14 }, Math.PI / 3);
 
+    // Coiled Rope Prop - near the magnifying glass
+    const ropeData = createRope(scene, physicsWorld, { x: 6, y: -2.75, z: -15 }, Math.PI / 6);
+
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
 
@@ -594,7 +598,7 @@ async function init() {
     const noShadowNames = ['Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope'];
     scene.traverse(child => {
         if (child.isMesh) {
             let p = child.parent;
