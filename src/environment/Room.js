@@ -28,10 +28,10 @@ export function createRoom(scene) {
         side: THREE.BackSide // Render inside of the box
     });
 
-    // Room Geometry (large box)
-    const roomWidth = 50;
-    const roomHeight = 30;
-    const roomDepth = 50;
+    // Room Geometry (ENLARGED for bigger table)
+    const roomWidth = 70;
+    const roomHeight = 35;
+    const roomDepth = 70;
 
     const roomGeometry = new THREE.BoxGeometry(roomWidth, roomHeight, roomDepth);
     const roomMesh = new THREE.Mesh(roomGeometry, wallMaterial);

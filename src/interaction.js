@@ -14,32 +14,37 @@ const DOUBLE_CLICK_DELAY = 300;
 // Interactive Objects Registry
 const interactiveObjects = [];
 
-// Pre-warm shader cache to prevent freeze on first levitation
-let prewarmedLight = null;
-let prewarmedMaterial = null;
-
 export const initInteraction = (camera, scene, physicsWorld) => {
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
 
-    // Pre-warm: create a light and material to force shader compilation
-    // This prevents the freeze on first levitation
-    if (!prewarmedLight) {
-        prewarmedLight = new THREE.PointLight(0x0088ff, 0, 0);
-        prewarmedMaterial = new THREE.MeshBasicMaterial({ color: 0x0088ff });
-        // Add briefly to scene to trigger shader compile, then remove
-        const tempMesh = new THREE.Mesh(new THREE.SphereGeometry(0.01, 4, 4), prewarmedMaterial);
-        tempMesh.add(prewarmedLight);
-        scene.add(tempMesh);
-        // Remove after a frame - use timeout to ensure render happens
+    // Pre-warm: force shader compilation for levitation effects
+    // This prevents the freeze on first double-click
+    const warmMaterials = () => {
+        const warmLight = new THREE.PointLight(0x0088ff, 1, 1);
+        const warmGeo = new THREE.SphereGeometry(0.01, 4, 4);
+        const warmMat = new THREE.MeshBasicMaterial({ color: 0x0088ff });
+        const warmMesh = new THREE.Mesh(warmGeo, warmMat);
+        warmMesh.add(warmLight);
+        warmMesh.position.set(0, -1000, 0); // Hide far away
+        scene.add(warmMesh);
+        
+        // Force render to compile shaders
+        if (scene.userData.renderer) {
+            scene.userData.renderer.compile(scene, camera);
+        }
+        
+        // Clean up after a few frames
         setTimeout(() => {
-            scene.remove(tempMesh);
-            prewarmedLight.dispose();
-            prewarmedMaterial.dispose();
-            prewarmedLight = null;
-            prewarmedMaterial = null;
-        }, 100);
-    }
+            scene.remove(warmMesh);
+            warmGeo.dispose();
+            warmMat.dispose();
+            warmLight.dispose();
+        }, 500);
+    };
+    
+    // Delay to ensure renderer is ready
+    setTimeout(warmMaterials, 100);
 
     return {
         handleDown: (x, y) => onPointerDown(x, y, camera, scene, physicsWorld),
@@ -54,39 +59,45 @@ export const registerInteractiveObject = (mesh, callback) => {
 
 function onPointerDown(x, y, camera, scene, physicsWorld) {
     updateMouse(x, y);
+    
+    // Configure raycaster for precise dice picking
     raycaster.setFromCamera(mouse, camera);
-
+    raycaster.params.Points.threshold = 0.1;
+    raycaster.params.Line.threshold = 0.1;
+    
     // 1. Check Interactive Objects (Static props like Lamps)
-    // We check this first or concurrently. If we hit one, we trigger the callback.
     if (interactiveObjects.length > 0) {
         const interactiveMeshes = interactiveObjects.map(obj => obj.mesh);
-        const intersectsInteractive = raycaster.intersectObjects(interactiveMeshes, true); // recursive
+        const intersectsInteractive = raycaster.intersectObjects(interactiveMeshes, true);
 
         if (intersectsInteractive.length > 0) {
             const hit = intersectsInteractive[0];
-            // Find which registered object this hit belongs to
-            // It could be the mesh itself or a child
             const registered = interactiveObjects.find(io => {
                 return io.mesh === hit.object || isDescendant(hit.object, io.mesh);
             });
 
             if (registered) {
                 registered.callback();
-                return; // Consume click
+                return;
             }
         }
     }
 
-    // 2. Check Physics Objects (Dice)
-    const meshes = spawnedDice.map(d => d.mesh);
-    const intersects = raycaster.intersectObjects(meshes);
+    // 2. Check Physics Objects (Dice) - use recursive to catch all mesh children
+    const diceGroups = spawnedDice.map(d => d.mesh);
+    const intersects = raycaster.intersectObjects(diceGroups, true);
 
     if (intersects.length > 0) {
         const intersect = intersects[0];
-        const object = intersect.object;
+        let object = intersect.object;
         const point = intersect.point;
 
-        if (object.userData.body) {
+        // Traverse up to find the object with physics body (in case we hit a child mesh)
+        while (object && !object.userData.body && object.parent) {
+            object = object.parent;
+        }
+
+        if (object && object.userData.body) {
             const now = Date.now();
             if (lastClickObject === object && (now - lastClickTime) < DOUBLE_CLICK_DELAY) {
                 // Double click detected

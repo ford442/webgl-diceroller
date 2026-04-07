@@ -1,18 +1,22 @@
 import * as THREE from 'three';
 
 export function createTable(scene) {
-    // Dimensions
-    const width = 20;
-    const depth = 20;
+    // ENLARGED Dimensions for more decoration space
+    const width = 36;  // Was 20
+    const depth = 36;  // Was 20
     const floorHeight = 0.5;
 
-    // Rim Dimensions - Updated per requirements
-    const rimWidth = 1;
-    const rimHeight = 4.0; // Increased to 4 units
+    // Rim Dimensions
+    const rimWidth = 1.5;
+    const rimHeight = 4.5;
 
     // Lip Dimensions (Inward overhang)
-    const lipWidth = 1.5; // Extends inward
+    const lipWidth = 2.0;
     const lipThickness = 0.5;
+
+    // DICE AREA - Center velvet zone
+    const diceZoneSize = 16; // 16x16 area for dice in center
+    const diceZoneBorder = 0.5; // Raised border around dice zone
 
     // Position (World)
     const position = { x: 0, y: -3, z: 0 };
@@ -30,11 +34,10 @@ export function createTable(scene) {
         texture.wrapT = THREE.RepeatWrapping;
         texture.colorSpace = THREE.SRGBColorSpace;
     });
-    // Fix color space for non-color maps
     woodRoughness.colorSpace = THREE.NoColorSpace;
     woodBump.colorSpace = THREE.NoColorSpace;
 
-    // Table Textures (Rolling Surface)
+    // Table Surface Textures (outer area)
     const tableDiffuse = textureLoader.load('./images/table_diff.jpg');
     const tableRoughness = textureLoader.load('./images/table_rough.jpg');
     const tableNormal = textureLoader.load('./images/table_nor.jpg');
@@ -47,9 +50,17 @@ export function createTable(scene) {
     });
     tableDiffuse.colorSpace = THREE.SRGBColorSpace;
 
-    const repeatX = 2;
-    const repeatY = 2;
+    const repeatX = 4;
+    const repeatY = 4;
     [tableDiffuse, tableRoughness, tableNormal, tableAO].forEach(t => t.repeat.set(repeatX, repeatY));
+
+    // VELVET Material for dice zone
+    const velvetMaterial = new THREE.MeshStandardMaterial({
+        color: 0x4a0e0e, // Deep red velvet
+        roughness: 0.95,
+        metalness: 0.05,
+        bumpScale: 0.02
+    });
 
     // Materials
     const rimMaterial = new THREE.MeshStandardMaterial({
@@ -79,18 +90,30 @@ export function createTable(scene) {
 
     // --- Geometry Construction ---
 
-    // 1. Floor
+    // 1. Main Floor (large surface)
     const floorGeometry = new THREE.BoxGeometry(width, floorHeight, depth);
-    floorGeometry.attributes.uv2 = floorGeometry.attributes.uv; // For AO
+    floorGeometry.attributes.uv2 = floorGeometry.attributes.uv;
     const floorMesh = new THREE.Mesh(floorGeometry, surfaceMaterial);
     floorMesh.receiveShadow = true;
     floorMesh.castShadow = true;
     tableGroup.add(floorMesh);
 
-    // 2. Rims (Walls)
-    // Align rim bottom with floor bottom.
-    // Floor is centered at 0 (local). Height 0.5. Bottom is -0.25.
-    // Rim Height 4. Bottom -0.25. Center = -0.25 + 2 = 1.75.
+    // 2. DICE ZONE - Velvet area in center (slightly raised)
+    const diceZoneGeo = new THREE.BoxGeometry(diceZoneSize, floorHeight * 1.2, diceZoneSize);
+    const diceZoneMesh = new THREE.Mesh(diceZoneGeo, velvetMaterial);
+    diceZoneMesh.position.y = floorHeight * 0.1; // Slightly above main floor
+    diceZoneMesh.receiveShadow = true;
+    tableGroup.add(diceZoneMesh);
+
+    // 3. Dice Zone Border (subtle raised edge)
+    const borderGeo = new THREE.BoxGeometry(diceZoneSize + 0.2, floorHeight * 0.8, diceZoneSize + 0.2);
+    const borderMesh = new THREE.Mesh(borderGeo, rimMaterial);
+    borderMesh.position.y = floorHeight * 0.3;
+    borderMesh.scale.set(1, 0.3, 1); // Flat border
+    borderMesh.receiveShadow = true;
+    tableGroup.add(borderMesh);
+
+    // 4. Rims (Walls)
     const localRimY = -0.25 + (rimHeight / 2);
 
     const sideRimGeometry = new THREE.BoxGeometry(rimWidth, rimHeight, depth);
@@ -98,7 +121,7 @@ export function createTable(scene) {
     sideMaterial.map = woodDiffuse.clone();
     sideMaterial.map.wrapS = THREE.RepeatWrapping;
     sideMaterial.map.wrapT = THREE.RepeatWrapping;
-    sideMaterial.map.repeat.set(0.5, 4);
+    sideMaterial.map.repeat.set(0.5, 6);
 
     // Left Rim
     const leftRim = new THREE.Mesh(sideRimGeometry, rimMaterial);
@@ -114,7 +137,7 @@ export function createTable(scene) {
     rightRim.receiveShadow = true;
     tableGroup.add(rightRim);
 
-    // Top/Bottom Rims (Full Width including side rims)
+    // Top/Bottom Rims
     const topBotWidth = width + 2 * rimWidth;
     const topBotRimGeometry = new THREE.BoxGeometry(topBotWidth, rimHeight, rimWidth);
 
@@ -130,96 +153,63 @@ export function createTable(scene) {
     botRim.receiveShadow = true;
     tableGroup.add(botRim);
 
-    // 3. Lips (Inward Overhang)
-    // Sit on top of rims.
-    // Rim Top = -0.25 + 4 = 3.75.
-    // Lip Center = 3.75 + lipThickness/2 = 4.0.
-    const localLipY = 4.0;
-
-    // We want the lip to overhang INWARD.
-    // Side Lips:
-    // Attached to Left Rim: X center should shift inward.
-    // Left Rim Center X: -(width/2 + rimWidth/2).
-    // Lip Width: rimWidth + lipWidth (covers rim + overhang).
-    // Lip Center X: LeftRimX + (lipWidth)/2 ?
-    // Left Rim X is -10.5.
-    // We want Lip to cover from -11 (outer edge) to -10 + 1.5 = -8.5?
-    // Let's make Lip dimension `rimWidth + lipWidth`.
-    // Outer edge aligns with Rim Outer Edge.
-    // Rim Outer Edge X = -10.5 - 0.5 = -11.
-    // Lip Width = 1 + 1.5 = 2.5.
-    // Lip Center X = -11 + 1.25 = -9.75.
+    // 5. Lips (Inward Overhang)
+    const localLipY = -0.25 + rimHeight + lipThickness/2;
 
     const sideLipTotalWidth = rimWidth + lipWidth;
-    const sideLipGeometry = new THREE.BoxGeometry(sideLipTotalWidth, lipThickness, depth); // Span depth of table
+    const sideLipGeometry = new THREE.BoxGeometry(sideLipTotalWidth, lipThickness, depth);
 
     // Left Lip
-    const leftLip = new THREE.Mesh(sideLipGeometry, rimMaterial);
-    // Outer edge at -(width/2 + rimWidth).
-    // Center = Outer + width/2
     const leftLipX = -(width/2 + rimWidth) + (sideLipTotalWidth / 2);
+    const leftLip = new THREE.Mesh(sideLipGeometry, rimMaterial);
     leftLip.position.set(leftLipX, localLipY, 0);
     leftLip.castShadow = true;
     leftLip.receiveShadow = true;
     tableGroup.add(leftLip);
 
     // Right Lip
-    const rightLip = new THREE.Mesh(sideLipGeometry, rimMaterial);
     const rightLipX = (width/2 + rimWidth) - (sideLipTotalWidth / 2);
+    const rightLip = new THREE.Mesh(sideLipGeometry, rimMaterial);
     rightLip.position.set(rightLipX, localLipY, 0);
     rightLip.castShadow = true;
     rightLip.receiveShadow = true;
     tableGroup.add(rightLip);
 
     // Top/Bottom Lips
-    // Need to span the full width including the side lips? Or just fit between?
-    // Let's span full width to look seamless (corners might overlap, which is fine visually).
     const topBotLipTotalDepth = rimWidth + lipWidth;
-    const topBotLipLength = width + 2 * rimWidth; // Same as topBotRim
+    const topBotLipLength = width + 2 * rimWidth;
     const topBotLipGeometry = new THREE.BoxGeometry(topBotLipLength, lipThickness, topBotLipTotalDepth);
 
-    // Top Lip (Back)
-    const topLip = new THREE.Mesh(topBotLipGeometry, rimMaterial);
-    // Outer edge Z = -(depth/2 + rimWidth)
     const topLipZ = -(depth/2 + rimWidth) + (topBotLipTotalDepth / 2);
+    const topLip = new THREE.Mesh(topBotLipGeometry, rimMaterial);
     topLip.position.set(0, localLipY, topLipZ);
     topLip.castShadow = true;
     topLip.receiveShadow = true;
     tableGroup.add(topLip);
 
-    // Bottom Lip (Front)
-    const botLip = new THREE.Mesh(topBotLipGeometry, rimMaterial);
     const botLipZ = (depth/2 + rimWidth) - (topBotLipTotalDepth / 2);
+    const botLip = new THREE.Mesh(topBotLipGeometry, rimMaterial);
     botLip.position.set(0, localLipY, botLipZ);
     botLip.castShadow = true;
     botLip.receiveShadow = true;
     tableGroup.add(botLip);
 
-
-    // 4. Legs (Visual)
-    const legSize = 1.5;
-    // Leg Top at -0.25 (Table Floor Bottom).
-    // Floor Visual Top is -9.5 (-10 + 0.5 thickness).
-    // Distance from -0.25 to -9.5 is 9.25? No. Table Group is at -3.
-    // Table Floor Bottom World = -3 - 0.25 = -3.25.
-    // Room Floor Top World = -9.5.
-    // Height = |-3.25 - (-9.5)| = 6.25.
+    // 6. Legs
+    const legSize = 2.0;
     const legHeight = 6.25;
     const legGeometry = new THREE.BoxGeometry(legSize, legHeight, legSize);
 
-    // Leg Center World = -3.25 - (6.25/2) = -6.375.
-    // Leg Center Local (Group at -3) = -6.375 - (-3) = -3.375.
     const legY = -3.375;
-    const legOffset = width / 2 - legSize / 2;
+    const legOffset = width / 2 - legSize;
 
-    const positions = [
+    const legPositions = [
         { x: -legOffset, z: -legOffset },
         { x: legOffset, z: -legOffset },
         { x: -legOffset, z: legOffset },
         { x: legOffset, z: legOffset }
     ];
 
-    positions.forEach(pos => {
+    legPositions.forEach(pos => {
         const leg = new THREE.Mesh(legGeometry, rimMaterial);
         leg.position.set(pos.x, legY, pos.z);
         leg.castShadow = true;
@@ -229,7 +219,7 @@ export function createTable(scene) {
 
     scene.add(tableGroup);
 
-    // --- Physics Definitions (World Coordinates) ---
+    // --- Physics Definitions ---
     const physicsBodies = [];
     const physicsWallThickness = 20;
 
@@ -243,37 +233,27 @@ export function createTable(scene) {
         restitution: 0.5
     });
 
-    // 2. Walls (Thickened for safety)
-    // Left Wall
-    // Visual Inner X = -10.
-    // Physics Inner X should be -10.
-    // Physics Center X = -10 - (thickness/2) = -20.
-    // World Y: LocalRimY is center of visual wall.
-    // Visual Wall Height 4. Center local 1.75. World -3 + 1.75 = -1.25.
-    // We can use same Y and height, just thicker.
+    // 2. Walls
     const worldWallY = position.y + localRimY;
 
     physicsBodies.push({
         type: 'box',
-        size: { x: physicsWallThickness, y: rimHeight, z: depth + physicsWallThickness*2 }, // Extend depth to close corners
+        size: { x: physicsWallThickness, y: rimHeight, z: depth + physicsWallThickness*2 },
         position: { x: -(width/2 + physicsWallThickness/2), y: worldWallY, z: 0 },
         mass: 0
     });
-    // Right Wall
     physicsBodies.push({
         type: 'box',
         size: { x: physicsWallThickness, y: rimHeight, z: depth + physicsWallThickness*2 },
         position: { x: (width/2 + physicsWallThickness/2), y: worldWallY, z: 0 },
         mass: 0
     });
-    // Top Wall (Back)
     physicsBodies.push({
         type: 'box',
         size: { x: width + physicsWallThickness*2, y: rimHeight, z: physicsWallThickness },
         position: { x: 0, y: worldWallY, z: -(depth/2 + physicsWallThickness/2) },
         mass: 0
     });
-    // Bottom Wall (Front)
     physicsBodies.push({
         type: 'box',
         size: { x: width + physicsWallThickness*2, y: rimHeight, z: physicsWallThickness },
@@ -281,32 +261,27 @@ export function createTable(scene) {
         mass: 0
     });
 
-    // 3. Lips (Overhangs)
-    // These need to match visual dimensions exactly to catch dice.
+    // 3. Lips
     const worldLipY = position.y + localLipY;
 
-    // Left Lip
     physicsBodies.push({
         type: 'box',
         size: { x: sideLipTotalWidth, y: lipThickness, z: depth },
         position: { x: position.x + leftLipX, y: worldLipY, z: position.z },
         mass: 0
     });
-    // Right Lip
     physicsBodies.push({
         type: 'box',
         size: { x: sideLipTotalWidth, y: lipThickness, z: depth },
         position: { x: position.x + rightLipX, y: worldLipY, z: position.z },
         mass: 0
     });
-    // Top Lip
     physicsBodies.push({
         type: 'box',
         size: { x: topBotLipLength, y: lipThickness, z: topBotLipTotalDepth },
         position: { x: position.x, y: worldLipY, z: position.z + topLipZ },
         mass: 0
     });
-    // Bot Lip
     physicsBodies.push({
         type: 'box',
         size: { x: topBotLipLength, y: lipThickness, z: topBotLipTotalDepth },
@@ -319,6 +294,7 @@ export function createTable(scene) {
         height: floorHeight,
         depth,
         position,
-        physicsBodies // New export
+        diceZoneSize,  // Export dice zone info for decoration placement
+        physicsBodies
     };
 }
