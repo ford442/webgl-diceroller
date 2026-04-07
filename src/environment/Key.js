@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createKey(scene, physicsWorld, position = { x: 3, y: -2.75, z: -4 }, rotationY = Math.PI / 4) {
+export function createKey(scene, physicsWorld, position = { x: 6, y: -2.75, z: 8 }, rotationY = Math.PI / 4) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.position.set(position.x, position.y, position.z);

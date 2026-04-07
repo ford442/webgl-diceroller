@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 
-export function createBell(scene, position = { x: -8, y: -2.75, z: 2 }) {
+export function createBell(scene, physicsWorld, position = { x: -10, y: -2.75, z: 10 }, rotationY = 0) {
     const group = new THREE.Group();
     group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     // Brass Material for the Bell
     const brassMaterial = new THREE.MeshStandardMaterial({

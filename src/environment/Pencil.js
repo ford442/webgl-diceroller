@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createPencil(scene, physicsWorld) {
+export function createPencil(scene, physicsWorld, position = { x: -4, y: -2.75, z: -6 }, rotationY = -Math.PI / 4) {
     const group = new THREE.Group();
     group.name = 'Pencil';
 
@@ -103,12 +103,12 @@ export function createPencil(scene, physicsWorld) {
 
     // Position on table near character sheet
     // Y = -2.75 is the table surface. Add radius so it rests on it.
-    group.position.set(-2, -2.75 + pencilRadius, -4);
+    group.position.set(position.x, position.y + pencilRadius, position.z);
 
     // Rotate so it lays flat on the table.
     // The group's length is along its local Y-axis.
     // We rotate 90 degrees around X to lay it flat, and then around Y to point it.
-    group.rotation.set(Math.PI / 2, -Math.PI / 4, 0, 'YXZ');
+    group.rotation.set(Math.PI / 2, rotationY, 0, 'YXZ');
 
     scene.add(group);
 

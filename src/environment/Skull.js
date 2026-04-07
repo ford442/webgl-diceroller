@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createSkull(scene, physicsWorld) {
+export function createSkull(scene, physicsWorld, position = { x: -10, y: -2.4, z: -10 }, rotationY = 0.3) {
     const group = new THREE.Group();
     group.name = 'SkullProp';
 
@@ -119,10 +119,8 @@ export function createSkull(scene, physicsWorld) {
     // Place on table. Table Y = -2.75.
     // Skull height ~ 0.8 (Cranium 0.35*2 + Jaw).
     // Center ~ -2.75 + 0.35 = -2.4.
-    // Place near books/candle.
-    group.position.set(-1.5, -2.4, -3.0);
-    // Rotate to look at user
-    group.rotation.y = 0.3;
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createAmulet(scene, physicsWorld, position = { x: -3, y: -2.74, z: -2 }, rotationY = Math.PI / 6) {
+export function createAmulet(scene, physicsWorld, position = { x: -6, y: -2.74, z: -8 }, rotationY = Math.PI / 6) {
     const group = new THREE.Group();
     group.name = 'Amulet';
 

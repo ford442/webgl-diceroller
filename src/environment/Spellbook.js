@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createSpellbook(scene, physicsWorld) {
+export function createSpellbook(scene, physicsWorld, position = { x: -10, y: -2.35, z: 8 }, rotationY = Math.PI / 4) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Spellbook';
@@ -94,10 +94,8 @@ export function createSpellbook(scene, physicsWorld) {
     // Table Top -2.75.
     // Center Y = -2.75 + height/2 = -2.75 + 0.4 = -2.35.
     
-    // Position somewhere interesting, near the crystal ball or other edge
-    group.position.set(-8, -2.35, 6);
-    // Slightly rotated
-    group.rotation.set(0, Math.PI / 4, 0);
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 

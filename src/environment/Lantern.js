@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 import { registerInteractiveObject } from '../interaction.js';
 
-export function createLantern(scene, physicsWorld) {
+export function createLantern(scene, physicsWorld, position = { x: -8, y: -2.75, z: -12 }, rotationY = 0) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Lantern';
@@ -137,8 +137,8 @@ export function createLantern(scene, physicsWorld) {
     // Position on table
     // Table Top -2.75.
     // Base is at y=0 local, so set group y to -2.75.
-    group.position.set(-6, -2.75, 4);
-    group.rotation.y = Math.random() * Math.PI * 2;
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 
@@ -161,7 +161,7 @@ export function createLantern(scene, physicsWorld) {
     // Now group center is middle of lantern.
     // Table top -2.75.
     // Group Y = -2.75 + halfHeight
-    group.position.y = -2.75 + halfHeight;
+    group.position.set(position.x, position.y + halfHeight, position.z);
 
     const shape = new ammo.btCylinderShape(new ammo.btVector3(bodyRadiusTop + 0.05, halfHeight, bodyRadiusTop + 0.05));
     createStaticBody(physicsWorld, group, shape);

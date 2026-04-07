@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createCheeseWheel(scene, physicsWorld) {
+export function createCheeseWheel(scene, physicsWorld, position = { x: 12, y: -2.75, z: 8 }, rotationY = 0) {
     const group = new THREE.Group();
     group.name = 'CheeseWheel';
 
@@ -58,8 +58,8 @@ export function createCheeseWheel(scene, physicsWorld) {
 
     // Position on table
     // Table top is -2.75. Center of cheese = -2.75 + height/2.
-    group.position.set(-6, -2.75 + height / 2, -2);
-    group.rotation.y = Math.random() * Math.PI * 2;
+    group.position.set(position.x, position.y + height / 2, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 

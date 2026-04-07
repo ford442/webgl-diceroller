@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createCrystalBall(scene, physicsWorld) {
+export function createCrystalBall(scene, physicsWorld, position = { x: 12, y: -2.75, z: 0 }, rotationY = 0) {
     const group = new THREE.Group();
     group.name = 'CrystalBall';
 
@@ -88,7 +88,8 @@ export function createCrystalBall(scene, physicsWorld) {
 
     // Position on Table
     // Table Top is at Y = -2.75
-    group.position.set(6, -2.75, -4);
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 
@@ -100,8 +101,7 @@ export function createCrystalBall(scene, physicsWorld) {
             new THREE.SphereGeometry(ballRadius), 
             new THREE.MeshBasicMaterial({ visible: false })
         );
-        ballPhysMesh.position.copy(group.position);
-        ballPhysMesh.position.y += ballMesh.position.y;
+        ballPhysMesh.position.set(position.x, position.y + ballMesh.position.y, position.z);
         scene.add(ballPhysMesh);
 
         const ballShape = new ammo.btSphereShape(ballRadius);
@@ -112,8 +112,7 @@ export function createCrystalBall(scene, physicsWorld) {
             new THREE.CylinderGeometry(standRadiusBot, standRadiusBot, baseHeight),
             new THREE.MeshBasicMaterial({ visible: false })
         );
-        standPhysMesh.position.copy(group.position);
-        standPhysMesh.position.y += baseHeight / 2;
+        standPhysMesh.position.set(position.x, position.y + baseHeight / 2, position.z);
         scene.add(standPhysMesh);
 
         const standShape = new ammo.btCylinderShape(

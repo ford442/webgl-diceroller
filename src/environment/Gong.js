@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createGong(scene, physicsWorld) {
+export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z: -15 }, rotationY = Math.PI / 4) {
     const group = new THREE.Group();
     group.name = 'Gong';
 
@@ -112,10 +112,8 @@ export function createGong(scene, physicsWorld) {
 
     // --- Positioning ---
     // Place near a wall/corner of the room
-    // Room walls are around x: -20 to 20, z: -20 to 20
-    // Place in a corner: back-left
-    group.position.set(-15, -7.5, -15);
-    group.rotation.y = Math.PI / 4; // Face toward center
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 
@@ -129,8 +127,7 @@ export function createGong(scene, physicsWorld) {
             new THREE.BoxGeometry(baseWidth, postHeight, baseDepth),
             new THREE.MeshBasicMaterial({ visible: false })
         );
-        framePhysMesh.position.copy(group.position);
-        framePhysMesh.position.y += baseHeight / 2;
+        framePhysMesh.position.set(position.x, position.y + baseHeight / 2, position.z);
         scene.add(framePhysMesh);
         createStaticBody(physicsWorld, framePhysMesh, frameShape);
 
@@ -139,7 +136,7 @@ export function createGong(scene, physicsWorld) {
             new THREE.CylinderGeometry(gongRadius, gongRadius, gongThickness, 16),
             new THREE.MeshBasicMaterial({ visible: false })
         );
-        gongPhysMesh.position.copy(group.position);
+        gongPhysMesh.position.set(position.x, position.y, position.z);
         gongPhysMesh.rotation.z = Math.PI / 2;
         scene.add(gongPhysMesh);
         

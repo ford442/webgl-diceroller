@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createCharacterSheet(scene, physicsWorld) {
+export function createCharacterSheet(scene, physicsWorld, position = { x: -6, y: -2.75, z: -6 }, rotationY = Math.PI / 6) {
     const width = 4;
     const length = 5.5;
     const thickness = 0.02;
@@ -67,10 +67,8 @@ export function createCharacterSheet(scene, physicsWorld) {
 
     // Position on table (table surface is Y = -2.75)
     // Add half thickness to sit exactly on top
-    mesh.position.set(-4, -2.75 + thickness/2, -3);
-
-    // Slight rotation so it looks casually tossed
-    mesh.rotation.y = Math.PI / 6;
+    mesh.position.set(position.x, position.y + thickness/2, position.z);
+    mesh.rotation.y = rotationY;
 
     mesh.castShadow = true;
     mesh.receiveShadow = true;

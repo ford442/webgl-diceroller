@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createDiceBag(scene, physicsWorld) {
+export function createDiceBag(scene, physicsWorld, position = { x: -10, y: -1.95, z: 8 }, rotationY = 0) {
     const group = new THREE.Group();
     const loader = new THREE.TextureLoader();
 
@@ -59,9 +59,8 @@ export function createDiceBag(scene, physicsWorld) {
     // Position on Table
     // Table surface is at -2.75 (approx).
     // Let's place it near the edge.
-    group.position.set(-6, -2.75, 2);
-    // Random rotation
-    group.rotation.y = Math.random() * Math.PI * 2;
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 
@@ -112,7 +111,7 @@ export function createDiceBag(scene, physicsWorld) {
 
         // Visual bottom is now at -0.8.
         // To sit on table (-2.75), Group Y must be -2.75 + 0.8 = -1.95.
-        group.position.set(-6, -1.95, 2);
+        group.position.set(position.x, -1.95, position.z);
 
         createStaticBody(physicsWorld, group, shape);
     }

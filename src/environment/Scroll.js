@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createScroll(scene, physicsWorld) {
+export function createScroll(scene, physicsWorld, position = { x: 8, y: -2.4, z: 12 }, rotationY = 0) {
     const group = new THREE.Group();
     group.name = 'SealedScroll';
 
@@ -126,7 +126,8 @@ export function createScroll(scene, physicsWorld) {
     // Table Y = -2.75.
     // Radius ~0.35.
     // Center Y = -2.75 + 0.35 = -2.4.
-    group.position.set(2, -2.4, 6);
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 

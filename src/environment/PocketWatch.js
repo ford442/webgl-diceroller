@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createPocketWatch(scene, physicsWorld) {
+export function createPocketWatch(scene, physicsWorld, position = { x: 6, y: -2.65, z: 6 }, rotationY = 0) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'PocketWatch';
@@ -136,9 +136,8 @@ export function createPocketWatch(scene, physicsWorld) {
     // --- Position on Table ---
     // Table Top Y = -2.75.
     // Watch Thickness 0.2. Center Y = -2.75 + 0.1 = -2.65.
-    group.position.set(3, -2.65, 2);
-    // Random rotation
-    group.rotation.y = Math.random() * Math.PI * 2;
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 

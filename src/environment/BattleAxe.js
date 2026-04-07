@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createBattleAxe(scene, physicsWorld) {
+export function createBattleAxe(scene, physicsWorld, position = { x: 15, y: -6, z: 15 }, rotationY = Math.PI / 4) {
     const group = new THREE.Group();
     group.name = 'BattleAxe';
 
@@ -84,20 +84,11 @@ export function createBattleAxe(scene, physicsWorld) {
     group.add(head);
 
     // --- Position ---
-    // Lean against table leg at (9.25, -3, 9.25).
+    // Lean against table leg at position.
     // Floor at -10.
-    // Axe base at (x, -10, z).
-    // Lean top against leg.
-    // Handle length 8.
-    // Triangle: H = 8. Height = 7 (from -10 to -3).
-    // Base dist = sqrt(8^2 - 7^2) = sqrt(64 - 49) = sqrt(15) ~ 3.8.
-    // So base should be ~3.8 units away from leg.
-
     const legPos = new THREE.Vector3(9.25, -3, 9.25);
-    // Lean direction: Towards center? Or just against outside corner?
-    // Let's lean against the outside corner leg.
-    // Base at (9.25 + 2, -10, 9.25 + 2).
-    const basePos = new THREE.Vector3(12, -10, 12);
+    // Use provided position as base, or default to leaning against leg
+    const basePos = new THREE.Vector3(position.x, -10, position.z);
 
     // Set Group Position to base
     group.position.copy(basePos);
@@ -182,6 +173,11 @@ export function createBattleAxe(scene, physicsWorld) {
     group.position.copy(midPoint);
     group.lookAt(legPos);
     group.rotateX(Math.PI / 2);
+    
+    // Apply additional rotation if specified
+    if (rotationY !== 0) {
+        group.rotateY(rotationY);
+    }
 
     // Reset visual positions relative to new center
     handle.position.y = 0; // Centered

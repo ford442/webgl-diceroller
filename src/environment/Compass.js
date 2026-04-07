@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createCompass(scene, physicsWorld) {
+export function createCompass(scene, physicsWorld, position = { x: 8, y: -2.65, z: -8 }, rotationY = 0) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Compass';
@@ -114,8 +114,8 @@ export function createCompass(scene, physicsWorld) {
 
     // Position on table
     // Table Top is around -2.75. Center Y = -2.75 + height/2 = -2.65
-    group.position.set(4, -2.65, 3);
-    group.rotation.y = Math.random() * Math.PI * 2;
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 

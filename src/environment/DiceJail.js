@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createDiceJail(scene, physicsWorld) {
+export function createDiceJail(scene, physicsWorld, position = { x: -12, y: -2.75, z: 5 }, rotationY = Math.PI / 4) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'DiceJail';
@@ -174,10 +174,8 @@ export function createDiceJail(scene, physicsWorld) {
         // Group Origin is at Bottom Corner (0,0,0) of the cage local space.
         // Base is at 0...thickness.
         // So Group Y should be -2.75.
-        group.position.set(-8, -2.75, 5);
-
-        // Rotate to face center
-        group.rotation.y = Math.PI / 4;
+        group.position.set(position.x, position.y, position.z);
+        group.rotation.y = rotationY;
 
         scene.add(group);
         createStaticBody(physicsWorld, group, compoundShape);

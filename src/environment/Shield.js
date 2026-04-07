@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createShield(scene, physicsWorld) {
+export function createShield(scene, physicsWorld, position = { x: 16, y: 10, z: 0 }, rotationY = -Math.PI / 2) {
     const group = new THREE.Group();
     group.name = 'VikingShield';
 
@@ -73,15 +73,9 @@ export function createShield(scene, physicsWorld) {
     group.add(boss);
 
     // --- Position ---
-    // Chimney breast at x=18 (surface), y=10, z=0.
-    // Shield center at (18, 10, 0).
-    // But it needs to face -X (Left).
-    // Currently constructed facing Z.
-    // Rotate Group -90 deg Y (-PI/2).
-    // Facing Z -> Facing -X.
-
-    group.position.set(18, 10, 0);
-    group.rotation.y = -Math.PI / 2;
+    // Wall mounted shield position
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     // Tilt slightly down?
     group.rotation.z = -Math.PI / 12; // Tilt top forward (local Z rotation after Y rotation?)

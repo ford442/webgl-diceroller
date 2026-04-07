@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createMap(scene, physicsWorld) {
+export function createMap(scene, physicsWorld, position = { x: -8, y: -2.75, z: 12 }, rotationY = 0) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'WorldMap';
@@ -55,10 +55,9 @@ export function createMap(scene, physicsWorld) {
     // --- Position on Table ---
     // Table surface is at Y = -2.75.
     // Map center Y = -2.75 + thickness/2 = -2.725.
-    const posY = -2.75 + thickness/2;
-    group.position.set(-8, posY, 2);
-    // Slight random rotation
-    group.rotation.y = Math.random() * 0.2 - 0.1;
+    const posY = position.y + thickness/2;
+    group.position.set(position.x, posY, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 

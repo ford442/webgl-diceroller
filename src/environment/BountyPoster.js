@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createBountyPoster(scene, physicsWorld) {
+export function createBountyPoster(scene, physicsWorld, position = { x: -10, y: -2.75, z: -4 }, rotationY = -Math.PI / 8) {
     const width = 3.5;
     const length = 5;
     const thickness = 0.02;
@@ -149,11 +149,8 @@ export function createBountyPoster(scene, physicsWorld) {
     mesh.name = 'BountyPoster';
 
     // Position on table (table surface is Y = -2.75)
-    // Placed slightly off to the side, maybe overlapping with the character sheet or separate
-    mesh.position.set(-6, -2.75 + thickness/2, 1);
-
-    // Rotation so it faces the "player" mostly, but casually angled
-    mesh.rotation.y = -Math.PI / 8;
+    mesh.position.set(position.x, position.y + thickness/2, position.z);
+    mesh.rotation.y = rotationY;
 
     mesh.castShadow = true;
     mesh.receiveShadow = true;

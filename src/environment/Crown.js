@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createCrown(scene, physicsWorld) {
+export function createCrown(scene, physicsWorld, position = { x: -14, y: -2.75, z: 6 }, rotationY = 0) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'KingsCrown';
@@ -129,8 +129,8 @@ export function createCrown(scene, physicsWorld) {
 
     // --- Position on Table ---
     // Table Top -2.75.
-    group.position.set(-6, -2.75, 4);
-    group.rotation.y = Math.random() * Math.PI * 2;
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 
@@ -141,7 +141,7 @@ export function createCrown(scene, physicsWorld) {
     // The visual group's Y origin is at the bottom (y=0).
     // The physics shape origin should be at y = height / 2.
     // Shift visual meshes down relative to group, and move group up.
-    group.position.y += height / 2;
+    group.position.y = position.y + height / 2;
 
     // Offset all children down by height/2
     const childrenToMove = [...group.children];

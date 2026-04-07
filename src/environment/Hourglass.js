@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createHourglass(scene, physicsWorld) {
+export function createHourglass(scene, physicsWorld, position = { x: -12, y: -1.75, z: -8 }, rotationY = 0) {
     const group = new THREE.Group();
     group.name = 'Hourglass';
 
@@ -121,8 +121,8 @@ export function createHourglass(scene, physicsWorld) {
     // We want -1.0 (local) to be at -2.75 (world).
     // Group Y = -2.75 + 1.0 = -1.75.
 
-    group.position.set(-6, -1.75, 0);
-    group.rotation.y = Math.random() * Math.PI;
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 

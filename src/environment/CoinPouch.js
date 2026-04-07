@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createCoinPouch(scene, physicsWorld) {
+export function createCoinPouch(scene, physicsWorld, position = { x: -6, y: -2.75, z: 6 }, rotationY = 0) {
     const group = new THREE.Group();
     group.name = 'CoinPouch';
 
@@ -71,8 +71,8 @@ export function createCoinPouch(scene, physicsWorld) {
     // Position on table
     // Table Top -2.75.
     // Pouch base is at 0. Group Y should be -2.75.
-    group.position.set(-4.5, -2.75, 2.5);
-    group.rotation.y = Math.random() * Math.PI * 2;
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 
@@ -89,7 +89,7 @@ export function createCoinPouch(scene, physicsWorld) {
     // but the bag sits fine if we just use a slightly taller shape or shift the mesh down inside the group.
 
     // Let's adjust the group to be centered to match Ammo's expectations
-    group.position.y = -2.75 + height / 2;
+    group.position.y = position.y + height / 2;
     bodyMesh.position.y -= height / 2;
     tieMesh.position.y -= height / 2;
     string1.position.y -= height / 2;

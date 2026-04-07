@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createCoin(scene, physicsWorld) {
+export function createCoin(scene, physicsWorld, position = { x: 8, y: -2.75, z: -2 }, rotationY = 0) {
     const ammo = getAmmo();
 
     // Group to hold all coins
@@ -25,7 +25,7 @@ export function createCoin(scene, physicsWorld) {
     // Create a scattered pile of coins
     const numCoins = 12;
     // Central position for the pile
-    const pileCenter = new THREE.Vector3(5, -2.75, -2);
+    const pileCenter = new THREE.Vector3(position.x, position.y, position.z);
 
     for (let i = 0; i < numCoins; i++) {
         const coinMesh = new THREE.Mesh(geometry, goldMaterial);

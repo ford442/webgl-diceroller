@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 import { registerInteractiveObject } from '../interaction.js';
 
-export function createWand(scene, physicsWorld) {
+export function createWand(scene, physicsWorld, position = { x: 8, y: -2.70, z: 4 }, rotationY = Math.PI / 4) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'MagicWand';
@@ -93,10 +93,10 @@ export function createWand(scene, physicsWorld) {
 
     // Position on table top (Y = -2.75)
     // The cylinder radius is ~0.05. Center Y = -2.75 + 0.05 = -2.70
-    group.position.set(3, -2.70, 1);
+    group.position.set(position.x, position.y, position.z);
 
     // Rotate to lay flat. 'YXZ' rotation order to prevent gimbal lock.
-    group.rotation.set(0, Math.PI / 4, Math.PI / 2, 'YXZ');
+    group.rotation.set(0, rotationY, Math.PI / 2, 'YXZ');
 
     scene.add(group);
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createDiceTower(scene, physicsWorld) {
+export function createDiceTower(scene, physicsWorld, position = { x: 12, y: -3.0, z: -8 }, rotationY = -Math.PI / 6) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'DiceTower';
@@ -114,10 +114,8 @@ export function createDiceTower(scene, physicsWorld) {
     // --- Positioning ---
     // Place on the table (Table surface is at approx Y = -2.75)
     // Tower base is at Y=0 relative to group.
-    group.position.set(8, -3.0, -8);
-
-    // Rotate slightly for style
-    group.rotation.y = -Math.PI / 6;
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 

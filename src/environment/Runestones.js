@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createRunestones(scene, physicsWorld) {
+export function createRunestones(scene, physicsWorld, position = { x: 10, y: -2.75, z: -10 }, rotationY = 0) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Runestones';
@@ -23,10 +23,9 @@ export function createRunestones(scene, physicsWorld) {
     ];
 
     // Base position on the table (Table Y is approx -2.75)
-    // Place them off to the side, e.g., near X=3, Z=-5
-    const baseX = 3.5;
-    const baseZ = -5.5;
-    const baseY = -2.75 + height / 2; // Sit exactly on the table
+    const baseX = position.x;
+    const baseZ = position.z;
+    const baseY = position.y + height / 2; // Sit exactly on the table
 
     for (let i = 0; i < numStones; i++) {
         // Procedurally generated texture for the top face

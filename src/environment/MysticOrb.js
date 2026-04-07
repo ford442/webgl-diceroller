@@ -23,7 +23,7 @@ const MODE_NAMES = {
     [OrbMode.ARCANE]: 'Arcane'
 };
 
-export function createMysticOrb(scene, physicsWorld) {
+export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.75, z: 4 }, rotationY = 0) {
     const group = new THREE.Group();
     group.name = 'MysticOrb';
 
@@ -133,8 +133,8 @@ export function createMysticOrb(scene, physicsWorld) {
 
     // --- Positioning ---
     // Place on the table surface (table top is at Y = -2.75)
-    // Pedestal height: ~1.35, so position at -2.75 + 1.35/2 adjustment
-    group.position.set(8, -2.75, 4);
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 
@@ -150,8 +150,7 @@ export function createMysticOrb(scene, physicsWorld) {
             new THREE.CylinderGeometry(pedestalBaseRadius, pedestalBaseRadius, pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight, 16),
             new THREE.MeshBasicMaterial({ visible: false })
         );
-        pedestalPhysMesh.position.copy(group.position);
-        pedestalPhysMesh.position.y += (pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight) / 2;
+        pedestalPhysMesh.position.set(position.x, position.y + (pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight) / 2, position.z);
         scene.add(pedestalPhysMesh);
         createStaticBody(physicsWorld, pedestalPhysMesh, pedestalShape);
     }

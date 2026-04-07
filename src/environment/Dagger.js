@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo } from '../physics.js';
 
-export function createDagger(scene, physicsWorld) {
+export function createDagger(scene, physicsWorld, position = { x: 8, y: -2.45, z: 8 }, rotationY = Math.PI / 4) {
     const group = new THREE.Group();
 
     // Materials
@@ -62,8 +62,8 @@ export function createDagger(scene, physicsWorld) {
     // Position the whole dagger on the table
     // Table is at y = -3 roughly.
     // We want it lying flat.
-    group.position.set(5, -2.45, -2);
-    group.rotation.y = Math.PI / 4; // Angled casually
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 
@@ -83,16 +83,7 @@ export function createDagger(scene, physicsWorld) {
         // Half extents
         const shape = new Ammo.btBoxShape(new Ammo.btVector3(1.25, 0.2, 4.0));
 
-        const mass = 0; // Static
-        const localInertia = new Ammo.btVector3(0, 0, 0);
-        const motionState = new Ammo.btDefaultMotionState(transform);
-        const rbInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
-        const body = new Ammo.btRigidBody(rbInfo);
-
-        body.setFriction(0.5);
-        body.setRestitution(0.1);
-
-        physicsWorld.addRigidBody(body);
+        createStaticBody(physicsWorld, group, shape);
     }
 
     return group;

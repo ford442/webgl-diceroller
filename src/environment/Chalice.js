@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createChalice(scene, physicsWorld) {
+export function createChalice(scene, physicsWorld, position = { x: 8, y: -2.75, z: -10 }, rotationY = 0) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Chalice';
@@ -108,8 +108,8 @@ export function createChalice(scene, physicsWorld) {
     // Position on Table
     // Table Top -2.75.
     // Chalice base starts at 0 locally, so group.position.y = -2.75
-    group.position.set(3, -2.75, 4);
-    group.rotation.y = Math.random() * Math.PI * 2;
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 
@@ -127,9 +127,8 @@ export function createChalice(scene, physicsWorld) {
     // We add an invisible mesh centered at totalHeight/2, and create the body on that mesh.
 
     const physMesh = new THREE.Mesh(new THREE.BoxGeometry(maxRadius*2, totalHeight, maxRadius*2));
-    physMesh.position.copy(group.position);
-    physMesh.position.y += totalHeight / 2;
-    physMesh.rotation.copy(group.rotation);
+    physMesh.position.set(position.x, position.y + totalHeight / 2, position.z);
+    physMesh.rotation.y = rotationY;
     physMesh.visible = false;
     scene.add(physMesh);
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createDragonScale(scene, physicsWorld) {
+export function createDragonScale(scene, physicsWorld, position = { x: 10, y: -2.75, z: -12 }, rotationY = 0) {
     const group = new THREE.Group();
     group.name = 'DragonScale';
 
@@ -30,14 +30,8 @@ export function createDragonScale(scene, physicsWorld) {
     // Table Top -2.75.
     // The geometry is centered in the group (mostly).
     // Let's place it slightly above the table to avoid z-fighting.
-    group.position.set(3, -2.75 + (height / 2), -5);
-
-    // Slight random rotation to make it look dropped
-    group.rotation.set(
-        (Math.random() - 0.5) * 0.1,
-        Math.random() * Math.PI * 2,
-        (Math.random() - 0.5) * 0.1
-    );
+    group.position.set(position.x, position.y + (height / 2), position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 

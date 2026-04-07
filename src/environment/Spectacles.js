@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createSpectacles(scene, physicsWorld) {
+export function createSpectacles(scene, physicsWorld, position = { x: 6, y: -2.75, z: -4 }, rotationY = 0) {
     const group = new THREE.Group();
     group.name = 'Spectacles';
 
@@ -124,14 +124,13 @@ export function createSpectacles(scene, physicsWorld) {
     // Table top is roughly Y = -2.75.
     // The frames lay flat, so rotate X by -90 degrees.
     group.rotation.x = -Math.PI / 2;
-    // Also add a slight random rotation around the vertical axis (which is now Z locally, but Y globally)
-    // Actually, applying global Y rotation after local X rotation is easier.
+    // Also add rotation around the vertical axis
     group.rotation.order = 'YXZ';
-    group.rotation.y = Math.random() * Math.PI * 2;
+    group.rotation.y = rotationY;
 
     // To sit flush on the table, we need to account for the frame thickness.
     const restingHeight = frameTube; // roughly
-    group.position.set(3.5, -2.75 + restingHeight, -1.5); // Placed near the writing set and character sheet
+    group.position.set(position.x, position.y + restingHeight, position.z);
 
     scene.add(group);
 

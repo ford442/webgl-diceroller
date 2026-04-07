@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createMerchantScale(scene, physicsWorld) {
+export function createMerchantScale(scene, physicsWorld, position = { x: -14, y: -2.75, z: 2 }, rotationY = -Math.PI / 4) {
     const group = new THREE.Group();
     group.name = 'MerchantScale';
 
@@ -101,9 +101,8 @@ export function createMerchantScale(scene, physicsWorld) {
     // --- Position ---
     // Table Top -2.75.
     // Base is at y=0 local.
-    // Place at (-5, -2.75, 5).
-    group.position.set(-5, -2.75, 5);
-    group.rotation.y = -Math.PI / 4; // Angle it
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 

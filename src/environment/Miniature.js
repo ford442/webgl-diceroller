@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createMiniature(scene, physicsWorld) {
+export function createMiniature(scene, physicsWorld, position = { x: 10, y: -2.75, z: -8 }, rotationY = 0) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Miniature';
@@ -53,10 +53,8 @@ export function createMiniature(scene, physicsWorld) {
     // Position on table
     // Table Top -2.75.
     // Group origin (Y=0 local) is the bottom of the base.
-    group.position.set(3, -2.75, 4);
-
-    // Give it a random rotation around Y
-    group.rotation.y = Math.random() * Math.PI * 2;
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 
@@ -84,9 +82,8 @@ export function createMiniature(scene, physicsWorld) {
     const physMesh = new THREE.Mesh(dummyGeo, dummyMat);
 
     // Set physMesh world position to the center of the miniature.
-    physMesh.position.copy(group.position);
-    physMesh.position.y += totalHeight / 2;
-    physMesh.rotation.copy(group.rotation);
+    physMesh.position.set(position.x, position.y + totalHeight / 2, position.z);
+    physMesh.rotation.y = rotationY;
     scene.add(physMesh);
 
     createStaticBody(physicsWorld, physMesh, shape);

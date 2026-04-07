@@ -1,17 +1,17 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createTavernMeal(scene, physicsWorld) {
+export function createTavernMeal(scene, physicsWorld, position = { x: 10, y: -2.75, z: 10 }, rotationY = Math.PI / 4) {
     const ammo = getAmmo();
 
     // 1. Tankard of Ale
-    createTankard(scene, physicsWorld, ammo);
+    createTankard(scene, physicsWorld, ammo, position, rotationY);
 
     // 2. Plate with Food
-    createFoodPlate(scene, physicsWorld, ammo);
+    createFoodPlate(scene, physicsWorld, ammo, position, rotationY);
 }
 
-function createTankard(scene, physicsWorld, ammo) {
+function createTankard(scene, physicsWorld, ammo, basePosition, baseRotation) {
     const group = new THREE.Group();
     group.name = 'Tankard';
 
@@ -83,9 +83,9 @@ function createTankard(scene, physicsWorld, ammo) {
     // Position on Table
     // Table Top -2.75.
     // Tankard Height 0.8. Center at -2.75 + 0.4 = -2.35.
-    // Place at (6, -2, 6) area.
-    group.position.set(6, -2.35, 6);
-    group.rotation.y = Math.random() * Math.PI * 2;
+    // Offset from base position
+    group.position.set(basePosition.x - 0.5, -2.35, basePosition.z - 0.5);
+    group.rotation.y = baseRotation + (Math.random() - 0.5) * 0.2;
 
     scene.add(group);
 
@@ -94,7 +94,7 @@ function createTankard(scene, physicsWorld, ammo) {
     createStaticBody(physicsWorld, group, shape);
 }
 
-function createFoodPlate(scene, physicsWorld, ammo) {
+function createFoodPlate(scene, physicsWorld, ammo, basePosition, baseRotation) {
     const group = new THREE.Group();
     group.name = 'FoodPlate';
 
@@ -144,8 +144,8 @@ function createFoodPlate(scene, physicsWorld, ammo) {
     // Table Top -2.75.
     // Plate Height 0.1. Center at -2.75 + 0.05 = -2.7.
     // Place near Tankard.
-    group.position.set(7.5, -2.7, 5.5);
-    group.rotation.y = Math.random() * Math.PI * 2;
+    group.position.set(basePosition.x + 0.5, -2.7, basePosition.z + 0.5);
+    group.rotation.y = baseRotation + (Math.random() - 0.5) * 0.3;
 
     scene.add(group);
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createPotionSet(scene, physicsWorld) {
+export function createPotionSet(scene, physicsWorld, position = { x: 12, y: -2.75, z: -6 }, rotationY = -Math.PI / 6) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'PotionSet';
@@ -73,10 +73,8 @@ export function createPotionSet(scene, physicsWorld) {
     // --- Positioning the Group ---
     // Table Top Y = -2.75.
     // We want the bottom of the stand (y=0 local) to be at -2.75.
-    // Stand is at (8, -2.75, 0).
-    group.position.set(8, -2.75, 0);
-    // Slight rotation
-    group.rotation.y = -Math.PI / 6; // Angle towards center
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 

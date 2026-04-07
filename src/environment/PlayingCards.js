@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createPlayingCards(scene, physicsWorld) {
+export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -2.75, z: -8 }, rotationY = 0) {
     const group = new THREE.Group();
     group.name = 'PlayingCards';
 
@@ -27,8 +27,8 @@ export function createPlayingCards(scene, physicsWorld) {
     // Base position on the table
     // Table Top -2.75.
     // Center Y = -2.75 + 0.005 = -2.745.
-    const baseX = -3;
-    const baseZ = -2;
+    const baseX = position.x;
+    const baseZ = position.z;
 
     const backTexture = generateCardBackTexture();
     const backMaterial = new THREE.MeshStandardMaterial({

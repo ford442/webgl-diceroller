@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createWaxSeal(scene, physicsWorld) {
+export function createWaxSeal(scene, physicsWorld, position = { x: 10, y: -2.75, z: -8 }, rotationY = 0) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'WaxSealStamp';
@@ -107,14 +107,8 @@ export function createWaxSeal(scene, physicsWorld) {
     // --- Position on Table ---
     // Table Top is at Y = -2.75.
     // The group bottom (baseMesh bottom) is at Y = 0 local.
-    const stampPosX = 3.5;
-    const stampPosZ = -4.5;
-    const stampPosY = -2.75;
-
-    group.position.set(stampPosX, stampPosY, stampPosZ);
-
-    // Randomize rotation slightly around Y to make it look naturally placed
-    group.rotation.y = Math.random() * Math.PI * 2;
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 
@@ -133,7 +127,7 @@ export function createWaxSeal(scene, physicsWorld) {
     // It's easier to move the group's logical center and visually offset the children down.
 
     // Move group center up by totalHeight/2:
-    group.position.y += totalHeight / 2;
+    group.position.y = position.y + totalHeight / 2;
 
     // Move all children down by totalHeight/2 to keep them visually at Y=-2.75:
     handleMesh.position.y -= totalHeight / 2;
