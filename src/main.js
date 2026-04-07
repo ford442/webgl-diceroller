@@ -9,7 +9,7 @@ import { VignetteShader } from './shaders/VignetteShader.js';
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
 import { diceTypes, diceModels, loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice, spawnedDice } from './dice.js';
 import { initUI, createCrosshair } from './ui.js';
-import { initInteraction, updateInteraction, registerInteractiveObject } from './interaction.js';
+import { initInteraction, updateInteraction, registerInteractiveObject, isDragging, isHoveringOverDice } from './interaction.js';
 import { createTable } from './environment/Table.js';
 import { createTavernWalls } from './environment/TavernWalls.js';
 import { createBookshelf } from './environment/Bookshelf.js';
@@ -651,10 +651,23 @@ function setupInput() {
         keys[event.code] = false;
     });
 
-    // Pointer Lock Request
-    renderer.domElement.addEventListener('click', () => {
+    // Pointer Lock Request - only when not clicking on dice
+    renderer.domElement.addEventListener('click', (event) => {
         if (!isLocked) {
-            renderer.domElement.requestPointerLock();
+            // Check if we clicked on a die
+            const rect = getContainerRect();
+            const relX = event.clientX - rect.left;
+            const relY = event.clientY - rect.top;
+            const normX = (relX / rect.width) * 2 - 1;
+            const normY = -(relY / rect.height) * 2 + 1;
+            
+            // Only request pointer lock if we didn't hit a die
+            // The mousedown handler will pick up the die
+            setTimeout(() => {
+                if (!isDragging() && diceFocusState === DiceFocusState.IDLE) {
+                    renderer.domElement.requestPointerLock();
+                }
+            }, 50);
         }
     });
 
@@ -698,12 +711,8 @@ function setupInput() {
     document.addEventListener('mousedown', (event) => {
         if (diceFocusState === DiceFocusState.IDLE) {
             if (isLocked) {
-                const rect = getContainerRect();
-                const halfWidth = rect.width / 2;
-                const halfHeight = rect.height / 2;
-                const normX = cursorPos.x / halfWidth;
-                const normY = cursorPos.y / halfHeight;
-                if (interaction) interaction.handleDown(normX, -normY);
+                // FPS mode: crosshair is always centered, shoot ray from center
+                if (interaction) interaction.handleDown(0, 0);
             } else {
                 // Unlocked: Allow clicking dice with coordinates relative to canvas
                 const rect = getContainerRect();

@@ -184,6 +184,18 @@ export const updateInteraction = () => {
     updateLevitation();
 };
 
+export const isDragging = () => draggedItem !== null;
+
+export const isHoveringOverDice = (camera, normX, normY) => {
+    if (!raycaster) return false;
+    mouse.x = normX;
+    mouse.y = normY;
+    raycaster.setFromCamera(mouse, camera);
+    const meshes = spawnedDice.map(d => d.mesh);
+    const intersects = raycaster.intersectObjects(meshes);
+    return intersects.length > 0;
+};
+
 const levitatingDice = [];
 
 function triggerLevitation(object, scene, physicsWorld) {
