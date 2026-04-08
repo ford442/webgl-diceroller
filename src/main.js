@@ -13,6 +13,7 @@ import { initInteraction, updateInteraction, registerInteractiveObject, isDraggi
 import { createTable } from './environment/Table.js';
 import { createTavernWalls } from './environment/TavernWalls.js';
 import { createBookshelf } from './environment/Bookshelf.js';
+import { createDecorativeWalls } from './environment/DecorativeWalls.js';
 import { createRoom } from './environment/Room.js';
 import { createChair } from './environment/Chair.js';
 import { createChest } from './environment/Chest.js';
@@ -339,6 +340,9 @@ async function init() {
 
     // Bookshelf (Background Prop)
     createBookshelf(scene, physicsWorld, { x: -18, y: -10, z: 0 }, Math.PI / 2);
+
+    // Decorative Walls (Multiple Bookshelves)
+    createDecorativeWalls(scene, physicsWorld);
 
     // Chairs (Background Props)
     createChair(scene, physicsWorld, { x: -14, y: -9.5, z: 6 }, Math.PI / 3);
