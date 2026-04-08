@@ -233,30 +233,31 @@ export function createTable(scene) {
         restitution: 0.5
     });
 
-    // 2. Walls
-    const worldWallY = position.y + localRimY;
+    // 2. Walls (Invisible Collider Walls)
+    const physicsWallHeight = 100.0;
+    const worldWallY = position.y + (physicsWallHeight / 2) - 0.25;
 
     physicsBodies.push({
         type: 'box',
-        size: { x: physicsWallThickness, y: rimHeight, z: depth + physicsWallThickness*2 },
+        size: { x: physicsWallThickness, y: physicsWallHeight, z: depth + physicsWallThickness*2 },
         position: { x: -(width/2 + physicsWallThickness/2), y: worldWallY, z: 0 },
         mass: 0
     });
     physicsBodies.push({
         type: 'box',
-        size: { x: physicsWallThickness, y: rimHeight, z: depth + physicsWallThickness*2 },
+        size: { x: physicsWallThickness, y: physicsWallHeight, z: depth + physicsWallThickness*2 },
         position: { x: (width/2 + physicsWallThickness/2), y: worldWallY, z: 0 },
         mass: 0
     });
     physicsBodies.push({
         type: 'box',
-        size: { x: width + physicsWallThickness*2, y: rimHeight, z: physicsWallThickness },
+        size: { x: width + physicsWallThickness*2, y: physicsWallHeight, z: physicsWallThickness },
         position: { x: 0, y: worldWallY, z: -(depth/2 + physicsWallThickness/2) },
         mass: 0
     });
     physicsBodies.push({
         type: 'box',
-        size: { x: width + physicsWallThickness*2, y: rimHeight, z: physicsWallThickness },
+        size: { x: width + physicsWallThickness*2, y: physicsWallHeight, z: physicsWallThickness },
         position: { x: 0, y: worldWallY, z: (depth/2 + physicsWallThickness/2) },
         mass: 0
     });
