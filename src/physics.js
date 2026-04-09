@@ -85,9 +85,10 @@ export const createFloorAndWalls = (scene, world, tableConfig = null) => {
         // Visuals are already created by Table.js, so we only need physics for the floor
         // Note: floorY matches the visual mesh position. The box shape is centered at floorY,
         // so the top surface is at floorY + thickness/2.
-        // Visual mesh is also centered at floorY, so surfaces align.
-        console.log(`Creating physics floor at Y=${floorY} with thickness=${thickness}`);
-        createPhysicsBox(world, width, thickness, depth, tableConfig.position.x, floorY, tableConfig.position.z, 0);
+        // The visual velvet mesh is raised by 0.1 locally, so we raise the physics floor by 0.1 to align exactly.
+        const velvetVisualOffset = 0.1;
+        console.log(`Creating physics floor at Y=${floorY + velvetVisualOffset} with thickness=${thickness}`);
+        createPhysicsBox(world, width, thickness, depth, tableConfig.position.x, floorY + velvetVisualOffset, tableConfig.position.z, 0);
     } else {
         // Fallback or legacy floor
         createBox(scene, world, 25, 1, 25, 0, -5, 0, 0, 0xffffff, 'images/wood.jpg');

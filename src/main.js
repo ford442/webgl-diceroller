@@ -79,6 +79,7 @@ import { createLockpicks } from './environment/Lockpicks.js';
 import { createDart } from './environment/Dart.js';
 import { createMagnifyingGlass } from './environment/MagnifyingGlass.js';
 import { createRope } from './environment/Rope.js';
+import { createGoblet } from './environment/Goblet.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -594,6 +595,9 @@ async function init() {
 
     // Coiled Rope Prop - near the magnifying glass
     const ropeData = createRope(scene, physicsWorld, { x: 6, y: -2.75, z: -15 }, Math.PI / 6);
+
+    // Goblet Prop - near the tavern meal
+    createGoblet(scene, physicsWorld, { x: 5, y: -2.75, z: 12 }, 0);
 
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
