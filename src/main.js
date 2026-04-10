@@ -79,6 +79,7 @@ import { createLockpicks } from './environment/Lockpicks.js';
 import { createDart } from './environment/Dart.js';
 import { createMagnifyingGlass } from './environment/MagnifyingGlass.js';
 import { createRope } from './environment/Rope.js';
+import { createCandelabra } from './environment/Candelabra.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -594,6 +595,12 @@ async function init() {
 
     // Coiled Rope Prop - near the magnifying glass
     const ropeData = createRope(scene, physicsWorld, { x: 6, y: -2.75, z: -15 }, Math.PI / 6);
+
+    // Candelabra Prop - on the back edge of the table (moved to front left)
+    const candelabraData = createCandelabra(scene, physicsWorld, { x: -8, y: -2.75, z: 12 }, Math.PI / 4);
+    if (candelabraData && candelabraData.update) {
+        updateRegistry.register('candelabra', candelabraData.update);
+    }
 
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
