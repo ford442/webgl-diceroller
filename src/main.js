@@ -49,6 +49,7 @@ import { createLute } from './environment/Lute.js';
 import { createRunestones } from './environment/Runestones.js';
 import { createSmokingPipe } from './environment/SmokingPipe.js';
 import { createGemstones } from './environment/Gemstones.js';
+import { createCandelabra } from './environment/Candelabra.js';
 import { createWritingSet } from './environment/WritingSet.js';
 import { createCheeseWheel } from './environment/CheeseWheel.js';
 import { createFloatingCandles } from './environment/FloatingCandles.js';
@@ -503,6 +504,12 @@ async function init() {
     // Runestones Prop - right back
     createRunestones(scene, physicsWorld, { x: 12, y: -2.75, z: -12 }, -Math.PI / 12);
 
+    // Candelabra
+    const candelabraData = createCandelabra(scene, physicsWorld, { x: 6, y: -2.75, z: -10 }, Math.PI / 4);
+    if (candelabraData && candelabraData.update) {
+        updateRegistry.register('candelabra', candelabraData.update);
+    }
+
     // Smoking Pipe and Tobacco Pouch - front edge
     const pipeData = createSmokingPipe(scene, physicsWorld, { x: -4, y: -2.73, z: 14 }, Math.PI / 8);
     if (pipeData && pipeData.update) {
@@ -606,7 +613,7 @@ async function init() {
     const noShadowNames = ['Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra'];
     scene.traverse(child => {
         if (child.isMesh) {
             let p = child.parent;
