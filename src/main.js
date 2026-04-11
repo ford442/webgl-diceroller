@@ -80,6 +80,7 @@ import { createDart } from './environment/Dart.js';
 import { createMagnifyingGlass } from './environment/MagnifyingGlass.js';
 import { createRope } from './environment/Rope.js';
 import { createCandelabra } from './environment/Candelabra.js';
+import { createGoblet } from './environment/Goblet.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -601,6 +602,8 @@ async function init() {
     if (candelabraData && candelabraData.update) {
         updateRegistry.register('candelabra', candelabraData.update);
     }
+    // Goblet Prop - near the tavern meal
+    createGoblet(scene, physicsWorld, { x: 5, y: -2.75, z: 12 }, 0);
 
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
