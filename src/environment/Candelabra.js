@@ -1,139 +1,194 @@
 import * as THREE from 'three';
-import { createStaticBody } from '../physics.js';
+import { getAmmo } from '../physics.js';
+import { createFire } from './Fire.js';
 
-export function createCandelabra(scene, physicsWorld, position, rotationY = 0) {
+export function createCandelabra(
+    scene,
+    physicsWorld,
+    position = { x: 0, y: 0, z: 0 },
+    rotationY = 0
+) {
+    const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Candelabra';
-    group.position.set(position.x, position.y, position.z);
-    group.rotation.y = rotationY;
 
-    // Materials
-    const brassMaterial = new THREE.MeshStandardMaterial({
+    // Materials (best of both versions – rich brass + warm wax + emissive wick)
+    const brassMat = new THREE.MeshStandardMaterial({
         color: 0xb5a642,
+        metalness: 1.0,
         roughness: 0.3,
-        metalness: 0.8,
+        envMapIntensity: 1.2,
     });
 
     const waxMaterial = new THREE.MeshStandardMaterial({
-        color: 0xfffdd0,
-        roughness: 0.7,
-        metalness: 0.1,
-        transparent: true,
-        opacity: 0.9,
+        color: 0xf5f5e0,
+        roughness: 0.4,
+        metalness: 0.0,
+        emissive: 0x221a10,
+        emissiveIntensity: 0.1,
     });
 
-    // Base
-    const baseGeo = new THREE.CylinderGeometry(0.8, 1.2, 0.4, 16);
-    const baseMesh = new THREE.Mesh(baseGeo, brassMaterial);
-    baseMesh.position.y = 0.2;
+    const wickMat = new THREE.MeshStandardMaterial({
+        color: 0x1a1a1a,
+        roughness: 1.0,
+        emissive: 0x331100,
+        emissiveIntensity: 0.3,
+    });
+
+    // 1. Base
+    const baseGeo = new THREE.CylinderGeometry(0.8, 1.2, 0.2, 16);
+    const baseMesh = new THREE.Mesh(baseGeo, brassMat);
+    baseMesh.position.y = 0.1;
+    baseMesh.castShadow = true;
+    baseMesh.receiveShadow = true;
     group.add(baseMesh);
 
-    // Stem
-    const stemGeo = new THREE.CylinderGeometry(0.2, 0.3, 3.0, 16);
-    const stemMesh = new THREE.Mesh(stemGeo, brassMaterial);
-    stemMesh.position.y = 1.9; // 0.4 + 1.5
+    // 2. Main Stem
+    const stemGeo = new THREE.CylinderGeometry(0.15, 0.2, 1.5, 16);
+    const stemMesh = new THREE.Mesh(stemGeo, brassMat);
+    stemMesh.position.y = 0.95;
+    stemMesh.castShadow = true;
+    stemMesh.receiveShadow = true;
     group.add(stemMesh);
 
-    // Center cup
-    const cupGeo = new THREE.CylinderGeometry(0.4, 0.2, 0.4, 16);
-    const centerCup = new THREE.Mesh(cupGeo, brassMaterial);
-    centerCup.position.y = 3.6; // 3.4 + 0.2
-    group.add(centerCup);
+    // Stem decorative node
+    const stemNodeGeo = new THREE.SphereGeometry(0.3, 16, 16);
+    const stemNodeMesh = new THREE.Mesh(stemNodeGeo, brassMat);
+    stemNodeMesh.position.y = 1.0;
+    group.add(stemNodeMesh);
 
-    // Arms
-    const armGeo = new THREE.TorusGeometry(1.0, 0.15, 8, 16, Math.PI);
-    const arm1 = new THREE.Mesh(armGeo, brassMaterial);
-    arm1.position.set(0, 2.5, 0);
-    arm1.rotation.x = Math.PI;
-    group.add(arm1);
+    // Store flames for animation
+    const flames = [];
 
-    const arm2 = new THREE.Mesh(armGeo, brassMaterial);
-    arm2.position.set(0, 2.5, 0);
-    arm2.rotation.x = Math.PI;
-    arm2.rotation.y = Math.PI / 2;
-    group.add(arm2);
+    // Helper to create a candle + cup + wick + fire at any location
+    function addCandle(parent, offsetX, offsetY, offsetZ) {
+        // Cup
+        const cupGeo = new THREE.CylinderGeometry(0.3, 0.2, 0.2, 16);
+        const cupMesh = new THREE.Mesh(cupGeo, brassMat);
+        cupMesh.position.set(offsetX, offsetY, offsetZ);
+        cupMesh.castShadow = true;
+        parent.add(cupMesh);
 
-    // Side cups
-    const cupPositions = [
-        { x: 1.0, z: 0 },
-        { x: -1.0, z: 0 },
-        { x: 0, z: 1.0 },
-        { x: 0, z: -1.0 }
-    ];
-
-    cupPositions.forEach(pos => {
-        const sideCup = new THREE.Mesh(cupGeo, brassMaterial);
-        sideCup.position.set(pos.x, 2.7, pos.z);
-        group.add(sideCup);
-    });
-
-    // Candles and Lights
-    const candles = [];
-    const lights = [];
-
-    // Add center candle
-    cupPositions.push({ x: 0, z: 0, isCenter: true });
-
-    cupPositions.forEach(pos => {
-        const yOffset = pos.isCenter ? 3.8 : 2.9;
-
-        // Candle body
-        const candleHeight = 1.0 + Math.random() * 0.5;
-        const candleGeo = new THREE.CylinderGeometry(0.25, 0.25, candleHeight, 16);
-        const candle = new THREE.Mesh(candleGeo, waxMaterial);
-        candle.position.set(pos.x, yOffset + candleHeight/2, pos.z);
-        group.add(candle);
-        candles.push(candle);
+        // Candle wax (slightly randomized height)
+        const candleHeight = 0.8 + Math.random() * 0.4;
+        const candleGeo = new THREE.CylinderGeometry(0.15, 0.15, candleHeight, 16);
+        const candleMesh = new THREE.Mesh(candleGeo, waxMaterial);
+        candleMesh.position.set(offsetX, offsetY + 0.1 + candleHeight / 2, offsetZ);
+        candleMesh.castShadow = true;
+        parent.add(candleMesh);
 
         // Wick
-        const wickGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.1, 4);
-        const wickMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-        const wick = new THREE.Mesh(wickGeo, wickMat);
-        wick.position.set(0, candleHeight/2 + 0.05, 0);
-        candle.add(wick);
+        const wickHeight = 0.1;
+        const wickGeo = new THREE.CylinderGeometry(0.02, 0.02, wickHeight, 8);
+        const wickMesh = new THREE.Mesh(wickGeo, wickMat);
+        wickMesh.position.set(offsetX, offsetY + 0.1 + candleHeight + wickHeight / 2, offsetZ);
+        parent.add(wickMesh);
 
-        // Point Light
-        const light = new THREE.PointLight(0xffa500, 2.0, 10.0);
-        light.position.set(0, candleHeight/2 + 0.2, 0);
-        // Reduce shadow intensity and map size to optimize
-        light.castShadow = true;
-        light.shadow.bias = -0.001;
-        candle.add(light);
+        // Realistic fire particle system (from Fire.js)
+        const fire = createFire({
+            scale: 0.3,
+            color: 0xffaa00,
+            particleCount: 15,
+            spread: 0.05,
+        });
+        fire.mesh.position.set(offsetX, offsetY + 0.1 + candleHeight + wickHeight, offsetZ);
+        parent.add(fire.mesh);
 
-        lights.push({ light, baseIntensity: 1.5 + Math.random() * 1.0, offset: Math.random() * 100 });
-    });
+        // Flame point light
+        const flameLight = new THREE.PointLight(0xff6600, 0.5, 5);
+        flameLight.position.copy(fire.mesh.position);
+        parent.add(flameLight);
+
+        flames.push({ fire, light: flameLight });
+    }
+
+    // Center candle
+    addCandle(group, 0, 1.7, 0);
+
+    // 4 curved arms + candles (much more elegant than the old torus arms)
+    const numArms = 4;
+    const armRadius = 1.0;
+    const armHeight = 1.4;
+
+    for (let i = 0; i < numArms; i++) {
+        const angle = (i / numArms) * Math.PI * 2;
+
+        // Smooth curved arm using CatmullRomCurve3
+        const curve = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(Math.cos(angle) * 0.2, 1.0, Math.sin(angle) * 0.2), // start at center
+            new THREE.Vector3(Math.cos(angle) * armRadius * 0.6, 0.8, Math.sin(angle) * armRadius * 0.6), // dip
+            new THREE.Vector3(Math.cos(angle) * armRadius, armHeight - 0.2, Math.sin(angle) * armRadius), // end at cup
+        ]);
+
+        const armGeo = new THREE.TubeGeometry(curve, 16, 0.08, 8, false);
+        const armMesh = new THREE.Mesh(armGeo, brassMat);
+        armMesh.castShadow = true;
+        armMesh.receiveShadow = true;
+        group.add(armMesh);
+
+        // Candle at the end of each arm
+        addCandle(group, Math.cos(angle) * armRadius, armHeight, Math.sin(angle) * armRadius);
+    }
+
+    // Final positioning & rotation
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
 
     scene.add(group);
 
-    // Physics (Static Box covering the base and arms)
-    // We use global AmmoInstance
-    const w = 1.2;
-    const h = 2.5; // Half height
-    const d = 1.2;
+    // Physics – two static cylinder bodies (base + wide stem/arms envelope)
+    // Base
+    const baseShape = new ammo.btCylinderShape(new ammo.btVector3(1.2, 0.1, 1.2));
+    const transform = new ammo.btTransform();
+    transform.setIdentity();
+    transform.setOrigin(new ammo.btVector3(position.x, position.y + 0.1, position.z));
+    const q = new ammo.btQuaternion(group.quaternion.x, group.quaternion.y, group.quaternion.z, group.quaternion.w);
+    transform.setRotation(q);
 
-    // Y offset to put origin of physics shape correctly.
-    // Half height is 2.5. So center of shape is 2.5.
-    const shape = new AmmoInstance.btBoxShape(new AmmoInstance.btVector3(w, h, d));
+    const motionState = new ammo.btDefaultMotionState(transform);
+    const localInertia = new ammo.btVector3(0, 0, 0);
+    const rbInfo = new ammo.btRigidBodyConstructionInfo(0, motionState, baseShape, localInertia);
+    const baseBody = new ammo.btRigidBody(rbInfo);
+    physicsWorld.addRigidBody(baseBody);
 
-    // Offset the physics body
-    // Create a dummy mesh for positioning
-    const dummyMesh = new THREE.Mesh();
-    dummyMesh.position.set(position.x, position.y + h, position.z);
-    dummyMesh.rotation.y = rotationY;
+    // Stem + arms envelope (slightly wider radius to cover the curved arms)
+    const stemShape = new ammo.btCylinderShape(new ammo.btVector3(1.3, 1.2, 1.3));
+    const stemTransform = new ammo.btTransform();
+    stemTransform.setIdentity();
+    stemTransform.setOrigin(new ammo.btVector3(position.x, position.y + 1.8, position.z));
+    stemTransform.setRotation(q);
 
-    const body = createStaticBody(physicsWorld, dummyMesh, shape);
+    const stemMotionState = new ammo.btDefaultMotionState(stemTransform);
+    const stemRbInfo = new ammo.btRigidBodyConstructionInfo(0, stemMotionState, stemShape, localInertia);
+    const stemBody = new ammo.btRigidBody(stemRbInfo);
+    physicsWorld.addRigidBody(stemBody);
+
+    // Animation loop (fire particles + realistic flickering light)
+    function update(deltaTime, time) {
+        flames.forEach((f) => {
+            f.fire.update(deltaTime);
+
+            // Gentle breathing + random flicker
+            const breathing = Math.sin(time * 2.0) * 0.08;
+            const flicker = (Math.random() - 0.5) * 0.12;
+            f.light.intensity = 0.5 + breathing + flicker;
+
+            // Subtle warm color shift
+            const hueShift = Math.sin(time * 3.5) * 0.03;
+            f.light.color.setHSL(0.08 + hueShift, 1.0, 0.52);
+        });
+    }
 
     return {
         group,
-        update: (deltaTime, time) => {
-            lights.forEach(lightData => {
-                const { light, baseIntensity, offset } = lightData;
-                // Flicker calculation
-                const flicker = Math.sin(time * 15.0 + offset) * 0.2 +
-                                Math.sin(time * 25.0 - offset) * 0.1 +
-                                Math.random() * 0.05;
-                light.intensity = Math.max(0.1, baseIntensity + flicker);
-            });
-        }
+        update,
+        // Optional cleanup (recommended for long-lived scenes)
+        remove() {
+            physicsWorld.removeRigidBody(baseBody);
+            physicsWorld.removeRigidBody(stemBody);
+            // Ammo.js bodies should also be deleted if you want to free memory:
+            // ammo.destroy(baseBody); ammo.destroy(stemBody); etc.
+            scene.remove(group);
+        },
     };
 }
