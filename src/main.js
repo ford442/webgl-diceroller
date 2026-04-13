@@ -78,6 +78,7 @@ import { createPadlock } from './environment/Padlock.js';
 import { createSpectacles } from './environment/Spectacles.js';
 import { createLockpicks } from './environment/Lockpicks.js';
 import { createDart } from './environment/Dart.js';
+import { createScrollCase } from './environment/ScrollCase.js';
 import { createMagnifyingGlass } from './environment/MagnifyingGlass.js';
 import { createRope } from './environment/Rope.js';
 import { createGoblet } from './environment/Goblet.js';
@@ -597,6 +598,9 @@ async function init() {
 
     // Dart Prop - front edge
     createDart(scene, physicsWorld, { x: 8, y: -2.75, z: 14 }, Math.PI / 4);
+
+    // Scroll Case - on the table
+    createScrollCase(scene, physicsWorld, { x: 1, y: -2.43, z: 10 }, Math.PI / 6);
 
     // Magnifying Glass Prop - back edge
     createMagnifyingGlass(scene, physicsWorld, { x: 9, y: -2.75, z: -14 }, Math.PI / 3);
