@@ -153,25 +153,30 @@ export const spawnObjects = (scene, world, config = null) => {
     });
 };
 
+// Reusable transform to avoid per-frame allocations
+let _sharedTransform = null;
+
 export const updateDiceVisuals = () => {
     const Ammo = getAmmo();
-    const transform = new Ammo.btTransform();
+    
+    // Lazy-init shared transform
+    if (!_sharedTransform) {
+        _sharedTransform = new Ammo.btTransform();
+    }
 
     spawnedDice.forEach(die => {
         const body = die.body;
         const mesh = die.mesh;
 
         if (body && body.getMotionState()) {
-            body.getMotionState().getWorldTransform(transform);
-            const origin = transform.getOrigin();
-            const rotation = transform.getRotation();
+            body.getMotionState().getWorldTransform(_sharedTransform);
+            const origin = _sharedTransform.getOrigin();
+            const rotation = _sharedTransform.getRotation();
 
             mesh.position.set(origin.x(), origin.y(), origin.z());
             mesh.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
         }
     });
-
-    Ammo.destroy(transform);
 };
 
 export const clearDice = (scene, world) => {
@@ -267,6 +272,6 @@ export const throwDice = (scene, world) => {
         body.applyCentralImpulse(new Ammo.btVector3(forceX, forceY, forceZ));
         body.applyTorqueImpulse(new Ammo.btVector3(spinX, spinY, spinZ));
     });
-
-    Ammo.destroy(transform);
+    
+    // transform is stack-allocated in Ammo, no need to destroy
 };

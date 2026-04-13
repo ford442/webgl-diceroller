@@ -9,7 +9,7 @@ import { VignetteShader } from './shaders/VignetteShader.js';
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
 import { diceTypes, diceModels, loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice, spawnedDice } from './dice.js';
 import { initUI, createCrosshair } from './ui.js';
-import { initInteraction, updateInteraction, registerInteractiveObject, isDragging, isHoveringOverDice } from './interaction.js';
+import { initInteraction, updateInteraction, registerInteractiveObject, isDragging, isHoveringOverDice, getHoveredDie } from './interaction.js';
 import { createTable } from './environment/Table.js';
 import { createTavernWalls } from './environment/TavernWalls.js';
 import { createBookshelf } from './environment/Bookshelf.js';
@@ -156,7 +156,7 @@ async function init() {
 
     // Renderer setup
     renderer = new THREE.WebGLRenderer({ antialias: false });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap pixel ratio for performance
+    renderer.setPixelRatio(1.0); // Fixed 1:1 pixel ratio for consistent performance
     renderer.setSize(containerWidth, containerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -676,23 +676,12 @@ function setupInput() {
         keys[event.code] = false;
     });
 
-    // Pointer Lock Request - only when not clicking on dice
-    renderer.domElement.addEventListener('click', (event) => {
-        if (!isLocked) {
-            // Check if we clicked on a die
-            const rect = getContainerRect();
-            const relX = event.clientX - rect.left;
-            const relY = event.clientY - rect.top;
-            const normX = (relX / rect.width) * 2 - 1;
-            const normY = -(relY / rect.height) * 2 + 1;
-            
-            // Only request pointer lock if we didn't hit a die
-            // The mousedown handler will pick up the die
-            setTimeout(() => {
-                if (!isDragging() && diceFocusState === DiceFocusState.IDLE) {
-                    renderer.domElement.requestPointerLock();
-                }
-            }, 50);
+    // Pointer Lock Request - RIGHT CLICK ONLY to enter FPS mode
+    // Left click always interacts with dice/props
+    renderer.domElement.addEventListener('contextmenu', (event) => {
+        event.preventDefault(); // Prevent browser context menu
+        if (!isLocked && diceFocusState === DiceFocusState.IDLE) {
+            renderer.domElement.requestPointerLock();
         }
     });
 
@@ -729,30 +718,55 @@ function setupInput() {
             const normX = (relX / rect.width) * 2 - 1;
             const normY = -(relY / rect.height) * 2 + 1;
             if (interaction) interaction.handleMove(normX, normY);
+            
+            // Update cursor based on hover state
+            const canvas = renderer.domElement;
+            const hoveredDie = getHoveredDie(camera, normX, normY);
+            if (hoveredDie) {
+                canvas.style.cursor = 'grab';
+            } else {
+                canvas.style.cursor = 'default';
+            }
         }
     });
 
-    // Pass clicks to interaction
-    document.addEventListener('mousedown', (event) => {
+    // Pass clicks to interaction (left click only for dice)
+    renderer.domElement.addEventListener('mousedown', (event) => {
+        if (event.button !== 0) return; // Only left click
         if (diceFocusState === DiceFocusState.IDLE) {
+            // Change cursor to grabbing when clicking a die
+            const rect = getContainerRect();
+            const relX = event.clientX - rect.left;
+            const relY = event.clientY - rect.top;
+            const normX = (relX / rect.width) * 2 - 1;
+            const normY = -(relY / rect.height) * 2 + 1;
+            const hoveredDie = getHoveredDie(camera, normX, normY);
+            if (hoveredDie) {
+                renderer.domElement.style.cursor = 'grabbing';
+            }
+            
             if (isLocked) {
                 // FPS mode: crosshair is always centered, shoot ray from center
                 if (interaction) interaction.handleDown(0, 0);
             } else {
                 // Unlocked: Allow clicking dice with coordinates relative to canvas
-                const rect = getContainerRect();
-                const relX = event.clientX - rect.left;
-                const relY = event.clientY - rect.top;
-                const normX = (relX / rect.width) * 2 - 1;
-                const normY = -(relY / rect.height) * 2 + 1;
                 if (interaction) interaction.handleDown(normX, normY);
             }
         }
     });
 
-    document.addEventListener('mouseup', () => {
+    renderer.domElement.addEventListener('mouseup', (event) => {
+        if (event.button !== 0) return; // Only left click
         // Always trigger handleUp so we can drop dice regardless of lock state
         if (interaction) interaction.handleUp();
+        // Reset cursor
+        renderer.domElement.style.cursor = 'default';
+    });
+    
+    // Handle mouse leaving canvas - drop any dragged dice
+    renderer.domElement.addEventListener('mouseleave', () => {
+        if (interaction) interaction.handleUp();
+        renderer.domElement.style.cursor = 'default';
     });
 }
 

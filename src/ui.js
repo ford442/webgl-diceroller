@@ -67,6 +67,28 @@ export const initUI = (onUpdateDice, onRollAll) => {
     container.appendChild(rollBtn);
     canvasContainer.appendChild(container);
 
+    // Controls Help Panel
+    const helpContainer = document.createElement('div');
+    helpContainer.style.position = 'absolute';
+    helpContainer.style.bottom = '10px';
+    helpContainer.style.left = '10px';
+    helpContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    helpContainer.style.padding = '10px';
+    helpContainer.style.color = 'white';
+    helpContainer.style.fontFamily = 'sans-serif';
+    helpContainer.style.fontSize = '12px';
+    helpContainer.style.borderRadius = '5px';
+    helpContainer.style.zIndex = '1000';
+    helpContainer.innerHTML = `
+        <div style="font-weight: bold; margin-bottom: 5px;">Controls:</div>
+        <div>🖱️ <b>Left Click</b> - Grab/throw dice</div>
+        <div>🖱️ <b>Right Click</b> - Enter FPS mode</div>
+        <div>⌨️ <b>WASD</b> - Move (FPS mode)</div>
+        <div>⌨️ <b>ESC</b> - Exit FPS mode</div>
+        <div>⌨️ <b>R</b> - Roll all dice</div>
+    `;
+    canvasContainer.appendChild(helpContainer);
+
     return {
         updateCounts: (newCounts) => {
             Object.keys(newCounts).forEach(key => {

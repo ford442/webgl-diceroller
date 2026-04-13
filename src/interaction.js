@@ -203,8 +203,27 @@ export const isHoveringOverDice = (camera, normX, normY) => {
     mouse.y = normY;
     raycaster.setFromCamera(mouse, camera);
     const meshes = spawnedDice.map(d => d.mesh);
-    const intersects = raycaster.intersectObjects(meshes);
+    const intersects = raycaster.intersectObjects(meshes, true);
     return intersects.length > 0;
+};
+
+// Get the first die under the cursor (for hover effects)
+export const getHoveredDie = (camera, normX, normY) => {
+    if (!raycaster) return null;
+    mouse.x = normX;
+    mouse.y = normY;
+    raycaster.setFromCamera(mouse, camera);
+    const meshes = spawnedDice.map(d => d.mesh);
+    const intersects = raycaster.intersectObjects(meshes, true);
+    if (intersects.length > 0) {
+        let object = intersects[0].object;
+        // Traverse up to find the die group
+        while (object && !object.userData.body && object.parent) {
+            object = object.parent;
+        }
+        return object;
+    }
+    return null;
 };
 
 const levitatingDice = [];
@@ -239,12 +258,19 @@ function triggerLevitation(object, scene, physicsWorld) {
     });
 }
 
+// Reusable transform for levitation updates
+let _levitationTransform = null;
+
 function updateLevitation() {
     if (levitatingDice.length === 0) return;
 
     const now = Date.now();
     const Ammo = getAmmo();
-    const transform = new Ammo.btTransform();
+    
+    // Lazy-init shared transform
+    if (!_levitationTransform) {
+        _levitationTransform = new Ammo.btTransform();
+    }
 
     for (let i = levitatingDice.length - 1; i >= 0; i--) {
         const item = levitatingDice[i];
@@ -271,10 +297,10 @@ function updateLevitation() {
             const p = item.object.position;
             const q = item.object.quaternion;
 
-            transform.setIdentity();
-            transform.setOrigin(new Ammo.btVector3(p.x, p.y, p.z));
-            transform.setRotation(new Ammo.btQuaternion(q.x, q.y, q.z, q.w));
-            item.body.getMotionState().setWorldTransform(transform);
+            _levitationTransform.setIdentity();
+            _levitationTransform.setOrigin(new Ammo.btVector3(p.x, p.y, p.z));
+            _levitationTransform.setRotation(new Ammo.btQuaternion(q.x, q.y, q.z, q.w));
+            item.body.getMotionState().setWorldTransform(_levitationTransform);
 
         } else {
             // Release
@@ -304,6 +330,4 @@ function updateLevitation() {
             levitatingDice.splice(i, 1);
         }
     }
-
-    Ammo.destroy(transform);
 }
