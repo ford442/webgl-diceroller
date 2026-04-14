@@ -83,6 +83,7 @@ import { createMagnifyingGlass } from './environment/MagnifyingGlass.js';
 import { createRope } from './environment/Rope.js';
 import { createGoblet } from './environment/Goblet.js';
 import { createCrossbow } from './environment/Crossbow.js';
+import { createWaterskin } from './environment/Waterskin.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -616,6 +617,7 @@ async function init() {
     // Goblet Prop - near the tavern meal
     createGoblet(scene, physicsWorld, { x: 5, y: -2.75, z: 12 }, 0);
     createCrossbow(scene, physicsWorld, { x: -8, y: -2.75, z: -2 }, Math.PI / 4);
+    createWaterskin(scene, physicsWorld, { x: 7, y: -2.75, z: 2 }, Math.PI / 6);
 
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
@@ -624,7 +626,7 @@ async function init() {
     const noShadowNames = ['Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra', 'Waterskin'];
     scene.traverse(child => {
         if (child.isMesh) {
             let p = child.parent;
