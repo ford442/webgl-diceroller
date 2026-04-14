@@ -144,10 +144,11 @@ export async function createLamp(scene) {
     const lights = [];
     const positions = [-spacing, 0, spacing];
 
-    positions.forEach(x => {
+    positions.forEach((x, i) => {
         const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 40, 25);
         light.position.set(x, lightY, 0);
-        light.castShadow = true;
+        // Only the center light (i === 1) casts shadows — two cubemap shadow passes saved per frame
+        light.castShadow = (i === 1);
         light.shadow.bias = -0.0001;
         light.shadow.mapSize.width = 512;
         light.shadow.mapSize.height = 512;

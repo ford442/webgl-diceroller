@@ -43,7 +43,7 @@ export const getAmmo = () => {
 
 export const stepPhysics = (world, deltaTime) => {
     // Higher sub-steps for better accuracy with fast moving dice
-    world.stepSimulation(deltaTime, 10, 1/60);
+    world.stepSimulation(deltaTime, 4, 1/60);
 };
 
 export const createFloorAndWalls = (scene, world, tableConfig = null) => {
@@ -233,6 +233,10 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
 
     world.addRigidBody(body);
 
+    // Free temporary Ammo.js heap objects (body copies the data it needs)
+    AmmoInstance.destroy(rbInfo);
+    AmmoInstance.destroy(localInertia);
+
     return body;
 };
 
@@ -253,6 +257,11 @@ export const createStaticBody = (world, mesh, shape) => {
     const body = new AmmoInstance.btRigidBody(rbInfo);
 
     world.addRigidBody(body);
+
+    // Free temporary Ammo.js heap objects (body copies the data it needs)
+    AmmoInstance.destroy(rbInfo);
+    AmmoInstance.destroy(localInertia);
+
     return body;
 };
 
@@ -290,6 +299,7 @@ export const createConvexHullShape = (mesh) => {
         v.applyMatrix4(mesh.matrixWorld);
         const vec = new AmmoInstance.btVector3(v.x, v.y, v.z);
         shape.addPoint(vec);
+        AmmoInstance.destroy(vec);
     }
     return shape;
 };

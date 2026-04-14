@@ -180,9 +180,15 @@ export const updateDiceVisuals = () => {
 };
 
 export const clearDice = (scene, world) => {
+    const Ammo = getAmmo();
     spawnedDice.forEach(die => {
         scene.remove(die.mesh);
+        if (die.mesh.geometry) die.mesh.geometry.dispose();
+        const mats = Array.isArray(die.mesh.material) ? die.mesh.material : [die.mesh.material];
+        mats.forEach(m => m && m.dispose());
         world.removeRigidBody(die.body);
+        Ammo.destroy(die.body.getMotionState());
+        Ammo.destroy(die.body);
     });
     spawnedDice = [];
 };
@@ -207,15 +213,22 @@ export const updateDiceSet = (scene, world, targetCounts) => {
             spawnObjects(scene, world, toAdd);
         } else if (diff < 0) {
             // Remove 'abs(diff)' amount of this type
+            const Ammo = getAmmo();
             let toRemove = Math.abs(diff);
             // Iterate backwards to safely remove
             for (let i = spawnedDice.length - 1; i >= 0; i--) {
                 if (toRemove === 0) break;
                 if (spawnedDice[i].type === type) {
-                    // Remove physics
-                    world.removeRigidBody(spawnedDice[i].body);
-                    // Remove visual
-                    scene.remove(spawnedDice[i].mesh);
+                    const die = spawnedDice[i];
+                    // Remove physics and free Ammo heap objects
+                    world.removeRigidBody(die.body);
+                    Ammo.destroy(die.body.getMotionState());
+                    Ammo.destroy(die.body);
+                    // Remove visual and free Three.js resources
+                    scene.remove(die.mesh);
+                    if (die.mesh.geometry) die.mesh.geometry.dispose();
+                    const mats = Array.isArray(die.mesh.material) ? die.mesh.material : [die.mesh.material];
+                    mats.forEach(m => m && m.dispose());
                     // Remove from array
                     spawnedDice.splice(i, 1);
                     toRemove--;
@@ -232,9 +245,11 @@ export const throwDice = (scene, world) => {
     spawnedDice.forEach((die, index) => {
         const body = die.body;
 
-        // Reset velocity
-        body.setLinearVelocity(new Ammo.btVector3(0, 0, 0));
-        body.setAngularVelocity(new Ammo.btVector3(0, 0, 0));
+        // Reset velocity — use temps destroyed immediately after
+        const zeroVec = new Ammo.btVector3(0, 0, 0);
+        body.setLinearVelocity(zeroVec);
+        body.setAngularVelocity(zeroVec);
+        Ammo.destroy(zeroVec);
 
         // Group them near the top center for the throw
         // Reduced spread
@@ -243,7 +258,9 @@ export const throwDice = (scene, world) => {
         const z = (getSecureRandom() - 0.5) * 4;
 
         transform.setIdentity();
-        transform.setOrigin(new Ammo.btVector3(x, y, z));
+        const origin = new Ammo.btVector3(x, y, z);
+        transform.setOrigin(origin);
+        Ammo.destroy(origin);
 
         // Random starting orientation
         const q = new THREE.Quaternion();
@@ -252,7 +269,9 @@ export const throwDice = (scene, world) => {
             getSecureRandom() * Math.PI * 2,
             getSecureRandom() * Math.PI * 2
         ));
-        transform.setRotation(new Ammo.btQuaternion(q.x, q.y, q.z, q.w));
+        const btQ = new Ammo.btQuaternion(q.x, q.y, q.z, q.w);
+        transform.setRotation(btQ);
+        Ammo.destroy(btQ);
 
         body.setWorldTransform(transform);
         body.getMotionState().setWorldTransform(transform);
@@ -269,9 +288,14 @@ export const throwDice = (scene, world) => {
         const spinY = (getSecureRandom() - 0.5) * 100; // Was 350
         const spinZ = (getSecureRandom() - 0.5) * 100; // Was 350
 
-        body.applyCentralImpulse(new Ammo.btVector3(forceX, forceY, forceZ));
-        body.applyTorqueImpulse(new Ammo.btVector3(spinX, spinY, spinZ));
+        const impulse = new Ammo.btVector3(forceX, forceY, forceZ);
+        body.applyCentralImpulse(impulse);
+        Ammo.destroy(impulse);
+
+        const torque = new Ammo.btVector3(spinX, spinY, spinZ);
+        body.applyTorqueImpulse(torque);
+        Ammo.destroy(torque);
     });
-    
-    // transform is stack-allocated in Ammo, no need to destroy
+
+    Ammo.destroy(transform);
 };
