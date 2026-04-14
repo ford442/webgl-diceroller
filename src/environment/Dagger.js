@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo } from '../physics.js';
+import { getAmmo, createStaticBody } from '../physics.js';
 
 export function createDagger(scene, physicsWorld, position = { x: 8, y: -2.45, z: 8 }, rotationY = Math.PI / 4) {
     const group = new THREE.Group();
