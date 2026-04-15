@@ -20,6 +20,7 @@ import { createChest } from './environment/Chest.js';
 import { createClutter } from './environment/Clutter.js';
 import { createTavernMeal } from './environment/TavernMeal.js';
 import { createDagger } from './environment/Dagger.js';
+import { createSword } from './environment/Sword.js';
 import { createShield } from './environment/Shield.js';
 import { createBell } from './environment/Bell.js';
 import { createBattleAxe } from './environment/BattleAxe.js';
@@ -470,6 +471,9 @@ async function init() {
 
     // Dagger - right front
     createDagger(scene, physicsWorld, { x: 13, y: -2.45, z: 11 }, Math.PI / 3);
+
+    // Sword (Resting on table edge)
+    createSword(scene, physicsWorld, { x: -14, y: -2.45, z: 12 }, -Math.PI / 6);
 
     // Shield (Wall Mount) - on back wall
     createShield(scene, physicsWorld, { x: 0, y: 2, z: -24 }, 0);
