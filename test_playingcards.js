@@ -3,28 +3,39 @@ const { chromium } = require('playwright');
 (async () => {
     console.log("Starting browser...");
     const browser = await chromium.launch({
-        args: ['--use-gl=swiftshader']
+        args: [
+            '--use-gl=swiftshader',
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu-shader-disk-cache'
+        ]
     });
     const page = await browser.newPage();
 
-    console.log("Navigating to http://localhost:5173/?no-post...");
+    console.log("Navigating to http://localhost:4173/?no-post...");
     // Wait until network is idle to ensure scene and scripts load
-    await page.goto('http://localhost:5173/?no-post', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:4173/?no-post', { waitUntil: 'networkidle', timeout: 60000 });
 
     console.log("Waiting for scene to be ready...");
     await page.waitForFunction(() => window.scene !== undefined);
 
-    // Give it a brief moment for asynchronous initialization (like Ammo.js)
-    await page.waitForTimeout(1000);
+    console.log("Waiting for loading overlay to disappear...");
+    await page.waitForFunction("() => !document.getElementById('loading-overlay')", { timeout: 60000 });
 
+    // Evaluate and recursively search the scene graph
     console.log("Checking for PlayingCards object in the scene...");
     const exists = await page.evaluate(() => {
-        const obj = window.scene.getObjectByName('PlayingCards');
-        if (obj) {
+        let pc = null;
+        window.scene.traverse((child) => {
+            if (child.name === 'PlayingCards') pc = child;
+        });
+
+        if (pc) {
             return {
                 found: true,
-                position: obj.position,
-                childrenCount: obj.children.length
+                position: pc.position,
+                childrenCount: pc.children.length
             };
         }
         return { found: false };
