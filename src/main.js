@@ -85,6 +85,7 @@ import { createRope } from './environment/Rope.js';
 import { createGoblet } from './environment/Goblet.js';
 import { createCrossbow } from './environment/Crossbow.js';
 import { createWaterskin } from './environment/Waterskin.js';
+import { createAstrolabe } from './environment/Astrolabe.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -623,6 +624,12 @@ async function init() {
     createCrossbow(scene, physicsWorld, { x: -8, y: -2.75, z: -2 }, Math.PI / 4);
     createWaterskin(scene, physicsWorld, { x: 7, y: -2.75, z: 2 }, Math.PI / 6);
 
+    // Astrolabe Prop - right edge
+    const astrolabeData = createAstrolabe(scene, physicsWorld, { x: 10, y: -2.75, z: -8 }, Math.PI / 4);
+    if (astrolabeData && astrolabeData.update) {
+        updateRegistry.register('astrolabe', astrolabeData.update);
+    }
+
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
 
@@ -630,7 +637,7 @@ async function init() {
     const noShadowNames = ['Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra', 'Waterskin'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra', 'Waterskin', 'Astrolabe'];
     scene.traverse(child => {
         if (child.isMesh) {
             let p = child.parent;
