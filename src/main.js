@@ -86,6 +86,7 @@ import { createGoblet } from './environment/Goblet.js';
 import { createCrossbow } from './environment/Crossbow.js';
 import { createWaterskin } from './environment/Waterskin.js';
 import { createAstrolabe } from './environment/Astrolabe.js';
+import { createSundial } from './environment/Sundial.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -630,6 +631,9 @@ async function init() {
         updateRegistry.register('astrolabe', astrolabeData.update);
     }
 
+    // Sundial Prop
+    createSundial(scene, physicsWorld, { x: 8, y: -2.75, z: 8 }, -Math.PI / 6);
+
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
 
@@ -637,7 +641,7 @@ async function init() {
     const noShadowNames = ['Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra', 'Waterskin', 'Astrolabe'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra', 'Waterskin', 'Astrolabe', 'Sundial'];
     scene.traverse(child => {
         if (child.isMesh) {
             let p = child.parent;
