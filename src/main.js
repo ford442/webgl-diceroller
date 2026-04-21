@@ -87,6 +87,7 @@ import { createCrossbow } from './environment/Crossbow.js';
 import { createWaterskin } from './environment/Waterskin.js';
 import { createAstrolabe } from './environment/Astrolabe.js';
 import { createSundial } from './environment/Sundial.js';
+import { createAleKeg } from './environment/AleKeg.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -633,6 +634,9 @@ async function init() {
 
     // Sundial Prop
     createSundial(scene, physicsWorld, { x: 8, y: -2.75, z: 8 }, -Math.PI / 6);
+
+    // Ale Keg Prop - left back
+    createAleKeg(scene, physicsWorld, { x: -16, y: -2.75, z: -10 }, Math.PI / 4);
 
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
