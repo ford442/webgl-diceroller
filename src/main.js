@@ -59,6 +59,8 @@ import { createMug } from './environment/Mug.js';
 import { createTankard } from './environment/Tankard.js';
 import { createWaxSeal } from './environment/WaxSeal.js';
 import { createCrown } from './environment/Crown.js';
+import { createHelmet } from './environment/Helmet.js';
+
 import { createGong } from './environment/Gong.js';
 import { createMysticOrb } from './environment/MysticOrb.js';
 import { createDMScreen } from './environment/DMScreen.js';
@@ -546,6 +548,8 @@ async function init() {
 
     // Kings Crown Prop - back edge center
     createCrown(scene, physicsWorld, { x: 0, y: -2.75, z: -13 }, 0);
+    createHelmet(scene, physicsWorld, { x: -15, y: -2.75, z: 8 }, Math.PI / 6);
+
 
     // Gong Prop (Interactive) - back wall
     const gongResult = createGong(scene, physicsWorld, { x: 0, y: 0, z: -24 }, 0);
