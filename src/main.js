@@ -644,6 +644,9 @@ async function init() {
     createAleKeg(scene, physicsWorld, { x: -16, y: -2.75, z: -10 }, Math.PI / 4);
     createFlute(scene, physicsWorld, { x: 12, y: -2.75, z: 6 }, Math.PI / 3);
 
+    // Flute Prop - front edge
+    createFlute(scene, physicsWorld, { x: 2, y: -2.75, z: 14 }, -Math.PI / 8);
+
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
 
@@ -651,7 +654,7 @@ async function init() {
     const noShadowNames = ['Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra', 'Waterskin', 'Astrolabe', 'Sundial'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra', 'Waterskin', 'Astrolabe', 'Sundial', 'Flute'];
     scene.traverse(child => {
         if (child.isMesh) {
             let p = child.parent;
