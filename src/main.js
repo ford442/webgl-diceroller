@@ -90,6 +90,7 @@ import { createWaterskin } from './environment/Waterskin.js';
 import { createAstrolabe } from './environment/Astrolabe.js';
 import { createSundial } from './environment/Sundial.js';
 import { createAleKeg } from './environment/AleKeg.js';
+import { createFlute } from './environment/Flute.js';
 import { TavernEnvironment } from './environment/TavernEnvironment.js';
 
 let camera, scene, renderer, composer;
@@ -641,6 +642,7 @@ async function init() {
 
     // Ale Keg Prop - left back
     createAleKeg(scene, physicsWorld, { x: -16, y: -2.75, z: -10 }, Math.PI / 4);
+    createFlute(scene, physicsWorld, { x: 12, y: -2.75, z: 6 }, Math.PI / 3);
 
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
@@ -677,6 +679,9 @@ async function init() {
         overlay.style.opacity = '0';
         setTimeout(() => overlay.remove(), 500);
     }
+
+    // Flag to indicate all async tiers have finished loading
+    window.sceneReady = true;
 }
 
 function setupInput() {
