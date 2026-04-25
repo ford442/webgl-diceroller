@@ -60,7 +60,7 @@ export function createFlute(scene, physicsWorld, position = { x: 0, y: -2.75, z:
         hole.rotation.x = Math.PI / 2;
         group.add(hole);
     }
-    
+
     // Embouchure hole (blow hole)
     const blowHole = new THREE.Mesh(holeGeo, holeMat);
     blowHole.position.x = -0.7;
@@ -70,7 +70,7 @@ export function createFlute(scene, physicsWorld, position = { x: 0, y: -2.75, z:
     // Position and Rotation
     group.position.set(position.x, position.y + radius, position.z); // Adjust y by radius so it rests on surface
     group.rotation.y = rotationY;
-    
+
     // Add to scene
     scene.add(group);
 

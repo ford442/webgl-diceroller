@@ -642,6 +642,7 @@ async function init() {
 
     // Ale Keg Prop - left back
     createAleKeg(scene, physicsWorld, { x: -16, y: -2.75, z: -10 }, Math.PI / 4);
+    createFlute(scene, physicsWorld, { x: 12, y: -2.75, z: 6 }, Math.PI / 3);
 
     // Flute Prop - front edge
     createFlute(scene, physicsWorld, { x: 2, y: -2.75, z: 14 }, -Math.PI / 8);
@@ -682,7 +683,7 @@ async function init() {
         setTimeout(() => overlay.remove(), 500);
     }
 
-    // Explicit signal that the entire scene graph is populated and ready for tests
+    // Flag to indicate all async tiers have finished loading
     window.sceneReady = true;
 }
 
