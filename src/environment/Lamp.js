@@ -30,9 +30,11 @@ export async function createLamp(scene) {
     const texGlass = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_glass.jpg');
     const texSteel = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_steel.jpg');
     const texWood = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_wood.jpg');
+    texCopper.colorSpace = THREE.SRGBColorSpace;
 
     const matCopper = new THREE.MeshStandardMaterial({
-        map: texCopper, roughness: 0.4, metalness: 0.8, color: 0xffaa88
+        map: texCopper, roughness: 0.4, metalness: 0.6, color: 0xffaa88,
+        emissive: 0x221100, emissiveIntensity: 0.3  // NEW
     });
     const matSteel = new THREE.MeshStandardMaterial({
         map: texSteel, roughness: 0.5, metalness: 0.7, color: 0xaaaaaa
