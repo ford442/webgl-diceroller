@@ -60,87 +60,47 @@ export async function createLamp(scene) {
     }
 
     // Compute bounding box of raw object
-    const initialBox = new THREE.Box3().setFromObject(object);
-    const center = initialBox.getCenter(new THREE.Vector3());
-    const size = initialBox.getSize(new THREE.Vector3());
+const initialBox = new THREE.Box3().setFromObject(object);
+const center = initialBox.getCenter(new THREE.Vector3());
+const size = initialBox.getSize(new THREE.Vector3());
 
-    console.log('[Lamp] Raw model bounds:', {
-        min: initialBox.min.toArray(),
-        max: initialBox.max.toArray(),
-        center: center.toArray(),
-        size: size.toArray()
-    });
+// Target size
+const targetWidth = 22.0;
+const targetHeight = 12.0; // increased a bit if you want more headroom
 
-    // Target dimensions
-    const targetWidth = 22.0;
-    const targetHeight = 8.0; // Maximum height we want the lamp to be
+const uniformScale = targetWidth / size.x;
+const scaledHeight = size.y * uniformScale;
+const squashY = scaledHeight > targetHeight ? targetHeight / scaledHeight : 1.0;
+const finalScaleY = uniformScale * squashY;
 
-    // Calculate uniform scale to fit width
-    const scaleX = targetWidth / size.x;
-    
-    // Apply scale to all axes uniformly to maintain proportions, then squash if too tall
-    const uniformScale = scaleX;
-    const scaledHeight = size.y * uniformScale;
-    const squashY = scaledHeight > targetHeight ? targetHeight / scaledHeight : 1.0;
-    const finalScaleY = uniformScale * squashY;
+// Apply transformations
+object.traverse((child) => {
+    if (child.isMesh) {
+        // Center X/Z only — do NOT force top to Y=0
+        child.geometry.translate(-center.x, -center.y, -center.z);
+        
+        child.geometry.scale(uniformScale, finalScaleY, uniformScale);
+        
+        child.geometry.computeVertexNormals();
+        child.geometry.computeBoundingBox();
+        child.castShadow = true;
+        child.receiveShadow = true;
+        
+        // material assignment...
+    }
+});
 
-    console.log('[Lamp] Scaling:', {
-        rawSize: size.toArray(),
-        scaleX,
-        uniformScale,
-        scaledHeight,
-        squashY,
-        finalScaleY,
-        finalHeight: size.y * finalScaleY
-    });
+// Now position the whole lamp nicely
+object.position.y = 6.0;   // Move the model up so lights sit inside the shade
 
-    // Transform geometry: 
-    // 1. Center in X and Z
-    // 2. Move top to Y=0 (so lamp hangs DOWN from its position)
-    // 3. Scale
-    object.traverse((child) => {
-        if (child.isMesh) {
-            // Translate: center X/Z, move top to 0
-            child.geometry.translate(-center.x, -initialBox.max.y, -center.z);
-            
-            // Scale: uniform X/Z, potentially squashed Y
-            child.geometry.scale(uniformScale, finalScaleY, uniformScale);
-            
-            // Recompute
-            child.geometry.computeVertexNormals();
-            child.geometry.computeBoundingBox();
-            child.geometry.computeBoundingSphere();
+lampGroup.add(object);
 
-            child.castShadow = true;
-            child.receiveShadow = true;
+// Re-calculate final bounds
+const finalBox = new THREE.Box3().setFromObject(object);
+const finalSize = finalBox.getSize(new THREE.Vector3());
 
-            const name = child.name.toLowerCase();
-            if (name.includes('glass') || name.includes('shade')) {
-                child.material = matGlass;
-            } else if (name.includes('wood')) {
-                child.material = matWood;
-            } else if (name.includes('steel') || name.includes('chain')) {
-                child.material = matSteel;
-            } else {
-                child.material = matCopper;
-            }
-        }
-    });
-
-    // Verify final bounds
-    const finalBox = new THREE.Box3().setFromObject(object);
-    console.log('[Lamp] Final model bounds:', {
-        min: finalBox.min.toArray(),
-        max: finalBox.max.toArray(),
-        size: finalBox.getSize(new THREE.Vector3()).toArray()
-    });
-
-    lampGroup.add(object);
-    scene.add(lampGroup);
-
-    // Lights - position inside the lamp shade
-    const finalSize = finalBox.getSize(new THREE.Vector3());
-    const lightY = -finalSize.y * 0.2; // 20% down from top for better downward casting
+// Position lights inside the shade
+const lightY = object.position.y - finalSize.y * 0.25; // 25% down from top of shade
     const spacing = targetWidth * 0.25;
 
     const lights = [];
