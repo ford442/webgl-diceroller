@@ -71,7 +71,7 @@ export async function createLamp(scene) {
 
     // Target dimensions
     const targetWidth = 22.0;
-    const targetHeight = 6.0; // Maximum height we want the lamp to be
+    const targetHeight = 8.0; // Maximum height we want the lamp to be
 
     // Calculate uniform scale to fit width
     const scaleX = targetWidth / size.x;
