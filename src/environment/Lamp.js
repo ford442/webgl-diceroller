@@ -57,7 +57,10 @@ export async function createLamp(scene) {
     // Use the largest horizontal dimension to prevent explosions if the model is rotated
     const rawWidth = Math.max(size.x, size.z); 
     const targetWidth = 22.0;
-    const scaleFactor = rawWidth > 0.001 ? (targetWidth / rawWidth) : 1.0;
+    const targetHeight = 8.0;
+    const scaleX = rawWidth > 0.001 ? (targetWidth / rawWidth) : 1.0;
+    const scaleY = size.y > 0.001 ? (targetHeight / size.y) : 1.0;
+    const scaleFactor = Math.min(scaleX, scaleY);
 
     // Create a visual wrapper to hold the scaled/centered object
     const visualWrapper = new THREE.Group();
