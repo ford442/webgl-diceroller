@@ -60,6 +60,7 @@ import { createTankard } from './environment/Tankard.js';
 import { createWaxSeal } from './environment/WaxSeal.js';
 import { createCrown } from './environment/Crown.js';
 import { createHelmet } from './environment/Helmet.js';
+import { createApple } from './environment/Apple.js';
 
 import { createGong } from './environment/Gong.js';
 import { createMysticOrb } from './environment/MysticOrb.js';
@@ -647,6 +648,9 @@ async function init() {
     // Flute Prop - front edge
     createFlute(scene, physicsWorld, { x: 2, y: -2.75, z: 14 }, -Math.PI / 8);
 
+    // Apple Prop - right edge
+    createApple(scene, physicsWorld, { x: 13, y: -2.75, z: 7 }, Math.PI / 6);
+
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
 
@@ -654,7 +658,7 @@ async function init() {
     const noShadowNames = ['Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra', 'Waterskin', 'Astrolabe', 'Sundial', 'Flute'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra', 'Waterskin', 'Astrolabe', 'Sundial', 'Flute', 'Apple'];
     scene.traverse(child => {
         if (child.isMesh) {
             let p = child.parent;
