@@ -61,6 +61,7 @@ import { createWaxSeal } from './environment/WaxSeal.js';
 import { createCrown } from './environment/Crown.js';
 import { createHelmet } from './environment/Helmet.js';
 import { createApple } from './environment/Apple.js';
+import { createPocketFlask } from './environment/PocketFlask.js';
 
 import { createGong } from './environment/Gong.js';
 import { createMysticOrb } from './environment/MysticOrb.js';
@@ -650,12 +651,13 @@ async function init() {
 
     // Apple Prop - right edge
     createApple(scene, physicsWorld, { x: 13, y: -2.75, z: 7 }, Math.PI / 6);
+    createPocketFlask(scene, physicsWorld, { x: -4, y: -2.75, z: 2 }, Math.PI / 4);
 
     updateLoadingText("Finalizing...");
     updateLoadingBar(95);
 
     // Disable castShadow on small decorative props to reduce shadow pass draw calls
-    const noShadowNames = ['Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'Compass', 'WaxSeal',
+    const noShadowNames = ['Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'PocketFlask', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet', 'CoinPouch',
         'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra', 'Waterskin', 'Astrolabe', 'Sundial', 'Flute', 'Apple'];
