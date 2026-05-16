@@ -64,14 +64,14 @@ function _computeFaceNormals(geometry) {
 /**
  * Assign integer values 1..N to face normals.
  *
- * Strategy: sort normals by Y component ascending so the face whose normal
- * points most downward (resting on the table) gets value 1, and the face
- * whose normal points most upward (showing to the player) gets value N.
- * This matches the standard convention for Western polyhedral dice where the
- * highest-value face is on top when the die is at rest showing its maximum.
+ * Assumes the Blender source models are exported with the +Y axis pointing up,
+ * i.e. after the `rotateX(-Math.PI / 2)` applied in loadDiceModels the face
+ * that was originally "up" in Blender (the highest-value face) ends up with
+ * the most positive Y normal component.  Sorting ascending therefore maps
+ * lowest-Y normal → value 1 (face resting on the table) and highest-Y normal
+ * → value N (face visible to the player).
  *
- * NOTE: The exact mapping depends on how the source Blender models are
- * oriented. If values appear reversed, flip the sort to descending.
+ * If values appear reversed for a particular model, flip the sort order here.
  */
 function _assignFaceValues(faceNormals) {
     const n = faceNormals.length;
@@ -89,6 +89,10 @@ function _assignFaceValues(faceNormals) {
     return values;
 }
 
+// Reusable objects for readDiceValue() — avoids per-call heap allocations
+const _invQ    = new THREE.Quaternion();
+const _localUp = new THREE.Vector3();
+
 /**
  * Read the face-up value for a settled die.
  * Returns null if face-normal data is not available.
@@ -102,14 +106,14 @@ export const readDiceValue = (die) => {
     if (!faceNormals || !faceNormals.length || !faceValues) return null;
 
     // Transform world UP into the die's local space via inverse quaternion
-    const invQ    = die.mesh.quaternion.clone().invert();
-    const localUp = new THREE.Vector3(0, 1, 0).applyQuaternion(invQ);
+    _invQ.copy(die.mesh.quaternion).invert();
+    _localUp.set(0, 1, 0).applyQuaternion(_invQ);
 
     // The face whose local normal is most aligned with local-up is facing up
     let maxDot  = -Infinity;
     let bestIdx = 0;
     for (let i = 0; i < faceNormals.length; i++) {
-        const d = faceNormals[i].dot(localUp);
+        const d = faceNormals[i].dot(_localUp);
         if (d > maxDot) { maxDot = d; bestIdx = i; }
     }
 

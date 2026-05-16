@@ -232,6 +232,9 @@ function _makeResultCard(result) {
     return card;
 }
 
+// Canonical die type order for consistent history display
+const DICE_TYPE_ORDER = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+
 function _addToHistory(diceResults, total) {
     const now = new Date();
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -243,9 +246,10 @@ function _addToHistory(diceResults, total) {
         grouped[r.type].push(r.value);
     });
 
-    // "2d6: 3, 5  •  1d20: 14"
-    const rollStr = Object.entries(grouped)
-        .map(([type, vals]) => `${vals.length}${type}: ${vals.join(', ')}`)
+    // Sort by canonical order and format: "2d6: 3, 5  •  1d20: 14"
+    const rollStr = DICE_TYPE_ORDER
+        .filter(type => grouped[type])
+        .map(type => `${grouped[type].length}${type}: ${grouped[type].join(', ')}`)
         .join('  •  ');
 
     rollHistory.unshift({ timeStr, rollStr, total, diceResults: [...diceResults] });
@@ -309,6 +313,12 @@ function _renderHistory() {
     `;
     copyBtn.textContent = '📋 Copy Last Roll';
     copyBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+
+    const resetCopyBtn = () => {
+        copyBtn.textContent = '📋 Copy Last Roll';
+        copyBtn.style.color = GOLD_DIM;
+    };
+
     copyBtn.addEventListener('click', () => {
         if (rollHistory.length === 0) return;
         const latest = rollHistory[0];
@@ -317,14 +327,11 @@ function _renderHistory() {
             .then(() => {
                 copyBtn.textContent = '✓ Copied!';
                 copyBtn.style.color = GOLD;
-                setTimeout(() => {
-                    copyBtn.textContent = '📋 Copy Last Roll';
-                    copyBtn.style.color = GOLD_DIM;
-                }, 1500);
+                setTimeout(resetCopyBtn, 1500);
             })
             .catch(() => {
                 copyBtn.textContent = '⚠ Copy unavailable';
-                setTimeout(() => { copyBtn.textContent = '📋 Copy Last Roll'; }, 1500);
+                setTimeout(resetCopyBtn, 1500);
             });
     });
     historyList.appendChild(copyBtn);
