@@ -2,6 +2,124 @@ import * as THREE from 'three';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import { createConvexHullShape, spawnDicePhysics, getAmmo } from './physics.js';
 
+// ---------------------------------------------------------------------------
+// Face-detection helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute unique face normals by clustering per-triangle geometric normals.
+ * Works with both indexed and non-indexed BufferGeometry.
+ */
+function _computeFaceNormals(geometry) {
+    const CLUSTER_THRESHOLD = 0.98; // ~11.5° tolerance — tight enough for all die types
+    const faceNormals = [];
+
+    const pos = geometry.attributes.position;
+    const index = geometry.index;
+
+    const _a = new THREE.Vector3();
+    const _b = new THREE.Vector3();
+    const _c = new THREE.Vector3();
+    const _e1 = new THREE.Vector3();
+    const _e2 = new THREE.Vector3();
+    const _n  = new THREE.Vector3();
+
+    const getVertex = (i) => {
+        const vi = index ? index.getX(i) : i;
+        return { x: pos.getX(vi), y: pos.getY(vi), z: pos.getZ(vi) };
+    };
+
+    const triCount = index ? index.count / 3 : pos.count / 3;
+
+    for (let t = 0; t < triCount; t++) {
+        const va = getVertex(t * 3);
+        const vb = getVertex(t * 3 + 1);
+        const vc = getVertex(t * 3 + 2);
+
+        _a.set(va.x, va.y, va.z);
+        _b.set(vb.x, vb.y, vb.z);
+        _c.set(vc.x, vc.y, vc.z);
+
+        _e1.subVectors(_b, _a);
+        _e2.subVectors(_c, _a);
+        _n.crossVectors(_e1, _e2);
+
+        if (_n.lengthSq() < 1e-10) continue; // skip degenerate triangles
+        _n.normalize();
+
+        // Check against existing clusters
+        let found = false;
+        for (const fn of faceNormals) {
+            if (fn.dot(_n) > CLUSTER_THRESHOLD) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) faceNormals.push(_n.clone());
+    }
+
+    return faceNormals;
+}
+
+/**
+ * Assign integer values 1..N to face normals.
+ *
+ * Assumes the Blender source models are exported with the +Y axis pointing up,
+ * i.e. after the `rotateX(-Math.PI / 2)` applied in loadDiceModels the face
+ * that was originally "up" in Blender (the highest-value face) ends up with
+ * the most positive Y normal component.  Sorting ascending therefore maps
+ * lowest-Y normal → value 1 (face resting on the table) and highest-Y normal
+ * → value N (face visible to the player).
+ *
+ * If values appear reversed for a particular model, flip the sort order here.
+ */
+function _assignFaceValues(faceNormals) {
+    const n = faceNormals.length;
+    if (n === 0) return [];
+
+    // Sort ascending by Y: lowest Y → value 1, highest Y → value N
+    const sorted = faceNormals
+        .map((fn, i) => ({ i, y: fn.y }))
+        .sort((a, b) => a.y - b.y);
+
+    const values = new Array(n);
+    for (let i = 0; i < n; i++) {
+        values[sorted[i].i] = i + 1;
+    }
+    return values;
+}
+
+// Reusable objects for readDiceValue() — avoids per-call heap allocations
+const _invQ    = new THREE.Quaternion();
+const _localUp = new THREE.Vector3();
+
+/**
+ * Read the face-up value for a settled die.
+ * Returns null if face-normal data is not available.
+ */
+export const readDiceValue = (die) => {
+    const model = diceModels[die.type];
+    if (!model) return null;
+
+    const faceNormals = model.userData.faceNormals;
+    const faceValues  = model.userData.faceValues;
+    if (!faceNormals || !faceNormals.length || !faceValues) return null;
+
+    // Transform world UP into the die's local space via inverse quaternion
+    _invQ.copy(die.mesh.quaternion).invert();
+    _localUp.set(0, 1, 0).applyQuaternion(_invQ);
+
+    // The face whose local normal is most aligned with local-up is facing up
+    let maxDot  = -Infinity;
+    let bestIdx = 0;
+    for (let i = 0; i < faceNormals.length; i++) {
+        const d = faceNormals[i].dot(_localUp);
+        if (d > maxDot) { maxDot = d; bestIdx = i; }
+    }
+
+    return faceValues[bestIdx];
+};
+
 const loader = new ColladaLoader();
 
 let diceModels = {};
@@ -92,6 +210,11 @@ export const loadDiceModels = async (onProgress) => {
                 cleanMesh.castShadow = true;
                 cleanMesh.receiveShadow = true;
                 diceModels[d.type].userData.physicsShape = createConvexHullShape(cleanMesh);
+
+                // Precompute face normals and value map for result reading
+                const faceNormals = _computeFaceNormals(cleanMesh.geometry);
+                diceModels[d.type].userData.faceNormals = faceNormals;
+                diceModels[d.type].userData.faceValues  = _assignFaceValues(faceNormals);
             }
 
             done++;

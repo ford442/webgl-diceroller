@@ -7,7 +7,8 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { VignetteShader } from './shaders/VignetteShader.js';
 
 import { initPhysics, stepPhysics, createFloorAndWalls } from './physics.js';
-import { diceTypes, diceModels, loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice, spawnedDice } from './dice.js';
+import { diceTypes, diceModels, loadDiceModels, spawnObjects, updateDiceVisuals, updateDiceSet, throwDice, spawnedDice, readDiceValue } from './dice.js';
+import { initResultsUI, showResults, hideResults } from './results.js';
 import { initUI, createCrosshair } from './ui.js';
 import { initInteraction, updateInteraction, registerInteractiveObject, isDragging, isHoveringOverDice, getHoveredDie } from './interaction.js';
 import { createTable } from './environment/Table.js';
@@ -350,9 +351,14 @@ async function init() {
         () => {
             throwDice(scene, physicsWorld);
             diceFocusState = DiceFocusState.WAITING_FOR_STOP;
+            hideResults();
+            if (lampData) lampData.setRolling(true);
         }
     );
     crosshairUI = createCrosshair();
+
+    // Results UI (overlay + history panel)
+    initResultsUI();
 
     // Interaction Setup
     interaction = initInteraction(camera, scene, physicsWorld);
@@ -719,6 +725,7 @@ function setupInput() {
         if (event.code === 'KeyR') {
             throwDice(scene, physicsWorld);
             diceFocusState = DiceFocusState.WAITING_FOR_STOP;
+            hideResults();
             // Trigger lamp strobe/rolling effect
             if (lampData) {
                 lampData.setRolling(true);
@@ -999,6 +1006,13 @@ function animate() {
         if (focusProgress === 1) {
             diceFocusState = DiceFocusState.HOLDING;
             focusTimer = 2.0; // Hold for 2s
+
+            // Read settled dice values and show result overlay
+            const results = spawnedDice.map(d => ({
+                type: d.type,
+                value: readDiceValue(d)
+            }));
+            showResults(results);
         }
     } else if (diceFocusState === DiceFocusState.HOLDING) {
         focusTimer -= deltaTime;
