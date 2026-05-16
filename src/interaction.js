@@ -19,8 +19,15 @@ export const initInteraction = (camera, scene, physicsWorld) => {
     mouse = new THREE.Vector2();
 
     // Pre-warm: force shader compilation for levitation effects
-    // This prevents the freeze on first double-click
+    // This prevents the freeze on first double-click.
+    // Use requestAnimationFrame instead of setTimeout to guarantee the renderer
+    // has completed at least one frame before we try to compile shaders.
     const warmMaterials = () => {
+        if (!scene.userData.renderer) {
+            // Renderer not ready yet — retry on the next frame
+            requestAnimationFrame(warmMaterials);
+            return;
+        }
         const warmLight = new THREE.PointLight(0x0088ff, 1, 1);
         const warmGeo = new THREE.SphereGeometry(0.01, 4, 4);
         const warmMat = new THREE.MeshBasicMaterial({ color: 0x0088ff });
@@ -30,9 +37,7 @@ export const initInteraction = (camera, scene, physicsWorld) => {
         scene.add(warmMesh);
         
         // Force render to compile shaders
-        if (scene.userData.renderer) {
-            scene.userData.renderer.compile(scene, camera);
-        }
+        scene.userData.renderer.compile(scene, camera);
         
         // Clean up after a few frames
         setTimeout(() => {
@@ -43,8 +48,8 @@ export const initInteraction = (camera, scene, physicsWorld) => {
         }, 500);
     };
     
-    // Delay to ensure renderer is ready
-    setTimeout(warmMaterials, 100);
+    // Kick off on the next animation frame so the renderer is ready
+    requestAnimationFrame(warmMaterials);
 
     return {
         handleDown: (x, y) => onPointerDown(x, y, camera, scene, physicsWorld),

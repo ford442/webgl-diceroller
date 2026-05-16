@@ -187,11 +187,11 @@ async function init() {
     pointLight.position.set(3, 6, 3); // Default if no candle
     pointLight.castShadow = true;
     pointLight.shadow.bias = -0.001; // Adjusted bias to prevent acne
-    pointLight.shadow.mapSize.width = 1024;
-    pointLight.shadow.mapSize.height = 1024;
+    pointLight.shadow.mapSize.width = 512;
+    pointLight.shadow.mapSize.height = 512;
     pointLight.shadow.radius = 5; // Softer shadows
-    pointLight.shadow.camera.near = 0.5;
-    pointLight.shadow.camera.far = 15;
+    pointLight.shadow.camera.near = 0.1;
+    pointLight.shadow.camera.far = 25;
     scene.add(pointLight);
 
     // Cool SpotLight (Moonlight) - Shining through the window
@@ -213,15 +213,24 @@ async function init() {
     scene.fog = new THREE.FogExp2(0x111111, 0.02);
 
     // Post-Processing
+    // Auto-detect low-end GPUs: disable post-processing if texture size is limited.
+    // Devices with maxTextureSize < 4096 typically have underpowered GPUs where
+    // fullscreen bloom passes would cause significant frame-rate drops.
+    // The `?no-post` URL parameter always overrides this check for manual control.
+    const isLowEnd = renderer.capabilities.maxTextureSize < 4096;
+
     const params = new URLSearchParams(window.location.search);
-    if (!params.has('no-post')) {
+    if (!params.has('no-post') && !isLowEnd) {
         composer = new EffectComposer(renderer);
 
         const renderPass = new RenderPass(scene, camera);
         composer.addPass(renderPass);
 
-        // Bloom
-        const bloomPass = new UnrealBloomPass(new THREE.Vector2(containerWidth, containerHeight), 1.5, 0.4, 0.85);
+        // Bloom — run at half resolution to save fillrate
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(Math.round(containerWidth / 2), Math.round(containerHeight / 2)),
+            1.5, 0.4, 0.85
+        );
         bloomPass.threshold = 0.6; // High threshold to only catch flames/lights
         bloomPass.strength = 0.6; // Soft glow
         bloomPass.radius = 0.4;
@@ -236,6 +245,8 @@ async function init() {
         // Output Pass
         const outputPass = new OutputPass();
         composer.addPass(outputPass);
+    } else if (isLowEnd) {
+        console.log('Post-processing disabled: low-end GPU detected');
     }
 
     // Environment Map
@@ -258,18 +269,34 @@ async function init() {
         if (el) el.textContent = text;
     }
 
+    // Start the clock and render loop immediately so the browser shows something
+    // while the physics engine (WASM) compiles and initialises in the background.
+    clock = new THREE.Clock();
+    window.addEventListener('resize', onWindowResize);
+    renderer.setAnimationLoop(animate);
+
     // ==========================================
     // TIER 0: Critical (must exist before first render)
     // ==========================================
     updateLoadingText("Initializing physics engine...");
     updateLoadingBar(10);
 
-    // Initialize Physics
+    // Initialize Physics — awaited here but the render loop above is already running,
+    // so the browser paints every frame while WASM compiles/allocates.
     try {
         physicsWorld = await initPhysics();
     } catch (e) {
         console.error("Failed to initialize physics", e);
-        updateLoadingText("Error: Physics failed to load");
+        updateLoadingText("Error: Physics failed to load. Check console.");
+        // Fade out overlay after a short delay so the user isn't stuck on a blank screen
+        setTimeout(() => {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay) {
+                overlay.style.transition = 'opacity 0.5s';
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.remove(), 500);
+            }
+        }, 3000);
         return;
     }
 
@@ -304,7 +331,7 @@ async function init() {
 
     updateLoadingText("Loading dice models...");
     updateLoadingBar(30);
-    // Load dice models sequentially with granular progress (30% to 40%)
+    // Load dice models in parallel with granular progress (30% to 40%)
     await loadDiceModels((done, total, label) => {
         const percent = 30 + ((done / total) * 10);
         updateLoadingBar(percent);
@@ -331,19 +358,12 @@ async function init() {
     interaction = initInteraction(camera, scene, physicsWorld);
     setupInput();
 
-    clock = new THREE.Clock();
-
     // Expose for debugging/verification
     window.camera = camera;
     window.scene = scene;
     window.physicsWorld = physicsWorld;
     window.THREE = THREE;
     window.renderer = renderer;
-
-    window.addEventListener('resize', onWindowResize);
-
-    // Start rendering immediately after Tier 0 - scene is playable
-    renderer.setAnimationLoop(animate);
 
     // ==========================================
     // TIER 1: Important (visible from default camera, yield first)
@@ -731,7 +751,7 @@ function setupInput() {
     document.addEventListener('pointerlockchange', () => {
         const wasLocked = isLocked;
         isLocked = document.pointerLockElement === renderer.domElement;
-        crosshairUI.setVisible(isLocked);
+        if (crosshairUI) crosshairUI.setVisible(isLocked);
         if (isLocked && !wasLocked) {
              // Reset cursor to center when locking
              cursorPos.set(0, 0);
@@ -743,6 +763,12 @@ function setupInput() {
         const container = document.getElementById('canvas-container');
         return container ? container.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
     };
+
+    // Throttle hover raycasting: only run once per animation frame to avoid
+    // O(n) raycast cost firing 60-120 times/second during cursor movement.
+    let hoverCheckPending = false;
+    let lastHoverNormX = 0;
+    let lastHoverNormY = 0;
 
     // Mouse Movement Tracking for FPS camera AND normal interaction
     document.addEventListener('mousemove', (event) => {
@@ -760,15 +786,20 @@ function setupInput() {
             const relY = event.clientY - rect.top;
             const normX = (relX / rect.width) * 2 - 1;
             const normY = -(relY / rect.height) * 2 + 1;
+            // Drag responsiveness: always forward move events immediately
             if (interaction) interaction.handleMove(normX, normY);
-            
-            // Update cursor based on hover state
-            const canvas = renderer.domElement;
-            const hoveredDie = getHoveredDie(camera, normX, normY);
-            if (hoveredDie) {
-                canvas.style.cursor = 'grab';
-            } else {
-                canvas.style.cursor = 'default';
+
+            // Hover cursor update: batch at frame boundary to avoid redundant raycasts
+            lastHoverNormX = normX;
+            lastHoverNormY = normY;
+            if (!hoverCheckPending) {
+                hoverCheckPending = true;
+                requestAnimationFrame(() => {
+                    const canvas = renderer.domElement;
+                    const hoveredDie = getHoveredDie(camera, lastHoverNormX, lastHoverNormY);
+                    canvas.style.cursor = hoveredDie ? 'grab' : 'default';
+                    hoverCheckPending = false;
+                });
             }
         }
     });
@@ -862,11 +893,13 @@ function animate() {
     }
 
     // Update Crosshair UI Position - always centered in FPS mode
-    const container = document.getElementById('canvas-container');
-    const rect = container ? container.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
-    const screenCenterX = rect.width / 2;
-    const screenCenterY = rect.height / 2;
-    crosshairUI.updatePosition(screenCenterX, screenCenterY);
+    if (crosshairUI) {
+        const container = document.getElementById('canvas-container');
+        const rect = container ? container.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
+        const screenCenterX = rect.width / 2;
+        const screenCenterY = rect.height / 2;
+        crosshairUI.updatePosition(screenCenterX, screenCenterY);
+    }
 
     // Update Atmosphere
     updateAtmosphere(time);

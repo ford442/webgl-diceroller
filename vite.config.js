@@ -13,6 +13,17 @@ export default defineConfig({
   // Ensure assets are served correctly
   publicDir: 'public',
   build: {
-    target: 'esnext'
+    target: 'esnext',
+    modulePreload: {
+      polyfill: true,
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ['three'],
+          physics: ['ammo.js'],
+        }
+      }
+    }
   }
 });

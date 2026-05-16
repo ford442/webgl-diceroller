@@ -35,80 +35,77 @@ export const loadDiceModels = async (onProgress) => {
         if (typeof onProgress === 'function') onProgress(done, total, label);
     };
 
-    for (const d of diceTypes) {
-        report(d.type);
+    // Load all dice models in parallel for ~4x faster loading on decent connections.
+    // The `done` counter is incremented atomically (JS single-threaded) so the
+    // percentage reported to the progress bar is accurate, though the per-model
+    // label may arrive in any completion order.
+    await Promise.all(diceTypes.map(d => new Promise((resolve) => {
+        let timedOut = false;
+        const url = `./images/${d.file}`;
+        const timer = setTimeout(() => {
+            console.warn(`Timeout loading ${url}`);
+            timedOut = true;
+            done++;
+            report(d.type);
+            resolve();
+        }, 15000);
 
-        await new Promise((resolve) => {
-            let timedOut = false;
-            const url = `./images/${d.file}`;
-            const timer = setTimeout(() => {
-                console.warn(`Timeout loading ${url}`);
-                timedOut = true;
-                done++;
-                report(d.type);
-                resolve();
-            }, 15000);
+        loader.load(url, (collada) => {
+            if (timedOut) return;
+            clearTimeout(timer);
 
-            loader.load(url, (collada) => {
-                if (timedOut) return;
-                clearTimeout(timer);
+            let mesh = null;
+            collada.scene.traverse((child) => {
+                if (child.isMesh) mesh = child;
+            });
 
-                let mesh = null;
-                collada.scene.traverse((child) => {
-                    if (child.isMesh) mesh = child;
+            if (mesh) {
+                const geometry = mesh.geometry.clone();
+                geometry.center();
+                mesh.updateMatrixWorld(true);
+                geometry.applyMatrix4(mesh.matrixWorld);
+                geometry.rotateX(-Math.PI / 2);
+                geometry.center();
+
+                let material = mesh.material;
+                const upgradeMaterial = (mat) => new THREE.MeshStandardMaterial({
+                    color: mat.color || 0xeeeeee,
+                    map: mat.map || null,
+                    roughness: 0.2,
+                    metalness: 0.0,
+                    envMapIntensity: 1.0
                 });
 
-                if (mesh) {
-                    const geometry = mesh.geometry.clone();
-                    geometry.center();
-                    mesh.updateMatrixWorld(true);
-                    geometry.applyMatrix4(mesh.matrixWorld);
-                    geometry.rotateX(-Math.PI / 2);
-                    geometry.center();
-
-                    let material = mesh.material;
-                    const upgradeMaterial = (mat) => new THREE.MeshStandardMaterial({
-                        color: mat.color || 0xeeeeee,
-                        map: mat.map || null,
-                        roughness: 0.2,
-                        metalness: 0.0,
-                        envMapIntensity: 1.0
-                    });
-
-                    if (material) {
-                        material = Array.isArray(material) ? material.map(upgradeMaterial) : upgradeMaterial(material);
-                    } else {
-                        console.warn(`No material found for ${d.file}, using default material`);
-                        material = new THREE.MeshStandardMaterial({ color: 0xff00ff, roughness: 0.2, metalness: 0.0 });
-                    }
-
-                    const cleanMesh = new THREE.Mesh(geometry, material);
-                    cleanMesh.position.set(0, 0, 0);
-                    cleanMesh.rotation.set(0, 0, 0);
-                    cleanMesh.scale.set(1, 1, 1);
-
-                    diceModels[d.type] = cleanMesh;
-                    cleanMesh.castShadow = true;
-                    cleanMesh.receiveShadow = true;
-                    diceModels[d.type].userData.physicsShape = createConvexHullShape(cleanMesh);
+                if (material) {
+                    material = Array.isArray(material) ? material.map(upgradeMaterial) : upgradeMaterial(material);
+                } else {
+                    console.warn(`No material found for ${d.file}, using default material`);
+                    material = new THREE.MeshStandardMaterial({ color: 0xff00ff, roughness: 0.2, metalness: 0.0 });
                 }
 
-                done++;
-                report(d.type);
-                resolve();
-            }, undefined, (error) => {
-                if (timedOut) return;
-                clearTimeout(timer);
-                console.warn(`Error loading ${url}:`, error);
-                done++;
-                report(d.type);
-                resolve();
-            });
-        });
+                const cleanMesh = new THREE.Mesh(geometry, material);
+                cleanMesh.position.set(0, 0, 0);
+                cleanMesh.rotation.set(0, 0, 0);
+                cleanMesh.scale.set(1, 1, 1);
 
-        // Yield to event loop between dice loads to let the UI paint
-        await new Promise(r => setTimeout(r, 0));
-    }
+                diceModels[d.type] = cleanMesh;
+                cleanMesh.castShadow = true;
+                cleanMesh.receiveShadow = true;
+                diceModels[d.type].userData.physicsShape = createConvexHullShape(cleanMesh);
+            }
+
+            done++;
+            report(d.type);
+            resolve();
+        }, undefined, (error) => {
+            if (timedOut) return;
+            clearTimeout(timer);
+            console.warn(`Error loading ${url}:`, error);
+            done++;
+            report(d.type);
+            resolve();
+        });
+    })));
 
     console.log("All dice models loaded");
 };
@@ -141,7 +138,7 @@ export const spawnObjects = (scene, world, config = null) => {
         const z = (getSecureRandom() - 0.5) * 4;
 
         mesh.position.set(x, y, z);
-        mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+        mesh.rotation.set(getSecureRandom() * Math.PI, getSecureRandom() * Math.PI, getSecureRandom() * Math.PI);
 
         scene.add(mesh);
 
