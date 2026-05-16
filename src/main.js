@@ -213,10 +213,11 @@ async function init() {
     scene.fog = new THREE.FogExp2(0x111111, 0.02);
 
     // Post-Processing
-    // Auto-detect low-end GPUs: disable post-processing if texture size is limited
-    // or hardware concurrency is very low to avoid frame-rate drops on integrated GPUs.
-    const isLowEnd = renderer.capabilities.maxTextureSize < 4096 ||
-        (typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 2);
+    // Auto-detect low-end GPUs: disable post-processing if texture size is limited.
+    // Devices with maxTextureSize < 4096 typically have underpowered GPUs where
+    // fullscreen bloom passes would cause significant frame-rate drops.
+    // The `?no-post` URL parameter always overrides this check for manual control.
+    const isLowEnd = renderer.capabilities.maxTextureSize < 4096;
 
     const params = new URLSearchParams(window.location.search);
     if (!params.has('no-post') && !isLowEnd) {

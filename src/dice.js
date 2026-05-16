@@ -35,7 +35,10 @@ export const loadDiceModels = async (onProgress) => {
         if (typeof onProgress === 'function') onProgress(done, total, label);
     };
 
-    // Load all dice models in parallel for ~4x faster loading on decent connections
+    // Load all dice models in parallel for ~4x faster loading on decent connections.
+    // The `done` counter is incremented atomically (JS single-threaded) so the
+    // percentage reported to the progress bar is accurate, though the per-model
+    // label may arrive in any completion order.
     await Promise.all(diceTypes.map(d => new Promise((resolve) => {
         let timedOut = false;
         const url = `./images/${d.file}`;
