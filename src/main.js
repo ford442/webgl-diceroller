@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 import { initPhysics, stepPhysics } from './physics.js';
+import { loadWasmEngine, isWasmAvailable, getWasmEngine } from './wasm/WasmPhysicsBridge.js';
 import { updateDiceVisuals, throwDice } from './dice.js';
 import { showResults, hideResults } from './results.js';
 import { updateInteraction } from './interaction.js';
@@ -78,6 +79,16 @@ async function init() {
         return;
     }
 
+    // Load WASM physics engine in parallel (non-blocking — falls back to a
+    // no-op stub when the binary is not yet compiled).
+    loadWasmEngine().then((available) => {
+        if (available) {
+            const eng = getWasmEngine();
+            eng.init(-15.0, -2.75, 18.0, 18.0);
+            console.log('[WasmPhysics] Engine initialized and ready.');
+        }
+    });
+
     // Camera controller (focus state + FPS movement)
     cameraController = createCameraController(camera);
 
@@ -126,6 +137,9 @@ async function init() {
     window.physicsWorld = physicsWorld;
     window.THREE = THREE;
     window.renderer = renderer;
+    // WASM engine exposed after loadWasmEngine() resolves (may be the stub)
+    window.getWasmEngine = getWasmEngine;
+    window.isWasmAvailable = isWasmAvailable;
 }
 
 function onWindowResize() {
