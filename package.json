@@ -6,7 +6,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "bash -c 'which emcc > /dev/null && npm run build:wasm || echo \"[build:wasm] emcc not found, skipping WASM build\"' && vite build",
     "preview": "vite preview",
     "build:wasm": "bash src/wasm/build.sh"
   },
