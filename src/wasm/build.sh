@@ -33,7 +33,6 @@ emcc "${SCRIPT_DIR}/dice_physics.cpp" \
     -s ALLOW_MEMORY_GROWTH=1 \
     -s MODULARIZE=1 \
     -s "EXPORT_NAME=DicePhysicsModule" \
-    -s "EXPORTED_RUNTIME_METHODS=['typed_memory_view']" \
     -std=c++17 \
     -o "${OUT_DIR}/dice_physics.js"
 
