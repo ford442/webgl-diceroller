@@ -14,6 +14,8 @@
 #   public/wasm/dice_physics.js    — Emscripten module loader (ES module)
 #   public/wasm/dice_physics.wasm  — Compiled WASM binary
 
+source /contant/buil*/emsdk/emsdk_env.sh
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
