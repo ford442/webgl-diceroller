@@ -198,8 +198,14 @@ export async function loadTiers(scene, camera, physicsWorld, updateRegistry, cal
     createAtmosphere(scene);
 
     // Billiard Lamp (async OBJ load)
-    const lampResult = await createLamp(scene);
-    lampResult.group.position.set(0, 10.5, 0);
+    // NOTE: createLamp() no longer takes a scene param and does not add itself.
+    // We use the Group-wrapper pattern inside Lamp.js so the model never has its
+    // raw geometry mutated. The lamp top-center sits at local (0,0,0) after
+    // scaling; placing the group at y=30 lets the chains emerge from near the
+    // ceiling (y≈20) and hang naturally into the room.
+    const lampResult = await createLamp();
+    scene.add(lampResult.group);
+    lampResult.group.position.set(0, 30, 0);
     registerInteractiveObject(lampResult.group, lampResult.toggle);
     const lampData = lampResult;
     if (setLampData) setLampData(lampData);

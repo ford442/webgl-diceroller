@@ -21,23 +21,77 @@ const MODE_COLORS = {
     [LampMode.CRITICAL]: 0xffd700
 };
 
-export async function createLamp(scene) {
+/**
+ * Creates the hanging billiard lamp (triple shade OBJ model).
+ *
+ * IMPORTANT GROUP WRAPPER PATTERN (use this for ALL future imported models):
+ * ---------------------------------------------------------------
+ * We NEVER call .scale.set(), .translate(), or any vertex/geometry mutation
+ * directly on the loaded OBJ result or its child meshes/geometries.
+ *
+ * Imported models (OBJ, GLTF, etc.) frequently contain:
+ *   - Nested Groups with pre-applied transforms
+ *   - Awkward pivots / rotations / offsets on individual meshes
+ *   - Non-uniform or huge internal scales
+ *
+ * Directly mutating their geometry vertices or mesh.scale produces
+ * unpredictable "exploding" or distorted results (giant wooden structures,
+ * floating lights, broken pivots). The safe, robust approach is always:
+ *
+ *   1. Load the raw object.
+ *   2. Apply materials (traverse only).
+ *   3. Compute bounding box on the raw object.
+ *   4. Create a visualWrapper Group.
+ *   5. Position the raw object *inside* the wrapper so the desired
+ *      anchor point (here: top-center) sits at (0,0,0) of the wrapper.
+ *   6. Apply uniform scale ONLY to the visualWrapper.
+ *   7. Add lights/bulbs as siblings or children of the top-level group
+ *      (or inside the wrapper if you want them to inherit model scale).
+ *
+ * This guarantees the visual transform is isolated and predictable.
+ */
+export async function createLamp() {
     const loader = new OBJLoader();
     const textureLoader = new THREE.TextureLoader();
 
-    // 1. Load Textures
+    // 1. Load Textures (diffuse + bump for glass)
     const texCopper = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_cooper.jpg');
     const texGlass = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_glass.jpg');
+    const texGlassBump = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_glass_bump.jpg');
     const texSteel = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_steel.jpg');
     const texWood = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_wood.jpg');
 
-    // Materials
-    const matCopper = new THREE.MeshStandardMaterial({ map: texCopper, roughness: 0.4, metalness: 0.8, color: 0xffaa88 });
-    const matSteel = new THREE.MeshStandardMaterial({ map: texSteel, roughness: 0.5, metalness: 0.7, color: 0xaaaaaa });
-    const matWood = new THREE.MeshStandardMaterial({ map: texWood, roughness: 0.7, metalness: 0.0 });
+    // Materials - assigned by mesh name
+    const matCopper = new THREE.MeshStandardMaterial({
+        map: texCopper,
+        roughness: 0.4,
+        metalness: 0.8,
+        color: 0xffaa88
+    });
+    const matSteel = new THREE.MeshStandardMaterial({
+        map: texSteel,
+        roughness: 0.5,
+        metalness: 0.7,
+        color: 0xaaaaaa
+    });
+    const matWood = new THREE.MeshStandardMaterial({
+        map: texWood,
+        roughness: 0.7,
+        metalness: 0.0
+    });
     const matGlass = new THREE.MeshPhysicalMaterial({
-        color: 0xffffff, map: texGlass, metalness: 0, roughness: 0.1,
-        transmission: 0.9, transparent: true, opacity: 0.3, thickness: 0.1, side: THREE.DoubleSide
+        color: 0xffffff,
+        map: texGlass,
+        bumpMap: texGlassBump,
+        bumpScale: 0.6,
+        metalness: 0.0,
+        roughness: 0.08,
+        transmission: 0.92,
+        transparent: true,
+        opacity: 0.25,
+        thickness: 0.08,
+        side: THREE.DoubleSide,
+        envMapIntensity: 1.2
     });
 
     const lampGroup = new THREE.Group();
@@ -48,15 +102,26 @@ export async function createLamp(scene) {
         object = await loader.loadAsync('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj');
     } catch (e) {
         console.error("Failed to load lamp OBJ:", e);
-        return { group: lampGroup, toggle: () => {}, setMode: () => {}, update: () => {} };
+        // Return a safe stub so the rest of the app doesn't crash
+        return {
+            group: lampGroup,
+            toggle: () => {},
+            setMode: () => {},
+            setRolling: () => {},
+            triggerCritical: () => {},
+            update: () => {},
+            handleKey: () => {},
+            getMode: () => LampMode.NORMAL,
+            LampMode
+        };
     }
 
-    // 2. Apply Materials
+    // 2. Apply Materials based on mesh names (never mutate geometry here)
     object.traverse((child) => {
         if (child.isMesh) {
             child.castShadow = true;
             child.receiveShadow = true;
-            const name = child.name.toLowerCase();
+            const name = (child.name || '').toLowerCase();
             if (name.includes('glass') || name.includes('shade')) {
                 child.material = matGlass;
             } else if (name.includes('wood')) {
@@ -69,79 +134,124 @@ export async function createLamp(scene) {
         }
     });
 
-    // 3. Safely Normalize Scale and Position using Group Wrappers
+    // 3. SAFE SCALING + POSITIONING USING GROUP WRAPPERS ONLY
+    //    (see big comment at top of file for why this is mandatory)
     const box = new THREE.Box3().setFromObject(object);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
 
-    // Use the largest horizontal dimension to prevent explosions if the model is rotated
-    const rawWidth = Math.max(size.x, size.z);
+    // Use largest horizontal dimension so a rotated model doesn't cause
+    // wildly wrong scale factors that explode the geometry.
+    const rawWidth = Math.max(size.x, size.z) || 1.0;
     const targetWidth = 22.0;
-    const targetHeight = 8.0;
-    const scaleX = rawWidth > 0.001 ? (targetWidth / rawWidth) : 1.0;
-    const scaleY = size.y > 0.001 ? (targetHeight / size.y) : 1.0;
-    const scaleFactor = Math.min(scaleX, scaleY);
+    const scaleFactor = targetWidth / rawWidth;
 
-    // Create a visual wrapper to hold the scaled/centered object
     const visualWrapper = new THREE.Group();
+    visualWrapper.name = 'LampVisualWrapper';
 
-    // Shift the raw object inside the wrapper so its Top-Center is exactly at (0,0,0)
+    // Shift the raw loaded object so its TOP-CENTER lies exactly at (0,0,0)
+    // of the visualWrapper. After we scale the wrapper, the top stays
+    // pinned at the wrapper origin and everything (chains + shades) hangs
+    // downward in negative local Y. This is what allows clean "hang from ceiling".
     object.position.set(-center.x, -box.max.y, -center.z);
     visualWrapper.add(object);
 
-    // Apply the scale to the wrapper, NOT the raw geometry
-    visualWrapper.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    // Apply scale ONLY to the wrapper Group. Never touch the raw meshes.
+    visualWrapper.scale.setScalar(scaleFactor);
+
     lampGroup.add(visualWrapper);
 
-    scene.add(lampGroup);
+    // 4. Place three PointLights + emissive bulbs INSIDE the actual glass shades
+    //    We locate the real shade meshes after the wrapper transform and use
+    //    their bounding boxes for accurate placement. No more floating bulbs.
+    lampGroup.updateMatrixWorld(true);
 
-    // 4. Align Lights Perfectly Inside the Shade
-    const scaledHeight = size.y * scaleFactor;
-    const spacing = targetWidth * 0.30; // Spread lights across 30% of the width
-    const lightY = -scaledHeight * 0.45; // Push lights down into the bottom half of the shade
+    const glassShades = [];
+    object.traverse((child) => {
+        if (child.isMesh) {
+            const n = (child.name || '').toLowerCase();
+            if (n.includes('glass') || n.includes('shade')) {
+                glassShades.push(child);
+            }
+        }
+    });
+
+    let lightPositions = [];
+    if (glassShades.length > 0) {
+        // Sort left-to-right for consistent left/center/right ordering
+        const shadeData = glassShades.map(shade => {
+            const b = new THREE.Box3().setFromObject(shade);
+            const c = b.getCenter(new THREE.Vector3());
+            const h = b.getSize(new THREE.Vector3()).y;
+            // Push slightly downward inside the shade volume
+            c.y -= Math.max(h * 0.12, 0.15);
+            return { center: c, box: b };
+        });
+        shadeData.sort((a, b) => a.center.x - b.center.x);
+
+        // Take up to 3 shades (the model is a triple lamp)
+        const selected = shadeData.slice(0, 3);
+        lightPositions = selected.map(d => d.center);
+    }
+
+    // Fallback (should rarely happen): approximate positions using overall bounds
+    if (lightPositions.length === 0) {
+        const scaledW = rawWidth * scaleFactor;
+        const spacing = scaledW * 0.30;
+        const approxY = -size.y * scaleFactor * 0.82; // deep in the lower half
+        lightPositions = [
+            new THREE.Vector3(-spacing, approxY, 0),
+            new THREE.Vector3(0, approxY, 0),
+            new THREE.Vector3(spacing, approxY, 0)
+        ];
+    }
 
     const lights = [];
-    const positions = [-spacing, 0, spacing];
+    const lasers = [];
 
-    positions.forEach((x, i) => {
-        const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 100, 30);
-        light.position.set(x, lightY, 0);
-        // Only the center light casts shadows to save performance
-        light.castShadow = (i === 1);
-        light.shadow.bias = -0.0001;
+    lightPositions.forEach((pos, i) => {
+        const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 95, 26);
+        light.position.copy(pos);
+        light.castShadow = (i === 1); // only center light casts shadows
+        light.shadow.bias = -0.0004;
         light.shadow.mapSize.width = 512;
         light.shadow.mapSize.height = 512;
 
-        // Emissive Bulb Mesh
-        const bulbGeo = new THREE.SphereGeometry(targetWidth * 0.02, 16, 16);
+        // Small emissive bulb mesh sitting inside the shade
+        const bulbGeo = new THREE.SphereGeometry(0.32, 12, 12);
         const bulbMat = new THREE.MeshBasicMaterial({ color: MODE_COLORS[LampMode.NORMAL] });
         const bulb = new THREE.Mesh(bulbGeo, bulbMat);
-        bulb.position.set(x, lightY, 0);
+        bulb.position.copy(pos);
+        bulb.castShadow = false;
+        bulb.receiveShadow = false;
 
         lampGroup.add(light);
         lampGroup.add(bulb);
 
-        lights.push({ light, bulb, originalIntensity: 100 });
+        lights.push({ light, bulb, originalIntensity: 95 });
     });
 
-    // Laser beams
-    const lasers = [];
-    const laserGeo = new THREE.CylinderGeometry(0.02, 0.02, 15, 8);
-    laserGeo.translate(0, -7.5, 0);
-
-    positions.forEach((x, i) => {
+    // Decorative laser beams (only visible in LASER/CRITICAL modes)
+    const laserLength = 15;
+    lightPositions.forEach((pos, i) => {
         const laserMat = new THREE.MeshBasicMaterial({
-            color: 0xff0000, transparent: true, opacity: 0,
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0,
             blending: THREE.AdditiveBlending
         });
-        const laser = new THREE.Mesh(laserGeo, laserMat);
-        laser.position.set(x, lightY, 0);
-        laser.rotation.z = (i - 1) * 0.15;
+        const laser = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.018, 0.018, laserLength, 6),
+            laserMat
+        );
+        // Position so the "beam" originates near the bulb and points downward
+        laser.position.set(pos.x, pos.y - (laserLength * 0.5) - 0.3, pos.z);
+        laser.rotation.z = (i - 1) * 0.12;
         lampGroup.add(laser);
         lasers.push(laser);
     });
 
-    // State
+    // --- Runtime State & Controls (on/off + fancy modes via keys) ---
     let currentMode = LampMode.NORMAL;
     let isOn = true;
     let strobeState = false;
@@ -244,12 +354,12 @@ export async function createLamp(scene) {
                 const critColor = flash ? 0xffd700 : 0xffffff;
                 lights.forEach(l => {
                     l.light.color.setHex(critColor);
-                    l.light.intensity = flash ? 150 : 100;
+                    l.light.intensity = flash ? 155 : 95;
                     l.bulb.material.color.setHex(critColor);
                 });
                 lasers.forEach((laser, i) => {
                     laser.material.color.setHex(0xffd700);
-                    laser.material.opacity = 0.8;
+                    laser.material.opacity = 0.85;
                     laser.rotation.y = criticalTime * 8 + i * (Math.PI * 2 / 3);
                 });
                 break;
@@ -268,8 +378,13 @@ export async function createLamp(scene) {
     };
 
     return {
-        group: lampGroup, toggle, setMode, setRolling,
-        triggerCritical, update, handleKey,
+        group: lampGroup,
+        toggle,
+        setMode,
+        setRolling,
+        triggerCritical,
+        update,
+        handleKey,
         getMode: () => currentMode,
         LampMode
     };

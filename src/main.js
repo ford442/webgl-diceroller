@@ -228,6 +228,8 @@ function animate() {
         lampData,
         LampMode
     });
+    // Lamp uses Group-wrapper scaling (see src/environment/Lamp.js) and is
+    // positioned at y=30 in LoadingTiers.js so chains hang from ceiling height.
 
     if (composer) {
         composer.render();
