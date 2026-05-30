@@ -39,6 +39,7 @@ import { createPencil } from '../environment/Pencil.js';
 import { createCoinPouch } from '../environment/CoinPouch.js';
 import { createLantern } from '../environment/Lantern.js';
 import { createWoodenSpoon } from '../environment/WoodenSpoon.js';
+import { createWarhammer } from '../environment/Warhammer.js';
 import { createLute } from '../environment/Lute.js';
 import { createRunestones } from '../environment/Runestones.js';
 import { createSmokingPipe } from '../environment/SmokingPipe.js';
@@ -422,6 +423,9 @@ export async function loadTiers(scene, camera, physicsWorld, updateRegistry, cal
     // Spectacles Prop - front edge
     createSpectacles(scene, physicsWorld, { x: 3, y: -2.75, z: 14 }, 0);
 
+    // Warhammer Prop - table
+    createWarhammer(scene, physicsWorld, { x: 5, y: -2.75, z: 2 }, Math.PI / 3);
+
     // Leather Journal Prop - back right
     createLeatherJournal(scene, physicsWorld, { x: 12, y: -2.5, z: -13 }, Math.PI / 5);
 
@@ -493,7 +497,7 @@ export async function loadTiers(scene, camera, physicsWorld, updateRegistry, cal
     const noShadowNames = ['Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'PocketFlask', 'Compass', 'WaxSeal',
         'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
         'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet',
-        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra', 'Waterskin', 'Astrolabe', 'Sundial', 'Flute', 'Apple', 'WoodenSpoon'];
+        'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus', 'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope', 'Candelabra', 'Waterskin', 'Astrolabe', 'Sundial', 'Flute', 'Apple', 'WoodenSpoon', 'Warhammer'];
     scene.traverse(child => {
         if (child.isMesh) {
             let p = child.parent;
