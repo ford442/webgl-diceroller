@@ -331,6 +331,6 @@ if (!window.isWasmAvailable()) {
 ### Phase 3+
 
 - Multi-threading via `SharedArrayBuffer` + `Worker`.
-- Draco-compressed GLB models (already planned in `plan.md`) with C++ convex hull extraction.
+- Draco-compressed GLB dice models are now live (`public/images/dice/*.glb`, see `plan.md` §2). Convex hulls are still extracted on the CPU in `src/dice.js` via `createConvexHullShape`. A future step is to extract them in C++ at load time: pass the decoded glTF `POSITION` accessor (a contiguous `Float32Array`) into the WASM engine and build the hull there (e.g. Bullet `btConvexHullShape` / qhull), avoiding the JS-side per-die hull pass entirely. Because the Draco decode already yields a flat vertex buffer, this is a direct hand-off with no reformatting.
 - Audio trigger callbacks from WASM → JS.
 - Production hardening: error handling, memory bounds, fuzzing.

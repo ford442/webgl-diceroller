@@ -38,6 +38,24 @@ export const SHADOW_DISABLED_PROP_NAMES = new Set([
     'Warhammer'
 ]);
 
+function resolveRootObject(result) {
+    if (!result) return null;
+    if (result.isObject3D) return result;
+    if (result.group?.isObject3D) return result.group;
+    return null;
+}
+
+function applyShadowPolicyToResult(result, enabled) {
+    const root = resolveRootObject(result);
+    if (!root) return;
+
+    root.traverse((child) => {
+        if (!child.isMesh) return;
+        child.castShadow = enabled;
+        if (!enabled) child.receiveShadow = false;
+    });
+}
+
 export const TIER_PROP_DEFINITIONS = {
     tier0: [
         factoryEntry('TavernWalls', {
@@ -264,6 +282,10 @@ export async function spawnProp(entry, context) {
 
     if (entry.afterCreate) {
         entry.afterCreate(result, context);
+    }
+
+    if (entry.shadow === 'off' || SHADOW_DISABLED_PROP_NAMES.has(factoryName)) {
+        applyShadowPolicyToResult(result, false);
     }
 
     return result;

@@ -18,18 +18,34 @@ The following dice types are required and have been partially implemented in the
 *   **Throwing Mechanics:** Implement a user-input driven throwing mechanism (drag and release vector) rather than the current static drop.
 *   **Materials & Visuals:** Improve the visual fidelity using PBR materials (roughness, metalness) instead of basic standard materials, potentially leveraging the texture maps embedded in the original DAEs more effectively.
 
-## 2. Asset Optimization Pipeline
+## 2. Asset Optimization Pipeline ✅ (dice done)
 
-To fully modernize the application, the legacy Collada (`.dae`) assets should be converted to glTF/GLB.
+The legacy Collada (`.dae`) dice assets have been converted to Draco-compressed glTF/GLB.
 
 ### Conversion Strategy:
-1.  **Automated Conversion Script:** Create a Node.js script using `gltf-pipeline` or Blender CLI to batch convert all `.dae` files in `public./images/` to `.glb` format.
-2.  **Draco Compression:** Apply Draco compression to the resulting GLB files to reduce download sizes.
-3.  **Loader Update:** Switch `ColladaLoader` to `GLTFLoader` in `src/dice.js`.
+1.  **Automated Conversion Script:** ✅ `scripts/convert-dice-to-glb.mjs` (`npm run convert:dice`) batch-converts the `.dae` sources (now in `raw_models/dae/`) to `.glb`. It drives headless Chromium (Playwright) for `ColladaLoader`→`GLTFExporter`, then post-processes with `@gltf-transform` (dedup/weld/prune/quantize). (Blender CLI was unavailable in the build env, so the browser loaders were used directly.)
+2.  **Draco Compression:** ✅ `KHR_draco_mesh_compression` applied to all six dice. Total payload ~243 KB (~227 KB gzipped), down from ~4 MB of `.dae` XML.
+3.  **Loader Update:** ✅ `src/dice.js` now uses `GLTFLoader` + `DRACOLoader` (decoder self-hosted in `public/draco/`).
+
+### Remaining:
+- Convert the 80+ environment props (`raw_models/*.blend`, OBJ lamp) to GLB/Draco the same way.
+- KTX2 + Basis texture compression for the shared PBR texture sets.
 
 ## 3. WebGPU & WGSL Optimizations
 
-The current implementation uses Three.js's `WebGPURenderer` which abstracts much of the WebGPU complexity. However, for high-performance physics or custom visual effects, raw WGSL (WebGPU Shading Language) can be utilized.
+The current production path still uses Three.js `WebGLRenderer` by default. The repo now has an experimental `?webgpu` prototype path, but it is not yet the primary renderer. For high-performance physics or custom visual effects, raw WGSL (WebGPU Shading Language) can be utilized on top of that prototype.
+
+### Current Prototype Status
+*   **Renderer abstraction:** `src/core/RendererFactory.js` can select `WebGPURenderer` behind `?webgpu` and falls back to `WebGLRenderer` when init fails or `?webgl` is forced.
+*   **Post stack split:** WebGL keeps `EffectComposer`; WebGPU uses Three.js TSL `PostProcessing`.
+*   **Known compatibility gap:** `ShaderMaterial`-based effects like the tavern window god rays do not run on the WebGPU path and are disabled there.
+
+### Migration Steps
+1.  **Keep the opt-in boundary strict:** land WebGPU changes only when `?webgpu` visuals remain close to `?webgl`.
+2.  **Port custom shaders to TSL/WGSL:** replace `ShaderMaterial` effects, starting with `GodRayShader.js`, before making WebGPU the default.
+3.  **Audit materials and loaders:** verify environment maps, shadow quality, tone mapping, and texture color spaces match across both renderers.
+4.  **Add a regression harness:** compare `?webgl` and `?webgpu` screenshots or scene stats in Playwright where browser support allows it.
+5.  **Only then consider default-on WebGPU:** after parity and fallback behavior are stable.
 
 ### Roadmap for Compute Shaders:
 *   **Physics Offloading:** Currently, `ammo.js` (WASM) handles physics on the CPU. A major optimization would be to implement a **Compute Shader** based physics engine (or use a library that does) to handle collision detection and rigid body dynamics entirely on the GPU.
@@ -43,3 +59,4 @@ The current implementation uses Three.js's `WebGPURenderer` which abstracts much
 
 *   Ensure all custom shaders or materials written for WebGPU have appropriate fallbacks or transpilation for WebGL2 to maintain broad compatibility.
 *   Test on devices with disabled WebGPU flags.
+*   Preserve the existing `WebGLRenderer` path as the stable baseline until WebGPU is proven across Chrome/Edge and non-WebGPU browsers still render identically under `?webgl`.

@@ -8,9 +8,15 @@
     "dev": "vite",
     "build": "npm run build:wasm && vite build",
     "preview": "vite preview",
-    "build:wasm": "bash src/wasm/build.sh"
+    "build:wasm": "bash src/wasm/build.sh",
+    "convert:dice": "node scripts/convert-dice-to-glb.mjs"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.1.0",
+    "@gltf-transform/extensions": "^4.1.0",
+    "@gltf-transform/functions": "^4.1.0",
+    "convex-hull": "^1.0.3",
+    "draco3dgltf": "^1.5.7",
     "playwright": "^1.58.2",
     "vite": "^7.3.1"
   }

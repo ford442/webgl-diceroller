@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 import { initPhysics, stepPhysics } from './physics.js';
 import { loadWasmEngine, isWasmAvailable, getWasmEngine } from './wasm/WasmPhysicsBridge.js';
-import { updateDiceVisuals, throwDice, syncAllDiceToWasm } from './dice.js';
+import { updateDiceVisuals, throwDice, syncAllDiceToWasm, areDiceSettled } from './dice.js';
 import { showResults, hideResults } from './results.js';
 import { updateInteraction, hasActiveDiceInteraction } from './interaction.js';
 import { updateAtmosphere } from './environment/Atmosphere.js';
@@ -27,11 +27,17 @@ let gongFlashIntensity = 0; // Screen flash from gong
 let interaction; // Interaction handler
 const searchParams = new URLSearchParams(window.location.search);
 const dualPhysicsValidation = searchParams.has('dual-physics');
+const debugEnabled = searchParams.has('debug') || searchParams.has('debug-perf');
 const scheduler = createFrameScheduler({
     fixedDeltaTime: 1 / 60,
     maxPhysicsSteps: 5,
     debugPerf: searchParams.has('debug-perf')
 });
+let postConfig;
+let shadowController;
+let debugOverlay = null;
+let frameMsSmoothed = 16.7;
+let rendererState;
 
 // "Eye-Head" Cursor Logic
 const cursorPos = new THREE.Vector2(0, 0); // Pixel coordinates relative to center
@@ -39,6 +45,94 @@ const isLockedRef = { value: false };
 
 let cameraController;
 let inputState;
+
+function createShadowController(rendererRef, sceneRef) {
+    const state = {
+        externalMotionCount: 0,
+        settleStartedAtMs: null,
+        staticShadowRefreshes: 0,
+        lastReason: 'startup'
+    };
+
+    const markShadowLightsDirty = () => {
+        sceneRef.traverse((child) => {
+            if (child.isLight && child.castShadow && child.shadow) {
+                child.shadow.needsUpdate = true;
+            }
+        });
+    };
+
+    const enable = (reason = 'motion') => {
+        state.lastReason = reason;
+        rendererRef.shadowMap.autoUpdate = true;
+        rendererRef.shadowMap.needsUpdate = true;
+        markShadowLightsDirty();
+    };
+
+    const requestStaticRefresh = (reason = 'settled') => {
+        state.lastReason = reason;
+        rendererRef.shadowMap.autoUpdate = false;
+        rendererRef.shadowMap.needsUpdate = true;
+        markShadowLightsDirty();
+        state.staticShadowRefreshes += 1;
+    };
+
+    return {
+        state,
+        noteMotionStart(reason = 'motion') {
+            state.externalMotionCount += 1;
+            state.settleStartedAtMs = null;
+            enable(reason);
+        },
+        pulse(reason = 'motion') {
+            state.settleStartedAtMs = null;
+            enable(reason);
+        },
+        noteMotionEnd(reason = 'motion') {
+            state.externalMotionCount = Math.max(0, state.externalMotionCount - 1);
+            state.lastReason = reason;
+        },
+        forceRefresh(reason = 'manual') {
+            requestStaticRefresh(reason);
+        },
+        update(timeMs, diceSettled) {
+            const dynamicMotion = state.externalMotionCount > 0 || !diceSettled;
+            if (dynamicMotion) {
+                state.settleStartedAtMs = null;
+                enable('dynamic');
+                return;
+            }
+
+            if (state.settleStartedAtMs === null) {
+                state.settleStartedAtMs = timeMs;
+                return;
+            }
+
+            if ((timeMs - state.settleStartedAtMs) >= 500 && rendererRef.shadowMap.autoUpdate) {
+                requestStaticRefresh('settled');
+            }
+        }
+    };
+}
+
+function createDebugOverlay() {
+    const container = document.getElementById('canvas-container') || document.body;
+    const overlay = document.createElement('div');
+    overlay.style.position = 'absolute';
+    overlay.style.top = '10px';
+    overlay.style.left = '10px';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+    overlay.style.color = '#d7f7d0';
+    overlay.style.fontFamily = 'monospace';
+    overlay.style.fontSize = '11px';
+    overlay.style.padding = '8px 10px';
+    overlay.style.borderRadius = '6px';
+    overlay.style.zIndex = '1100';
+    overlay.style.pointerEvents = 'none';
+    overlay.style.whiteSpace = 'pre-line';
+    container.appendChild(overlay);
+    return overlay;
+}
 
 init();
 
@@ -52,8 +146,18 @@ async function init() {
     camera = sceneSetup.camera;
     renderer = sceneSetup.renderer;
     composer = sceneSetup.composer;
+    rendererState = sceneSetup.rendererState;
     pointLight = sceneSetup.pointLight;
+    postConfig = sceneSetup.postConfig;
+    shadowController = createShadowController(renderer, scene);
+    console.info(
+        `[Renderer] Active backend: ${rendererState?.rendererType ?? 'webgl'}`
+        + (rendererState?.fallbackReason ? ` (${rendererState.fallbackReason})` : '')
+    );
     window.__renderStats = scheduler.stats;
+    if (debugEnabled) {
+        debugOverlay = createDebugOverlay();
+    }
 
     scheduler.register('physicsStep', 'dicePhysics', ({ deltaTime }) => {
         if (!physicsWorld) return;
@@ -104,12 +208,46 @@ async function init() {
 
     scheduler.register('preRender', 'candleFlicker', createCandleFlickerSystem(pointLight, () => candleFlamePos));
     scheduler.register('preRender', 'fireplaceFlicker', createFireplaceFlickerSystem(() => fireplaceLight));
+    scheduler.register('preRender', 'shadowController', ({ time }) => {
+        if (!shadowController) return;
+        shadowController.update(time * 1000, areDiceSettled());
+    });
+    scheduler.register('preRender', 'debugOverlay', ({ deltaTime }) => {
+        frameMsSmoothed = THREE.MathUtils.lerp(frameMsSmoothed, deltaTime * 1000, 0.1);
+        scheduler.stats.shadow = {
+            autoUpdate: renderer.shadowMap.autoUpdate,
+            needsUpdate: renderer.shadowMap.needsUpdate,
+            staticRefreshes: shadowController?.state.staticShadowRefreshes ?? 0,
+            motionSources: shadowController?.state.externalMotionCount ?? 0
+        };
+        scheduler.stats.post = postConfig;
+        if (!debugOverlay) return;
+
+        const renderInfo = renderer.info.render;
+        const memoryInfo = renderer.info.memory;
+        const programs = renderer.info.programs?.length ?? 0;
+        debugOverlay.textContent = [
+            `frame ${frameMsSmoothed.toFixed(1)} ms`,
+            `renderer ${rendererState?.rendererType ?? 'unknown'}${rendererState?.fallbackReason ? ' fallback' : ''}`,
+            `draws ${renderInfo.calls} tris ${renderInfo.triangles}`,
+            `geom ${memoryInfo.geometries} tex ${memoryInfo.textures} prog ${programs}`,
+            `shadows ${renderer.shadowMap.autoUpdate ? 'dynamic' : 'static'} refresh ${shadowController?.state.staticShadowRefreshes ?? 0}`,
+            `post ${postConfig.quality}${postConfig.bloomEnabled ? ' +bloom' : ''}${postConfig.chromaticAberrationEnabled ? ' +ca' : ''}`
+        ].join('\n');
+    });
 
     scheduler.register('render', 'sceneRender', () => {
         if (composer) {
             composer.render();
         } else {
             renderer.render(scene, camera);
+        }
+    });
+    scheduler.register('postRender', 'renderWarnings', () => {
+        if (!debugEnabled) return;
+        const drawCalls = renderer.info.render.calls;
+        if (drawCalls > 300) {
+            console.warn(`[RenderPerf] High draw call count: ${drawCalls}`);
         }
     });
 
@@ -156,6 +294,7 @@ async function init() {
     // Load all tiers
     const tierResult = await loadTiers(scene, camera, physicsWorld, { scheduler }, {
         onDiceRoll: () => {
+            shadowController?.pulse('roll');
             cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
             hideResults();
             if (lampData) lampData.setRolling(true);
@@ -167,7 +306,14 @@ async function init() {
             pointLight.position.copy(candleFlamePos);
             pointLight.position.y += 0.05;
         },
-        setInteraction: (inter) => { interaction = inter; }
+        setInteraction: (inter) => { interaction = inter; },
+        interactionHooks: {
+            onMotionActivityChange: (active, source) => {
+                if (!shadowController) return;
+                if (active) shadowController.noteMotionStart(source);
+                else shadowController.noteMotionEnd(source);
+            }
+        }
     });
 
     ui = tierResult.ui;
@@ -184,6 +330,7 @@ async function init() {
         cursorPos,
         crosshairUI,
         onRoll: () => {
+            shadowController?.pulse('roll');
             throwDice(scene, physicsWorld);
             cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
             hideResults();
@@ -198,9 +345,15 @@ async function init() {
     window.physicsWorld = physicsWorld;
     window.THREE = THREE;
     window.renderer = renderer;
+    window.usingWebGPU = rendererState?.usingWebGPU === true;
+    window.usingWebGL = rendererState?.usingWebGL !== false;
+    window.rendererType = rendererState?.rendererType ?? 'webgl';
+    window.rendererFallbackReason = rendererState?.fallbackReason ?? null;
     // WASM engine exposed after loadWasmEngine() resolves (may be the stub)
     window.getWasmEngine = getWasmEngine;
     window.isWasmAvailable = isWasmAvailable;
+    window.forceShadowRefresh = () => shadowController?.forceRefresh('debug');
+    window.postConfig = postConfig;
 }
 
 function onWindowResize() {

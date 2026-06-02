@@ -6,6 +6,71 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { VignetteShader } from '../shaders/VignetteShader.js';
 import { TavernEnvironment } from '../environment/TavernEnvironment.js';
+import { createRenderer } from './RendererFactory.js';
+
+async function createWebGpuPostPipeline(renderer, scene, camera, { width, height, postConfig }) {
+    const [
+        { PostProcessing },
+        { pass, uniform, float, vec2, vec3, vec4, mix, Fn, screenUV },
+        { bloom },
+        { chromaticAberration }
+    ] = await Promise.all([
+        import('three/webgpu'),
+        import('three/tsl'),
+        import('three/addons/tsl/display/BloomNode.js'),
+        import('three/addons/tsl/display/ChromaticAberrationNode.js')
+    ]);
+
+    const postProcessing = new PostProcessing(renderer);
+    const scenePass = pass(scene, camera);
+    scenePass.setSize(width, height);
+
+    let outputNode = scenePass.getTextureNode('output');
+    let bloomNode = null;
+
+    if (postConfig.bloomEnabled) {
+        bloomNode = bloom(
+            outputNode,
+            postConfig.quality === 'low' ? 0.35 : 0.6,
+            postConfig.quality === 'low' ? 0.25 : 0.4,
+            0.6
+        );
+        outputNode = outputNode.add(bloomNode);
+    }
+
+    const vignetteOffset = uniform(1.2);
+    const vignetteDarkness = uniform(1.8);
+    const vignetteNode = Fn(() => {
+        const vignetteUv = screenUV.sub(vec2(0.5, 0.5)).mul(vignetteOffset);
+        const vignetteColor = vec3(float(1.0).sub(vignetteDarkness));
+        return vec4(
+            mix(outputNode.rgb, vignetteColor, vignetteUv.dot(vignetteUv)),
+            outputNode.a
+        );
+    })();
+
+    outputNode = vignetteNode;
+
+    if (postConfig.quality === 'high') {
+        outputNode = chromaticAberration(outputNode, 0.2, vec2(0.5, 0.5), 1.08);
+    }
+
+    postProcessing.outputNode = outputNode;
+
+    return {
+        type: 'webgpu-post',
+        render() {
+            postProcessing.render();
+        },
+        setSize(nextWidth, nextHeight) {
+            scenePass.setSize(nextWidth, nextHeight);
+            bloomNode?.setSize?.(nextWidth, nextHeight);
+        },
+        dispose() {
+            postProcessing.dispose();
+        }
+    };
+}
 
 export async function setupScene(container) {
     const containerWidth = container.clientWidth;
@@ -21,15 +86,33 @@ export async function setupScene(container) {
     camera.lookAt(0, -3, 0);
 
     // Renderer setup
-    const renderer = new THREE.WebGLRenderer({ antialias: false });
-    renderer.setPixelRatio(1.0); // Fixed 1:1 pixel ratio for consistent performance
-    renderer.setSize(containerWidth, containerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.8; // Darker exposure for mood
+    const rendererState = await createRenderer(container, { antialias: false });
+    const renderer = rendererState.renderer;
     container.appendChild(renderer.domElement);
     scene.userData.renderer = renderer;
+    scene.userData.rendererState = rendererState;
+    scene.userData.rendererType = rendererState.rendererType;
+
+    const params = new URLSearchParams(window.location.search);
+    const hardwareConcurrency = navigator.hardwareConcurrency || 4;
+    const hasWebGpu = rendererState.usingWebGPU || Boolean(navigator.gpu);
+    const maxTextureSize = renderer.capabilities?.maxTextureSize ?? 4096;
+    const isLowEndDevice = maxTextureSize < 4096 || hardwareConcurrency <= 4 || !hasWebGpu;
+    const forceLowPost = params.has('low-post');
+    const disablePost = params.has('no-post');
+    const disableBloom = params.has('no-bloom');
+    const disableGodRays = params.has('no-godrays');
+    const postQuality = disablePost ? 'off' : ((isLowEndDevice || forceLowPost) ? 'low' : 'high');
+    const postConfig = {
+        quality: postQuality,
+        bloomEnabled: !disablePost && !disableBloom,
+        godRaysEnabled: !disableGodRays && !rendererState.usingWebGPU,
+        lowEndDetected: isLowEndDevice,
+        rendererType: rendererState.rendererType,
+        requestedRenderer: rendererState.requestedRenderer,
+        chromaticAberrationEnabled: rendererState.usingWebGPU && postQuality === 'high'
+    };
+    scene.userData.postConfig = postConfig;
 
     // Lights
     // Ambient light (low intensity)
@@ -48,6 +131,8 @@ export async function setupScene(container) {
     pointLight.shadow.radius = 5; // Softer shadows
     pointLight.shadow.camera.near = 0.1;
     pointLight.shadow.camera.far = 25;
+    pointLight.shadow.autoUpdate = false;
+    pointLight.shadow.needsUpdate = true;
     scene.add(pointLight);
 
     // Cool SpotLight (Moonlight) - Shining through the window
@@ -60,8 +145,10 @@ export async function setupScene(container) {
     spotLight.penumbra = 0.5;
     spotLight.castShadow = true;
     spotLight.shadow.bias = -0.0001;
-    spotLight.shadow.mapSize.width = 1024;
-    spotLight.shadow.mapSize.height = 1024;
+    spotLight.shadow.mapSize.width = postQuality === 'low' ? 512 : 1024;
+    spotLight.shadow.mapSize.height = postQuality === 'low' ? 512 : 1024;
+    spotLight.shadow.autoUpdate = false;
+    spotLight.shadow.needsUpdate = true;
     scene.add(spotLight);
     scene.add(spotLight.target);
 
@@ -73,36 +160,60 @@ export async function setupScene(container) {
     // Devices with maxTextureSize < 4096 typically have underpowered GPUs where
     // fullscreen bloom passes would cause significant frame-rate drops.
     // The `?no-post` URL parameter always overrides this check for manual control.
-    const isLowEnd = renderer.capabilities.maxTextureSize < 4096;
-
     let composer = null;
-    const params = new URLSearchParams(window.location.search);
-    if (!params.has('no-post') && !isLowEnd) {
-        composer = new EffectComposer(renderer);
+    const postPasses = {
+        renderPass: null,
+        bloomPass: null,
+        vignettePass: null,
+        outputPass: null,
+        postProcessing: null
+    };
+    if (!disablePost) {
+        if (rendererState.usingWebGPU) {
+            composer = await createWebGpuPostPipeline(renderer, scene, camera, {
+                width: containerWidth,
+                height: containerHeight,
+                postConfig
+            });
+            postPasses.postProcessing = composer;
+        } else {
+            composer = new EffectComposer(renderer);
 
-        const renderPass = new RenderPass(scene, camera);
-        composer.addPass(renderPass);
+            const renderPass = new RenderPass(scene, camera);
+            composer.addPass(renderPass);
+            postPasses.renderPass = renderPass;
 
-        // Bloom — run at half resolution to save fillrate
-        const bloomPass = new UnrealBloomPass(
-            new THREE.Vector2(Math.round(containerWidth / 2), Math.round(containerHeight / 2)),
-            1.5, 0.4, 0.85
-        );
-        bloomPass.threshold = 0.6; // High threshold to only catch flames/lights
-        bloomPass.strength = 0.6; // Soft glow
-        bloomPass.radius = 0.4;
-        composer.addPass(bloomPass);
+            if (postConfig.bloomEnabled) {
+                const bloomScale = postQuality === 'low' ? 4 : 2;
+                const bloomPass = new UnrealBloomPass(
+                    new THREE.Vector2(
+                        Math.round(containerWidth / bloomScale),
+                        Math.round(containerHeight / bloomScale)
+                    ),
+                    postQuality === 'low' ? 1.0 : 1.5,
+                    postQuality === 'low' ? 0.25 : 0.4,
+                    0.85
+                );
+                bloomPass.threshold = 0.6;
+                bloomPass.strength = postQuality === 'low' ? 0.35 : 0.6;
+                bloomPass.radius = postQuality === 'low' ? 0.25 : 0.4;
+                composer.addPass(bloomPass);
+                postPasses.bloomPass = bloomPass;
+            }
 
-        // Vignette
-        const vignettePass = new ShaderPass(VignetteShader);
-        vignettePass.uniforms['offset'].value = 1.2;
-        vignettePass.uniforms['darkness'].value = 1.8; // Darker vignette
-        composer.addPass(vignettePass);
+            // Vignette
+            const vignettePass = new ShaderPass(VignetteShader);
+            vignettePass.uniforms['offset'].value = 1.2;
+            vignettePass.uniforms['darkness'].value = 1.8; // Darker vignette
+            composer.addPass(vignettePass);
+            postPasses.vignettePass = vignettePass;
 
-        // Output Pass
-        const outputPass = new OutputPass();
-        composer.addPass(outputPass);
-    } else if (isLowEnd) {
+            // Output Pass
+            const outputPass = new OutputPass();
+            composer.addPass(outputPass);
+            postPasses.outputPass = outputPass;
+        }
+    } else if (isLowEndDevice) {
         console.log('Post-processing disabled: low-end GPU detected');
     }
 
@@ -115,5 +226,5 @@ export async function setupScene(container) {
     pmremGenerator.dispose();
     tavernEnvironment.dispose();
 
-    return { scene, camera, renderer, composer, pointLight, spotLight };
+    return { scene, camera, renderer, composer, pointLight, spotLight, postConfig, postPasses, rendererState };
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { createConvexHullShape, spawnDicePhysics, getAmmo } from './physics.js';
 import { getWasmEngine, isWasmAvailable, isWasmInitialized } from './wasm/WasmPhysicsBridge.js';
 
@@ -121,7 +122,32 @@ export const readDiceValue = (die) => {
     return faceValues[bestIdx];
 };
 
-const loader = new ColladaLoader();
+export const areDiceSettled = () => {
+    if (spawnedDice.length === 0) return true;
+
+    if (isWasmAvailable()) {
+        return getWasmEngine().areAllSettled();
+    }
+
+    let allStable = true;
+    spawnedDice.forEach((die) => {
+        if (!die.body) return;
+        const linear = die.body.getLinearVelocity();
+        const angular = die.body.getAngularVelocity();
+        const velSq = linear.x() * linear.x() + linear.y() * linear.y() + linear.z() * linear.z();
+        const angSq = angular.x() * angular.x() + angular.y() * angular.y() + angular.z() * angular.z();
+        if (velSq > 1.0 || angSq > 1.0) allStable = false;
+    });
+
+    return allStable;
+};
+
+// glTF + Draco loader. The Draco decoder (wasm) is self-hosted under
+// public/draco/ so loading works offline and without a CDN round-trip.
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('./draco/');
+const loader = new GLTFLoader();
+loader.setDRACOLoader(dracoLoader);
 
 let diceModels = {};
 export let spawnedDice = [];
@@ -136,12 +162,12 @@ const getSecureRandom = () => {
 
 // Exported for main.js to use during sequential loading
 export const diceTypes = [
-    { type: 'd4', file: 'die_4.dae' },
-    { type: 'd6', file: 'die_6.dae' },
-    { type: 'd8', file: 'die_8.dae' },
-    { type: 'd10', file: 'die_10.dae' },
-    { type: 'd12', file: 'die_12.dae' },
-    { type: 'd20', file: 'die_20.dae' }
+    { type: 'd4', file: 'dice/die_4.glb' },
+    { type: 'd6', file: 'dice/die_6.glb' },
+    { type: 'd8', file: 'dice/die_8.glb' },
+    { type: 'd10', file: 'dice/die_10.glb' },
+    { type: 'd12', file: 'dice/die_12.glb' },
+    { type: 'd20', file: 'dice/die_20.glb' }
 ];
 
 // Export diceModels so main.js can populate it
@@ -269,12 +295,12 @@ export const loadDiceModels = async (onProgress) => {
             resolve();
         }, 15000);
 
-        loader.load(url, (collada) => {
+        loader.load(url, (gltf) => {
             if (timedOut) return;
             clearTimeout(timer);
 
             let mesh = null;
-            collada.scene.traverse((child) => {
+            gltf.scene.traverse((child) => {
                 if (child.isMesh) mesh = child;
             });
 
@@ -290,10 +316,19 @@ export const loadDiceModels = async (onProgress) => {
                 const upgradeMaterial = (mat) => new THREE.MeshStandardMaterial({
                     color: mat.color || 0xeeeeee,
                     map: mat.map || null,
-                    roughness: 0.2,
+                    roughnessMap: mat.roughnessMap || null,
+                    normalMap: mat.normalMap || null,
+                    aoMap: mat.aoMap || null,
+                    roughness: mat.roughnessMap ? 1.0 : 0.2,
                     metalness: 0.0,
                     envMapIntensity: 1.0
                 });
+
+                // Ensure colour maps decode in sRGB (glTF base-colour textures).
+                if (mesh.material) {
+                    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                    mats.forEach((m) => { if (m.map) m.map.colorSpace = THREE.SRGBColorSpace; });
+                }
 
                 if (material) {
                     material = Array.isArray(material) ? material.map(upgradeMaterial) : upgradeMaterial(material);

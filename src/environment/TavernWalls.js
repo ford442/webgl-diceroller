@@ -100,7 +100,19 @@ export function createTavernWalls(scene, physicsWorld) {
 
     // Left Wall (Windowed)
     const leftWallX = -width/2 - thickness/2;
-    const godRayUpdate = createWindowedWall(roomGroup, physicsWorld, Ammo, leftWallX, floorY, height, depth, thickness, wallMaterial, woodMaterial);
+    const godRayUpdate = createWindowedWall(
+        roomGroup,
+        physicsWorld,
+        Ammo,
+        leftWallX,
+        floorY,
+        height,
+        depth,
+        thickness,
+        wallMaterial,
+        woodMaterial,
+        scene.userData.postConfig?.godRaysEnabled !== false
+    );
 
 
     // Beams / Decorations
@@ -193,7 +205,7 @@ function createCeiling(group, physicsWorld, Ammo, wallMat, woodMat, width, depth
     }
 }
 
-function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight, wallDepth, thickness, wallMat, woodMat) {
+function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight, wallDepth, thickness, wallMat, woodMat, godRaysEnabled = true) {
     // Window Parameters
     const winWidth = 6;
     const winHeight = 10;
@@ -286,7 +298,7 @@ function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight,
     group.add(frameGroup);
 
     // --- God Rays ---
-    const godRayUpdate = createGodRays(group, xPos, winY, winZ);
+    const godRayUpdate = godRaysEnabled ? createGodRays(group, xPos, winY, winZ) : null;
 
 
     // --- Physics ---

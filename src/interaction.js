@@ -21,7 +21,7 @@ const DOUBLE_CLICK_DELAY = 300;
 // Interactive Objects Registry
 const interactiveObjects = [];
 
-export const initInteraction = (camera, scene, physicsWorld) => {
+export const initInteraction = (camera, scene, physicsWorld, hooks = {}) => {
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
 
@@ -43,8 +43,10 @@ export const initInteraction = (camera, scene, physicsWorld) => {
         warmMesh.position.set(0, -1000, 0); // Hide far away
         scene.add(warmMesh);
         
-        // Force render to compile shaders
-        scene.userData.renderer.compile(scene, camera);
+        // Force shader/material warmup when the active renderer supports it.
+        if (typeof scene.userData.renderer.compile === 'function') {
+            scene.userData.renderer.compile(scene, camera);
+        }
         
         // Clean up after a few frames
         setTimeout(() => {
@@ -59,9 +61,9 @@ export const initInteraction = (camera, scene, physicsWorld) => {
     requestAnimationFrame(warmMaterials);
 
     return {
-        handleDown: (x, y) => onPointerDown(x, y, camera, scene, physicsWorld),
+        handleDown: (x, y) => onPointerDown(x, y, camera, scene, physicsWorld, hooks),
         handleMove: (x, y) => onPointerMove(x, y, camera),
-        handleUp: () => onPointerUp(physicsWorld)
+        handleUp: () => onPointerUp(physicsWorld, hooks)
     };
 };
 
@@ -69,7 +71,7 @@ export const registerInteractiveObject = (mesh, callback) => {
     interactiveObjects.push({ mesh, callback });
 };
 
-function onPointerDown(x, y, camera, scene, physicsWorld) {
+function onPointerDown(x, y, camera, scene, physicsWorld, hooks = {}) {
     updateMouse(x, y);
     
     // Configure raycaster for precise dice picking
@@ -115,7 +117,7 @@ function onPointerDown(x, y, camera, scene, physicsWorld) {
             const now = Date.now();
             if (lastClickObject === object && (now - lastClickTime) < DOUBLE_CLICK_DELAY) {
                 // Double click detected
-                triggerLevitation(object, scene, physicsWorld);
+                triggerLevitation(object, scene, physicsWorld, hooks);
                 lastClickObject = null;
                 lastClickTime = 0;
                 return;
@@ -125,6 +127,7 @@ function onPointerDown(x, y, camera, scene, physicsWorld) {
             lastClickObject = object;
 
             draggedItem = object;
+            hooks.onMotionActivityChange?.(true, 'drag');
             startDrag(object.userData.body, point, physicsWorld);
         }
     }
@@ -160,7 +163,7 @@ function onPointerMove(x, y, camera) {
     }
 }
 
-function onPointerUp(physicsWorld) {
+function onPointerUp(physicsWorld, hooks = {}) {
     if (dragConstraint) {
         const Ammo = getAmmo();
         syncDieBodyStateToWasm(draggedItem);
@@ -169,6 +172,7 @@ function onPointerUp(physicsWorld) {
         Ammo.destroy(dragConstraint);
         dragConstraint = null;
         draggedItem = null;
+        hooks.onMotionActivityChange?.(false, 'drag');
     }
 }
 
@@ -245,7 +249,7 @@ export const getHoveredDie = (camera, normX, normY) => {
 
 const levitatingDice = [];
 
-function triggerLevitation(object, scene, physicsWorld) {
+function triggerLevitation(object, scene, physicsWorld, hooks = {}) {
     if (levitatingDice.find(d => d.object === object)) return;
 
     prepareDieForAmmoInteraction(object);
@@ -270,6 +274,7 @@ function triggerLevitation(object, scene, physicsWorld) {
         light: light,
         scene: scene,
         physicsWorld: physicsWorld,
+        hooks,
         startTime: Date.now(),
         startY: object.position.y,
         targetY: object.position.y + 2.0,
@@ -277,6 +282,7 @@ function triggerLevitation(object, scene, physicsWorld) {
     });
 
     setDiePhysicsAuthority(object, 'ammo');
+    hooks.onMotionActivityChange?.(true, 'levitation');
 }
 
 // Reusable transform for levitation updates
@@ -356,6 +362,7 @@ function updateLevitation() {
 
             item.body.applyCentralImpulse(new Ammo.btVector3(forceX, forceY, forceZ));
             item.body.applyTorqueImpulse(new Ammo.btVector3(spinX, spinY, spinZ));
+            item.hooks?.onMotionActivityChange?.(false, 'levitation');
 
             levitatingDice.splice(i, 1);
         }

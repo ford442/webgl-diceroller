@@ -4,7 +4,7 @@
 
 This is a **WebGL-based 3D dice roller application** built with Three.js. It simulates a tavern-themed environment where users can spawn, throw, and interact with various gaming dice (d4, d6, d8, d10, d12, d20) using realistic rigid-body physics. The project was originally built using the CubicVR engine (preserved in `legacy/`) and has been migrated to a modern Three.js + Vite stack.
 
-> **Note on naming:** The HTML `<title>` reads "WebGPU Dice Roller" and `plan.md` discusses future WebGPU/WGSL migration, but the **current implementation uses `THREE.WebGLRenderer`** exclusively. There is no WebGPU or WebGPURenderer code in the active source.
+> **Note on naming:** The HTML `<title>` reads "WebGPU Dice Roller". The default runtime remains `THREE.WebGLRenderer`, but the repo now includes an opt-in `?webgpu` prototype path using Three.js `WebGPURenderer` with a TSL post stack. `?webgl` forces the stable WebGL path.
 
 ## Technology Stack
 
@@ -13,7 +13,7 @@ This is a **WebGL-based 3D dice roller application** built with Three.js. It sim
 | 3D Engine | Three.js (`^0.181.2`) |
 | Physics | Custom `DicePhysicsEngine` WASM + ammo.js (`^0.0.10`) fallback/interaction bridge |
 | Build Tool | Vite (`^7.3.1`) |
-| Rendering | WebGLRenderer with post-processing (`EffectComposer`) |
+| Rendering | WebGLRenderer by default, optional WebGPURenderer prototype behind `?webgpu` |
 | Module System | ES Modules |
 | Test Automation | Playwright (`^1.58.2`, ad-hoc Node.js scripts only) |
 
@@ -23,7 +23,7 @@ This is a **WebGL-based 3D dice roller application** built with Three.js. It sim
 webgl-diceroller/
 ├── src/                        # Main source code
 │   ├── main.js                 # Entry point: scene setup, render loop, camera, loading tiers
-│   ├── dice.js                 # Dice loading (Collada), spawning, throw logic
+│   ├── dice.js                 # Dice loading (glTF/Draco), spawning, throw logic
 │   ├── physics.js              # ammo.js physics initialization and helpers
 │   ├── core/FrameScheduler.js  # Ordered frame phases + fixed-timestep physics hook
 │   ├── interaction.js          # Mouse/raycaster interaction (drag, levitate)
@@ -42,9 +42,11 @@ webgl-diceroller/
 │       ├── Fire.js             # Fireplace fire effect
 │       └── Bookshelf.js, Chair.js, Chest.js, Gong.js, etc.  # Decor props
 ├── public/                     # Static assets served as-is
-│   ├── images/                 # Dice models (.dae), textures, lamp OBJ + textures
+│   ├── images/                 # Textures, lamp OBJ + textures
+│   │   └── dice/               # Draco-compressed dice models (die_*.glb)
+│   ├── draco/                  # Self-hosted Draco decoder (wasm) for GLTFLoader
 │   └── js/                     # Legacy script placements
-├── raw_models/                 # Source Blender files (.blend)
+├── raw_models/                 # Source Blender files (.blend); dae/ holds legacy Collada conversion inputs
 ├── legacy/                     # Original CubicVR implementation (HTML + JS)
 ├── index.html                  # HTML entry point
 ├── vite.config.js              # Vite configuration
@@ -80,17 +82,26 @@ npm run preview
 - `npm run dev` still works without compiled WASM artifacts; the bridge falls back to ammo.js automatically.
 - `?no-wasm` forces the ammo fallback path even if `public/wasm/` exists.
 - `?dual-physics` steps ammo and WASM in parallel for validation/debugging.
+- Render/perf flags:
+  - `?webgpu` opts into the experimental WebGPU renderer path.
+  - `?webgl` forces the stable WebGL renderer path.
+  - `?no-post` disables the composer entirely.
+  - `?low-post` keeps post enabled but lowers bloom quality.
+  - `?no-bloom` disables only bloom.
+  - `?no-godrays` disables the tavern window volumetric beam meshes.
+  - `?debug` / `?debug-perf` shows render stats; `debug-perf` also logs slow frame systems.
 
 ## Architecture Details
 
 ### `src/main.js`
-- Initializes Three.js `Scene`, `WebGLRenderer` (antialias: false, pixelRatio: 1.0, `PCFSoftShadowMap`, `ACESFilmicToneMapping`, exposure 0.8), and `EffectComposer`.
+- Initializes Three.js `Scene` plus the renderer selected by `src/core/RendererFactory.js`.
 - Uses `FrameScheduler` to run named phases: `preStep` → `physicsStep` → `postPhysicsSync` → `updates` → `preRender` → `render` → `postRender`.
 - Sets up lighting:
   - Warm flickering candle `PointLight` (`0xff9933`, intensity 2.5, distance 20, casts shadow)
   - Cool moonlight `SpotLight` (`0x4444dd`, intensity 5.0, outside window)
   - Very low ambient light (`0xffffff`, intensity 0.05)
-- Configures post-processing pipeline: `RenderPass` → `UnrealBloomPass` (threshold=0.6, strength=0.6, radius=0.4) → `ShaderPass(VignetteShader)` (offset=1.2, darkness=1.8) → `OutputPass`. Disable entirely with `?no-post` URL parameter.
+- WebGL post pipeline: `RenderPass` → `UnrealBloomPass` → `ShaderPass(VignetteShader)` → `OutputPass`.
+- WebGPU post pipeline: TSL `PostProcessing` scene pass with bloom, vignette, and a subtle chromatic aberration pass in high quality mode.
 - Loads a PMREM environment map from `TavernEnvironment.js` for PBR reflections.
 - Loads `src/wasm/WasmPhysicsBridge.js` asynchronously. When the module is present and `?no-wasm` is not set, the custom WASM engine becomes authoritative for ordinary dice simulation; ammo remains available as fallback and for active drag/levitation handoff.
 - Implements **tiered async loading** with a loading overlay and progress bar:
@@ -105,10 +116,10 @@ npm run preview
   When focusing, the camera dynamically calculates distance based on dice spread.
 - Exposes `window.__renderStats` for scheduler timings / renderer info when `?debug-perf` is enabled.
 - Exposes globals for debugging and test automation:
-  `window.camera`, `window.scene`, `window.physicsWorld`, `window.renderer`, `window.THREE`, `window.sceneReady`.
+  `window.camera`, `window.scene`, `window.physicsWorld`, `window.renderer`, `window.THREE`, `window.sceneReady`, `window.usingWebGPU`, `window.usingWebGL`, `window.rendererType`.
 
 ### `src/dice.js`
-- Loads Collada (`.dae`) dice models from `public/images/` using `ColladaLoader`.
+- Loads Draco-compressed glTF (`.glb`) dice models from `public/images/dice/` using `GLTFLoader` + `DRACOLoader`.
 - Converts materials to `MeshStandardMaterial` (roughness 0.2, metalness 0.0, envMapIntensity 1.0).
 - Centers and rotates geometry, then creates convex hull collision shapes stored in `diceModels[type].userData.physicsShape`.
 - Uses `window.crypto.getRandomValues` for secure randomness in spawns and throws.
@@ -162,21 +173,22 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 - Physics-enabled props often use `createStaticBody()` from `physics.js` for invisible collision meshes.
 - Shadows are aggressively optimized: small decorative props are listed in `SHADOW_DISABLED_PROP_NAMES` in `src/environment/PropRegistry.js`.
 
-### Post-Processing Pipeline
-1. **RenderPass**
-2. **UnrealBloomPass** (threshold=0.6, strength=0.6, radius=0.4 — glow for flames/lights)
-3. **ShaderPass(VignetteShader)** (offset=1.2, darkness=1.8)
-4. **OutputPass**
-
-Note: `GodRayShader.js` exists in `src/shaders/` but is **not currently used** in the active pipeline.
+### Rendering Notes
+- WebGL remains the default and most compatible runtime.
+- `?webgpu` uses `WebGPURenderer` plus the TSL post pipeline. It is intentionally opt-in.
+- The tavern window god-ray mesh uses `THREE.ShaderMaterial`, so it is disabled automatically on the WebGPU path unless that effect is ported to TSL/WGSL later.
+- `GodRayShader.js` is used for the scene-space moonlight beam mesh in `TavernWalls.js`; it is not part of the fullscreen composer pipeline.
 
 ## Asset Pipeline
 
 ### Dice Models
-- **Format**: Collada (`.dae`) in `public/images/`
-- **Source**: Blender files in `raw_models/`
+- **Format**: Draco-compressed binary glTF (`.glb`) in `public/images/dice/` (`die_4.glb` … `die_20.glb`).
+- **Source**: Blender files in `raw_models/`; the legacy Collada exports are kept (un-shipped) in `raw_models/dae/` as the conversion input.
+- **Loader**: `GLTFLoader` + `DRACOLoader` in `src/dice.js`. The Draco decoder (wasm) is self-hosted in `public/draco/` (copied from `node_modules/three/examples/jsm/libs/draco/`) and referenced via `setDecoderPath('./draco/')` — no CDN dependency.
+- **Conversion**: `npm run convert:dice` runs `scripts/convert-dice-to-glb.mjs`, which drives a headless Chromium (Playwright) to load each `.dae` with `ColladaLoader` and re-export it via `GLTFExporter`, then post-processes with `@gltf-transform` (dedup → weld → prune → quantize) and applies `KHR_draco_mesh_compression`. The world matrix is baked into the geometry so the runtime transform in `dice.js` (`center → applyMatrix4 → rotateX(-π/2) → center`) is mathematically identical to the old Collada path — physics hulls and `readDiceValue` face clustering are preserved.
+- **Payload**: ~243 KB total (~227 KB gzipped), down from ~4 MB of raw `.dae` XML. `weld()` also collapses the heavily-duplicated Collada vertices (e.g. d4 34 470 → 5 747 verts).
 - Geometry is centered and rotated on load to ensure proper center of mass for physics.
-- `plan.md` mentions a future migration to glTF/GLB with Draco compression, but this has not yet been implemented.
+- To regenerate after editing a source model: export the `.blend` to `raw_models/dae/die_N.dae`, then `npm run convert:dice`.
 
 ### Textures
 - PBR workflow: diffuse, roughness, normal, AO, bump maps.
@@ -217,6 +229,11 @@ Note: `GodRayShader.js` exists in `src/shaders/` but is **not currently used** i
 - When removing dice, always call `Ammo.destroy()` on `body.getMotionState()` and `body` itself.
 - When removing dice visuals, call `geometry.dispose()` and `material.dispose()`.
 - Reusable transforms (`_sharedTransform`, `_levitationTransform`) are used in `updateDiceVisuals` and `updateLevitation` to minimize Ammo.js heap churn.
+
+### Shadow Best Practices
+- Prefer disabling `castShadow` at prop registration time via `PropRegistry` instead of relying on a late full-scene traverse.
+- Keep `renderer.shadowMap.autoUpdate = false` by default; motion systems should temporarily re-enable shadow updates during rolls, drags, or levitation.
+- If a prop includes tiny accent meshes, default them to `castShadow = false` unless the shadow is visually important.
 
 ## Testing Instructions
 

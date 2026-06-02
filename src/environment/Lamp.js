@@ -216,6 +216,8 @@ export async function createLamp() {
         light.shadow.bias = -0.0004;
         light.shadow.mapSize.width = 512;
         light.shadow.mapSize.height = 512;
+        light.shadow.autoUpdate = false;
+        light.shadow.needsUpdate = true;
 
         // Small emissive bulb mesh sitting inside the shade
         const bulbGeo = new THREE.SphereGeometry(0.32, 12, 12);

@@ -3,7 +3,7 @@ import { initUI, createCrosshair } from '../ui.js';
 import { initResultsUI } from '../results.js';
 import { initInteraction } from '../interaction.js';
 import { createFloorAndWalls } from '../physics.js';
-import { SHADOW_DISABLED_PROP_NAMES, TIER_PROP_DEFINITIONS, spawnProp } from '../environment/PropRegistry.js';
+import { TIER_PROP_DEFINITIONS, spawnProp } from '../environment/PropRegistry.js';
 
 const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -28,25 +28,6 @@ async function spawnTier(entries, context) {
     for (const entry of entries) {
         await spawnProp(entry, context);
     }
-}
-
-function finalizeSceneShadows(scene) {
-    scene.traverse((child) => {
-        if (!child.isMesh) return;
-
-        let parent = child.parent;
-        while (parent && parent !== scene) {
-            if (parent.name) {
-                for (const propName of SHADOW_DISABLED_PROP_NAMES) {
-                    if (parent.name.includes(propName)) {
-                        child.castShadow = false;
-                        return;
-                    }
-                }
-            }
-            parent = parent.parent;
-        }
-    });
 }
 
 export async function loadTiers(scene, camera, physicsWorld, orchestrator, callbacks) {
@@ -93,7 +74,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
 
     initResultsUI();
 
-    const interaction = initInteraction(camera, scene, physicsWorld);
+    const interaction = initInteraction(camera, scene, physicsWorld, callbacks.interactionHooks || {});
     callbacks.setInteraction?.(interaction);
 
     updateLoadingText('Loading furniture and props...');
@@ -113,7 +94,6 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
 
     updateLoadingText('Finalizing...');
     updateLoadingBar(95);
-    finalizeSceneShadows(scene);
 
     updateLoadingText('Ready!');
     updateLoadingBar(100);
