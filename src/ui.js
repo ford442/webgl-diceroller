@@ -105,6 +105,8 @@ export const createCrosshair = () => {
     const canvasContainer = document.getElementById('canvas-container') || document.body;
     const crosshair = document.createElement('div');
     crosshair.style.position = 'absolute';
+    crosshair.style.left = '50%';
+    crosshair.style.top = '50%';
     crosshair.style.width = '20px';
     crosshair.style.height = '20px';
     crosshair.style.pointerEvents = 'none'; // Click through

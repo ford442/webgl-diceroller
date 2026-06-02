@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import { createConvexHullShape, spawnDicePhysics, getAmmo } from './physics.js';
+import { getWasmEngine, isWasmAvailable, isWasmInitialized } from './wasm/WasmPhysicsBridge.js';
 
 // ---------------------------------------------------------------------------
 // Face-detection helpers
@@ -124,6 +125,7 @@ const loader = new ColladaLoader();
 
 let diceModels = {};
 export let spawnedDice = [];
+const WASM_TRANSFORM_STRIDE = 7;
 
 // Helper for Crypto Randomness
 const getSecureRandom = () => {
@@ -144,6 +146,105 @@ export const diceTypes = [
 
 // Export diceModels so main.js can populate it
 export { diceModels };
+
+const getDieSides = (type) => Number.parseInt(type.replace('d', ''), 10) || 6;
+const isUsingWasmPhysics = () => isWasmInitialized() && isWasmAvailable();
+
+const findSpawnedDieByMesh = (mesh) => spawnedDice.find((die) => die.mesh === mesh) || null;
+
+const getAmmoTransform = (die) => {
+    const body = die?.body;
+    if (!body || !body.getMotionState()) return null;
+
+    const Ammo = getAmmo();
+    if (!_sharedTransform) {
+        _sharedTransform = new Ammo.btTransform();
+    }
+
+    body.getMotionState().getWorldTransform(_sharedTransform);
+    return _sharedTransform;
+};
+
+const syncBodyTransformFromMesh = (die, resetVelocities = true) => {
+    if (!die?.body) return;
+
+    const Ammo = getAmmo();
+    const transform = new Ammo.btTransform();
+    transform.setIdentity();
+    const origin = new Ammo.btVector3(die.mesh.position.x, die.mesh.position.y, die.mesh.position.z);
+    const rotation = new Ammo.btQuaternion(
+        die.mesh.quaternion.x,
+        die.mesh.quaternion.y,
+        die.mesh.quaternion.z,
+        die.mesh.quaternion.w
+    );
+    transform.setOrigin(origin);
+    transform.setRotation(rotation);
+    die.body.setWorldTransform(transform);
+    die.body.getMotionState().setWorldTransform(transform);
+
+    if (resetVelocities) {
+        const zeroVec = new Ammo.btVector3(0, 0, 0);
+        die.body.setLinearVelocity(zeroVec);
+        die.body.setAngularVelocity(zeroVec);
+        Ammo.destroy(zeroVec);
+    }
+
+    die.body.activate();
+
+    Ammo.destroy(rotation);
+    Ammo.destroy(origin);
+    Ammo.destroy(transform);
+};
+
+const syncWasmTransformForDie = (die, options = {}) => {
+    if (!isUsingWasmPhysics() || die?.wasmId == null) return;
+
+    const {
+        position = die.mesh.position,
+        quaternion = die.mesh.quaternion,
+        linearVelocity = null,
+        angularVelocity = null
+    } = options;
+
+    const engine = getWasmEngine();
+    engine.setDieTransform(
+        die.wasmId,
+        position.x, position.y, position.z,
+        quaternion.x, quaternion.y, quaternion.z, quaternion.w
+    );
+
+    if (linearVelocity || angularVelocity) {
+        engine.setDieVelocity(
+            die.wasmId,
+            linearVelocity?.x ?? 0,
+            linearVelocity?.y ?? 0,
+            linearVelocity?.z ?? 0,
+            angularVelocity?.x ?? 0,
+            angularVelocity?.y ?? 0,
+            angularVelocity?.z ?? 0
+        );
+    }
+};
+
+const syncDieStateFromAmmoToWasm = (die) => {
+    if (!isUsingWasmPhysics() || die?.wasmId == null || !die.body) return;
+
+    const transform = getAmmoTransform(die);
+    if (!transform) return;
+
+    const origin = transform.getOrigin();
+    const rotation = transform.getRotation();
+    const linear = die.body.getLinearVelocity();
+    const angular = die.body.getAngularVelocity();
+
+    syncWasmTransformForDie(die, {
+        position: { x: origin.x(), y: origin.y(), z: origin.z() },
+        quaternion: { x: rotation.x(), y: rotation.y(), z: rotation.z(), w: rotation.w() },
+        linearVelocity: { x: linear.x(), y: linear.y(), z: linear.z() },
+        angularVelocity: { x: angular.x(), y: angular.y(), z: angular.z() }
+    });
+};
 
 export const loadDiceModels = async (onProgress) => {
     let done = 0;
@@ -267,9 +368,21 @@ export const spawnObjects = (scene, world, config = null) => {
 
         const body = spawnDicePhysics(world, mesh, template.userData.physicsShape, {x, y, z}, mesh.rotation);
         mesh.userData.body = body;
+        mesh.userData.physicsAuthority = isUsingWasmPhysics() ? 'wasm' : 'ammo';
+
+        let wasmId = null;
+        if (isUsingWasmPhysics()) {
+            const engine = getWasmEngine();
+            wasmId = engine.addDie(getDieSides(type), x, y, z);
+            engine.setDieTransform(
+                wasmId,
+                mesh.position.x, mesh.position.y, mesh.position.z,
+                mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w
+            );
+        }
 
         // Store type for smart updating
-        spawnedDice.push({ mesh, body, type });
+        spawnedDice.push({ mesh, body, type, wasmId });
     });
 };
 
@@ -277,30 +390,52 @@ export const spawnObjects = (scene, world, config = null) => {
 let _sharedTransform = null;
 
 export const updateDiceVisuals = () => {
-    const Ammo = getAmmo();
-    
-    // Lazy-init shared transform
-    if (!_sharedTransform) {
-        _sharedTransform = new Ammo.btTransform();
+    if (isUsingWasmPhysics()) {
+        const transforms = getWasmEngine().getTransforms();
+
+        spawnedDice.forEach((die, index) => {
+            if (die.mesh.userData.physicsAuthority === 'ammo') {
+                const transform = getAmmoTransform(die);
+                if (!transform) return;
+                const origin = transform.getOrigin();
+                const rotation = transform.getRotation();
+                die.mesh.position.set(origin.x(), origin.y(), origin.z());
+                die.mesh.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
+                return;
+            }
+
+            const offset = index * WASM_TRANSFORM_STRIDE;
+            if (offset + (WASM_TRANSFORM_STRIDE - 1) >= transforms.length) return;
+
+            die.mesh.position.set(
+                transforms[offset + 0],
+                transforms[offset + 1],
+                transforms[offset + 2]
+            );
+            die.mesh.quaternion.set(
+                transforms[offset + 3],
+                transforms[offset + 4],
+                transforms[offset + 5],
+                transforms[offset + 6]
+            );
+        });
+
+        return;
     }
 
-    spawnedDice.forEach(die => {
-        const body = die.body;
-        const mesh = die.mesh;
-
-        if (body && body.getMotionState()) {
-            body.getMotionState().getWorldTransform(_sharedTransform);
-            const origin = _sharedTransform.getOrigin();
-            const rotation = _sharedTransform.getRotation();
-
-            mesh.position.set(origin.x(), origin.y(), origin.z());
-            mesh.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
-        }
+    spawnedDice.forEach((die) => {
+        const transform = getAmmoTransform(die);
+        if (!transform) return;
+        const origin = transform.getOrigin();
+        const rotation = transform.getRotation();
+        die.mesh.position.set(origin.x(), origin.y(), origin.z());
+        die.mesh.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
     });
 };
 
 export const clearDice = (scene, world) => {
     const Ammo = getAmmo();
+    const engine = isUsingWasmPhysics() ? getWasmEngine() : null;
     spawnedDice.forEach(die => {
         scene.remove(die.mesh);
         if (die.mesh.geometry) die.mesh.geometry.dispose();
@@ -309,6 +444,7 @@ export const clearDice = (scene, world) => {
         world.removeRigidBody(die.body);
         Ammo.destroy(die.body.getMotionState());
         Ammo.destroy(die.body);
+        if (engine && die.wasmId != null) engine.removeDie(die.wasmId);
     });
     spawnedDice = [];
 };
@@ -344,6 +480,9 @@ export const updateDiceSet = (scene, world, targetCounts) => {
                     world.removeRigidBody(die.body);
                     Ammo.destroy(die.body.getMotionState());
                     Ammo.destroy(die.body);
+                    if (isUsingWasmPhysics() && die.wasmId != null) {
+                        getWasmEngine().removeDie(die.wasmId);
+                    }
                     // Remove visual and free Three.js resources
                     scene.remove(die.mesh);
                     if (die.mesh.geometry) die.mesh.geometry.dispose();
@@ -361,9 +500,11 @@ export const updateDiceSet = (scene, world, targetCounts) => {
 export const throwDice = (scene, world) => {
     const Ammo = getAmmo();
     const transform = new Ammo.btTransform();
+    const engine = isUsingWasmPhysics() ? getWasmEngine() : null;
 
     spawnedDice.forEach((die, index) => {
         const body = die.body;
+        die.mesh.userData.physicsAuthority = engine ? 'wasm' : 'ammo';
 
         // Reset velocity — use temps destroyed immediately after
         const zeroVec = new Ammo.btVector3(0, 0, 0);
@@ -399,6 +540,15 @@ export const throwDice = (scene, world) => {
         // Wake up
         body.activate();
 
+        if (engine && die.wasmId != null) {
+            engine.setDieTransform(
+                die.wasmId,
+                x, y, z,
+                q.x, q.y, q.z, q.w
+            );
+            engine.setDieVelocity(die.wasmId, 0, 0, 0, 0, 0, 0);
+        }
+
         // Much softer throw forces
         const forceX = (getSecureRandom() - 0.5) * 25; // Was 80
         const forceY = (getSecureRandom()) * 10 - 5;   // Gentle vertical toss
@@ -415,7 +565,81 @@ export const throwDice = (scene, world) => {
         const torque = new Ammo.btVector3(spinX, spinY, spinZ);
         body.applyTorqueImpulse(torque);
         Ammo.destroy(torque);
+
+        if (engine && die.wasmId != null) {
+            engine.applyImpulse(die.wasmId, forceX, forceY, forceZ);
+            engine.applyTorqueImpulse(die.wasmId, spinX, spinY, spinZ);
+        }
     });
 
     Ammo.destroy(transform);
+};
+
+export const setDiePhysicsAuthority = (mesh, authority) => {
+    const die = findSpawnedDieByMesh(mesh);
+    if (!die) return;
+    die.mesh.userData.physicsAuthority = authority;
+};
+
+export const prepareDieForAmmoInteraction = (mesh) => {
+    const die = findSpawnedDieByMesh(mesh);
+    if (!die?.body) return;
+    syncBodyTransformFromMesh(die, true);
+    die.mesh.userData.physicsAuthority = 'ammo';
+};
+
+export const syncDieBodyStateToWasm = (mesh) => {
+    const die = findSpawnedDieByMesh(mesh);
+    if (!die) return;
+    syncDieStateFromAmmoToWasm(die);
+};
+
+export const syncDieMeshStateToWasm = (mesh) => {
+    const die = findSpawnedDieByMesh(mesh);
+    if (!die) return;
+    syncWasmTransformForDie(die);
+};
+
+export const applyWasmImpulseForDie = (mesh, impulse, torque) => {
+    const die = findSpawnedDieByMesh(mesh);
+    if (!isUsingWasmPhysics() || !die || die.wasmId == null) return;
+
+    const engine = getWasmEngine();
+    if (impulse) {
+        engine.applyImpulse(die.wasmId, impulse.x, impulse.y, impulse.z);
+    }
+    if (torque) {
+        engine.applyTorqueImpulse(die.wasmId, torque.x, torque.y, torque.z);
+    }
+};
+
+export const syncAllDiceToWasm = () => {
+    if (!isUsingWasmPhysics()) return;
+
+    const engine = getWasmEngine();
+    engine.clearAllDice();
+
+    spawnedDice.forEach((die) => {
+        die.wasmId = engine.addDie(
+            getDieSides(die.type),
+            die.mesh.position.x,
+            die.mesh.position.y,
+            die.mesh.position.z
+        );
+
+        engine.setDieTransform(
+            die.wasmId,
+            die.mesh.position.x,
+            die.mesh.position.y,
+            die.mesh.position.z,
+            die.mesh.quaternion.x,
+            die.mesh.quaternion.y,
+            die.mesh.quaternion.z,
+            die.mesh.quaternion.w
+        );
+
+        if (die.mesh.userData.physicsAuthority !== 'ammo') {
+            die.mesh.userData.physicsAuthority = 'wasm';
+        }
+    });
 };

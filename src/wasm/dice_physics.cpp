@@ -39,7 +39,9 @@ struct Vec3 {
     Vec3 operator+(const Vec3& o) const { return {x + o.x, y + o.y, z + o.z}; }
     Vec3 operator-(const Vec3& o) const { return {x - o.x, y - o.y, z - o.z}; }
     Vec3 operator*(float s)        const { return {x * s,   y * s,   z * s};   }
+    Vec3 operator/(float s)        const { return {x / s,   y / s,   z / s};   }
     Vec3& operator+=(const Vec3& o) { x += o.x; y += o.y; z += o.z; return *this; }
+    Vec3& operator-=(const Vec3& o) { x -= o.x; y -= o.y; z -= o.z; return *this; }
 
     float dot(const Vec3& o)  const { return x * o.x + y * o.y + z * o.z; }
     Vec3  cross(const Vec3& o) const {
@@ -260,6 +262,11 @@ public:
             for (auto& b : bodies_) {
                 if (b.sleeping) continue;
                 integrate(b, subDt);
+            }
+
+            resolveDieCollisions();
+
+            for (auto& b : bodies_) {
                 resolveTableCollision(b);
                 checkSleep(b, subDt);
             }
@@ -388,6 +395,74 @@ private:
 
         // Integrate rotation
         b.rotation = b.rotation.integrate(b.angularVelocity, dt);
+    }
+
+    void resolveDieCollisions() {
+        const float POSITION_SLOP = 0.001f;
+        const float POSITION_BIAS = 0.80f;
+
+        for (std::size_t i = 0; i < bodies_.size(); ++i) {
+            for (std::size_t j = i + 1; j < bodies_.size(); ++j) {
+                auto& a = bodies_[i];
+                auto& b = bodies_[j];
+
+                if (a.sleeping && b.sleeping) continue;
+
+                Vec3 delta = b.position - a.position;
+                float distSq = delta.lengthSq();
+                float combinedRadius = a.radius + b.radius;
+                float minDistSq = combinedRadius * combinedRadius;
+                if (distSq >= minDistSq) continue;
+
+                float dist = std::sqrt(std::max(distSq, 1e-8f));
+                Vec3 normal = dist > 1e-4f ? (delta / dist) : Vec3{1.0f, 0.0f, 0.0f};
+                float penetration = combinedRadius - dist;
+
+                wake(a);
+                wake(b);
+
+                float invMassSum = a.invMass + b.invMass;
+                if (invMassSum <= 1e-6f) continue;
+
+                float correctionMag = std::max(penetration - POSITION_SLOP, 0.0f) * POSITION_BIAS / invMassSum;
+                Vec3 correction = normal * correctionMag;
+                a.position -= correction * a.invMass;
+                b.position += correction * b.invMass;
+
+                Vec3 relativeVelocity = b.velocity - a.velocity;
+                float normalSpeed = relativeVelocity.dot(normal);
+                if (normalSpeed > 0.0f) continue;
+
+                float restitution = std::min(a.restitution, b.restitution);
+                float normalImpulseMag = -(1.0f + restitution) * normalSpeed / invMassSum;
+                Vec3 normalImpulse = normal * normalImpulseMag;
+
+                a.velocity -= normalImpulse * a.invMass;
+                b.velocity += normalImpulse * b.invMass;
+
+                relativeVelocity = b.velocity - a.velocity;
+                Vec3 tangent = relativeVelocity - normal * relativeVelocity.dot(normal);
+                float tangentLenSq = tangent.lengthSq();
+                if (tangentLenSq > 1e-8f) {
+                    tangent = tangent / std::sqrt(tangentLenSq);
+                    float tangentSpeed = relativeVelocity.dot(tangent);
+                    float frictionImpulseMag = -tangentSpeed / invMassSum;
+                    float friction = std::sqrt(a.friction * b.friction);
+                    float maxFrictionImpulse = normalImpulseMag * friction;
+                    frictionImpulseMag = std::clamp(
+                        frictionImpulseMag,
+                        -maxFrictionImpulse,
+                        maxFrictionImpulse
+                    );
+
+                    Vec3 frictionImpulse = tangent * frictionImpulseMag;
+                    a.velocity -= frictionImpulse * a.invMass;
+                    b.velocity += frictionImpulse * b.invMass;
+                    a.angularVelocity -= tangent.cross(normal) * (frictionImpulseMag * a.invInertia * 0.25f);
+                    b.angularVelocity += tangent.cross(normal) * (frictionImpulseMag * b.invInertia * 0.25f);
+                }
+            }
+        }
     }
 
     void resolveTableCollision(RigidBody& b) const {

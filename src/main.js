@@ -2,14 +2,17 @@ import * as THREE from 'three';
 
 import { initPhysics, stepPhysics } from './physics.js';
 import { loadWasmEngine, isWasmAvailable, getWasmEngine } from './wasm/WasmPhysicsBridge.js';
-import { updateDiceVisuals, throwDice } from './dice.js';
+import { updateDiceVisuals, throwDice, syncAllDiceToWasm } from './dice.js';
 import { showResults, hideResults } from './results.js';
-import { updateInteraction } from './interaction.js';
+import { updateInteraction, hasActiveDiceInteraction } from './interaction.js';
 import { updateAtmosphere } from './environment/Atmosphere.js';
 import { setupScene } from './core/SceneSetup.js';
-import { loadTiers, LampMode } from './core/LoadingTiers.js';
+import { LampMode } from './environment/Lamp.js';
+import { loadTiers } from './core/LoadingTiers.js';
 import { setupInput } from './core/InputHandler.js';
 import { createCameraController, DiceFocusState } from './core/CameraController.js';
+import { createFrameScheduler } from './core/FrameScheduler.js';
+import { createCandleFlickerSystem, createFireplaceFlickerSystem } from './core/LightingSystems.js';
 
 let camera, scene, renderer, composer;
 let physicsWorld;
@@ -22,15 +25,13 @@ let lampData; // Lamp reference for key handling and rolling state
 let gongData; // Gong reference for flash intensity
 let gongFlashIntensity = 0; // Screen flash from gong
 let interaction; // Interaction handler
-
-// Update registry - centralizes all per-frame update functions
-const updateRegistry = {
-    updates: [],
-    register(name, fn) { this.updates.push({ name, fn }); },
-    runAll(deltaTime, time) {
-        for (const { fn } of this.updates) fn(deltaTime, time);
-    }
-};
+const searchParams = new URLSearchParams(window.location.search);
+const dualPhysicsValidation = searchParams.has('dual-physics');
+const scheduler = createFrameScheduler({
+    fixedDeltaTime: 1 / 60,
+    maxPhysicsSteps: 5,
+    debugPerf: searchParams.has('debug-perf')
+});
 
 // "Eye-Head" Cursor Logic
 const cursorPos = new THREE.Vector2(0, 0); // Pixel coordinates relative to center
@@ -52,6 +53,65 @@ async function init() {
     renderer = sceneSetup.renderer;
     composer = sceneSetup.composer;
     pointLight = sceneSetup.pointLight;
+    window.__renderStats = scheduler.stats;
+
+    scheduler.register('physicsStep', 'dicePhysics', ({ deltaTime }) => {
+        if (!physicsWorld) return;
+
+        const useWasm = isWasmAvailable();
+        const shouldStepAmmo = !useWasm || dualPhysicsValidation || hasActiveDiceInteraction();
+
+        if (shouldStepAmmo) {
+            stepPhysics(physicsWorld, deltaTime);
+        }
+        if (useWasm) {
+            getWasmEngine().step(deltaTime);
+        }
+    });
+
+    scheduler.register('postPhysicsSync', 'diceVisualSync', () => {
+        if (!physicsWorld) return;
+        updateDiceVisuals();
+    });
+
+    scheduler.register('updates', 'interaction', () => {
+        if (!physicsWorld) return;
+        updateInteraction();
+    }, { priority: -20 });
+
+    scheduler.register('updates', 'atmosphere', ({ time }) => {
+        updateAtmosphere(time);
+    }, { priority: 10 });
+
+    scheduler.register('preRender', 'cameraController', ({ deltaTime, time }) => {
+        if (!cameraController || !inputState) return;
+        cameraController.update(deltaTime, time, {
+            keys: inputState.keys,
+            cursorPos,
+            isLocked: isLockedRef.value,
+            showResults,
+            hideResults,
+            lampData,
+            LampMode
+        });
+    }, { priority: -10 });
+
+    scheduler.register('preRender', 'gongFlash', () => {
+        if (gongData?.getFlashIntensity) {
+            gongFlashIntensity = gongData.getFlashIntensity();
+        }
+    });
+
+    scheduler.register('preRender', 'candleFlicker', createCandleFlickerSystem(pointLight, () => candleFlamePos));
+    scheduler.register('preRender', 'fireplaceFlicker', createFireplaceFlickerSystem(() => fireplaceLight));
+
+    scheduler.register('render', 'sceneRender', () => {
+        if (composer) {
+            composer.render();
+        } else {
+            renderer.render(scene, camera);
+        }
+    });
 
     // Start the clock and render loop immediately so the browser shows something
     // while the physics engine (WASM) compiles and initialises in the background.
@@ -85,6 +145,7 @@ async function init() {
         if (available) {
             const eng = getWasmEngine();
             eng.init(-15.0, -2.75, 18.0, 18.0);
+            syncAllDiceToWasm();
             console.log('[WasmPhysics] Engine initialized and ready.');
         }
     });
@@ -93,7 +154,7 @@ async function init() {
     cameraController = createCameraController(camera);
 
     // Load all tiers
-    const tierResult = await loadTiers(scene, camera, physicsWorld, updateRegistry, {
+    const tierResult = await loadTiers(scene, camera, physicsWorld, { scheduler }, {
         onDiceRoll: () => {
             cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
             hideResults();
@@ -158,82 +219,5 @@ function onWindowResize() {
 function animate() {
     const deltaTime = clock.getDelta();
     const time = clock.getElapsedTime();
-
-    // Step physics
-    if (physicsWorld) {
-        stepPhysics(physicsWorld, deltaTime);
-        updateDiceVisuals();
-        updateInteraction();
-    }
-
-    // Update Crosshair UI Position - always centered in FPS mode
-    if (crosshairUI) {
-        const container = document.getElementById('canvas-container');
-        const rect = container ? container.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
-        const screenCenterX = rect.width / 2;
-        const screenCenterY = rect.height / 2;
-        crosshairUI.updatePosition(screenCenterX, screenCenterY);
-    }
-
-    // Update Atmosphere
-    updateAtmosphere(time);
-
-    // Run all registered update functions
-    updateRegistry.runAll(deltaTime, time);
-
-    // Get gong flash intensity for screen effect
-    if (gongData && gongData.getFlashIntensity) {
-        gongFlashIntensity = gongData.getFlashIntensity();
-    }
-
-    // Candle Flicker
-    if (pointLight && candleFlamePos) {
-        // More organic flicker
-        // 1. Low frequency breathing (wind drafts)
-        const breathing = Math.sin(time * 2.0) * 0.2;
-        // 2. High frequency flicker
-        const flicker = (Math.random() - 0.5) * 0.3;
-
-        pointLight.intensity = 2.5 + breathing + flicker;
-
-        // Jitter position based on flicker intensity (flame moves when it flickers)
-        const jitterAmount = 0.03;
-        const jitterX = (Math.random() - 0.5) * jitterAmount;
-        const jitterY = (Math.random() - 0.5) * jitterAmount * 0.5;
-        const jitterZ = (Math.random() - 0.5) * jitterAmount;
-
-        pointLight.position.set(
-            candleFlamePos.x + jitterX,
-            candleFlamePos.y + 0.1 + jitterY, // Slightly higher above wick
-            candleFlamePos.z + jitterZ
-        );
-    }
-
-    // Fireplace Flicker
-    if (fireplaceLight) {
-        // Slower, deeper flicker for a big fire
-        const deepPulse = Math.sin(time * 3.0) * 0.5; // Slow breath
-        const crackle = (Math.random() - 0.5) * 1.0; // Random intense crackle
-
-        fireplaceLight.intensity = 5.0 + deepPulse + crackle;
-    }
-
-    // Camera & Movement Logic
-    cameraController.update(deltaTime, time, {
-        keys: inputState.keys,
-        cursorPos,
-        isLocked: isLockedRef.value,
-        showResults,
-        hideResults,
-        lampData,
-        LampMode
-    });
-    // Lamp uses Group-wrapper scaling (see src/environment/Lamp.js) and is
-    // positioned at y=30 in LoadingTiers.js so chains hang from ceiling height.
-
-    if (composer) {
-        composer.render();
-    } else {
-        renderer.render(scene, camera);
-    }
+    scheduler.runFrame({ deltaTime, time, renderer, composer, scene, camera });
 }

@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import { getAmmo } from './physics.js';
-import { spawnedDice } from './dice.js';
+import {
+    spawnedDice,
+    prepareDieForAmmoInteraction,
+    setDiePhysicsAuthority,
+    syncDieBodyStateToWasm,
+    syncDieMeshStateToWasm,
+    applyWasmImpulseForDie
+} from './dice.js';
 
 let raycaster;
 let mouse;
@@ -103,6 +110,8 @@ function onPointerDown(x, y, camera, scene, physicsWorld) {
         }
 
         if (object && object.userData.body) {
+            prepareDieForAmmoInteraction(object);
+
             const now = Date.now();
             if (lastClickObject === object && (now - lastClickTime) < DOUBLE_CLICK_DELAY) {
                 // Double click detected
@@ -154,6 +163,8 @@ function onPointerMove(x, y, camera) {
 function onPointerUp(physicsWorld) {
     if (dragConstraint) {
         const Ammo = getAmmo();
+        syncDieBodyStateToWasm(draggedItem);
+        setDiePhysicsAuthority(draggedItem, 'wasm');
         physicsWorld.removeConstraint(dragConstraint);
         Ammo.destroy(dragConstraint);
         dragConstraint = null;
@@ -201,6 +212,7 @@ export const updateInteraction = () => {
 };
 
 export const isDragging = () => draggedItem !== null;
+export const hasActiveDiceInteraction = () => draggedItem !== null || levitatingDice.length > 0;
 
 export const isHoveringOverDice = (camera, normX, normY) => {
     if (!raycaster) return false;
@@ -236,6 +248,8 @@ const levitatingDice = [];
 function triggerLevitation(object, scene, physicsWorld) {
     if (levitatingDice.find(d => d.object === object)) return;
 
+    prepareDieForAmmoInteraction(object);
+
     const body = object.userData.body;
     const Ammo = getAmmo();
 
@@ -261,6 +275,8 @@ function triggerLevitation(object, scene, physicsWorld) {
         targetY: object.position.y + 2.0,
         state: 'lifting'
     });
+
+    setDiePhysicsAuthority(object, 'ammo');
 }
 
 // Reusable transform for levitation updates
@@ -305,6 +321,7 @@ function updateLevitation() {
             _levitationTransform.setIdentity();
             _levitationTransform.setOrigin(new Ammo.btVector3(p.x, p.y, p.z));
             _levitationTransform.setRotation(new Ammo.btQuaternion(q.x, q.y, q.z, q.w));
+            item.body.setWorldTransform(_levitationTransform);
             item.body.getMotionState().setWorldTransform(_levitationTransform);
 
         } else {
@@ -328,6 +345,14 @@ function updateLevitation() {
             const spinX = (Math.random() - 0.5) * spinVal;
             const spinY = (Math.random() - 0.5) * spinVal;
             const spinZ = (Math.random() - 0.5) * spinVal;
+
+            syncDieMeshStateToWasm(item.object);
+            applyWasmImpulseForDie(
+                item.object,
+                { x: forceX, y: forceY, z: forceZ },
+                { x: spinX, y: spinY, z: spinZ }
+            );
+            setDiePhysicsAuthority(item.object, 'wasm');
 
             item.body.applyCentralImpulse(new Ammo.btVector3(forceX, forceY, forceZ));
             item.body.applyTorqueImpulse(new Ammo.btVector3(spinX, spinY, spinZ));

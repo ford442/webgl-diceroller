@@ -11,7 +11,7 @@ This is a **WebGL-based 3D dice roller application** built with Three.js. It sim
 | Component | Technology |
 |-----------|------------|
 | 3D Engine | Three.js (`^0.181.2`) |
-| Physics | ammo.js (`^0.0.10`, Bullet Physics WASM port) |
+| Physics | Custom `DicePhysicsEngine` WASM + ammo.js (`^0.0.10`) fallback/interaction bridge |
 | Build Tool | Vite (`^7.3.1`) |
 | Rendering | WebGLRenderer with post-processing (`EffectComposer`) |
 | Module System | ES Modules |
@@ -25,12 +25,14 @@ webgl-diceroller/
 │   ├── main.js                 # Entry point: scene setup, render loop, camera, loading tiers
 │   ├── dice.js                 # Dice loading (Collada), spawning, throw logic
 │   ├── physics.js              # ammo.js physics initialization and helpers
+│   ├── core/FrameScheduler.js  # Ordered frame phases + fixed-timestep physics hook
 │   ├── interaction.js          # Mouse/raycaster interaction (drag, levitate)
 │   ├── ui.js                   # DOM-based UI controls and crosshair
 │   ├── shaders/                # Custom GLSL shaders
 │   │   ├── VignetteShader.js   # Active: used in post-processing pipeline
 │   │   └── GodRayShader.js     # Defined but unused in current pipeline
 │   └── environment/            # Scene environment components (84 prop modules)
+│       ├── PropRegistry.js     # Auto-discovers prop factories + tier definitions
 │       ├── Table.js            # Main dice table (36×36 surface with velvet dice zone)
 │       ├── TavernWalls.js      # Room walls with fireplace
 │       ├── TavernEnvironment.js# PMREM environment map for PBR
@@ -65,6 +67,9 @@ npm install
 # Start development server (opens browser, hot reload on http://localhost:5173)
 npm run dev
 
+# Build the custom WASM physics module (requires Emscripten)
+npm run build:wasm
+
 # Build for production (outputs to dist/)
 npm run build
 
@@ -72,16 +77,22 @@ npm run build
 npm run preview
 ```
 
+- `npm run dev` still works without compiled WASM artifacts; the bridge falls back to ammo.js automatically.
+- `?no-wasm` forces the ammo fallback path even if `public/wasm/` exists.
+- `?dual-physics` steps ammo and WASM in parallel for validation/debugging.
+
 ## Architecture Details
 
 ### `src/main.js`
 - Initializes Three.js `Scene`, `WebGLRenderer` (antialias: false, pixelRatio: 1.0, `PCFSoftShadowMap`, `ACESFilmicToneMapping`, exposure 0.8), and `EffectComposer`.
+- Uses `FrameScheduler` to run named phases: `preStep` → `physicsStep` → `postPhysicsSync` → `updates` → `preRender` → `render` → `postRender`.
 - Sets up lighting:
   - Warm flickering candle `PointLight` (`0xff9933`, intensity 2.5, distance 20, casts shadow)
   - Cool moonlight `SpotLight` (`0x4444dd`, intensity 5.0, outside window)
   - Very low ambient light (`0xffffff`, intensity 0.05)
 - Configures post-processing pipeline: `RenderPass` → `UnrealBloomPass` (threshold=0.6, strength=0.6, radius=0.4) → `ShaderPass(VignetteShader)` (offset=1.2, darkness=1.8) → `OutputPass`. Disable entirely with `?no-post` URL parameter.
 - Loads a PMREM environment map from `TavernEnvironment.js` for PBR reflections.
+- Loads `src/wasm/WasmPhysicsBridge.js` asynchronously. When the module is present and `?no-wasm` is not set, the custom WASM engine becomes authoritative for ordinary dice simulation; ammo remains available as fallback and for active drag/levitation handoff.
 - Implements **tiered async loading** with a loading overlay and progress bar:
   - **Tier 0 (Critical, 10–40%):** Physics engine, core environment (walls, room, table, candle), dice models, UI, interaction. Rendering starts immediately after this tier.
   - **Tier 1 (Important, 55–70%):** Furniture and background props (bookshelf, chairs, chest, rug, atmosphere, billiard lamp, floating candles, runecircle).
@@ -92,7 +103,7 @@ npm run preview
 - Manages the **dice focus state machine** after a roll:
   `IDLE` → `WAITING_FOR_STOP` → `FOCUSING` → `HOLDING` (2s) → `RETURNING` → `IDLE`
   When focusing, the camera dynamically calculates distance based on dice spread.
-- Maintains an **`updateRegistry`** (name + fn pairs) for per-frame animated updates from props.
+- Exposes `window.__renderStats` for scheduler timings / renderer info when `?debug-perf` is enabled.
 - Exposes globals for debugging and test automation:
   `window.camera`, `window.scene`, `window.physicsWorld`, `window.renderer`, `window.THREE`, `window.sceneReady`.
 
@@ -101,10 +112,10 @@ npm run preview
 - Converts materials to `MeshStandardMaterial` (roughness 0.2, metalness 0.0, envMapIntensity 1.0).
 - Centers and rotates geometry, then creates convex hull collision shapes stored in `diceModels[type].userData.physicsShape`.
 - Uses `window.crypto.getRandomValues` for secure randomness in spawns and throws.
-- `spawnObjects(scene, world, config)` — spawns dice with random positions/rotations. Default is one of each type (d4–d20). Accepts either a counts object or an array of type strings.
-- `updateDiceVisuals()` — syncs Three.js meshes with ammo.js physics bodies using a shared `_sharedTransform` (`btTransform`) to avoid per-frame allocations.
+- `spawnObjects(scene, world, config)` — spawns dice with random positions/rotations. Default is one of each type (d4–d20). Accepts either a counts object or an array of type strings. When WASM is ready it also registers each die in the C++ engine and stores the returned ID.
+- `updateDiceVisuals()` — prefers `engine.getTransforms()` (zero-copy `Float32Array`) when WASM is active, but temporarily reads ammo transforms for dice under drag/levitation control.
 - `updateDiceSet(scene, world, targetCounts)` — adds or removes dice dynamically to match UI counts. Properly disposes geometries, materials, and Ammo heap objects on removal.
-- `throwDice(scene, world)` — resets dice to top center and applies randomized impulses (±25 horizontal, ±5 vertical) and torque (±100 spin).
+- `throwDice(scene, world)` — resets dice to top center and applies randomized impulses (±25 horizontal, ±5 vertical) and torque (±100 spin) to both engines so WASM stays authoritative while ammo remains interaction-ready.
 - `clearDice(scene, world)` — removes all dice and explicitly destroys Three.js geometries/materials and Ammo.js heap objects.
 
 ### `src/physics.js`
@@ -146,10 +157,10 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 }
 ```
 - Props that need per-frame animation provide an `update(deltaTime, elapsedTime)` function.
-- `main.js` registers these in `updateRegistry` and calls them each frame.
-- Interactive props return callbacks (e.g., `interact`, `toggleGlow`) that are registered via `registerInteractiveObject()` in `main.js`.
+- `LoadingTiers.js` wires these into `FrameScheduler` through the prop registry; do not add ad-hoc per-frame calls in `main.js`.
+- Interactive props return callbacks (e.g., `interact`, `toggleGlow`) that are registered in the prop entry’s `afterCreate` hook.
 - Physics-enabled props often use `createStaticBody()` from `physics.js` for invisible collision meshes.
-- Shadows are aggressively optimized: small decorative props disable `castShadow` by name in a traversal at the end of `init()` via the `noShadowNames` array.
+- Shadows are aggressively optimized: small decorative props are listed in `SHADOW_DISABLED_PROP_NAMES` in `src/environment/PropRegistry.js`.
 
 ### Post-Processing Pipeline
 1. **RenderPass**
@@ -197,9 +208,10 @@ Note: `GodRayShader.js` exists in `src/shaders/` but is **not currently used** i
 1. Create a new file in `src/environment/PropName.js`.
 2. Export a factory function taking `(scene, physicsWorld?, position?, rotation?)`.
 3. Return an object with at least `{ group }`, optionally `{ update }` for animations.
-4. Import and call in `main.js` inside the appropriate loading tier.
-5. Use `registerInteractiveObject(mesh, callback)` for clickable items.
-6. If the prop is small/decorative, add its name to the `noShadowNames` array in `main.js` to disable `castShadow`.
+4. Add the prop to the appropriate tier in `src/environment/PropRegistry.js`.
+5. If it has per-frame behavior, register `result.update` in the entry’s `afterCreate` hook.
+6. If it is interactive, register the callback in the entry’s `afterCreate` hook.
+7. If the prop is small/decorative, add its name to `SHADOW_DISABLED_PROP_NAMES` in `src/environment/PropRegistry.js`.
 
 ### Memory Management
 - When removing dice, always call `Ammo.destroy()` on `body.getMotionState()` and `body` itself.
@@ -254,7 +266,7 @@ python deploy.py
 
 - **Dice result determination** (reading which face is up after a roll) is **not yet implemented**.
 - **ColladaLoader** is still used; migration to `GLTFLoader` with Draco-compressed `.glb` files is planned but incomplete.
-- **Physics runs on the CPU** via ammo.js WASM. GPU physics is noted as a future optimization in `plan.md`.
+- **WASM die-to-die contacts are still sphere-approximate** in the current cut-over. They are fast and stable enough for basic stacking, but accurate polyhedral contacts are still future work.
 - **No automated test coverage** beyond the three ad-hoc Playwright smoke tests.
 - **GodRayShader** exists but is not wired into the current post-processing pipeline.
 - The HTML `<title>` says "WebGPU Dice Roller" but the renderer is WebGL.

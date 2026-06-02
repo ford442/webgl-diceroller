@@ -51,6 +51,7 @@ const STUB_ENGINE = {
 let _engine      = null;
 let _available   = false;
 let _initialized = false;
+const _searchParams = new URLSearchParams(window.location.search);
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -67,6 +68,14 @@ let _initialized = false;
  */
 export const loadWasmEngine = async () => {
     if (_initialized) return _available;
+
+    if (_searchParams.has('no-wasm')) {
+        console.warn('[WasmPhysics] Disabled via ?no-wasm — using JS stub.');
+        _engine = STUB_ENGINE;
+        _available = false;
+        _initialized = true;
+        return false;
+    }
 
     try {
         // Dynamic import of the Emscripten-generated module loader.

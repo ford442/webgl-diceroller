@@ -1,6 +1,6 @@
 # WASM Physics Engine — Integration Guide
 
-> **Status:** Phase 1 complete — foundation & bridge in place.
+> **Status:** Phase 2 partial cut-over — WASM now drives ordinary dice simulation, with ammo.js retained for fallback and interaction handoff.
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -28,14 +28,20 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 | Determinism | Floating-point non-determinism | Reproducible with fixed seed |
 | Multi-threading (future) | Not supported | SharedArrayBuffer + Workers |
 
-### Phase 1 Goals (this branch)
+### Current status
 
 - [x] Set up the C++/Emscripten/CMake build pipeline.
 - [x] Implement a self-contained lightweight impulse solver (`DicePhysicsEngine`).
 - [x] Expose the engine to JavaScript via Embind.
 - [x] Write a JavaScript bridge (`WasmPhysicsBridge.js`) with a graceful stub fallback.
 - [x] Integrate the bridge into `src/main.js` (loads in parallel, non-blocking).
-- [x] Document architecture decisions, API, and next steps.
+- [x] Replace the normal simulation step with `engine.step(dt)` when WASM is available.
+- [x] Drive `updateDiceVisuals()` from `engine.getTransforms()` in the authoritative path.
+- [x] Mirror spawn/throw/remove lifecycle events into the WASM world.
+- [x] Add simple die-to-die sphere contacts in C++ for stacking/collision.
+- [x] Use `engine.areAllSettled()` for the camera focus settle gate.
+- [ ] Replace sphere contacts with die-shape-aware convex contacts.
+- [ ] Add deterministic seed support and formal performance baselines.
 
 ---
 
@@ -53,7 +59,7 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 │  • User input (mouse, keyboard)                 │
 │  • UI (dice picker, results overlay)            │
 │  • Asset loading (Collada models)               │
-│  • ammo.js physics world (Phase 1 — authoritative) │
+│  • ammo.js fallback world + interaction constraints │
 └───────────────────┬─────────────────────────────┘
                     │  Float32Array transforms
                     │  (7 floats/die: pos + quat)
@@ -70,17 +76,19 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 └─────────────────────────────────────────────────┘
 ```
 
-### Phase 1 Integration Model
+### Current Integration Model
 
-In Phase 1 the WASM engine runs **alongside** ammo.js.  `ammo.js` remains the
-authoritative physics backend for rendering.  The WASM module loads
-asynchronously and silently falls back to a no-op stub when the compiled
-binary is absent (e.g. in CI or before first build).
+The WASM engine now owns ordinary dice simulation when the compiled module is
+available. `ammo.js` still exists for three reasons:
+
+- Browser/build fallback when the WASM artifacts are absent or `?no-wasm` is set.
+- Drag constraints and levitation handoff during the migration period.
+- Optional `?dual-physics` validation runs where both engines step in parallel.
 
 This allows:
-- Side-by-side benchmarking of JS vs WASM physics.
-- Incremental migration of subsystems in Phase 2.
-- Zero disruption to the existing simulation.
+- Lower main-thread cost during normal rolling.
+- Incremental validation without removing the legacy path.
+- Zero-disruption fallback in environments without the compiled module.
 
 ### Data Transfer Strategy
 
@@ -126,6 +134,11 @@ npm run build:wasm
 # Equivalent direct invocation:
 cd src/wasm && ./build.sh
 ```
+
+### Runtime flags
+
+- `?no-wasm` forces the JS/ammo fallback path even if `public/wasm/` is present.
+- `?dual-physics` steps ammo and WASM in parallel for divergence checks.
 
 Output files land in `public/wasm/`:
 - `dice_physics.js`   — Emscripten ES module loader
@@ -221,7 +234,7 @@ const engine = getWasmEngine();
 
 ## Integration Points
 
-### Current (Phase 1 — non-authoritative parallel mode)
+### Current authoritative path
 
 `src/main.js` loads the bridge during `init()`:
 
@@ -229,9 +242,31 @@ const engine = getWasmEngine();
 loadWasmEngine().then((available) => {
     if (available) {
         getWasmEngine().init(-15.0, -2.75, 18.0, 18.0);
+        syncAllDiceToWasm();
     }
 });
 ```
+
+Per-frame stepping now prefers WASM:
+
+```js
+const useWasm = isWasmAvailable();
+const shouldStepAmmo = !useWasm || dualPhysicsValidation || hasActiveDiceInteraction();
+
+if (shouldStepAmmo) stepPhysics(physicsWorld, dt);
+if (useWasm) getWasmEngine().step(dt);
+updateDiceVisuals();
+```
+
+`src/dice.js` mirrors dice lifecycle events into both engines:
+
+- `spawnObjects()` registers each die in WASM and stores the returned ID.
+- `throwDice()` seeds transform plus linear/angular impulses in both engines.
+- `updateDiceVisuals()` reads `engine.getTransforms()` unless a die is under active ammo-driven interaction.
+- `clearDice()` and `updateDiceSet()` remove the corresponding WASM entries.
+
+`src/interaction.js` temporarily gives dragged/levitating dice ammo authority,
+then syncs the resulting transform or release impulse back into WASM.
 
 Global debug handles are exposed for console inspection:
 
@@ -240,24 +275,18 @@ window.getWasmEngine()      // engine instance
 window.isWasmAvailable()    // true when WASM is loaded
 ```
 
-### Phase 2 Migration Path
+### Remaining migration work
 
-When ready to replace ammo.js for the simulation step:
-
-1. In `src/dice.js` → `spawnObjects()`: call `engine.addDie(sides, x, y, z)` to
-   register each die in the WASM world.
-2. In `src/main.js` → `animate()`: replace `stepPhysics(physicsWorld, dt)` with
-   `engine.step(dt)`.
-3. In `src/dice.js` → `updateDiceVisuals()`: read positions from
-   `engine.getTransforms()` instead of querying ammo.js motion states.
-4. Retire ammo.js from the physics step (keep it for convex hull generation
-   during model loading until a C++ replacement is available).
+1. Replace sphere contacts with convex/polyhedral die contacts for more accurate stacking.
+2. Reduce or retire ammo involvement in drag/levitation, or mirror those controls directly into WASM.
+3. Add deterministic seed/state snapshot APIs for reproducible rolls and replay.
+4. Add dev-only delta logging or side-by-side render mode for validation.
 
 ---
 
 ## Performance Baseline
 
-> Measured data to be filled in after Phase 2 integration.
+> JS-side cut-over is complete; quantitative timing still needs to be recorded on a machine with Emscripten-built artifacts.
 
 ### Planned benchmark approach
 
@@ -282,7 +311,7 @@ if (!window.isWasmAvailable()) {
 }
 ```
 
-### Target metrics (Phase 2)
+### Target metrics
 
 | Metric | ammo.js | WASM target |
 |--------|---------|-------------|
@@ -296,9 +325,6 @@ if (!window.isWasmAvailable()) {
 ## Phase 2 Roadmap
 
 - [ ] Implement polyhedral convex-hull collision detection in C++ (OBB or GJK/EPA).
-- [ ] Replace ammo.js `stepPhysics` with `engine.step()` in the render loop.
-- [ ] Pipe die positions from `engine.getTransforms()` into Three.js meshes.
-- [ ] Implement die-to-die collision (sphere-sphere first, then convex hull).
 - [ ] Add deterministic seed support for replay / test reproducibility.
 - [ ] Run benchmarks and compare with ammo.js baseline.
 

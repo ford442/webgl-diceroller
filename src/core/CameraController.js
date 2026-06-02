@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { spawnedDice, readDiceValue } from '../dice.js';
+import { getWasmEngine, isWasmAvailable } from '../wasm/WasmPhysicsBridge.js';
 
 const DiceFocusState = {
     IDLE: 'IDLE',
@@ -43,19 +44,25 @@ export function createCameraController(camera) {
 
     function checkDiceStability(lampData, LampMode) {
         if (spawnedDice.length === 0) return true;
-        let allStable = true;
-        spawnedDice.forEach(d => {
-            if (!d.body) return;
-            const v = d.body.getLinearVelocity();
-            const a = d.body.getAngularVelocity();
+        let allStable = false;
 
-            // Calculate squared length manually to avoid Ammo.js missing method crashes
-            const velSq = v.x() * v.x() + v.y() * v.y() + v.z() * v.z();
-            const angSq = a.x() * a.x() + a.y() * a.y() + a.z() * a.z();
+        if (isWasmAvailable()) {
+            allStable = getWasmEngine().areAllSettled();
+        } else {
+            allStable = true;
+            spawnedDice.forEach(d => {
+                if (!d.body) return;
+                const v = d.body.getLinearVelocity();
+                const a = d.body.getAngularVelocity();
 
-            // Increased threshold to 1.0 (squared) to account for physics resting micro-jitters
-            if (velSq > 1.0 || angSq > 1.0) allStable = false;
-        });
+                // Calculate squared length manually to avoid Ammo.js missing method crashes
+                const velSq = v.x() * v.x() + v.y() * v.y() + v.z() * v.z();
+                const angSq = a.x() * a.x() + a.y() * a.y() + a.z() * a.z();
+
+                // Increased threshold to 1.0 (squared) to account for physics resting micro-jitters
+                if (velSq > 1.0 || angSq > 1.0) allStable = false;
+            });
+        }
 
         // Update lamp rolling state when dice stop
         if (allStable && lampData && lampData.getMode() === LampMode.NORMAL) {

@@ -29,6 +29,7 @@ export async function setupScene(container) {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.8; // Darker exposure for mood
     container.appendChild(renderer.domElement);
+    scene.userData.renderer = renderer;
 
     // Lights
     // Ambient light (low intensity)
