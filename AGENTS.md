@@ -11,7 +11,7 @@ This is a **WebGL-based 3D dice roller application** built with Three.js. It sim
 | Component | Technology |
 |-----------|------------|
 | 3D Engine | Three.js (`^0.181.2`) |
-| Physics | Custom `DicePhysicsEngine` WASM + ammo.js (`^0.0.10`) fallback/interaction bridge |
+| Physics | Custom `DicePhysicsEngine` WASM (SAT polyhedral) + ammo.js (`^0.0.10`) fallback/interaction bridge |
 | Build Tool | Vite (`^7.3.1`) |
 | Rendering | WebGLRenderer by default, optional WebGPURenderer prototype behind `?webgpu` |
 | Module System | ES Modules |
@@ -82,6 +82,7 @@ npm run preview
 - `npm run dev` still works without compiled WASM artifacts; the bridge falls back to ammo.js automatically.
 - `?no-wasm` forces the ammo fallback path even if `public/wasm/` exists.
 - `?dual-physics` steps ammo and WASM in parallel for validation/debugging.
+- `?worker-physics` (experimental) runs the WASM engine inside a Web Worker.
 - Render/perf flags:
   - `?webgpu` opts into the experimental WebGPU renderer path.
   - `?webgl` forces the stable WebGL renderer path.
@@ -126,7 +127,8 @@ npm run preview
 - `spawnObjects(scene, world, config)` — spawns dice with random positions/rotations. Default is one of each type (d4–d20). Accepts either a counts object or an array of type strings. When WASM is ready it also registers each die in the C++ engine and stores the returned ID.
 - `updateDiceVisuals()` — prefers `engine.getTransforms()` (zero-copy `Float32Array`) when WASM is active, but temporarily reads ammo transforms for dice under drag/levitation control.
 - `updateDiceSet(scene, world, targetCounts)` — adds or removes dice dynamically to match UI counts. Properly disposes geometries, materials, and Ammo heap objects on removal.
-- `throwDice(scene, world)` — resets dice to top center and applies randomized impulses (±25 horizontal, ±5 vertical) and torque (±100 spin) to both engines so WASM stays authoritative while ammo remains interaction-ready.
+- `throwDice(scene, world, seed)` — resets dice to top center and applies randomized impulses (±25 horizontal, ±5 vertical) and torque (±100 spin) to both engines. When `seed !== null`, uses the deterministic WASM PRNG for bit-identical replay. 
+- `loadHullForDie(wasmId, sides)` — passes precomputed convex hull vertices from `public/wasm/hulls.json` into the WASM engine so each die uses accurate SAT polyhedral collision instead of bounding spheres.
 - `clearDice(scene, world)` — removes all dice and explicitly destroys Three.js geometries/materials and Ammo.js heap objects.
 
 ### `src/physics.js`
@@ -250,6 +252,7 @@ npm run preview
 node test_playingcards.js   # Verifies PlayingCards object exists in scene graph
 node test_flute.js          # Verifies Flute object exists in scene graph
 node test_debug.js          # Polls window.sceneReady and logs scene child counts
+node test_wasm_direct.js    # Smoke-tests WASM SAT collision, determinism, and stress (requires preview server)
 ```
 
 **Automation hooks:**
@@ -281,9 +284,9 @@ python deploy.py
 
 ## Known Limitations
 
-- **Dice result determination** (reading which face is up after a roll) is **not yet implemented**.
-- **ColladaLoader** is still used; migration to `GLTFLoader` with Draco-compressed `.glb` files is planned but incomplete.
-- **WASM die-to-die contacts are still sphere-approximate** in the current cut-over. They are fast and stable enough for basic stacking, but accurate polyhedral contacts are still future work.
+- **Dice result determination** is implemented in `src/dice.js` via `_computeFaceNormals` and `readDiceValue()`.
+- **ColladaLoader migration is complete** — dice models now load as Draco-compressed `.glb` files from `public/images/dice/`.
+- **WASM die-to-die contacts are now SAT-based polyhedral** (Phase 3). Bounding spheres remain as a fallback when hulls are not loaded.
 - **No automated test coverage** beyond the three ad-hoc Playwright smoke tests.
 - **GodRayShader** exists but is not wired into the current post-processing pipeline.
 - The HTML `<title>` says "WebGPU Dice Roller" but the renderer is WebGL.

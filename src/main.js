@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 import { initPhysics, stepPhysics } from './physics.js';
 import { loadWasmEngine, isWasmAvailable, getWasmEngine } from './wasm/WasmPhysicsBridge.js';
-import { updateDiceVisuals, throwDice, syncAllDiceToWasm, areDiceSettled } from './dice.js';
+import { updateDiceVisuals, throwDice, syncAllDiceToWasm, areDiceSettled, pollPhysicsCollisionEvents } from './dice.js';
 import { showResults, hideResults } from './results.js';
 import { updateInteraction, hasActiveDiceInteraction } from './interaction.js';
 import { updateAtmosphere } from './environment/Atmosphere.js';
@@ -178,6 +178,17 @@ async function init() {
         updateDiceVisuals();
     });
 
+    scheduler.register('postPhysicsSync', 'collisionAudio', () => {
+        if (!physicsWorld) return;
+        const events = pollPhysicsCollisionEvents();
+        for (const ev of events) {
+            // TODO: wire to Web Audio for dice clack / table thump
+            if (window.__onDiceCollision) {
+                window.__onDiceCollision(ev);
+            }
+        }
+    });
+
     scheduler.register('updates', 'interaction', () => {
         if (!physicsWorld) return;
         updateInteraction();
@@ -329,9 +340,9 @@ async function init() {
         isLockedRef,
         cursorPos,
         crosshairUI,
-        onRoll: () => {
+        onRoll: (seed = null) => {
             shadowController?.pulse('roll');
-            throwDice(scene, physicsWorld);
+            throwDice(scene, physicsWorld, seed);
             cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
             hideResults();
             if (lampData) lampData.setRolling(true);
@@ -354,6 +365,13 @@ async function init() {
     window.isWasmAvailable = isWasmAvailable;
     window.forceShadowRefresh = () => shadowController?.forceRefresh('debug');
     window.postConfig = postConfig;
+    window.replayRoll = (seed) => {
+        shadowController?.pulse('roll');
+        throwDice(scene, physicsWorld, seed);
+        cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
+        hideResults();
+        if (lampData) lampData.setRolling(true);
+    };
 }
 
 function onWindowResize() {

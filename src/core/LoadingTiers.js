@@ -7,6 +7,9 @@ import { TIER_PROP_DEFINITIONS, spawnProp } from '../environment/PropRegistry.js
 
 const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** Tunable: total decorative props randomly selected per session */
+const MAX_RANDOM_PROPS = 9;
+
 function updateLoadingBar(percent) {
     const bar = document.getElementById('loading-bar');
     if (bar) bar.style.width = percent + '%';
@@ -26,6 +29,38 @@ function registerUpdate(orchestrator, name, update, priority = 0) {
 
 async function spawnTier(entries, context) {
     for (const entry of entries) {
+        await spawnProp(entry, context);
+    }
+}
+
+/** Fisher-Yates in-place shuffle */
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+/**
+ * Spawn a tier that contains a mix of "always" props and a random pool.
+ * Always props are loaded unconditionally. The random pool is shuffled and
+ * capped at `maxRandom` so the table never feels crowded.
+ */
+async function spawnTierWithRandomPool(entries, maxRandom, context) {
+    const always = [];
+    const pool = [];
+    for (const entry of entries) {
+        if (entry.randomPool) {
+            pool.push(entry);
+        } else {
+            always.push(entry);
+        }
+    }
+    shuffleArray(pool);
+    const selected = pool.slice(0, Math.max(0, maxRandom));
+    const combined = [...always, ...selected];
+    for (const entry of combined) {
         await spawnProp(entry, context);
     }
 }
@@ -85,12 +120,9 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
 
     updateLoadingText('Adding tabletop items...');
     await yieldToMain();
-    await spawnTier(TIER_PROP_DEFINITIONS.tier2, context);
+    const combinedDecorative = [...TIER_PROP_DEFINITIONS.tier2, ...TIER_PROP_DEFINITIONS.tier3];
+    await spawnTierWithRandomPool(combinedDecorative, MAX_RANDOM_PROPS, context);
     updateLoadingBar(85);
-
-    updateLoadingText('Adding decorative items...');
-    await yieldToMain();
-    await spawnTier(TIER_PROP_DEFINITIONS.tier3, context);
 
     updateLoadingText('Finalizing...');
     updateLoadingBar(95);

@@ -9,23 +9,15 @@
  * `npm run build:wasm`) the bridge transparently substitutes a no-op stub
  * so that the rest of the application continues to work.
  *
- * Usage:
- *   import { loadWasmEngine, getWasmEngine, isWasmAvailable } from './wasm/WasmPhysicsBridge.js';
- *
- *   // During app initialisation:
- *   const wasmReady = await loadWasmEngine();
- *
- *   // Per-frame (Phase 2: replace ammo.js step):
- *   if (isWasmAvailable()) {
- *       getWasmEngine().step(deltaTime);
- *   }
- *
- * Build the WASM artifacts:
- *   npm run build:wasm   (requires Emscripten SDK — see docs/WASM_ENGINE.md)
+ * Phase 3 additions:
+ *   • Loads hulls.json and provides `loadHullForDie(engine, sides)`
+ *   • Exposes `getCollisionEvents()` helper
+ *   • Exposes deterministic `seedRNG(seed)` and `randomFloat()`
+ *   • State serialisation helpers for replay
  */
 
 // ---------------------------------------------------------------------------
-// No-op stub — used when the WASM binary has not been compiled yet.
+// No-op stub
 // ---------------------------------------------------------------------------
 
 const STUB_ENGINE = {
@@ -35,6 +27,7 @@ const STUB_ENGINE = {
     addDie:             () => -1,
     removeDie:          () => {},
     clearAllDice:       () => {},
+    setDieHull:         () => {},
     applyImpulse:       () => {},
     applyTorqueImpulse: () => {},
     setDieTransform:    () => {},
@@ -42,6 +35,11 @@ const STUB_ENGINE = {
     getTransforms:      () => new Float32Array(0),
     getDieCount:        () => 0,
     areAllSettled:      () => true,
+    seedRNG:            () => {},
+    randomFloat:        () => 0.5,
+    getCollisionEvents: () => new Float32Array(0),
+    serializeState:     () => new Uint8Array(0),
+    deserializeState:   () => {},
 };
 
 // ---------------------------------------------------------------------------
@@ -49,23 +47,16 @@ const STUB_ENGINE = {
 // ---------------------------------------------------------------------------
 
 let _engine      = null;
+let _moduleClass = null;
 let _available   = false;
 let _initialized = false;
+let _hulls       = null;
 const _searchParams = new URLSearchParams(window.location.search);
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
-/**
- * Load the WASM engine asynchronously.
- *
- * Safe to call multiple times — subsequent calls resolve immediately with the
- * cached result.
- *
- * @returns {Promise<boolean>}  true if the real WASM engine was loaded,
- *                              false if the stub is in use.
- */
 export const loadWasmEngine = async () => {
     if (_initialized) return _available;
 
@@ -78,19 +69,23 @@ export const loadWasmEngine = async () => {
     }
 
     try {
-        // Dynamic import of the Emscripten-generated module loader.
-        // The .js loader and .wasm binary must both be present in public/wasm/.
-        // Vite serves public/ at the root, so the URL is /wasm/dice_physics.js.
-        //
-        // We use the Function constructor to prevent Rollup from attempting to
-        // statically resolve this path during `npm run build`.  The file is a
-        // runtime-only asset served from public/ — it is not bundled.
         const dynamicImport = new Function('u', 'return import(u)');
         const moduleFactory = await dynamicImport('/wasm/dice_physics.js');
-        const Module = await moduleFactory.default();
+        // UMD Emscripten output: try .default first, then the module itself
+        const ModuleFactory = moduleFactory.default || moduleFactory;
+        const Module = await ModuleFactory();
 
-        _engine    = new Module.DicePhysicsEngine();
-        _available = true;
+        _moduleClass = Module;
+        _engine      = new Module.DicePhysicsEngine();
+        _available   = true;
+
+        // Pre-load hulls.json for fast die registration
+        try {
+            const res = await fetch('/wasm/hulls.json');
+            if (res.ok) _hulls = await res.json();
+        } catch (e) {
+            console.warn('[WasmPhysics] Could not load hulls.json:', e);
+        }
 
         console.log('[WasmPhysics] WASM dice physics engine loaded successfully.');
         console.log('[WasmPhysics] Run `npm run build:wasm` to rebuild after C++ changes.');
@@ -99,7 +94,6 @@ export const loadWasmEngine = async () => {
         const hint = err.message && err.message.includes('fetch')
             ? 'WASM binary not found. Run `npm run build:wasm` to compile the C++ module.'
             : err.message;
-
         console.warn(`[WasmPhysics] WASM module unavailable — using JS stub. (${hint})`);
         _engine    = STUB_ENGINE;
         _available = false;
@@ -109,41 +103,80 @@ export const loadWasmEngine = async () => {
     return _available;
 };
 
-/**
- * Returns true if the real WASM module was loaded (not the stub).
- * Valid only after loadWasmEngine() has resolved.
- */
-export const isWasmAvailable = () => _available;
-
-/**
- * Returns true if loadWasmEngine() has been called and resolved
- * (regardless of whether the real WASM or the stub is in use).
- */
+export const isWasmAvailable = () => _initialized && _available;
 export const isWasmInitialized = () => _initialized;
 
-/**
- * Returns the active engine instance (real WASM or stub).
- *
- * @throws {Error} if called before loadWasmEngine() has resolved.
- *
- * Engine API surface:
- *   engine.init(gravity, tableY, tableHalfW, tableHalfD)
- *   engine.reset()
- *   engine.step(deltaTime)
- *   engine.addDie(sides, x, y, z)  → id (int)
- *   engine.removeDie(id)
- *   engine.clearAllDice()
- *   engine.applyImpulse(id, fx, fy, fz)
- *   engine.applyTorqueImpulse(id, tx, ty, tz)
- *   engine.setDieTransform(id, px,py,pz, qx,qy,qz,qw)
- *   engine.setDieVelocity(id, lvx,lvy,lvz, avx,avy,avz)
- *   engine.getTransforms()  → Float32Array [px,py,pz,qx,qy,qz,qw, ...]
- *   engine.getDieCount()    → int
- *   engine.areAllSettled()  → bool
- */
 export const getWasmEngine = () => {
     if (!_initialized) {
         throw new Error('[WasmPhysics] Engine not initialized. Await loadWasmEngine() first.');
     }
     return _engine;
+};
+
+/**
+ * Load the convex hull for a die into the WASM engine.
+ * @param {number} wasmId — die ID returned by engine.addDie()
+ * @param {number} sides — 4, 6, 8, 10, 12, 20
+ */
+export const loadHullForDie = (wasmId, sides) => {
+    if (!_available || !_hulls || !_moduleClass) return;
+    const type = 'd' + sides;
+    const data = _hulls[type];
+    if (!data || !data.vertices) return;
+    const flat = new _moduleClass.VectorFloat();
+    for (let i = 0; i < data.vertices.length; i++) {
+        flat.push_back(data.vertices[i][0]);
+        flat.push_back(data.vertices[i][1]);
+        flat.push_back(data.vertices[i][2]);
+    }
+    _engine.setDieHull(wasmId, flat);
+};
+
+/**
+ * Read collision events from the WASM engine.
+ * Returns array of { idA, idB, impactSpeed } objects.
+ */
+export const pollCollisionEvents = () => {
+    if (!_available) return [];
+    const buf = _engine.getCollisionEvents();
+    const out = [];
+    for (let i = 0; i < buf.length; i += 3) {
+        out.push({
+            idA: Math.round(buf[i]),
+            idB: Math.round(buf[i + 1]),
+            impactSpeed: buf[i + 2],
+        });
+    }
+    return out;
+};
+
+/**
+ * Deterministic random helpers (seeded from JS).
+ */
+export const seedPhysicsRNG = (seed) => {
+    if (!_available) return;
+    _engine.seedRNG(seed >>> 0);
+};
+
+export const randomPhysicsFloat = () => {
+    if (!_available) return Math.random();
+    return _engine.randomFloat();
+};
+
+/**
+ * State serialisation for replay.
+ */
+export const serializePhysicsState = () => {
+    if (!_available || !_moduleClass) return new Uint8Array(0);
+    const vec = _engine.serializeState();
+    const arr = new Uint8Array(vec.size());
+    for (let i = 0; i < vec.size(); i++) arr[i] = vec.get(i);
+    return arr;
+};
+
+export const deserializePhysicsState = (data) => {
+    if (!_available || !_moduleClass) return;
+    const vec = new _moduleClass.VectorU8();
+    for (let i = 0; i < data.length; i++) vec.push_back(data[i]);
+    _engine.deserializeState(vec);
 };

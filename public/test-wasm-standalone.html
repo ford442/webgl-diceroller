@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>WASM Test</title></head>
+<body>
+<pre id="out">loading...</pre>
+<script type="module">
+import DicePhysicsModule from './wasm/dice_physics.js';
+
+async function run() {
+    const out = [];
+    try {
+        const Module = await DicePhysicsModule();
+        const engine = new Module.DicePhysicsEngine();
+        engine.init(-15.0, -2.75, 18.0, 18.0);
+        out.push('init ok');
+
+        const hulls = await (await fetch('./wasm/hulls.json')).json();
+        out.push('hulls loaded');
+
+        const ids = [];
+        for (const type of ['d4', 'd6', 'd8', 'd10', 'd12', 'd20']) {
+            const data = hulls[type];
+            const id = engine.addDie(data.sides, 0, 5, 0);
+            const flat = new Module.VectorFloat();
+            for (const v of data.vertices) {
+                flat.push_back(v[0]);
+                flat.push_back(v[1]);
+                flat.push_back(v[2]);
+            }
+            engine.setDieHull(id, flat);
+            ids.push(id);
+        }
+        out.push('spawned ' + ids.length + ' dice');
+
+        for (const id of ids) {
+            engine.applyImpulse(id, (Math.random()-0.5)*20, Math.random()*10, (Math.random()-0.5)*20);
+            engine.applyTorqueImpulse(id, (Math.random()-0.5)*50, (Math.random()-0.5)*50, (Math.random()-0.5)*50);
+        }
+        for (let i = 0; i < 120; i++) engine.step(1/60);
+        out.push('stepped 120 frames');
+
+        const transforms = engine.getTransforms();
+        out.push('transforms length: ' + transforms.length + ' (expected ' + (ids.length*7) + ')');
+
+        const events = engine.getCollisionEvents();
+        out.push('collision events: ' + (events.length / 3));
+
+        // Determinism
+        engine.reset();
+        const ids2 = [];
+        for (const type of ['d4', 'd6', 'd8', 'd10', 'd12', 'd20']) {
+            const data = hulls[type];
+            const id = engine.addDie(data.sides, 0, 5, 0);
+            const flat = new Module.VectorFloat();
+            for (const v of data.vertices) flat.push_back(v[0]), flat.push_back(v[1]), flat.push_back(v[2]);
+            engine.setDieHull(id, flat);
+            ids2.push(id);
+        }
+        engine.seedRNG(12345);
+        for (const id of ids2) {
+            engine.applyImpulse(id, (engine.randomFloat()-0.5)*20, engine.randomFloat()*10, (engine.randomFloat()-0.5)*20);
+            engine.applyTorqueImpulse(id, (engine.randomFloat()-0.5)*50, (engine.randomFloat()-0.5)*50, (engine.randomFloat()-0.5)*50);
+        }
+        for (let i = 0; i < 60; i++) engine.step(1/60);
+        const t1 = Array.from(engine.getTransforms());
+
+        engine.reset();
+        const ids3 = [];
+        for (const type of ['d4', 'd6', 'd8', 'd10', 'd12', 'd20']) {
+            const data = hulls[type];
+            const id = engine.addDie(data.sides, 0, 5, 0);
+            const flat = new Module.VectorFloat();
+            for (const v of data.vertices) flat.push_back(v[0]), flat.push_back(v[1]), flat.push_back(v[2]);
+            engine.setDieHull(id, flat);
+            ids3.push(id);
+        }
+        engine.seedRNG(12345);
+        for (const id of ids3) {
+            engine.applyImpulse(id, (engine.randomFloat()-0.5)*20, engine.randomFloat()*10, (engine.randomFloat()-0.5)*20);
+            engine.applyTorqueImpulse(id, (engine.randomFloat()-0.5)*50, (engine.randomFloat()-0.5)*50, (engine.randomFloat()-0.5)*50);
+        }
+        for (let i = 0; i < 60; i++) engine.step(1/60);
+        const t2 = Array.from(engine.getTransforms());
+
+        let match = true;
+        for (let i = 0; i < t1.length; i++) {
+            if (Math.abs(t1[i] - t2[i]) > 1e-4) { match = false; break; }
+        }
+        out.push('deterministic match: ' + match);
+
+        // Serialization
+        const state = engine.serializeState();
+        engine.deserializeState(state);
+        out.push('serialize/deserialize ok, count=' + engine.getDieCount());
+
+        // Stress
+        engine.reset();
+        const flat6 = new Module.VectorFloat();
+        for (const v of hulls.d6.vertices) flat6.push_back(v[0]), flat6.push_back(v[1]), flat6.push_back(v[2]);
+        const t0 = performance.now();
+        for (let i = 0; i < 50; i++) {
+            const id = engine.addDie(6, (Math.random()-0.5)*10, 5 + i*0.1, (Math.random()-0.5)*10);
+            engine.setDieHull(id, flat6);
+        }
+        for (let i = 0; i < 600; i++) engine.step(1/60);
+        const ms = performance.now() - t0;
+        out.push('stress 50dice×600steps=' + ms.toFixed(1) + 'ms');
+    } catch (e) {
+        out.push('ERROR: ' + e.message + ' ' + e.stack);
+    }
+    document.getElementById('out').textContent = out.join('\n');
+}
+
+run();
+</script>
+</body>
+</html>

@@ -183,8 +183,8 @@ export async function createLamp() {
             const b = new THREE.Box3().setFromObject(shade);
             const c = b.getCenter(new THREE.Vector3());
             const h = b.getSize(new THREE.Vector3()).y;
-            // Push slightly downward inside the shade volume
-            c.y -= Math.max(h * 0.12, 0.15);
+            // Position light at ~75% depth inside the shade (down from top rim)
+            c.y -= h * 0.25;
             return { center: c, box: b };
         });
         shadeData.sort((a, b) => a.center.x - b.center.x);

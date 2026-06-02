@@ -14,7 +14,7 @@
 #   public/wasm/dice_physics.js    — Emscripten module loader (ES module)
 #   public/wasm/dice_physics.wasm  — Compiled WASM binary
 
-source /content/buil*/emsdk/emsdk_env.sh
+source /root/emsdk/emsdk_env.sh
 
 set -euo pipefail
 
@@ -31,7 +31,9 @@ emcc "${SCRIPT_DIR}/dice_physics.cpp" \
     -O3 \
     -s WASM=1 \
     -s ALLOW_MEMORY_GROWTH=1 \
+    -s MAXIMUM_MEMORY=64MB \
     -s MODULARIZE=1 \
+    -s EXPORT_ES6=1 \
     -s "EXPORT_NAME=DicePhysicsModule" \
     -std=c++17 \
     -o "${OUT_DIR}/dice_physics.js"

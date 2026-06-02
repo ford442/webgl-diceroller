@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { createConvexHullShape, spawnDicePhysics, getAmmo } from './physics.js';
-import { getWasmEngine, isWasmAvailable, isWasmInitialized } from './wasm/WasmPhysicsBridge.js';
+import {
+    getWasmEngine, isWasmAvailable, isWasmInitialized,
+    loadHullForDie, pollCollisionEvents, seedPhysicsRNG, randomPhysicsFloat
+} from './wasm/WasmPhysicsBridge.js';
 
 // ---------------------------------------------------------------------------
 // Face-detection helpers
@@ -408,7 +411,9 @@ export const spawnObjects = (scene, world, config = null) => {
         let wasmId = null;
         if (isUsingWasmPhysics()) {
             const engine = getWasmEngine();
-            wasmId = engine.addDie(getDieSides(type), x, y, z);
+            const sides = getDieSides(type);
+            wasmId = engine.addDie(sides, x, y, z);
+            loadHullForDie(wasmId, sides);
             engine.setDieTransform(
                 wasmId,
                 mesh.position.x, mesh.position.y, mesh.position.z,
@@ -532,10 +537,16 @@ export const updateDiceSet = (scene, world, targetCounts) => {
     });
 };
 
-export const throwDice = (scene, world) => {
+export const throwDice = (scene, world, seed = null) => {
     const Ammo = getAmmo();
     const transform = new Ammo.btTransform();
     const engine = isUsingWasmPhysics() ? getWasmEngine() : null;
+
+    const useDeterministic = seed !== null && isUsingWasmPhysics();
+    if (useDeterministic) {
+        seedPhysicsRNG(seed);
+    }
+    const rand = () => useDeterministic ? randomPhysicsFloat() : getSecureRandom();
 
     spawnedDice.forEach((die, index) => {
         const body = die.body;
@@ -548,10 +559,9 @@ export const throwDice = (scene, world) => {
         Ammo.destroy(zeroVec);
 
         // Group them near the top center for the throw
-        // Reduced spread
-        const x = (getSecureRandom() - 0.5) * 4;
-        const y = 4 + (index * 0.5); // Lower start height
-        const z = (getSecureRandom() - 0.5) * 4;
+        const x = (rand() - 0.5) * 4;
+        const y = 4 + (index * 0.5);
+        const z = (rand() - 0.5) * 4;
 
         transform.setIdentity();
         const origin = new Ammo.btVector3(x, y, z);
@@ -561,9 +571,9 @@ export const throwDice = (scene, world) => {
         // Random starting orientation
         const q = new THREE.Quaternion();
         q.setFromEuler(new THREE.Euler(
-            getSecureRandom() * Math.PI * 2,
-            getSecureRandom() * Math.PI * 2,
-            getSecureRandom() * Math.PI * 2
+            rand() * Math.PI * 2,
+            rand() * Math.PI * 2,
+            rand() * Math.PI * 2
         ));
         const btQ = new Ammo.btQuaternion(q.x, q.y, q.z, q.w);
         transform.setRotation(btQ);
@@ -584,14 +594,14 @@ export const throwDice = (scene, world) => {
             engine.setDieVelocity(die.wasmId, 0, 0, 0, 0, 0, 0);
         }
 
-        // Much softer throw forces
-        const forceX = (getSecureRandom() - 0.5) * 25; // Was 80
-        const forceY = (getSecureRandom()) * 10 - 5;   // Gentle vertical toss
-        const forceZ = (getSecureRandom() - 0.5) * 25; // Was 80
+        // Throw forces
+        const forceX = (rand() - 0.5) * 25;
+        const forceY = (rand()) * 10 - 5;
+        const forceZ = (rand() - 0.5) * 25;
 
-        const spinX = (getSecureRandom() - 0.5) * 100; // Was 350
-        const spinY = (getSecureRandom() - 0.5) * 100; // Was 350
-        const spinZ = (getSecureRandom() - 0.5) * 100; // Was 350
+        const spinX = (rand() - 0.5) * 100;
+        const spinY = (rand() - 0.5) * 100;
+        const spinZ = (rand() - 0.5) * 100;
 
         const impulse = new Ammo.btVector3(forceX, forceY, forceZ);
         body.applyCentralImpulse(impulse);
@@ -655,12 +665,14 @@ export const syncAllDiceToWasm = () => {
     engine.clearAllDice();
 
     spawnedDice.forEach((die) => {
+        const sides = getDieSides(die.type);
         die.wasmId = engine.addDie(
-            getDieSides(die.type),
+            sides,
             die.mesh.position.x,
             die.mesh.position.y,
             die.mesh.position.z
         );
+        loadHullForDie(die.wasmId, sides);
 
         engine.setDieTransform(
             die.wasmId,
@@ -678,3 +690,5 @@ export const syncAllDiceToWasm = () => {
         }
     });
 };
+
+export const pollPhysicsCollisionEvents = () => pollCollisionEvents();
