@@ -490,6 +490,8 @@ export const clearDice = (scene, world) => {
 };
 
 export const updateDiceSet = (scene, world, targetCounts) => {
+    if (!targetCounts || typeof targetCounts !== 'object') return;
+
     // 1. Count current dice
     const currentCounts = {};
     spawnedDice.forEach(d => {
