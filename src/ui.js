@@ -91,6 +91,7 @@ export const initUI = (onUpdateDice, onRollAll) => {
 
     return {
         updateCounts: (newCounts) => {
+            if (!newCounts || typeof newCounts !== 'object') return;
             Object.keys(newCounts).forEach(key => {
                 if (inputs[key]) {
                     inputs[key].value = newCounts[key];
