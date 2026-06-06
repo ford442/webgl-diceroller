@@ -269,33 +269,30 @@ export const createStaticBody = (world, mesh, shape) => {
 export const createConvexHullShape = (mesh) => {
     const shape = new AmmoInstance.btConvexHullShape();
 
-    // Clone geometry to avoid modifying the visual mesh
-    let geometry = mesh.geometry.clone();
+    const srcPos = mesh.geometry.attributes.position;
+    const originalCount = srcPos.count;
 
-    // Merge vertices to remove duplicates and reduce count
+    // Copy position into a plain (non-interleaved) BufferAttribute using getX/getY/getZ.
+    // This is necessary for Draco-compressed GLBs which produce InterleavedBufferAttribute;
+    // mergeVertices cannot operate on interleaved data.
+    const posArr = new Float32Array(originalCount * 3);
+    for (let i = 0; i < originalCount; i++) {
+        posArr[i * 3]     = srcPos.getX(i);
+        posArr[i * 3 + 1] = srcPos.getY(i);
+        posArr[i * 3 + 2] = srcPos.getZ(i);
+    }
+    let geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+
+    // Merge vertices to remove duplicates and reduce point count
     geometry = BufferGeometryUtils.mergeVertices(geometry);
 
     const positionAttribute = geometry.attributes.position;
-    console.log(`Creating convex hull from ${positionAttribute.count} vertices (original: ${mesh.geometry.attributes.position.count})`);
+    console.log(`Creating convex hull from ${positionAttribute.count} vertices (original: ${originalCount})`);
 
-    for ( let i = 0; i < positionAttribute.count; i ++ ) {
+    for (let i = 0; i < positionAttribute.count; i++) {
         const v = new THREE.Vector3();
-        v.fromBufferAttribute( positionAttribute, i );
-        // Apply scale if any (matrixWorld of the mesh)
-        // Note: matrixWorld might include position/rotation which we might not want if we set transform later?
-        // Usually for a shape, we want local coordinates scaled.
-        // If mesh.matrixWorld includes position, the shape origin will be offset.
-        // Usually we want the shape centered.
-        // Let's assume the mesh is centered at 0,0,0 and we just want to apply scale.
-        // But the previous code applied matrixWorld. Let's check if we should only apply scale.
-
-        // If the mesh is already at 0,0,0, applying matrixWorld (which might be identity or contain transform)
-        // is risky if the mesh was just loaded and not positioned yet.
-        // However, in dice.js, we see:
-        // cleanMesh.position.set(0, 0, 0);
-        // cleanMesh.scale.set(1, 1, 1);
-        // So matrixWorld is likely Identity.
-
+        v.fromBufferAttribute(positionAttribute, i);
         v.applyMatrix4(mesh.matrixWorld);
         const vec = new AmmoInstance.btVector3(v.x, v.y, v.z);
         shape.addPoint(vec);
