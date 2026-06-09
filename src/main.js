@@ -303,7 +303,9 @@ async function init() {
     cameraController = createCameraController(camera);
 
     // Load all tiers
-    const tierResult = await loadTiers(scene, camera, physicsWorld, { scheduler }, {
+    let tierResult;
+    try {
+    tierResult = await loadTiers(scene, camera, physicsWorld, { scheduler }, {
         onDiceRoll: () => {
             shadowController?.pulse('roll');
             cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
@@ -326,6 +328,20 @@ async function init() {
             }
         }
     });
+    } catch (e) {
+        console.error('Failed to load scene tiers', e);
+        const loadingText = document.getElementById('loading-text');
+        if (loadingText) loadingText.textContent = 'Error: Scene failed to load. Check console.';
+        setTimeout(() => {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay) {
+                overlay.style.transition = 'opacity 0.5s';
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.remove(), 500);
+            }
+        }, 3000);
+        return;
+    }
 
     ui = tierResult.ui;
     crosshairUI = tierResult.crosshairUI;
