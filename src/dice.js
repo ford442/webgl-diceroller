@@ -345,15 +345,15 @@ export const loadDiceModels = async (onProgress) => {
                 cleanMesh.rotation.set(0, 0, 0);
                 cleanMesh.scale.set(1, 1, 1);
 
-                diceModels[d.type] = cleanMesh;
                 cleanMesh.castShadow = true;
                 cleanMesh.receiveShadow = true;
-                diceModels[d.type].userData.physicsShape = createConvexHullShape(cleanMesh);
+                cleanMesh.userData.physicsShape = createConvexHullShape(cleanMesh);
 
                 // Precompute face normals and value map for result reading
                 const faceNormals = _computeFaceNormals(cleanMesh.geometry);
-                diceModels[d.type].userData.faceNormals = faceNormals;
-                diceModels[d.type].userData.faceValues  = _assignFaceValues(faceNormals);
+                cleanMesh.userData.faceNormals = faceNormals;
+                cleanMesh.userData.faceValues  = _assignFaceValues(faceNormals);
+                diceModels[d.type] = cleanMesh;
             }
 
             done++;

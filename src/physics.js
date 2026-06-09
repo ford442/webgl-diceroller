@@ -271,6 +271,7 @@ export const createConvexHullShape = (mesh) => {
 
     // Clone geometry to avoid modifying the visual mesh
     let geometry = mesh.geometry.clone();
+    BufferGeometryUtils.deinterleaveGeometry(geometry);
 
     // Merge vertices to remove duplicates and reduce count
     geometry = BufferGeometryUtils.mergeVertices(geometry);
@@ -303,4 +304,3 @@ export const createConvexHullShape = (mesh) => {
     }
     return shape;
 };
-
