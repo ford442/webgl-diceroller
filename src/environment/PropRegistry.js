@@ -1,4 +1,5 @@
 import { registerInteractiveObject } from '../interaction.js';
+import { LAMP_HANG_Y, toCurrentTabletopY } from '../core/SceneMetrics.js';
 
 const environmentModules = import.meta.glob('./*.js', { eager: true });
 
@@ -26,7 +27,13 @@ export const getPropFactory = (name) => {
 
 const factoryEntry = (name, options = {}) => ({ name, ...options });
 
-const tier1Position = { x: 0, y: 32, z: 0 };
+const tier1Position = { x: 0, y: LAMP_HANG_Y, z: 0 };
+const isLegacyTabletopPosition = (position) => position.y > -3.25 && position.y < -1.5;
+const resolveEntryPosition = (entry) => (
+    entry.tabletop === true || (entry.tabletop !== false && isLegacyTabletopPosition(entry.position))
+        ? toCurrentTabletopY(entry.position)
+        : entry.position
+);
 
 export const SHADOW_DISABLED_PROP_NAMES = new Set([
     'Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'PocketFlask', 'Compass', 'WaxSeal',
@@ -126,7 +133,7 @@ export const TIER_PROP_DEFINITIONS = {
         factoryEntry('DiceTray', { position: { x: 12, y: -2.75, z: 10 }, rotation: Math.PI / 6 }),
         factoryEntry('DiceJail', { position: { x: -13, y: -2.75, z: -13 }, rotation: -Math.PI / 4 }),
         factoryEntry('DiceBag', { position: { x: -10, y: -1.95, z: 12 }, rotation: Math.PI / 8 }),
-        factoryEntry('Bell', { randomPool: true, call: (ctx) => getPropFactory('Bell')(ctx.scene, { x: 0, y: -2.75, z: 15 }) }),
+        factoryEntry('Bell', { randomPool: true, call: (ctx) => getPropFactory('Bell')(ctx.scene, toCurrentTabletopY({ x: 0, y: -2.75, z: 15 })) }),
         factoryEntry('TavernMeal', { randomPool: true, position: { x: 14, y: -2.75, z: 5 }, rotation: -Math.PI / 6 }),
         factoryEntry('Hourglass', { randomPool: true, position: { x: 11, y: -1.75, z: -11 }, rotation: Math.PI / 12 }),
         factoryEntry('Map', { randomPool: true, position: { x: -14, y: -2.75, z: 0 }, rotation: Math.PI / 3 }),
@@ -283,7 +290,7 @@ export async function spawnProp(entry, context) {
         result = await getPropFactory(factoryName)(
             context.scene,
             context.physicsWorld,
-            entry.position,
+            resolveEntryPosition(entry),
             entry.rotation ?? 0
         );
     } else {

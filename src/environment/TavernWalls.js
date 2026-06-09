@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 import { createFire } from './Fire.js';
 import { GodRayShader } from '../shaders/GodRayShader.js';
+import { CAMERA_LOOK_AT_Y } from '../core/SceneMetrics.js';
 
 export function createTavernWalls(scene, physicsWorld) {
     const loader = new THREE.TextureLoader();
@@ -354,7 +355,7 @@ function createGodRays(group, x, y, z) {
 
     // Position and Orient
     mesh.position.set(x, y, z); // Window center
-    mesh.lookAt(0, -3, 0);      // Look at table
+    mesh.lookAt(0, CAMERA_LOOK_AT_Y, 0); // Look at table
     mesh.rotateX(-Math.PI / 2); // Rotate cylinder to align with look vector
 
     // Shift geometry so Top is at window

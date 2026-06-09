@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../../physics.js';
 import { createFire } from '../Fire.js';
+import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
+
+const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
 
 export function createCandle(scene, physicsWorld) {
     const ammo = getAmmo();
@@ -68,7 +71,7 @@ export function createCandle(scene, physicsWorld) {
 
     const posX = -2;
     const posZ = -6;
-    const posY = -2.0;
+    const posY = tabletopY(-2.0);
 
     candleGroup.position.set(posX, posY, posZ);
     scene.add(candleGroup);
@@ -159,7 +162,7 @@ export function createKey(scene, physicsWorld) {
     bit2.receiveShadow = true;
     keyGroup.add(bit2);
 
-    keyGroup.position.set(2, -2.69, -5);
+    keyGroup.position.set(2, tabletopY(-2.69), -5);
     keyGroup.rotation.y = Math.random() * Math.PI * 2;
     scene.add(keyGroup);
 
@@ -240,7 +243,7 @@ export function createQuill(scene, physicsWorld) {
 
     group.add(quillGroup);
 
-    group.position.set(5.5, -2.55, -2.0);
+    group.position.set(5.5, tabletopY(-2.55), -2.0);
     scene.add(group);
 
     const shape = new ammo.btCylinderShape(new ammo.btVector3(potRadiusBot, potHeight / 2, potRadiusBot));
@@ -326,7 +329,7 @@ export function createPipe(scene, physicsWorld) {
     bitMesh.receiveShadow = true;
     group.add(bitMesh);
 
-    group.position.set(-3.5, -2.35, -5);
+    group.position.set(-3.5, tabletopY(-2.35), -5);
     group.rotation.y = Math.PI / 3;
     scene.add(group);
 
@@ -398,7 +401,7 @@ export function createSpyglass(scene, physicsWorld) {
     eyeMesh.position.y = -mainLen / 2 - 0.1;
     group.add(eyeMesh);
 
-    group.position.set(0, -2.59, 6);
+    group.position.set(0, tabletopY(-2.59), 6);
     group.rotation.set(0, Math.random() * Math.PI * 2, Math.PI / 2, 'YXZ');
     scene.add(group);
 

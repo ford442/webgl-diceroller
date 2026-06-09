@@ -6,6 +6,7 @@ import {
     getWasmEngine, isWasmAvailable, isWasmInitialized,
     loadHullForDie, pollCollisionEvents, seedPhysicsRNG, randomPhysicsFloat
 } from './wasm/WasmPhysicsBridge.js';
+import { TABLE_SURFACE_Y } from './core/SceneMetrics.js';
 
 // ---------------------------------------------------------------------------
 // Face-detection helpers
@@ -396,7 +397,7 @@ export const spawnObjects = (scene, world, config = null) => {
 
         // Lower spawn height (was 5 + index) to reduce "drop hardness"
         const x = (getSecureRandom() - 0.5) * 4;
-        const y = 3 + (index * 0.5) + (getSecureRandom() * 1);
+        const y = TABLE_SURFACE_Y + 5.75 + (index * 0.5) + (getSecureRandom() * 1);
         const z = (getSecureRandom() - 0.5) * 4;
 
         mesh.position.set(x, y, z);
@@ -562,7 +563,7 @@ export const throwDice = (scene, world, seed = null) => {
 
         // Group them near the top center for the throw
         const x = (rand() - 0.5) * 4;
-        const y = 4 + (index * 0.5);
+        const y = TABLE_SURFACE_Y + 6.75 + (index * 0.5);
         const z = (rand() - 0.5) * 4;
 
         transform.setIdentity();

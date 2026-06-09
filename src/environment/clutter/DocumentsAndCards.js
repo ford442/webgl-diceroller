@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../../physics.js';
+import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
+
+const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
 
 function generateCharacterSheetTexture() {
     const canvas = document.createElement('canvas');
@@ -70,7 +73,7 @@ export function createParchment(scene, physicsWorld) {
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.receiveShadow = true;
-    mesh.position.set(4, -2.74, -3);
+    mesh.position.set(4, tabletopY(-2.74), -3);
     mesh.rotation.y = -0.3;
     scene.add(mesh);
 
@@ -153,7 +156,7 @@ export function createTarotCards(scene, physicsWorld) {
 
         const x = baseX + (i * 1.5) + (Math.random() - 0.5) * 0.5;
         const z = baseZ + (Math.random() - 0.5) * 0.5;
-        const y = -2.745 + (i * 0.002);
+        const y = tabletopY(-2.745) + (i * 0.002);
 
         mesh.position.set(x, y, z);
         mesh.rotation.y = (Math.random() - 0.5) * 0.5;
@@ -230,7 +233,7 @@ export function createWantedPoster(scene, physicsWorld) {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.receiveShadow = true;
     mesh.castShadow = true;
-    mesh.position.set(0, -2.74, -2);
+    mesh.position.set(0, tabletopY(-2.74), -2);
     mesh.rotation.y = 0.1;
     scene.add(mesh);
 
@@ -308,7 +311,7 @@ export function createDMScreen(scene, physicsWorld) {
     // 0: Right (+x), 1: Left (-x), 2: Top (+y), 3: Bottom (-y), 4: Front (+z), 5: Back (-z)
     const materials = [woodMat, woodMat, woodMat, woodMat, chartsMat, woodMat];
 
-    const screenY = -1.25;
+    const screenY = tabletopY(-1.25);
     const screenZ = -8;
 
     const centerMesh = new THREE.Mesh(centerGeo, materials);

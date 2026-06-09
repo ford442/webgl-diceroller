@@ -7,6 +7,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { VignetteShader } from '../shaders/VignetteShader.js';
 import { TavernEnvironment } from '../environment/TavernEnvironment.js';
 import { createRenderer } from './RendererFactory.js';
+import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z } from './SceneMetrics.js';
 
 async function createWebGpuPostPipeline(renderer, scene, camera, { width, height, postConfig }) {
     const [
@@ -82,8 +83,8 @@ export async function setupScene(container) {
 
     // Camera setup - 1:1 aspect ratio
     const camera = new THREE.PerspectiveCamera(80, 1, 0.1, 1000);
-    camera.position.set(0, 6.0, 18); // Standing height proportional to room
-    camera.lookAt(0, -3, 0);
+    camera.position.set(0, CAMERA_EYE_Y, CAMERA_START_Z);
+    camera.lookAt(0, CAMERA_LOOK_AT_Y, 0);
 
     // Renderer setup
     const rendererState = await createRenderer(container, { antialias: false });

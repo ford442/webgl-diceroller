@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ROOM_FLOOR_Y, TABLE_CENTER_Y } from '../core/SceneMetrics.js';
 
 export function createTable(scene) {
     // ENLARGED Dimensions for more decoration space
@@ -19,7 +20,7 @@ export function createTable(scene) {
     const diceZoneBorder = 0.5; // Raised border around dice zone
 
     // Position (World)
-    const position = { x: 0, y: -3, z: 0 };
+    const position = { x: 0, y: TABLE_CENTER_Y, z: 0 };
 
     // Texture Loader
     const textureLoader = new THREE.TextureLoader();
@@ -196,10 +197,10 @@ export function createTable(scene) {
 
     // 6. Legs
     const legSize = 2.0;
-    const legHeight = 6.25;
+    const legHeight = Math.max(1, position.y - floorHeight / 2 - ROOM_FLOOR_Y);
     const legGeometry = new THREE.BoxGeometry(legSize, legHeight, legSize);
 
-    const legY = -3.375;
+    const legY = ROOM_FLOOR_Y + legHeight / 2 - position.y;
     const legOffset = width / 2 - legSize;
 
     const legPositions = [
