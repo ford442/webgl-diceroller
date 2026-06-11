@@ -54,7 +54,16 @@ export function createCameraController(camera) {
         return allStable;
     }
 
-    function update(deltaTime, time, { keys, cursorPos, isLocked, showResults, hideResults, lampData, LampMode }) {
+    function update(deltaTime, time, {
+        keys,
+        cursorPos,
+        isLocked,
+        showResults,
+        hideResults,
+        lampData,
+        LampMode,
+        onResultsReady
+    }) {
         // Dice Focus State Machine
         if (diceFocusState === DiceFocusState.WAITING_FOR_STOP) {
             if (checkDiceStability(lampData, LampMode)) {
@@ -112,6 +121,7 @@ export function createCameraController(camera) {
                     value: readDiceValue(d)
                 }));
                 showResults(results);
+                onResultsReady?.(results);
             }
         } else if (diceFocusState === DiceFocusState.HOLDING) {
             focusTimer -= deltaTime;

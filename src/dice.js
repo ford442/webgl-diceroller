@@ -1,12 +1,21 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { createConvexHullShape, spawnDicePhysics, getAmmo } from './physics.js';
+import {
+    createConvexHullShape,
+    spawnDicePhysics,
+    getAmmo,
+    registerBodyAudioMeta,
+    unregisterBodyAudioMeta,
+    registerBodyDragMeta,
+    unregisterBodyDragMeta
+} from './physics.js';
 import {
     getWasmEngine, isWasmAvailable, isWasmInitialized,
     loadHullForDie, pollCollisionEvents, seedPhysicsRNG, randomPhysicsFloat
 } from './wasm/WasmPhysicsBridge.js';
 import { TABLE_SURFACE_Y } from './core/SceneMetrics.js';
+const searchParams = new URLSearchParams(window.location.search);
 
 // ---------------------------------------------------------------------------
 // Face-detection helpers
@@ -95,6 +104,12 @@ function _assignFaceValues(faceNormals) {
     return values;
 }
 
+function _getFaceNormalForValue(faceNormals, faceValues, targetValue) {
+    if (!faceNormals || !faceValues) return null;
+    const index = faceValues.findIndex((value) => value === targetValue);
+    return index >= 0 ? faceNormals[index]?.clone() ?? null : null;
+}
+
 // Reusable objects for readDiceValue() — avoids per-call heap allocations
 const _invQ    = new THREE.Quaternion();
 const _localUp = new THREE.Vector3();
@@ -156,6 +171,8 @@ loader.setDRACOLoader(dracoLoader);
 let diceModels = {};
 export let spawnedDice = [];
 const WASM_TRANSFORM_STRIDE = 7;
+let nextAudioBodyId = 1;
+const DEFAULT_MASS_BIAS_RATIO = 0.0075;
 
 // Helper for Crypto Randomness
 const getSecureRandom = () => {
@@ -180,7 +197,29 @@ export { diceModels };
 const getDieSides = (type) => Number.parseInt(type.replace('d', ''), 10) || 6;
 const isUsingWasmPhysics = () => isWasmInitialized() && isWasmAvailable();
 
+export const PHYSICS_PRESETS = {
+    d4: { mass: 5, friction: 0.85, rollingFriction: 0.35, dragFactor: 0.0024 },
+    d6: { mass: 5, friction: 0.60, rollingFriction: 0.10, dragFactor: 0.0020 },
+    d8: { mass: 5, friction: 0.55, rollingFriction: 0.08, dragFactor: 0.0019 },
+    d10: { mass: 5, friction: 0.50, rollingFriction: 0.06, dragFactor: 0.0018 },
+    d12: { mass: 5, friction: 0.45, rollingFriction: 0.05, dragFactor: 0.0017 },
+    d20: { mass: 5, friction: 0.40, rollingFriction: 0.03, dragFactor: 0.0016 }
+};
+
 const findSpawnedDieByMesh = (mesh) => spawnedDice.find((die) => die.mesh === mesh) || null;
+
+function estimateInertiaScalar(geometry, mass) {
+    const bbox = geometry.boundingBox ?? geometry.computeBoundingBox?.();
+    const source = bbox || geometry.boundingBox;
+    if (!source) return 0.4 * mass;
+
+    const size = new THREE.Vector3();
+    source.getSize(size);
+    const ix = (mass / 12) * (size.y * size.y + size.z * size.z);
+    const iy = (mass / 12) * (size.x * size.x + size.z * size.z);
+    const iz = (mass / 12) * (size.x * size.x + size.y * size.y);
+    return (ix + iy + iz) / 3;
+}
 
 const getAmmoTransform = (die) => {
     const body = die?.body;
@@ -349,11 +388,21 @@ export const loadDiceModels = async (onProgress) => {
                 cleanMesh.castShadow = true;
                 cleanMesh.receiveShadow = true;
                 cleanMesh.userData.physicsShape = createConvexHullShape(cleanMesh);
+                cleanMesh.geometry.computeBoundingBox();
 
                 // Precompute face normals and value map for result reading
                 const faceNormals = _computeFaceNormals(cleanMesh.geometry);
                 cleanMesh.userData.faceNormals = faceNormals;
                 cleanMesh.userData.faceValues  = _assignFaceValues(faceNormals);
+                const oneFaceNormal = _getFaceNormalForValue(cleanMesh.userData.faceNormals, cleanMesh.userData.faceValues, 1);
+                if (oneFaceNormal && cleanMesh.geometry.boundingBox) {
+                    const bboxSize = new THREE.Vector3();
+                    cleanMesh.geometry.boundingBox.getSize(bboxSize);
+                    const massBiasMagnitude = bboxSize.y * DEFAULT_MASS_BIAS_RATIO;
+                    cleanMesh.userData.massBiasOffset = oneFaceNormal.multiplyScalar(massBiasMagnitude);
+                } else {
+                    cleanMesh.userData.massBiasOffset = null;
+                }
                 diceModels[d.type] = cleanMesh;
             }
 
@@ -405,15 +454,37 @@ export const spawnObjects = (scene, world, config = null) => {
 
         scene.add(mesh);
 
-        const body = spawnDicePhysics(world, mesh, template.userData.physicsShape, {x, y, z}, mesh.rotation);
+        const physicsPreset = PHYSICS_PRESETS[type] ?? PHYSICS_PRESETS.d6;
+        const body = spawnDicePhysics(
+            world,
+            mesh,
+            template.userData.physicsShape,
+            {x, y, z},
+            mesh.rotation,
+            physicsPreset
+        );
         mesh.userData.body = body;
         mesh.userData.physicsAuthority = isUsingWasmPhysics() ? 'wasm' : 'ammo';
+        mesh.userData.physicsPreset = physicsPreset;
+        const audioBodyId = nextAudioBodyId++;
+        const inertiaScalar = estimateInertiaScalar(template.geometry, physicsPreset.mass);
+        registerBodyAudioMeta(body, {
+            id: audioBodyId,
+            type,
+            mass: physicsPreset.mass,
+            inertiaScalar
+        });
+        registerBodyDragMeta(body, {
+            dragFactor: physicsPreset.dragFactor ?? 0
+        });
 
         let wasmId = null;
         if (isUsingWasmPhysics()) {
             const engine = getWasmEngine();
             const sides = getDieSides(type);
             wasmId = engine.addDie(sides, x, y, z);
+            engine.setDieMaterial(wasmId, physicsPreset.friction, physicsPreset.rollingFriction);
+            engine.setDieDrag(wasmId, physicsPreset.dragFactor ?? 0);
             loadHullForDie(wasmId, sides);
             engine.setDieTransform(
                 wasmId,
@@ -423,7 +494,16 @@ export const spawnObjects = (scene, world, config = null) => {
         }
 
         // Store type for smart updating
-        spawnedDice.push({ mesh, body, type, wasmId });
+        spawnedDice.push({
+            mesh,
+            body,
+            type,
+            wasmId,
+            physicsPreset,
+            audioBodyId,
+            inertiaScalar,
+            massBiasOffset: template.userData.massBiasOffset?.clone() ?? null
+        });
     });
 };
 
@@ -483,6 +563,8 @@ export const clearDice = (scene, world) => {
         const mats = Array.isArray(die.mesh.material) ? die.mesh.material : [die.mesh.material];
         mats.forEach(m => m && m.dispose());
         world.removeRigidBody(die.body);
+        unregisterBodyAudioMeta(die.body);
+        unregisterBodyDragMeta(die.body);
         Ammo.destroy(die.body.getMotionState());
         Ammo.destroy(die.body);
         if (engine && die.wasmId != null) engine.removeDie(die.wasmId);
@@ -521,6 +603,8 @@ export const updateDiceSet = (scene, world, targetCounts) => {
                     const die = spawnedDice[i];
                     // Remove physics and free Ammo heap objects
                     world.removeRigidBody(die.body);
+                    unregisterBodyAudioMeta(die.body);
+                    unregisterBodyDragMeta(die.body);
                     Ammo.destroy(die.body.getMotionState());
                     Ammo.destroy(die.body);
                     if (isUsingWasmPhysics() && die.wasmId != null) {
@@ -623,6 +707,43 @@ export const throwDice = (scene, world, seed = null) => {
     Ammo.destroy(transform);
 };
 
+export const applyDiceMassBiases = ({ deltaTime = 1 / 60, applyAmmo = true, applyWasm = true } = {}) => {
+    if (searchParams.has('fair-dice')) return;
+
+    const Ammo = applyAmmo ? getAmmo() : null;
+    const gravityForce = new THREE.Vector3(0, -15, 0);
+    const worldOffset = new THREE.Vector3();
+    const torque = new THREE.Vector3();
+
+    spawnedDice.forEach((die) => {
+        if (!die.massBiasOffset) return;
+
+        worldOffset.copy(die.massBiasOffset).applyQuaternion(die.mesh.quaternion);
+        torque.crossVectors(worldOffset, gravityForce).multiplyScalar(die.physicsPreset?.mass ?? 5);
+        if (torque.lengthSq() < 1e-8) return;
+
+        if (applyAmmo && die.body) {
+            const torqueImpulse = new Ammo.btVector3(
+                torque.x * deltaTime,
+                torque.y * deltaTime,
+                torque.z * deltaTime
+            );
+            die.body.applyTorqueImpulse(torqueImpulse);
+            die.body.activate();
+            Ammo.destroy(torqueImpulse);
+        }
+
+        if (applyWasm && isUsingWasmPhysics() && die.wasmId != null) {
+            getWasmEngine().applyTorqueImpulse(
+                die.wasmId,
+                torque.x * deltaTime,
+                torque.y * deltaTime,
+                torque.z * deltaTime
+            );
+        }
+    });
+};
+
 export const setDiePhysicsAuthority = (mesh, authority) => {
     const die = findSpawnedDieByMesh(mesh);
     if (!die) return;
@@ -669,12 +790,15 @@ export const syncAllDiceToWasm = () => {
 
     spawnedDice.forEach((die) => {
         const sides = getDieSides(die.type);
+        const physicsPreset = die.physicsPreset ?? PHYSICS_PRESETS[die.type] ?? PHYSICS_PRESETS.d6;
         die.wasmId = engine.addDie(
             sides,
             die.mesh.position.x,
             die.mesh.position.y,
             die.mesh.position.z
         );
+        engine.setDieMaterial(die.wasmId, physicsPreset.friction, physicsPreset.rollingFriction);
+        engine.setDieDrag(die.wasmId, physicsPreset.dragFactor ?? 0);
         loadHullForDie(die.wasmId, sides);
 
         engine.setDieTransform(

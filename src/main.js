@@ -1,10 +1,18 @@
 import * as THREE from 'three';
 
-import { initPhysics, stepPhysics } from './physics.js';
+import { initPhysics, stepPhysics, pollAmmoCollisionEvents } from './physics.js';
 import { loadWasmEngine, isWasmAvailable, getWasmEngine } from './wasm/WasmPhysicsBridge.js';
-import { updateDiceVisuals, throwDice, syncAllDiceToWasm, areDiceSettled, pollPhysicsCollisionEvents } from './dice.js';
+import {
+    updateDiceVisuals,
+    throwDice,
+    syncAllDiceToWasm,
+    areDiceSettled,
+    pollPhysicsCollisionEvents,
+    applyDiceMassBiases
+} from './dice.js';
 import { showResults, hideResults } from './results.js';
 import { updateInteraction, hasActiveDiceInteraction } from './interaction.js';
+import { createDiceCollisionAudio } from './audio/DiceCollisionAudio.js';
 import { updateAtmosphere } from './environment/Atmosphere.js';
 import { setupScene } from './core/SceneSetup.js';
 import { LampMode } from './environment/Lamp.js';
@@ -13,6 +21,7 @@ import { setupInput } from './core/InputHandler.js';
 import { createCameraController, DiceFocusState } from './core/CameraController.js';
 import { createFrameScheduler } from './core/FrameScheduler.js';
 import { createCandleFlickerSystem, createFireplaceFlickerSystem } from './core/LightingSystems.js';
+import { createFairnessMonitor } from './debug/FairnessMonitor.js';
 
 let camera, scene, renderer, composer;
 let physicsWorld;
@@ -38,6 +47,8 @@ let shadowController;
 let debugOverlay = null;
 let frameMsSmoothed = 16.7;
 let rendererState;
+let fairnessMonitor = null;
+let collisionAudio = null;
 
 // "Eye-Head" Cursor Logic
 const cursorPos = new THREE.Vector2(0, 0); // Pixel coordinates relative to center
@@ -120,7 +131,7 @@ function createDebugOverlay() {
     const overlay = document.createElement('div');
     overlay.style.position = 'absolute';
     overlay.style.top = '10px';
-    overlay.style.left = '10px';
+    overlay.style.right = '360px';
     overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
     overlay.style.color = '#d7f7d0';
     overlay.style.fontFamily = 'monospace';
@@ -155,15 +166,25 @@ async function init() {
         + (rendererState?.fallbackReason ? ` (${rendererState.fallbackReason})` : '')
     );
     window.__renderStats = scheduler.stats;
+    collisionAudio = createDiceCollisionAudio();
     if (debugEnabled) {
         debugOverlay = createDebugOverlay();
+        fairnessMonitor = createFairnessMonitor({ enabled: true });
+        fairnessMonitor.init();
     }
+    window.addEventListener('pointerdown', () => collisionAudio?.resume(), { passive: true });
+    window.addEventListener('keydown', () => collisionAudio?.resume(), { passive: true });
 
     scheduler.register('physicsStep', 'dicePhysics', ({ deltaTime }) => {
         if (!physicsWorld) return;
 
         const useWasm = isWasmAvailable();
         const shouldStepAmmo = !useWasm || dualPhysicsValidation || hasActiveDiceInteraction();
+        applyDiceMassBiases({
+            deltaTime,
+            applyAmmo: shouldStepAmmo,
+            applyWasm: useWasm
+        });
 
         if (shouldStepAmmo) {
             stepPhysics(physicsWorld, deltaTime);
@@ -180,9 +201,12 @@ async function init() {
 
     scheduler.register('postPhysicsSync', 'collisionAudio', () => {
         if (!physicsWorld) return;
-        const events = pollPhysicsCollisionEvents();
+        const events = [
+            ...pollPhysicsCollisionEvents(),
+            ...pollAmmoCollisionEvents(physicsWorld)
+        ];
         for (const ev of events) {
-            // TODO: wire to Web Audio for dice clack / table thump
+            collisionAudio?.handleCollisionEvent(ev);
             if (window.__onDiceCollision) {
                 window.__onDiceCollision(ev);
             }
@@ -207,7 +231,8 @@ async function init() {
             showResults,
             hideResults,
             lampData,
-            LampMode
+            LampMode,
+            onResultsReady: (results) => fairnessMonitor?.recordResults(results)
         });
     }, { priority: -10 });
 
@@ -381,6 +406,8 @@ async function init() {
     window.isWasmAvailable = isWasmAvailable;
     window.forceShadowRefresh = () => shadowController?.forceRefresh('debug');
     window.postConfig = postConfig;
+    window.fairnessMonitor = fairnessMonitor;
+    window.resetFairnessMonitor = () => fairnessMonitor?.reset();
     window.replayRoll = (seed) => {
         shadowController?.pulse('roll');
         throwDice(scene, physicsWorld, seed);

@@ -224,17 +224,28 @@ export function createTable(scene) {
     const physicsBodies = [];
     const physicsWallThickness = 20;
 
-    // 1. Floor
+    // 1. Main surface outside the velvet zone
     physicsBodies.push({
         type: 'box',
         size: { x: width, y: floorHeight, z: depth },
         position: { x: position.x, y: position.y, z: position.z },
         mass: 0,
         friction: 0.6,
-        restitution: 0.5
+        restitution: 0.30
     });
 
-    // 2. Walls (Invisible Collider Walls)
+    // 2. Velvet play surface in the center. This sits slightly above the main
+    // floor visually and should absorb most impact energy.
+    physicsBodies.push({
+        type: 'box',
+        size: { x: diceZoneSize, y: floorHeight * 1.2, z: diceZoneSize },
+        position: { x: position.x, y: position.y + floorHeight * 0.1, z: position.z },
+        mass: 0,
+        friction: 0.6,
+        restitution: 0.05
+    });
+
+    // 3. Walls (Invisible Collider Walls aligned with the wooden rim)
     const physicsWallHeight = 100.0;
     const worldWallY = position.y + (physicsWallHeight / 2) - 0.25;
 
@@ -242,53 +253,61 @@ export function createTable(scene) {
         type: 'box',
         size: { x: physicsWallThickness, y: physicsWallHeight, z: depth + physicsWallThickness*2 },
         position: { x: -(width/2 + physicsWallThickness/2), y: worldWallY, z: 0 },
-        mass: 0
+        mass: 0,
+        restitution: 0.30
     });
     physicsBodies.push({
         type: 'box',
         size: { x: physicsWallThickness, y: physicsWallHeight, z: depth + physicsWallThickness*2 },
         position: { x: (width/2 + physicsWallThickness/2), y: worldWallY, z: 0 },
-        mass: 0
+        mass: 0,
+        restitution: 0.30
     });
     physicsBodies.push({
         type: 'box',
         size: { x: width + physicsWallThickness*2, y: physicsWallHeight, z: physicsWallThickness },
         position: { x: 0, y: worldWallY, z: -(depth/2 + physicsWallThickness/2) },
-        mass: 0
+        mass: 0,
+        restitution: 0.30
     });
     physicsBodies.push({
         type: 'box',
         size: { x: width + physicsWallThickness*2, y: physicsWallHeight, z: physicsWallThickness },
         position: { x: 0, y: worldWallY, z: (depth/2 + physicsWallThickness/2) },
-        mass: 0
+        mass: 0,
+        restitution: 0.30
     });
 
-    // 3. Lips
+    // 4. Lips
     const worldLipY = position.y + localLipY;
 
     physicsBodies.push({
         type: 'box',
         size: { x: sideLipTotalWidth, y: lipThickness, z: depth },
         position: { x: position.x + leftLipX, y: worldLipY, z: position.z },
-        mass: 0
+        mass: 0,
+        restitution: 0.30
     });
     physicsBodies.push({
         type: 'box',
         size: { x: sideLipTotalWidth, y: lipThickness, z: depth },
         position: { x: position.x + rightLipX, y: worldLipY, z: position.z },
-        mass: 0
+        mass: 0,
+        restitution: 0.30
     });
     physicsBodies.push({
         type: 'box',
         size: { x: topBotLipLength, y: lipThickness, z: topBotLipTotalDepth },
         position: { x: position.x, y: worldLipY, z: position.z + topLipZ },
-        mass: 0
+        mass: 0,
+        restitution: 0.30
     });
     physicsBodies.push({
         type: 'box',
         size: { x: topBotLipLength, y: lipThickness, z: topBotLipTotalDepth },
         position: { x: position.x, y: worldLipY, z: position.z + botLipZ },
-        mass: 0
+        mass: 0,
+        restitution: 0.30
     });
 
     return {
