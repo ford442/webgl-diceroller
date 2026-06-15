@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/dice-roller/',
+  base: './',
   server: {
     open: true,
     allowedHosts: ['code.noahcohn.com', 'localhost', '127.0.0.1'],
