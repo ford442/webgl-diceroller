@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { getWoodTextures } from '../core/TexturePipeline.js';
 
 // Cache materials to avoid reloading textures on multiple calls
 let sharedMaterials = null;
@@ -7,16 +8,7 @@ let sharedMaterials = null;
 function getMaterials() {
     if (sharedMaterials) return sharedMaterials;
 
-    const loader = new THREE.TextureLoader();
-
-    // Wood Material
-    const woodDiffuse = loader.load('./images/wood_diffuse.jpg');
-    const woodBump = loader.load('./images/wood_bump.jpg');
-    const woodRoughness = loader.load('./images/wood_roughness.jpg');
-
-    [woodDiffuse, woodBump, woodRoughness].forEach(t => {
-        t.colorSpace = (t === woodDiffuse) ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-    });
+    const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } = getWoodTextures();
 
     const woodMaterial = new THREE.MeshStandardMaterial({
         map: woodDiffuse,

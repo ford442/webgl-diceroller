@@ -9,6 +9,7 @@ export function setupInput({
     cursorPos,
     crosshairUI,
     onRoll,
+    onRerollLayout,
     onLampKey,
     getLampData
 }) {
@@ -26,7 +27,12 @@ export function setupInput({
     window.addEventListener('keydown', (event) => {
         keys[event.code] = true;
         if (event.code === 'KeyR') {
-            onRoll();
+            if (event.shiftKey && onRerollLayout) {
+                event.preventDefault();
+                onRerollLayout();
+            } else {
+                onRoll();
+            }
         }
         // ESC to exit pointer lock / enter UI mode
         if (event.code === 'Escape') {

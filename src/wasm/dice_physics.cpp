@@ -545,6 +545,15 @@ public:
         return val(typed_memory_view(transformBuffer_.size(), transformBuffer_.data()));
     }
 
+    val getDieIds() {
+        idBuffer_.clear();
+        idBuffer_.reserve(bodies_.size());
+        for (const auto& b : bodies_) {
+            idBuffer_.push_back(static_cast<float>(b.id));
+        }
+        return val(typed_memory_view(idBuffer_.size(), idBuffer_.data()));
+    }
+
     // ------------------------------------------------------------------
     // Deterministic RNG
     // ------------------------------------------------------------------
@@ -639,6 +648,7 @@ private:
     std::vector<Contact> contacts_;
     std::vector<CollisionEvent> events_;
     std::vector<float> transformBuffer_;
+    std::vector<float> idBuffer_;
     std::vector<float> eventBuffer_;
     DeterministicRNG rng_;
     bool noDrag_ = false;
@@ -951,6 +961,7 @@ EMSCRIPTEN_BINDINGS(dice_physics) {
         .function("getDieCount",       &DicePhysicsEngine::getDieCount)
         .function("areAllSettled",     &DicePhysicsEngine::areAllSettled)
         .function("getTransforms",     &DicePhysicsEngine::getTransforms)
+        .function("getDieIds",         &DicePhysicsEngine::getDieIds)
         .function("seedRNG",           &DicePhysicsEngine::seedRNG)
         .function("randomFloat",       &DicePhysicsEngine::randomFloat)
         .function("getCollisionEvents",&DicePhysicsEngine::getCollisionEvents)

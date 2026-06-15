@@ -1,0 +1,180 @@
+{
+  "generatedAt": "2026-06-15T13:41:25.265Z",
+  "textures": {
+    "entries": [
+      {
+        "set": "wood",
+        "role": "diffuse",
+        "src": "wood_diffuse.jpg",
+        "jpgBytes": 413689,
+        "ktx2Bytes": 264351,
+        "savingsPct": 36.1
+      },
+      {
+        "set": "wood",
+        "role": "roughness",
+        "src": "wood_roughness.jpg",
+        "jpgBytes": 146048,
+        "ktx2Bytes": 56644,
+        "savingsPct": 61.2
+      },
+      {
+        "set": "wood",
+        "role": "bump",
+        "src": "wood_bump.jpg",
+        "jpgBytes": 118085,
+        "ktx2Bytes": 57355,
+        "savingsPct": 51.4
+      },
+      {
+        "set": "table",
+        "role": "diffuse",
+        "src": "table_diff.jpg",
+        "jpgBytes": 1911950,
+        "ktx2Bytes": 129606,
+        "savingsPct": 93.2
+      },
+      {
+        "set": "table",
+        "role": "roughness",
+        "src": "table_rough.jpg",
+        "jpgBytes": 724055,
+        "ktx2Bytes": 126422,
+        "savingsPct": 82.5
+      },
+      {
+        "set": "table",
+        "role": "normal",
+        "src": "table_nor.jpg",
+        "jpgBytes": 2494446,
+        "ktx2Bytes": 82021,
+        "savingsPct": 96.7
+      },
+      {
+        "set": "table",
+        "role": "ao",
+        "src": "table_ao.jpg",
+        "jpgBytes": 698306,
+        "ktx2Bytes": 121202,
+        "savingsPct": 82.6
+      },
+      {
+        "set": "brick",
+        "role": "diffuse",
+        "src": "brick_diffuse.jpg",
+        "jpgBytes": 1090649,
+        "ktx2Bytes": 148140,
+        "savingsPct": 86.4
+      },
+      {
+        "set": "brick",
+        "role": "bump",
+        "src": "brick_bump.jpg",
+        "jpgBytes": 803741,
+        "ktx2Bytes": 118107,
+        "savingsPct": 85.3
+      },
+      {
+        "set": "brick",
+        "role": "roughness",
+        "src": "brick_roughness.jpg",
+        "jpgBytes": 234715,
+        "ktx2Bytes": 126165,
+        "savingsPct": 46.2
+      },
+      {
+        "set": "lamp",
+        "role": "copper",
+        "src": "lamp/RenderStuff_Breckenridge_triple_billiard_lamp_cooper.jpg",
+        "jpgBytes": 98703,
+        "ktx2Bytes": 74045,
+        "savingsPct": 25
+      },
+      {
+        "set": "lamp",
+        "role": "glass",
+        "src": "lamp/RenderStuff_Breckenridge_triple_billiard_lamp_glass.jpg",
+        "jpgBytes": 43810,
+        "ktx2Bytes": 35532,
+        "savingsPct": 18.9
+      },
+      {
+        "set": "lamp",
+        "role": "glass_bump",
+        "src": "lamp/RenderStuff_Breckenridge_triple_billiard_lamp_glass_bump.jpg",
+        "jpgBytes": 34398,
+        "ktx2Bytes": 24236,
+        "savingsPct": 29.5
+      },
+      {
+        "set": "lamp",
+        "role": "steel",
+        "src": "lamp/RenderStuff_Breckenridge_triple_billiard_lamp_steel.jpg",
+        "jpgBytes": 99191,
+        "ktx2Bytes": 74770,
+        "savingsPct": 24.6
+      },
+      {
+        "set": "lamp",
+        "role": "wood",
+        "src": "lamp/RenderStuff_Breckenridge_triple_billiard_lamp_wood.jpg",
+        "jpgBytes": 31725,
+        "ktx2Bytes": 32925,
+        "savingsPct": -3.8
+      }
+    ],
+    "jpgBytesBefore": 8943511,
+    "ktx2BytesAfter": 1471521,
+    "savingsPct": 83.5,
+    "encoder": "/root/webgl-diceroller/node_modules/basisu/bin/linux/x64_sse/basisu"
+  },
+  "meshes": {
+    "entries": [
+      {
+        "id": "billiard_lamp",
+        "srcBytes": 9083286,
+        "glbBytes": 352432,
+        "gzBytes": 275243,
+        "outRel": "public/images/props/billiard_lamp.glb"
+      }
+    ],
+    "srcBytesBefore": 9083286,
+    "glbBytesAfter": 352432,
+    "gzipBytesAfter": 275243,
+    "savingsPct": 96.1
+  },
+  "proceduralProps": [
+    "Table",
+    "TavernWalls",
+    "Room",
+    "Bookshelf",
+    "Chair",
+    "Chest",
+    "Fire",
+    "AleKeg",
+    "DiceBag",
+    "DiceJail",
+    "DiceTower",
+    "DiceTray",
+    "DMScreen",
+    "Lute",
+    "Gong",
+    "Runecircle",
+    "Atmosphere",
+    "TarotDeck",
+    "PlayingCards",
+    "Flute"
+  ],
+  "externalMeshSources": [
+    {
+      "id": "billiard_lamp",
+      "src": "public/images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj",
+      "out": "public/images/props/billiard_lamp.glb"
+    }
+  ],
+  "notes": [
+    "KTX2 textures are preferred at runtime; JPG fallbacks remain in public/images/.",
+    "Procedural props use inline BufferGeometry and are not exported to GLB by this pipeline.",
+    "Re-run after editing source OBJ or JPG textures."
+  ]
+}

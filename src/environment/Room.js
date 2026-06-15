@@ -1,23 +1,11 @@
 import * as THREE from 'three';
+import { getBrickTextures } from '../core/TexturePipeline.js';
 
 export function createRoom(scene) {
-    const loader = new THREE.TextureLoader();
-
-    // Load textures
-    const brickDiffuse = loader.load('./images/brick_diffuse.jpg');
-    const brickBump = loader.load('./images/brick_bump.jpg');
-    const brickRoughness = loader.load('./images/brick_roughness.jpg');
-
-    // Texture settings
-    [brickDiffuse, brickBump, brickRoughness].forEach(t => {
-        t.wrapS = THREE.RepeatWrapping;
-        t.wrapT = THREE.RepeatWrapping;
-        t.repeat.set(4, 4);
-    });
-
-    brickDiffuse.colorSpace = THREE.SRGBColorSpace;
-    brickBump.colorSpace = THREE.NoColorSpace;
-    brickRoughness.colorSpace = THREE.NoColorSpace;
+    const { diffuse: brickDiffuse, bump: brickBump, roughness: brickRoughness } = getBrickTextures();
+    brickDiffuse.repeat.set(4, 4);
+    brickBump.repeat.set(4, 4);
+    brickRoughness.repeat.set(4, 4);
 
     // Material
     const wallMaterial = new THREE.MeshStandardMaterial({

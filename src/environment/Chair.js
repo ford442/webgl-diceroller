@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getAmmo } from '../physics.js';
+import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }, rotationY = 0) {
     const chairGroup = new THREE.Group();
@@ -12,20 +13,7 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     const legWidth = 0.4;
     const backHeight = 5.0;
 
-    // Texture Loading
-    const textureLoader = new THREE.TextureLoader();
-    const woodDiffuse = textureLoader.load('./images/wood_diffuse.jpg');
-    // Using Bump map as normal map is missing
-    const woodBump = textureLoader.load('./images/wood_bump.jpg');
-    // Corrected roughness filename
-    const woodRoughness = textureLoader.load('./images/wood_roughness.jpg');
-
-    [woodDiffuse, woodBump, woodRoughness].forEach(t => {
-        t.wrapS = THREE.RepeatWrapping;
-        t.wrapT = THREE.RepeatWrapping;
-        // Fix color space
-        t.colorSpace = (t === woodDiffuse) ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-    });
+    const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } = getWoodTextures();
 
     const material = new THREE.MeshStandardMaterial({
         map: woodDiffuse,

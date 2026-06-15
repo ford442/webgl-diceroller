@@ -1,14 +1,10 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createDiceBag(scene, physicsWorld, position = { x: -10, y: -1.95, z: 8 }, rotationY = 0) {
     const group = new THREE.Group();
-    const loader = new THREE.TextureLoader();
-
-    // Reuse wood bump map for leather grain texture
-    const leatherBump = loader.load('./images/wood_bump.jpg');
-    leatherBump.wrapS = THREE.RepeatWrapping;
-    leatherBump.wrapT = THREE.RepeatWrapping;
+    const leatherBump = getWoodTextures().bump;
     leatherBump.repeat.set(2, 2);
 
     const leatherMaterial = new THREE.MeshStandardMaterial({

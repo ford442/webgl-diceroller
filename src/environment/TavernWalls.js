@@ -3,22 +3,13 @@ import { createStaticBody, getAmmo } from '../physics.js';
 import { createFire } from './Fire.js';
 import { GodRayShader } from '../shaders/GodRayShader.js';
 import { CAMERA_LOOK_AT_Y } from '../core/SceneMetrics.js';
+import { getBrickTextures, getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createTavernWalls(scene, physicsWorld) {
-    const loader = new THREE.TextureLoader();
-
-    // --- Brick Material (Walls & Floor) ---
-    const brickDiffuse = loader.load('./images/brick_diffuse.jpg');
-    const brickBump = loader.load('./images/brick_bump.jpg');
-    const brickRoughness = loader.load('./images/brick_roughness.jpg');
-
-    [brickDiffuse, brickBump, brickRoughness].forEach(t => {
-        t.wrapS = THREE.RepeatWrapping;
-        t.wrapT = THREE.RepeatWrapping;
-        t.colorSpace = (t === brickDiffuse) ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-        // Scale texture for walls
-        t.repeat.set(4, 3); // Increased vertical repeat for taller walls
-    });
+    const { diffuse: brickDiffuse, bump: brickBump, roughness: brickRoughness } = getBrickTextures();
+    brickDiffuse.repeat.set(4, 3);
+    brickBump.repeat.set(4, 3);
+    brickRoughness.repeat.set(4, 3);
 
     const wallMaterial = new THREE.MeshStandardMaterial({
         map: brickDiffuse,
@@ -28,17 +19,10 @@ export function createTavernWalls(scene, physicsWorld) {
         color: 0xaaaaaa // Slight dim, but let texture show
     });
 
-    // --- Wood Material (Beams & Columns) ---
-    const woodDiffuse = loader.load('./images/wood_diffuse.jpg');
-    const woodBump = loader.load('./images/wood_bump.jpg');
-    const woodRoughness = loader.load('./images/wood_roughness.jpg');
-
-    [woodDiffuse, woodBump, woodRoughness].forEach(t => {
-        t.wrapS = THREE.RepeatWrapping;
-        t.wrapT = THREE.RepeatWrapping;
-        t.colorSpace = (t === woodDiffuse) ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-        t.repeat.set(1, 4);
-    });
+    const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } = getWoodTextures();
+    woodDiffuse.repeat.set(1, 4);
+    woodBump.repeat.set(1, 4);
+    woodRoughness.repeat.set(1, 4);
 
     const woodMaterial = new THREE.MeshStandardMaterial({
         map: woodDiffuse,

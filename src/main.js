@@ -352,7 +352,7 @@ async function init() {
                 else shadowController.noteMotionEnd(source);
             }
         }
-    });
+    }, renderer);
     } catch (e) {
         console.error('Failed to load scene tiers', e);
         const loadingText = document.getElementById('loading-text');
@@ -371,6 +371,7 @@ async function init() {
     ui = tierResult.ui;
     crosshairUI = tierResult.crosshairUI;
     if (tierResult.fireplaceLight) fireplaceLight = tierResult.fireplaceLight;
+    const layoutManager = tierResult.layoutManager;
 
     // Input handling
     inputState = setupInput({
@@ -388,6 +389,10 @@ async function init() {
             hideResults();
             if (lampData) lampData.setRolling(true);
         },
+        onRerollLayout: layoutManager ? async () => {
+            const result = await layoutManager.rerollLayout({ newSeed: true });
+            ui?.updateLayoutStatus?.(result);
+        } : null,
         getLampData: () => lampData
     });
 
@@ -415,6 +420,8 @@ async function init() {
         hideResults();
         if (lampData) lampData.setRolling(true);
     };
+    window.rerollTableLayout = (overrides) => layoutManager?.rerollLayout(overrides);
+    window.getTableLayoutConfig = () => layoutManager?.getConfig();
 }
 
 function onWindowResize() {

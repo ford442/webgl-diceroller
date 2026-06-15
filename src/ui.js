@@ -1,4 +1,6 @@
-export const initUI = (onUpdateDice, onRollAll) => {
+import { DENSITY_PRESETS, LAYOUT_THEMES, buildShareableTableUrl } from './core/TableLayoutConfig.js';
+
+export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
     const canvasContainer = document.getElementById('canvas-container') || document.body;
     const container = document.createElement('div');
     container.style.position = 'absolute';
@@ -12,12 +14,11 @@ export const initUI = (onUpdateDice, onRollAll) => {
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
     container.style.gap = '5px';
-    container.style.zIndex = '1000'; // Ensure it's above canvas
+    container.style.zIndex = '1000';
+    container.style.maxWidth = '220px';
 
     const diceTypes = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
     const inputs = {};
-
-    // Initial counts (matching the default single die of each type)
     const counts = { d4: 1, d6: 1, d8: 1, d10: 1, d12: 1, d20: 1 };
 
     diceTypes.forEach(type => {
@@ -42,12 +43,9 @@ export const initUI = (onUpdateDice, onRollAll) => {
             counts[type] = parseInt(input.value) || 0;
             onUpdateDice(counts);
         });
-
-        // Prevent pointer lock when interacting with inputs
         input.addEventListener('mousedown', (e) => e.stopPropagation());
 
         inputs[type] = input;
-
         row.appendChild(label);
         row.appendChild(input);
         container.appendChild(row);
@@ -57,17 +55,127 @@ export const initUI = (onUpdateDice, onRollAll) => {
     rollBtn.textContent = 'Roll All';
     rollBtn.style.marginTop = '10px';
     rollBtn.style.cursor = 'pointer';
-    rollBtn.addEventListener('click', () => {
-        onRollAll();
-    });
-    // Prevent pointer lock when clicking button
+    rollBtn.addEventListener('click', () => onRollAll());
     rollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-
-
     container.appendChild(rollBtn);
+
+    let densitySelect;
+    let themeSelect;
+    let statusLine;
+    let rerollBtn;
+    let shareBtn;
+
+    if (layoutHooks?.onRerollLayout) {
+        const layoutDivider = document.createElement('div');
+        layoutDivider.style.marginTop = '8px';
+        layoutDivider.style.paddingTop = '8px';
+        layoutDivider.style.borderTop = '1px solid rgba(255,255,255,0.2)';
+        layoutDivider.style.fontWeight = 'bold';
+        layoutDivider.textContent = 'Table Layout';
+        container.appendChild(layoutDivider);
+
+        const densityRow = document.createElement('div');
+        densityRow.style.display = 'flex';
+        densityRow.style.justifyContent = 'space-between';
+        densityRow.style.alignItems = 'center';
+        densityRow.style.gap = '8px';
+
+        const densityLabel = document.createElement('label');
+        densityLabel.textContent = 'Density';
+        densityLabel.style.fontSize = '12px';
+
+        densitySelect = document.createElement('select');
+        densitySelect.style.flex = '1';
+        Object.keys(DENSITY_PRESETS).forEach((key) => {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+            densitySelect.appendChild(option);
+        });
+        densitySelect.value = layoutHooks.layoutConfig?.density ?? 'med';
+        densitySelect.addEventListener('mousedown', (e) => e.stopPropagation());
+        densityRow.appendChild(densityLabel);
+        densityRow.appendChild(densitySelect);
+        container.appendChild(densityRow);
+
+        const themeRow = document.createElement('div');
+        themeRow.style.display = 'flex';
+        themeRow.style.justifyContent = 'space-between';
+        themeRow.style.alignItems = 'center';
+        themeRow.style.gap = '8px';
+
+        const themeLabel = document.createElement('label');
+        themeLabel.textContent = 'Theme';
+        themeLabel.style.fontSize = '12px';
+
+        themeSelect = document.createElement('select');
+        themeSelect.style.flex = '1';
+        Object.values(LAYOUT_THEMES).forEach((theme) => {
+            const option = document.createElement('option');
+            option.value = theme.id;
+            option.textContent = theme.label;
+            themeSelect.appendChild(option);
+        });
+        themeSelect.value = layoutHooks.layoutConfig?.theme ?? 'default';
+        themeSelect.addEventListener('mousedown', (e) => e.stopPropagation());
+        themeRow.appendChild(themeLabel);
+        themeRow.appendChild(themeSelect);
+        container.appendChild(themeRow);
+
+        rerollBtn = document.createElement('button');
+        rerollBtn.textContent = 'New Table';
+        rerollBtn.style.cursor = 'pointer';
+        rerollBtn.style.marginTop = '4px';
+        rerollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+        rerollBtn.addEventListener('click', async () => {
+            rerollBtn.disabled = true;
+            rerollBtn.textContent = 'Arranging...';
+            try {
+                const result = await layoutHooks.onRerollLayout({
+                    density: densitySelect.value,
+                    theme: themeSelect.value,
+                    newSeed: true
+                });
+                updateLayoutStatus(result);
+            } finally {
+                rerollBtn.disabled = false;
+                rerollBtn.textContent = 'New Table';
+            }
+        });
+        container.appendChild(rerollBtn);
+
+        shareBtn = document.createElement('button');
+        shareBtn.textContent = 'Copy Table Link';
+        shareBtn.style.cursor = 'pointer';
+        shareBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+        shareBtn.addEventListener('click', async () => {
+            const config = layoutHooks.onShareTable?.() ?? layoutHooks.layoutConfig;
+            const url = buildShareableTableUrl(config);
+            try {
+                await navigator.clipboard.writeText(url);
+                shareBtn.textContent = 'Copied!';
+                setTimeout(() => { shareBtn.textContent = 'Copy Table Link'; }, 1500);
+            } catch {
+                window.prompt('Share this table:', url);
+            }
+        });
+        container.appendChild(shareBtn);
+
+        statusLine = document.createElement('div');
+        statusLine.style.fontSize = '11px';
+        statusLine.style.opacity = '0.85';
+        statusLine.style.lineHeight = '1.35';
+        container.appendChild(statusLine);
+        updateLayoutStatus(layoutHooks.layoutConfig);
+    }
+
+    function updateLayoutStatus(config) {
+        if (!statusLine || !config) return;
+        statusLine.textContent = `Seed ${config.seed} · ${config.clutterCount} clutter · ${config.decorCount} decor`;
+    }
+
     canvasContainer.appendChild(container);
 
-    // Controls Help Panel
     const helpContainer = document.createElement('div');
     helpContainer.style.position = 'absolute';
     helpContainer.style.bottom = '10px';
@@ -86,6 +194,7 @@ export const initUI = (onUpdateDice, onRollAll) => {
         <div>⌨️ <b>WASD</b> - Move (FPS mode)</div>
         <div>⌨️ <b>ESC</b> - Exit FPS mode</div>
         <div>⌨️ <b>R</b> - Roll all dice</div>
+        <div>⌨️ <b>Shift+R</b> - New table layout</div>
     `;
     canvasContainer.appendChild(helpContainer);
 
@@ -98,7 +207,8 @@ export const initUI = (onUpdateDice, onRollAll) => {
                     counts[key] = newCounts[key];
                 }
             });
-        }
+        },
+        updateLayoutStatus
     };
 };
 
@@ -110,11 +220,10 @@ export const createCrosshair = () => {
     crosshair.style.top = '50%';
     crosshair.style.width = '20px';
     crosshair.style.height = '20px';
-    crosshair.style.pointerEvents = 'none'; // Click through
+    crosshair.style.pointerEvents = 'none';
     crosshair.style.zIndex = '999';
-    crosshair.style.transform = 'translate(-50%, -50%)'; // Center pivot
+    crosshair.style.transform = 'translate(-50%, -50%)';
 
-    // Simple visual: a white circle with a dot
     const circle = document.createElement('div');
     circle.style.width = '100%';
     circle.style.height = '100%';

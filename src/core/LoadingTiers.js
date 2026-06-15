@@ -3,12 +3,17 @@ import { initUI, createCrosshair } from '../ui.js';
 import { initResultsUI } from '../results.js';
 import { initInteraction } from '../interaction.js';
 import { createFloorAndWalls } from '../physics.js';
-import { TIER_PROP_DEFINITIONS, spawnProp } from '../environment/PropRegistry.js';
+import {
+    TIER_PROP_DEFINITIONS,
+    DECORATIVE_TIER_ENTRIES,
+    spawnProp,
+    spawnTierWithRandomPool
+} from '../environment/PropRegistry.js';
+import { resolveTableLayoutConfig, persistTableLayoutConfig } from './TableLayoutConfig.js';
+import { createLayoutManager } from './RandomLayout.js';
+import { preloadSharedTextures } from './TexturePipeline.js';
 
 const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-/** Tunable: total decorative props randomly selected per session */
-const MAX_RANDOM_PROPS = 9;
 
 function updateLoadingBar(percent) {
     const bar = document.getElementById('loading-bar');
@@ -21,8 +26,8 @@ function updateLoadingText(text) {
 }
 
 function registerUpdate(orchestrator, name, update, priority = 0) {
-    if (!update) return;
-    orchestrator.scheduler.register('updates', name, ({ deltaTime, time }) => {
+    if (!update) return null;
+    return orchestrator.scheduler.register('updates', name, ({ deltaTime, time }) => {
         update(deltaTime, time);
     }, { priority });
 }
@@ -33,39 +38,18 @@ async function spawnTier(entries, context) {
     }
 }
 
-/** Fisher-Yates in-place shuffle */
-function shuffleArray(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-}
+export async function loadTiers(scene, camera, physicsWorld, orchestrator, callbacks, renderer) {
+    const layoutConfig = resolveTableLayoutConfig();
+    const registerUpdateFn = (name, update, priority = 0) => registerUpdate(orchestrator, name, update, priority);
 
-/**
- * Spawn a tier that contains a mix of "always" props and a random pool.
- * Always props are loaded unconditionally. The random pool is shuffled and
- * capped at `maxRandom` so the table never feels crowded.
- */
-async function spawnTierWithRandomPool(entries, maxRandom, context) {
-    const always = [];
-    const pool = [];
-    for (const entry of entries) {
-        if (entry.randomPool) {
-            pool.push(entry);
-        } else {
-            always.push(entry);
-        }
-    }
-    shuffleArray(pool);
-    const selected = pool.slice(0, Math.max(0, maxRandom));
-    const combined = [...always, ...selected];
-    for (const entry of combined) {
-        await spawnProp(entry, context);
-    }
-}
+    const layoutManager = createLayoutManager({
+        scene,
+        physicsWorld,
+        scheduler: orchestrator.scheduler,
+        callbacks,
+        registerUpdate: registerUpdateFn
+    });
 
-export async function loadTiers(scene, camera, physicsWorld, orchestrator, callbacks) {
     const context = {
         scene,
         camera,
@@ -73,16 +57,32 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         callbacks,
         state: {},
         scheduler: orchestrator.scheduler,
-        registerUpdate: (name, update, priority = 0) => registerUpdate(orchestrator, name, update, priority),
-        createFloorAndWalls
+        registerUpdate: registerUpdateFn,
+        createFloorAndWalls,
+        layoutConfig,
+        layoutManager,
+        clutterOptions: {
+            count: layoutConfig.clutterCount,
+            seed: layoutConfig.seed,
+            theme: layoutConfig.theme
+        }
     };
 
     updateLoadingText('Initializing physics engine...');
     updateLoadingBar(10);
 
+    updateLoadingText('Loading optimized textures...');
+    updateLoadingBar(18);
+    if (renderer) {
+        await preloadSharedTextures(renderer);
+    }
+
     updateLoadingText('Building tavern environment...');
     updateLoadingBar(20);
     await spawnTier(TIER_PROP_DEFINITIONS.tier0, context);
+    if (context.state.clutterResult) {
+        layoutManager.setInitialClutter(context.state.clutterResult);
+    }
 
     updateLoadingText('Loading dice models...');
     updateLoadingBar(30);
@@ -103,6 +103,14 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         () => {
             throwDice(scene, physicsWorld);
             callbacks.onDiceRoll?.();
+        },
+        {
+            layoutConfig,
+            onRerollLayout: async (overrides) => {
+                const result = await layoutManager.rerollLayout(overrides);
+                return result;
+            },
+            onShareTable: () => layoutManager.getConfig()
         }
     );
     const crosshairUI = createCrosshair();
@@ -120,9 +128,16 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
 
     updateLoadingText('Adding tabletop items...');
     await yieldToMain();
-    const combinedDecorative = [...TIER_PROP_DEFINITIONS.tier2, ...TIER_PROP_DEFINITIONS.tier3];
-    await spawnTierWithRandomPool(combinedDecorative, MAX_RANDOM_PROPS, context);
+    const decorRecords = await spawnTierWithRandomPool(
+        DECORATIVE_TIER_ENTRIES,
+        layoutConfig.decorCount,
+        context,
+        { seed: layoutConfig.seed + 0xDEC0, theme: layoutConfig.theme }
+    );
+    layoutManager.setInitialDecor(decorRecords);
     updateLoadingBar(85);
+
+    persistTableLayoutConfig(layoutConfig);
 
     updateLoadingText('Finalizing...');
     updateLoadingBar(95);
@@ -144,6 +159,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         ui,
         crosshairUI,
         interaction,
+        layoutManager,
         lampData: context.state.lampData,
         gongResult: context.state.gongData,
         fireplaceLight: context.state.fireplaceLight

@@ -1,5 +1,8 @@
 import { registerInteractiveObject } from '../interaction.js';
 import { LAMP_HANG_Y, toCurrentTabletopY } from '../core/SceneMetrics.js';
+import { shuffleWithRng } from './clutter/ClutterPlacement.js';
+import { LAYOUT_THEMES } from '../core/TableLayoutConfig.js';
+import { disposePropSpawn } from './PropLifecycle.js';
 
 const environmentModules = import.meta.glob('./*.js', { eager: true });
 
@@ -45,7 +48,7 @@ export const SHADOW_DISABLED_PROP_NAMES = new Set([
     'Warhammer'
 ]);
 
-function resolveRootObject(result) {
+export function resolveRootObject(result) {
     if (!result) return null;
     if (result.isObject3D) return result;
     if (result.group?.isObject3D) return result.group;
@@ -83,10 +86,10 @@ export const TIER_PROP_DEFINITIONS = {
             }
         }),
         factoryEntry('Clutter', {
-            call: (ctx) => getPropFactory('Clutter')(ctx.scene, ctx.physicsWorld),
+            call: (ctx) => getPropFactory('Clutter')(ctx.scene, ctx.physicsWorld, ctx.clutterOptions ?? {}),
             afterCreate: (result, ctx) => {
+                ctx.state.clutterResult = result;
                 if (result?.flamePosition) ctx.callbacks.setCandleFlamePos?.(result.flamePosition);
-                if (result?.update) ctx.registerUpdate('clutter', result.update);
             }
         }),
         factoryEntry('TarotDeck', {
@@ -280,9 +283,65 @@ export const TIER_PROP_DEFINITIONS = {
     ]
 };
 
+export const DECORATIVE_TIER_ENTRIES = [...TIER_PROP_DEFINITIONS.tier2, ...TIER_PROP_DEFINITIONS.tier3];
+
+function getDecorThemeWeight(entry, themeId) {
+    const theme = LAYOUT_THEMES[themeId];
+    if (!theme) return 1;
+    const name = entry.factoryName || entry.name;
+    if (theme.favorDecor?.includes(name)) return 3;
+    if (theme.reduceDecor?.includes(name)) return 0.25;
+    return 1;
+}
+
+export function selectDecorPoolEntries(entries, maxRandom, { seed, theme = 'default' } = {}) {
+    const pool = entries.filter((entry) => entry.randomPool);
+    const rng = (() => {
+        let state = ((seed ?? 1) >>> 0) + 0x9E3779B9;
+        return () => {
+            state = (state + 0x6D2B79F5) >>> 0;
+            let t = Math.imul(state ^ (state >>> 15), 1 | state);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    })();
+
+    const weighted = pool.map((entry) => ({
+        entry,
+        sortKey: rng() / getDecorThemeWeight(entry, theme)
+    }));
+    weighted.sort((a, b) => a.sortKey - b.sortKey);
+    return weighted.slice(0, Math.max(0, maxRandom)).map((item) => item.entry);
+}
+
+export async function spawnTierWithRandomPool(entries, maxRandom, context, { seed, theme } = {}) {
+    const always = entries.filter((entry) => !entry.randomPool);
+    const selected = selectDecorPoolEntries(entries, maxRandom, { seed: seed ?? context.layoutConfig?.seed, theme: theme ?? context.layoutConfig?.theme });
+    const records = [];
+
+    for (const entry of always) {
+        await spawnProp(entry, context);
+    }
+
+    for (const entry of selected) {
+        const record = await spawnProp(entry, context);
+        records.push(record);
+    }
+
+    return records;
+}
+
 export async function spawnProp(entry, context) {
     const factoryName = entry.factoryName || entry.name;
     let result;
+    let updateHandle = null;
+    const previousRegisterUpdate = context.registerUpdate;
+
+    context.registerUpdate = (name, update, priority = 0) => {
+        if (!update) return null;
+        updateHandle = previousRegisterUpdate(name, update, priority);
+        return updateHandle;
+    };
 
     if (entry.call) {
         result = await entry.call(context);
@@ -301,9 +360,15 @@ export async function spawnProp(entry, context) {
         entry.afterCreate(result, context);
     }
 
+    context.registerUpdate = previousRegisterUpdate;
+
     if (entry.shadow === 'off' || SHADOW_DISABLED_PROP_NAMES.has(factoryName)) {
         applyShadowPolicyToResult(result, false);
     }
 
-    return result;
+    return { entry, result, updateHandle };
+}
+
+export function despawnProp(record, context) {
+    disposePropSpawn(record, context.physicsWorld);
 }

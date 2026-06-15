@@ -71,6 +71,11 @@ export const registerInteractiveObject = (mesh, callback) => {
     interactiveObjects.push({ mesh, callback });
 };
 
+export const unregisterInteractiveObject = (mesh) => {
+    const index = interactiveObjects.findIndex((entry) => entry.mesh === mesh);
+    if (index >= 0) interactiveObjects.splice(index, 1);
+};
+
 function onPointerDown(x, y, camera, scene, physicsWorld, hooks = {}) {
     updateMouse(x, y);
     

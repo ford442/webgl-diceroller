@@ -72,6 +72,12 @@ npm run dev
 # Build the custom WASM physics module (requires Emscripten)
 npm run build:wasm
 
+# Convert dice Collada sources to Draco GLB (requires Playwright)
+npm run convert:dice
+
+# Convert prop meshes (lamp OBJ) + shared JPG textures to Draco GLB / KTX2
+npm run convert:props
+
 # Build for production (outputs to dist/)
 npm run build
 
@@ -205,12 +211,27 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 ### Textures
 - PBR workflow: diffuse, roughness, normal, AO, bump maps.
-- Table uses `table_diff.jpg`, `table_rough.jpg`, `table_nor.jpg`, `table_ao.jpg`.
-- Wood props share `wood_diffuse.jpg`, `wood_roughness.jpg`, `wood_bump.jpg`.
-- Brick walls use `brick_diffuse.jpg`, `brick_bump.jpg`, `brick_roughness.jpg`.
-- Lamp is an external OBJ model with a dedicated texture set in `public/images/lamp/`.
+- **Runtime loader**: `src/core/TexturePipeline.js` preloads shared sets via `KTX2Loader` (Basis transcoder in `public/basis/`) with automatic JPG fallback when a `.ktx2` sibling is missing.
+- **Conversion**: `npm run convert:props` runs `scripts/convert-textures-to-ktx2.mjs`, encoding JPGs with the `basisu` CLI (`-ktx2`, `-linear` for normal/roughness/bump/AO). Original JPGs remain in `public/images/` for fallback.
+- Table uses `table_diff.jpg` / `table_diff.ktx2`, `table_rough`, `table_nor`, `table_ao`.
+- Wood props share `wood_diffuse`, `wood_roughness`, `wood_bump`.
+- Brick walls use `brick_diffuse`, `brick_bump`, `brick_roughness`.
+- Lamp textures live in `public/images/lamp/` (JPG + KTX2).
 - All textures use `RepeatWrapping` with appropriate repeat counts.
 - `colorSpace` is explicitly set: `SRGBColorSpace` for diffuse/albedo, `NoColorSpace` for normal/roughness/ao/bump data textures.
+
+### Prop Meshes (environment)
+- **External mesh sources** are listed in `scripts/prop-asset-manifest.mjs`. Currently only the billiard lamp OBJ (`public/images/lamp/…`) ships as an external file; ~80 other environment props use inline `BufferGeometry` (procedural) and are documented in the manifest but not exported by the conversion pipeline.
+- **Conversion**: `npm run convert:props` runs `scripts/convert-props-to-glb.mjs` (Playwright + `OBJLoader` → `GLTFExporter` → `@gltf-transform` dedup/weld/prune/quantize + Draco), outputting `public/images/props/billiard_lamp.glb` (~344 KB vs ~8.9 MB OBJ).
+- **Runtime loader**: `src/core/PropAssetLoader.js` (`GLTFLoader` + `DRACOLoader`, OBJ fallback). `Lamp.js` uses the visual-wrapper group pattern — never mutate loaded geometry scale directly.
+- **Audit report**: `scripts/prop-asset-audit.json` records before/after byte sizes (re-generated each `convert:props` run).
+- Re-run `npm run convert:props` after editing lamp OBJ or shared JPG textures.
+
+### Finish Asset Optimization Pipeline
+- Dice: ✅ Draco GLB (`npm run convert:dice`).
+- Shared PBR textures: ✅ KTX2 via `basisu` + JPG fallback (`TexturePipeline.js`).
+- External prop mesh (lamp): ✅ Draco GLB + loader migration (`PropAssetLoader.js`).
+- Procedural props: remain inline geometry; export to GLB would require artist `.blend` sources or a geometry-exporter pass (not in repo today).
 
 ## Development Conventions
 

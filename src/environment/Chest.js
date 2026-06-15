@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { getWoodTextures } from '../core/TexturePipeline.js';
 
 /**
  * Enhanced Chest with:
@@ -20,20 +21,9 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
 
     // ========== ENHANCED MATERIALS ==========
     
-    const loader = new THREE.TextureLoader();
-    
-    // Load wood textures with error handling
     let woodDiffuse, woodBump, woodRoughness;
     try {
-        woodDiffuse = loader.load('./images/wood_diffuse.jpg');
-        woodBump = loader.load('./images/wood_bump.jpg');
-        woodRoughness = loader.load('./images/wood_roughness.jpg');
-
-        [woodDiffuse, woodBump, woodRoughness].forEach(t => {
-            t.wrapS = THREE.RepeatWrapping;
-            t.wrapT = THREE.RepeatWrapping;
-            t.colorSpace = (t === woodDiffuse) ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-        });
+        ({ diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } = getWoodTextures());
     } catch (e) {
         console.warn('Could not load wood textures, using procedural fallback');
     }

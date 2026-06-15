@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { loadPropMesh } from '../core/PropAssetLoader.js';
+import { getLampTextures } from '../core/TexturePipeline.js';
 
 // Light Effect Modes
 export const LampMode = {
@@ -51,15 +52,13 @@ const MODE_COLORS = {
  * This guarantees the visual transform is isolated and predictable.
  */
 export async function createLamp() {
-    const loader = new OBJLoader();
-    const textureLoader = new THREE.TextureLoader();
-
-    // 1. Load Textures (diffuse + bump for glass)
-    const texCopper = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_cooper.jpg');
-    const texGlass = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_glass.jpg');
-    const texGlassBump = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_glass_bump.jpg');
-    const texSteel = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_steel.jpg');
-    const texWood = textureLoader.load('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_wood.jpg');
+    const {
+        copper: texCopper,
+        glass: texGlass,
+        glassBump: texGlassBump,
+        steel: texSteel,
+        wood: texWood,
+    } = getLampTextures();
 
     // Materials - assigned by mesh name
     const matCopper = new THREE.MeshStandardMaterial({
@@ -99,9 +98,12 @@ export async function createLamp() {
 
     let object;
     try {
-        object = await loader.loadAsync('./images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj');
+        object = await loadPropMesh(
+            './images/props/billiard_lamp.glb',
+            { fallbackObjUrl: './images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj' }
+        );
     } catch (e) {
-        console.error("Failed to load lamp OBJ:", e);
+        console.error("Failed to load lamp model:", e);
         // Return a safe stub so the rest of the app doesn't crash
         return {
             group: lampGroup,

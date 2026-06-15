@@ -16,6 +16,7 @@ import {
 } from './wasm/WasmPhysicsBridge.js';
 import { TABLE_SURFACE_Y } from './core/SceneMetrics.js';
 const searchParams = new URLSearchParams(window.location.search);
+const WASM_TRANSFORM_STRIDE = 7;
 
 // ---------------------------------------------------------------------------
 // Face-detection helpers
@@ -113,6 +114,54 @@ function _getFaceNormalForValue(faceNormals, faceValues, targetValue) {
 // Reusable objects for readDiceValue() — avoids per-call heap allocations
 const _invQ    = new THREE.Quaternion();
 const _localUp = new THREE.Vector3();
+const _readQ   = new THREE.Quaternion();
+
+function getWasmTransformForDie(wasmId) {
+    const engine = getWasmEngine();
+    if (typeof engine.getDieIds !== 'function') return null;
+
+    const transforms = engine.getTransforms();
+    const ids = engine.getDieIds();
+    if (!transforms?.length || !ids?.length) return null;
+
+    for (let i = 0; i < ids.length; i++) {
+        if (Math.round(ids[i]) !== wasmId) continue;
+        const offset = i * WASM_TRANSFORM_STRIDE;
+        if (offset + (WASM_TRANSFORM_STRIDE - 1) >= transforms.length) return null;
+        return {
+            x: transforms[offset + 0],
+            y: transforms[offset + 1],
+            z: transforms[offset + 2],
+            qx: transforms[offset + 3],
+            qy: transforms[offset + 4],
+            qz: transforms[offset + 5],
+            qw: transforms[offset + 6]
+        };
+    }
+
+    return null;
+}
+
+function getDieQuaternion(die) {
+    if (die?.mesh?.userData?.physicsAuthority === 'ammo' && die.body) {
+        const transform = getAmmoTransform(die);
+        if (transform) {
+            const rotation = transform.getRotation();
+            _readQ.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
+            return _readQ;
+        }
+    }
+
+    if (isUsingWasmPhysics() && die?.wasmId != null) {
+        const wasmTransform = getWasmTransformForDie(die.wasmId);
+        if (wasmTransform) {
+            _readQ.set(wasmTransform.qx, wasmTransform.qy, wasmTransform.qz, wasmTransform.qw);
+            return _readQ;
+        }
+    }
+
+    return die.mesh.quaternion;
+}
 
 /**
  * Read the face-up value for a settled die.
@@ -126,8 +175,10 @@ export const readDiceValue = (die) => {
     const faceValues  = model.userData.faceValues;
     if (!faceNormals || !faceNormals.length || !faceValues) return null;
 
+    const dieQuaternion = getDieQuaternion(die);
+
     // Transform world UP into the die's local space via inverse quaternion
-    _invQ.copy(die.mesh.quaternion).invert();
+    _invQ.copy(dieQuaternion).invert();
     _localUp.set(0, 1, 0).applyQuaternion(_invQ);
 
     // The face whose local normal is most aligned with local-up is facing up
@@ -144,12 +195,17 @@ export const readDiceValue = (die) => {
 export const areDiceSettled = () => {
     if (spawnedDice.length === 0) return true;
 
-    if (isWasmAvailable()) {
-        return getWasmEngine().areAllSettled();
+    const wasmDice = spawnedDice.filter(
+        (die) => die.wasmId != null && die.mesh.userData.physicsAuthority !== 'ammo'
+    );
+
+    if (isUsingWasmPhysics() && wasmDice.length > 0) {
+        if (!getWasmEngine().areAllSettled()) return false;
     }
 
     let allStable = true;
     spawnedDice.forEach((die) => {
+        if (die.mesh.userData.physicsAuthority === 'wasm' && die.wasmId != null) return;
         if (!die.body) return;
         const linear = die.body.getLinearVelocity();
         const angular = die.body.getAngularVelocity();
@@ -170,7 +226,6 @@ loader.setDRACOLoader(dracoLoader);
 
 let diceModels = {};
 export let spawnedDice = [];
-const WASM_TRANSFORM_STRIDE = 7;
 let nextAudioBodyId = 1;
 const DEFAULT_MASS_BIAS_RATIO = 0.0075; // ~0.75% of die height, within the 0.5-1% range
 
@@ -584,8 +639,11 @@ let _sharedTransform = null;
 export const updateDiceVisuals = () => {
     if (isUsingWasmPhysics()) {
         const transforms = getWasmEngine().getTransforms();
+        const ids = typeof getWasmEngine().getDieIds === 'function'
+            ? getWasmEngine().getDieIds()
+            : null;
 
-        spawnedDice.forEach((die, index) => {
+        spawnedDice.forEach((die) => {
             if (die.mesh.userData.physicsAuthority === 'ammo') {
                 const transform = getAmmoTransform(die);
                 if (!transform) return;
@@ -598,8 +656,21 @@ export const updateDiceVisuals = () => {
                 return;
             }
 
-            const offset = index * WASM_TRANSFORM_STRIDE;
-            if (offset + (WASM_TRANSFORM_STRIDE - 1) >= transforms.length) return;
+            if (die.wasmId == null) return;
+
+            let offset = -1;
+            if (ids?.length) {
+                for (let i = 0; i < ids.length; i++) {
+                    if (Math.round(ids[i]) === die.wasmId) {
+                        offset = i * WASM_TRANSFORM_STRIDE;
+                        break;
+                    }
+                }
+            } else {
+                offset = spawnedDice.indexOf(die) * WASM_TRANSFORM_STRIDE;
+            }
+
+            if (offset < 0 || offset + (WASM_TRANSFORM_STRIDE - 1) >= transforms.length) return;
 
             die.mesh.position.set(
                 transforms[offset + 0],

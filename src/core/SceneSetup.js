@@ -7,6 +7,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { VignetteShader } from '../shaders/VignetteShader.js';
 import { TavernEnvironment } from '../environment/TavernEnvironment.js';
 import { createRenderer } from './RendererFactory.js';
+import { preloadSharedTextures } from './TexturePipeline.js';
 import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z } from './SceneMetrics.js';
 
 async function createWebGpuPostPipeline(renderer, scene, camera, { width, height, postConfig }) {
@@ -221,6 +222,7 @@ export async function setupScene(container) {
     // Environment Map
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
+    await preloadSharedTextures(renderer);
     const tavernEnvironment = new TavernEnvironment();
     await tavernEnvironment.load();
     scene.environment = pmremGenerator.fromScene(tavernEnvironment).texture;

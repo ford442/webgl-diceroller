@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../../physics.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
+import { resolvePlacement } from './ClutterPlacement.js';
 
 const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
+const randomUnit = (options) => (options?.rng ?? Math.random)();
 
 function generateCharacterSheetTexture() {
     const canvas = document.createElement('canvas');
@@ -55,7 +57,7 @@ function generateCharacterSheetTexture() {
     return texture;
 }
 
-export function createParchment(scene, physicsWorld) {
+export function createParchment(scene, physicsWorld, options = {}) {
     const ammo = getAmmo();
     const width = 5;
     const depth = 7;
@@ -73,9 +75,11 @@ export function createParchment(scene, physicsWorld) {
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.receiveShadow = true;
-    mesh.position.set(4, tabletopY(-2.74), -3);
-    mesh.rotation.y = -0.3;
+    const placement = resolvePlacement(options, { x: 4, z: -3 });
+    mesh.position.set(placement.x, tabletopY(-2.74), placement.z);
+    mesh.rotation.y = options.placement ? placement.rotationY : -0.3;
     scene.add(mesh);
+    options.track?.(mesh);
 
     const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, depth / 2));
     createStaticBody(physicsWorld, mesh, shape);
@@ -122,7 +126,7 @@ function generateTarotTexture(name, number, color) {
     return texture;
 }
 
-export function createTarotCards(scene, physicsWorld) {
+export function createTarotCards(scene, physicsWorld, options = {}) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'TarotCards';
@@ -139,8 +143,9 @@ export function createTarotCards(scene, physicsWorld) {
         { name: 'THE TOWER', number: 'XVI', color: '#8b0000' }
     ];
 
-    const baseX = -7;
-    const baseZ = 6;
+    const placement = resolvePlacement(options, { x: -7, z: 6 });
+    const baseX = placement.x;
+    const baseZ = placement.z;
 
     cards.forEach((card, i) => {
         const texture = generateTarotTexture(card.name, card.number, card.color);
@@ -154,18 +159,19 @@ export function createTarotCards(scene, physicsWorld) {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
 
-        const x = baseX + (i * 1.5) + (Math.random() - 0.5) * 0.5;
-        const z = baseZ + (Math.random() - 0.5) * 0.5;
+        const x = baseX + (i * 1.5) + (randomUnit(options) - 0.5) * 0.5;
+        const z = baseZ + (randomUnit(options) - 0.5) * 0.5;
         const y = tabletopY(-2.745) + (i * 0.002);
 
         mesh.position.set(x, y, z);
-        mesh.rotation.y = (Math.random() - 0.5) * 0.5;
+        mesh.rotation.y = (randomUnit(options) - 0.5) * 0.5;
 
         group.add(mesh);
         createStaticBody(physicsWorld, mesh, new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, height / 2)));
     });
 
     scene.add(group);
+    options.track?.(group);
 }
 
 function generateWantedPosterTexture() {
@@ -214,7 +220,7 @@ function generateWantedPosterTexture() {
     return texture;
 }
 
-export function createWantedPoster(scene, physicsWorld) {
+export function createWantedPoster(scene, physicsWorld, options = {}) {
     const ammo = getAmmo();
     const width = 2.5;
     const height = 3.5;
@@ -233,9 +239,11 @@ export function createWantedPoster(scene, physicsWorld) {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.receiveShadow = true;
     mesh.castShadow = true;
-    mesh.position.set(0, tabletopY(-2.74), -2);
-    mesh.rotation.y = 0.1;
+    const placement = resolvePlacement(options, { x: 0, z: -2 });
+    mesh.position.set(placement.x, tabletopY(-2.74), placement.z);
+    mesh.rotation.y = options.placement ? placement.rotationY : 0.1;
     scene.add(mesh);
+    options.track?.(mesh);
 
     const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, height / 2));
     createStaticBody(physicsWorld, mesh, shape);
@@ -283,7 +291,7 @@ function generateDMChartsTexture() {
     return texture;
 }
 
-export function createDMScreen(scene, physicsWorld) {
+export function createDMScreen(scene, physicsWorld, options = {}) {
     const ammo = getAmmo();
     const centerWidth = 8;
     const wingWidth = 4;
@@ -319,6 +327,7 @@ export function createDMScreen(scene, physicsWorld) {
     centerMesh.castShadow = true;
     centerMesh.receiveShadow = true;
     scene.add(centerMesh);
+    options.track?.(centerMesh);
 
     const centerShape = new ammo.btBoxShape(new ammo.btVector3(centerWidth / 2, height / 2, thickness / 2));
     createStaticBody(physicsWorld, centerMesh, centerShape);
@@ -331,6 +340,7 @@ export function createDMScreen(scene, physicsWorld) {
     const lz = screenZ + (wingWidth / 2) * Math.sin(angleRad);
     leftWingMesh.position.set(lx, screenY, lz);
     scene.add(leftWingMesh);
+    options.track?.(leftWingMesh);
 
     const leftShape = new ammo.btBoxShape(new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2));
     createStaticBody(physicsWorld, leftWingMesh, leftShape);
@@ -341,6 +351,7 @@ export function createDMScreen(scene, physicsWorld) {
     const rz = screenZ + (wingWidth / 2) * Math.sin(angleRad);
     rightWingMesh.position.set(rx, screenY, rz);
     scene.add(rightWingMesh);
+    options.track?.(rightWingMesh);
 
     const rightShape = new ammo.btBoxShape(new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2));
     createStaticBody(physicsWorld, rightWingMesh, rightShape);

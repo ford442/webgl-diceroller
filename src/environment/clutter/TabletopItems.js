@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../../physics.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
+import { resolvePlacement } from './ClutterPlacement.js';
 
 const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
+const randomUnit = (options) => (options?.rng ?? Math.random)();
 
-export function createMug(scene, physicsWorld) {
+export function createMug(scene, physicsWorld, options = {}) {
     const ammo = getAmmo();
     const mugGroup = new THREE.Group();
 
@@ -40,15 +42,17 @@ export function createMug(scene, physicsWorld) {
     innerMesh.position.y = 0.05;
     mugGroup.add(innerMesh);
 
-    mugGroup.position.set(5, tabletopY(-2.25), 5);
-    mugGroup.rotation.y = Math.random() * Math.PI * 2;
+    const placement = resolvePlacement(options, { x: 5, z: 5 });
+    mugGroup.position.set(placement.x, tabletopY(-2.25), placement.z);
+    mugGroup.rotation.y = placement.rotationY;
     scene.add(mugGroup);
+    options.track?.(mugGroup);
 
     const shape = new ammo.btCylinderShape(new ammo.btVector3(0.5, 0.5, 0.5));
     createStaticBody(physicsWorld, mugGroup, shape);
 }
 
-export function createCoins(scene, physicsWorld) {
+export function createCoins(scene, physicsWorld, options = {}) {
     const ammo = getAmmo();
     const radius = 0.3;
     const thickness = 0.05;
@@ -77,18 +81,19 @@ export function createCoins(scene, physicsWorld) {
 
     const materials = [goldMaterial, silverMaterial, copperMaterial];
     const count = 15;
-    const centerX = -4;
-    const centerZ = 3;
+    const placement = resolvePlacement(options, { x: -4, z: 3 });
+    const centerX = placement.x;
+    const centerZ = placement.z;
     const baseY = tabletopY(-2.75);
 
     for (let i = 0; i < count; i++) {
-        const material = materials[Math.floor(Math.random() * materials.length)];
+        const material = materials[Math.floor(randomUnit(options) * materials.length)];
         const mesh = new THREE.Mesh(geometry, material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
 
-        const angle = Math.random() * Math.PI * 2;
-        const dist = Math.random() * 1.5;
+        const angle = randomUnit(options) * Math.PI * 2;
+        const dist = randomUnit(options) * 1.5;
         const x = centerX + Math.cos(angle) * dist;
         const z = centerZ + Math.sin(angle) * dist;
 
@@ -97,22 +102,23 @@ export function createCoins(scene, physicsWorld) {
         if (i > 10) y += thickness;
 
         mesh.position.set(x, y, z);
-        mesh.rotation.y = Math.random() * Math.PI * 2;
+        mesh.rotation.y = randomUnit(options) * Math.PI * 2;
 
-        if (Math.random() > 0.8) {
-            mesh.rotation.x = (Math.random() - 0.5) * 0.5;
-            mesh.rotation.z = (Math.random() - 0.5) * 0.5;
+        if (randomUnit(options) > 0.8) {
+            mesh.rotation.x = (randomUnit(options) - 0.5) * 0.5;
+            mesh.rotation.z = (randomUnit(options) - 0.5) * 0.5;
             mesh.position.y += 0.05;
         }
 
         scene.add(mesh);
+        options.track?.(mesh);
 
         const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, thickness / 2, radius));
         createStaticBody(physicsWorld, mesh, shape);
     }
 }
 
-export function createBook(scene, physicsWorld) {
+export function createBook(scene, physicsWorld, options = {}) {
     const ammo = getAmmo();
     const width = 3;
     const height = 0.5;
@@ -129,15 +135,17 @@ export function createBook(scene, physicsWorld) {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    mesh.position.set(-6, tabletopY(-2.5), -6);
-    mesh.rotation.y = 0.2;
+    const placement = resolvePlacement(options, { x: -6, z: -6 });
+    mesh.position.set(placement.x, tabletopY(-2.5), placement.z);
+    mesh.rotation.y = options.placement ? placement.rotationY : 0.2;
     scene.add(mesh);
+    options.track?.(mesh);
 
     const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
     createStaticBody(physicsWorld, mesh, shape);
 }
 
-export function createMiniature(scene, physicsWorld) {
+export function createMiniature(scene, physicsWorld, options = {}) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'MiniaturePawn';
@@ -178,20 +186,22 @@ export function createMiniature(scene, physicsWorld) {
 
     const totalHeight = baseHeight + bodyHeight + headRadius * 2;
 
-    group.position.set(-2, tabletopY(-2.75) + totalHeight / 2, 2);
-    group.rotation.y = Math.random() * Math.PI * 2;
+    const placement = resolvePlacement(options, { x: -2, z: 2 });
+    group.position.set(placement.x, tabletopY(-2.75) + totalHeight / 2, placement.z);
+    group.rotation.y = placement.rotationY;
 
     baseMesh.position.y -= totalHeight / 2;
     bodyMesh.position.y -= totalHeight / 2;
     headMesh.position.y -= totalHeight / 2;
 
     scene.add(group);
+    options.track?.(group);
 
     const shape = new ammo.btCylinderShape(new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius));
     createStaticBody(physicsWorld, group, shape);
 }
 
-export function createD20Holder(scene, physicsWorld) {
+export function createD20Holder(scene, physicsWorld, options = {}) {
     const ammo = getAmmo();
     const holderGroup = new THREE.Group();
 
@@ -217,14 +227,17 @@ export function createD20Holder(scene, physicsWorld) {
     indMesh.position.y = height / 2 + 0.001;
     holderGroup.add(indMesh);
 
-    holderGroup.position.set(-2, tabletopY(-2.55), -4);
+    const placement = resolvePlacement(options, { x: -2, z: -4 });
+    holderGroup.position.set(placement.x, tabletopY(-2.55), placement.z);
+    holderGroup.rotation.y = placement.rotationY;
     scene.add(holderGroup);
+    options.track?.(holderGroup);
 
     const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
     createStaticBody(physicsWorld, holderGroup, shape);
 }
 
-export function createGemstone(scene, physicsWorld) {
+export function createGemstone(scene, physicsWorld, options = {}) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'RubyGem';
@@ -251,15 +264,18 @@ export function createGemstone(scene, physicsWorld) {
     mesh.receiveShadow = true;
     group.add(mesh);
 
-    group.position.set(-5, tabletopY(-2.25), 0);
-    group.rotation.set(Math.random(), Math.random(), Math.random());
+    const placement = resolvePlacement(options, { x: -5, z: 0 });
+    group.position.set(placement.x, tabletopY(-2.25), placement.z);
+    const rng = options.rng ?? Math.random;
+    group.rotation.set(rng(), rng(), rng());
     scene.add(group);
+    options.track?.(group);
 
     const shape = new ammo.btSphereShape(radius * 0.8);
     createStaticBody(physicsWorld, group, shape);
 }
 
-export function createPotionBottle(scene, physicsWorld) {
+export function createPotionBottle(scene, physicsWorld, options = {}) {
     const ammo = getAmmo();
     const bottleGroup = new THREE.Group();
     bottleGroup.name = 'PotionBottle';
@@ -323,15 +339,17 @@ export function createPotionBottle(scene, physicsWorld) {
     corkMesh.position.y = 0.85;
     bottleMesh.add(corkMesh);
 
-    bottleGroup.position.set(6, tabletopY(-2.15), -2);
-    bottleGroup.rotation.y = Math.random() * Math.PI * 2;
+    const placement = resolvePlacement(options, { x: 6, z: -2 });
+    bottleGroup.position.set(placement.x, tabletopY(-2.15), placement.z);
+    bottleGroup.rotation.y = placement.rotationY;
     scene.add(bottleGroup);
+    options.track?.(bottleGroup);
 
     const shape = new ammo.btCylinderShape(new ammo.btVector3(0.6, 0.8, 0.6));
     createStaticBody(physicsWorld, bottleGroup, shape);
 }
 
-export function createPencil(scene, physicsWorld) {
+export function createPencil(scene, physicsWorld, options = {}) {
     const ammo = getAmmo();
     const pencilGroup = new THREE.Group();
 
@@ -403,10 +421,12 @@ export function createPencil(scene, physicsWorld) {
     leadMesh.position.y = -(bodyLen / 2 + tipLen + leadLen / 2);
     pencilGroup.add(leadMesh);
 
-    pencilGroup.position.set(0, tabletopY(-2.71), 4.5);
-    pencilGroup.rotation.set(0, Math.random() * Math.PI * 2, Math.PI / 2, 'YXZ');
+    const placement = resolvePlacement(options, { x: 0, z: 4.5 });
+    pencilGroup.position.set(placement.x, tabletopY(-2.71), placement.z);
+    pencilGroup.rotation.set(0, placement.rotationY, Math.PI / 2, 'YXZ');
 
     scene.add(pencilGroup);
+    options.track?.(pencilGroup);
 
     const totalLen = bodyLen + ferruleLen + eraserLen + tipLen + leadLen;
     const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, totalLen / 2, radius));

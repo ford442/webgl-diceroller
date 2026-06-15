@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { getWoodTextures } from '../core/TexturePipeline.js';
 
 /**
  * Creates a Wooden Dice Tray with a velvet interior and physics colliders
@@ -18,21 +19,7 @@ export function createDiceTray(scene, physicsWorld, position = { x: -4, y: -2.75
 
     const Ammo = getAmmo();
 
-    // Textures
-    const textureLoader = new THREE.TextureLoader();
-
-    // Wood Textures (Outer frame)
-    const woodDiffuse = textureLoader.load('./images/wood_diffuse.jpg');
-    const woodRoughness = textureLoader.load('./images/wood_roughness.jpg');
-    const woodBump = textureLoader.load('./images/wood_bump.jpg');
-
-    [woodDiffuse, woodRoughness, woodBump].forEach(texture => {
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-    });
-    woodDiffuse.colorSpace = THREE.SRGBColorSpace;
-    woodRoughness.colorSpace = THREE.NoColorSpace;
-    woodBump.colorSpace = THREE.NoColorSpace;
+    const { diffuse: woodDiffuse, roughness: woodRoughness, bump: woodBump } = getWoodTextures();
 
     // Wood Material
     const woodMaterial = new THREE.MeshStandardMaterial({

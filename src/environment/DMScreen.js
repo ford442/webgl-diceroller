@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getAmmo } from '../physics.js';
+import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createDMScreen(scene, physicsWorld, position = { x: 0, y: -2.75, z: -7 }, rotationY = 0) {
     const ammo = getAmmo();
@@ -10,19 +11,10 @@ export function createDMScreen(scene, physicsWorld, position = { x: 0, y: -2.75,
     group.position.set(position.x, position.y, position.z);
     group.rotation.y = rotationY;
 
-    // Load Wood Textures
-    const textureLoader = new THREE.TextureLoader();
-    const woodDiffuse = textureLoader.load('./images/wood_diffuse.jpg');
-    const woodBump = textureLoader.load('./images/wood_bump.jpg');
-    const woodRoughness = textureLoader.load('./images/wood_roughness.jpg');
-
-    [woodDiffuse, woodBump, woodRoughness].forEach(texture => {
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(1, 1);
-    });
-
-    woodDiffuse.colorSpace = THREE.SRGBColorSpace;
+    const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } = getWoodTextures();
+    woodDiffuse.repeat.set(1, 1);
+    woodBump.repeat.set(1, 1);
+    woodRoughness.repeat.set(1, 1);
     woodBump.colorSpace = THREE.NoColorSpace;
     woodRoughness.colorSpace = THREE.NoColorSpace;
 

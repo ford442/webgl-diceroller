@@ -11,6 +11,7 @@ import {
 	SRGBColorSpace,
 	Scene,
 } from 'three';
+import { getBrickTextures } from '../core/TexturePipeline.js';
 
 /**
  * TavernEnvironment
@@ -33,20 +34,10 @@ class TavernEnvironment extends Scene {
 		// We DO NOT delete UVs because we need them for textures!
 		// geometry.deleteAttribute( 'uv' );
 
-		const loader = new THREE.TextureLoader();
-
-		// Load Textures asynchronously
-		const [brickDiffuse, brickBump, brickRoughness] = await Promise.all([
-			loader.loadAsync('./images/brick_diffuse.jpg'),
-			loader.loadAsync('./images/brick_bump.jpg'),
-			loader.loadAsync('./images/brick_roughness.jpg')
-		]);
-
-		[brickDiffuse, brickBump, brickRoughness].forEach(t => {
-			t.wrapS = THREE.RepeatWrapping;
-			t.wrapT = THREE.RepeatWrapping;
-			t.repeat.set(4, 3);
-		});
+		const { diffuse: brickDiffuse, bump: brickBump, roughness: brickRoughness } = getBrickTextures();
+		brickDiffuse.repeat.set(4, 3);
+		brickBump.repeat.set(4, 3);
+		brickRoughness.repeat.set(4, 3);
 
 		brickDiffuse.colorSpace = SRGBColorSpace;
 		brickBump.colorSpace = THREE.NoColorSpace;

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createLute(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }, rotationY = 0) {
     const luteGroup = new THREE.Group();
@@ -7,17 +8,7 @@ export function createLute(scene, physicsWorld, position = { x: 0, y: 0, z: 0 },
 
     const ammo = getAmmo();
 
-    // Texture Loading
-    const textureLoader = new THREE.TextureLoader();
-    const woodDiffuse = textureLoader.load('./images/wood_diffuse.jpg');
-    const woodBump = textureLoader.load('./images/wood_bump.jpg');
-    const woodRoughness = textureLoader.load('./images/wood_roughness.jpg');
-
-    [woodDiffuse, woodBump, woodRoughness].forEach(t => {
-        t.wrapS = THREE.RepeatWrapping;
-        t.wrapT = THREE.RepeatWrapping;
-        t.colorSpace = (t === woodDiffuse) ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-    });
+    const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } = getWoodTextures();
 
     const woodMaterial = new THREE.MeshStandardMaterial({
         map: woodDiffuse,

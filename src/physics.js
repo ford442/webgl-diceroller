@@ -452,6 +452,7 @@ export const createStaticBody = (world, mesh, shape) => {
     const body = new AmmoInstance.btRigidBody(rbInfo);
 
     world.addRigidBody(body);
+    mesh.userData.physicsBody = body;
 
     // Free temporary Ammo.js heap objects (body copies the data it needs)
     AmmoInstance.destroy(rbInfo);

@@ -18,18 +18,24 @@ The following dice types are required and have been partially implemented in the
 *   **Throwing Mechanics:** Implement a user-input driven throwing mechanism (drag and release vector) rather than the current static drop.
 *   **Materials & Visuals:** Improve the visual fidelity using PBR materials (roughness, metalness) instead of basic standard materials, potentially leveraging the texture maps embedded in the original DAEs more effectively.
 
-## 2. Asset Optimization Pipeline ✅ (dice done)
+## 2. Asset Optimization Pipeline ✅ (dice + props)
 
-The legacy Collada (`.dae`) dice assets have been converted to Draco-compressed glTF/GLB.
+The legacy Collada (`.dae`) dice assets and the external prop mesh / shared PBR textures have been converted to optimized binary formats.
 
-### Conversion Strategy:
+### Dice (done)
 1.  **Automated Conversion Script:** ✅ `scripts/convert-dice-to-glb.mjs` (`npm run convert:dice`) batch-converts the `.dae` sources (now in `raw_models/dae/`) to `.glb`. It drives headless Chromium (Playwright) for `ColladaLoader`→`GLTFExporter`, then post-processes with `@gltf-transform` (dedup/weld/prune/quantize). (Blender CLI was unavailable in the build env, so the browser loaders were used directly.)
 2.  **Draco Compression:** ✅ `KHR_draco_mesh_compression` applied to all six dice. Total payload ~243 KB (~227 KB gzipped), down from ~4 MB of `.dae` XML.
 3.  **Loader Update:** ✅ `src/dice.js` now uses `GLTFLoader` + `DRACOLoader` (decoder self-hosted in `public/draco/`).
 
-### Remaining:
-- Convert the 80+ environment props (`raw_models/*.blend`, OBJ lamp) to GLB/Draco the same way.
-- KTX2 + Basis texture compression for the shared PBR texture sets.
+### Props & textures (done)
+1.  **Orchestrator:** ✅ `npm run convert:props` → copies Basis transcoder to `public/basis/`, converts shared JPGs to KTX2 (`basisu -ktx2`), converts lamp OBJ to Draco GLB, writes `scripts/prop-asset-audit.json`.
+2.  **Texture runtime:** ✅ `src/core/TexturePipeline.js` — `KTX2Loader` with JPG fallback; preloaded in `SceneSetup.js` before PMREM / tier loading.
+3.  **Prop mesh runtime:** ✅ `src/core/PropAssetLoader.js` — Draco GLB with OBJ fallback; `Lamp.js` migrated.
+4.  **Procedural props:** ~80 environment modules still use inline `BufferGeometry` (no `.blend` sources in repo). Listed in `scripts/prop-asset-manifest.mjs` but not batch-exported.
+
+### Measured savings (`convert:props` audit)
+- Shared textures: ~8.7 MB JPG → ~1.4 MB KTX2 (~84% smaller).
+- Lamp mesh: ~8.9 MB OBJ → ~344 KB Draco GLB (~96% smaller).
 
 ## 3. WebGPU & WGSL Optimizations
 

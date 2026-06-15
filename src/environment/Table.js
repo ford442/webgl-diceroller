@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getWoodTextures, getTableTextures } from '../core/TexturePipeline.js';
 import { ROOM_FLOOR_Y, TABLE_CENTER_Y } from '../core/SceneMetrics.js';
 
 export function createTable(scene) {
@@ -22,38 +23,16 @@ export function createTable(scene) {
     // Position (World)
     const position = { x: 0, y: TABLE_CENTER_Y, z: 0 };
 
-    // Texture Loader
-    const textureLoader = new THREE.TextureLoader();
-
     // Wood Textures (Rims & Legs)
-    const woodDiffuse = textureLoader.load('./images/wood_diffuse.jpg');
-    const woodRoughness = textureLoader.load('./images/wood_roughness.jpg');
-    const woodBump = textureLoader.load('./images/wood_bump.jpg');
-
-    [woodDiffuse, woodRoughness, woodBump].forEach(texture => {
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.colorSpace = THREE.SRGBColorSpace;
-    });
-    woodRoughness.colorSpace = THREE.NoColorSpace;
-    woodBump.colorSpace = THREE.NoColorSpace;
+    const { diffuse: woodDiffuse, roughness: woodRoughness, bump: woodBump } = getWoodTextures();
 
     // Table Surface Textures (outer area)
-    const tableDiffuse = textureLoader.load('./images/table_diff.jpg');
-    const tableRoughness = textureLoader.load('./images/table_rough.jpg');
-    const tableNormal = textureLoader.load('./images/table_nor.jpg');
-    const tableAO = textureLoader.load('./images/table_ao.jpg');
-
-    [tableDiffuse, tableRoughness, tableNormal, tableAO].forEach(texture => {
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.colorSpace = THREE.NoColorSpace;
-    });
-    tableDiffuse.colorSpace = THREE.SRGBColorSpace;
-
-    const repeatX = 4;
-    const repeatY = 4;
-    [tableDiffuse, tableRoughness, tableNormal, tableAO].forEach(t => t.repeat.set(repeatX, repeatY));
+    const {
+        diffuse: tableDiffuse,
+        roughness: tableRoughness,
+        normal: tableNormal,
+        ao: tableAO
+    } = getTableTextures();
 
     // VELVET Material for dice zone
     const velvetMaterial = new THREE.MeshStandardMaterial({

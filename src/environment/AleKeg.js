@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createAleKeg(scene, physicsWorld, position, rotationY) {
     const group = new THREE.Group();
@@ -7,20 +8,7 @@ export function createAleKeg(scene, physicsWorld, position, rotationY) {
     group.rotation.y = rotationY;
     group.name = 'AleKeg';
 
-    const textureLoader = new THREE.TextureLoader();
-
-    // Wood material
-    const woodDiffuse = textureLoader.load('./images/wood_diffuse.jpg');
-    const woodRoughness = textureLoader.load('./images/wood_roughness.jpg');
-    const woodBump = textureLoader.load('./images/wood_bump.jpg');
-
-    [woodDiffuse, woodRoughness, woodBump].forEach(t => {
-        t.wrapS = THREE.RepeatWrapping;
-        t.wrapT = THREE.RepeatWrapping;
-    });
-    woodDiffuse.colorSpace = THREE.SRGBColorSpace;
-    woodRoughness.colorSpace = THREE.NoColorSpace;
-    woodBump.colorSpace = THREE.NoColorSpace;
+    const { diffuse: woodDiffuse, roughness: woodRoughness, bump: woodBump } = getWoodTextures();
 
     const woodMaterial = new THREE.MeshStandardMaterial({
         map: woodDiffuse,

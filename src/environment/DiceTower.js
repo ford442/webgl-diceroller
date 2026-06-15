@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createDiceTower(scene, physicsWorld, position = { x: 12, y: -3.0, z: -8 }, rotationY = -Math.PI / 6) {
     const ammo = getAmmo();
@@ -7,16 +8,7 @@ export function createDiceTower(scene, physicsWorld, position = { x: 12, y: -3.0
     group.name = 'DiceTower';
 
     // Materials
-    const loader = new THREE.TextureLoader();
-    const woodDiffuse = loader.load('./images/wood_diffuse.jpg');
-    const woodBump = loader.load('./images/wood_bump.jpg');
-    const woodRoughness = loader.load('./images/wood_roughness.jpg');
-
-    [woodDiffuse, woodBump, woodRoughness].forEach(t => {
-        t.wrapS = THREE.RepeatWrapping;
-        t.wrapT = THREE.RepeatWrapping;
-        t.colorSpace = (t === woodDiffuse) ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-    });
+    const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } = getWoodTextures();
 
     const woodMat = new THREE.MeshStandardMaterial({
         map: woodDiffuse,

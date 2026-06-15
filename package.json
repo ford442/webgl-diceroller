@@ -11,15 +11,18 @@
     "preview": "vite preview",
     "build:wasm": "bash src/wasm/build.sh",
     "build:wasm_colab": "bash src/wasm/build_colab.sh",
-    "convert:dice": "node scripts/convert-dice-to-glb.mjs"
+    "convert:dice": "node scripts/convert-dice-to-glb.mjs",
+    "convert:props": "node scripts/convert-props.mjs"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.1.0",
     "@gltf-transform/extensions": "^4.1.0",
     "@gltf-transform/functions": "^4.1.0",
+    "basisu": "^1.16.3",
     "convex-hull": "^1.0.3",
     "draco3dgltf": "^1.5.7",
     "playwright": "^1.58.2",
+    "sharp": "^0.35.1",
     "vite": "^7.3.1"
   }
 }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { spawnedDice, readDiceValue, areDiceSettled } from '../dice.js';
+import { spawnedDice, readDiceValue, areDiceSettled, updateDiceVisuals } from '../dice.js';
 import { CAMERA_EYE_Y } from './SceneMetrics.js';
 
 const DiceFocusState = {
@@ -114,6 +114,9 @@ export function createCameraController(camera) {
             if (focusProgress === 1) {
                 diceFocusState = DiceFocusState.HOLDING;
                 focusTimer = 2.0; // Hold for 2s
+
+                // Ensure mesh orientations match the authoritative physics state.
+                updateDiceVisuals();
 
                 // Read settled dice values and show result overlay
                 const results = spawnedDice.map(d => ({
