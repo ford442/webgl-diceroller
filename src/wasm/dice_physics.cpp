@@ -666,15 +666,21 @@ private:
         return (ix + iy + iz) / 3.0f;
     }
 
-    static CollisionEvent makeEvent(const RigidBody& primary, int otherId, float impactSpeed) {
+    static CollisionEvent makeEvent(
+        const RigidBody& primary,
+        int otherId,
+        float impactSpeed,
+        float linearSpeedSq = -1.0f,
+        float angularSpeedSq = -1.0f
+    ) {
         return {
             primary.id,
             otherId,
             impactSpeed,
             primary.mass,
             inertiaScalar(primary),
-            primary.velocity.lengthSq(),
-            primary.angularVelocity.lengthSq()
+            linearSpeedSq >= 0.0f ? linearSpeedSq : primary.velocity.lengthSq(),
+            angularSpeedSq >= 0.0f ? angularSpeedSq : primary.angularVelocity.lengthSq()
         };
     }
 
@@ -828,6 +834,9 @@ private:
                 if (proj < minProj) { minProj = proj; deepest = wv; }
             }
             if (minProj < 0.0f) {
+                const float impactSpeed = std::max(0.0f, -b.velocity.y);
+                const float preImpactLinearSpeedSq = b.velocity.lengthSq();
+                const float preImpactAngularSpeedSq = b.angularVelocity.lengthSq();
                 b.position.y -= minProj;
                 if (b.velocity.y < 0.0f) {
                     b.velocity.y = -b.velocity.y * b.restitution;
@@ -850,14 +859,23 @@ private:
                     b.angularVelocity = b.angularVelocity * rollFric;
                 }
                 // Collision event for table thump
-                if (std::abs(minProj) > 0.01f && b.velocity.y < -1.0f &&
+                if (std::abs(minProj) > 0.01f && impactSpeed > 1.0f &&
                     events_.size() < static_cast<size_t>(MAX_EVENTS_PER_STEP)) {
-                    events_.push_back(makeEvent(b, -1, std::abs(b.velocity.y)));
+                    events_.push_back(makeEvent(
+                        b,
+                        -1,
+                        impactSpeed,
+                        preImpactLinearSpeedSq,
+                        preImpactAngularSpeedSq
+                    ));
                 }
             }
         } else {
             // Sphere fallback
             if (b.position.y < floorY) {
+                const float impactSpeed = std::max(0.0f, -b.velocity.y);
+                const float preImpactLinearSpeedSq = b.velocity.lengthSq();
+                const float preImpactAngularSpeedSq = b.angularVelocity.lengthSq();
                 b.position.y = floorY;
                 if (b.velocity.y < 0.0f) {
                     b.velocity.y = -b.velocity.y * b.restitution;
@@ -865,6 +883,16 @@ private:
                     b.velocity.x *= rollFric;
                     b.velocity.z *= rollFric;
                     b.angularVelocity = b.angularVelocity * rollFric;
+                }
+                if (impactSpeed > 1.0f &&
+                    events_.size() < static_cast<size_t>(MAX_EVENTS_PER_STEP)) {
+                    events_.push_back(makeEvent(
+                        b,
+                        -1,
+                        impactSpeed,
+                        preImpactLinearSpeedSq,
+                        preImpactAngularSpeedSq
+                    ));
                 }
             }
         }

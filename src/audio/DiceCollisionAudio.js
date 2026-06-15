@@ -1,7 +1,7 @@
 const DEFAULTS = {
     maxVoices: 6,
     cooldownMs: 45,
-    energyForMaxVolume: 18,
+    energyForMaxVolume: 50,
     minAudibleEnergy: 0.18
 };
 
@@ -53,9 +53,9 @@ export function createDiceCollisionAudio(options = {}) {
 
         const now = ctx.currentTime;
         const volume = clamp(totalKE / config.energyForMaxVolume, 0.04, 1.0);
-        const impactBias = clamp(totalKE / 28, 0, 1);
+        const impactBias = clamp(totalKE / 200, 0, 1);
         const pitchJitter = (Math.random() - 0.5) * 0.08;
-        const pitch = clamp(1.02 + pitchJitter - impactBias * 0.20, 0.68, 1.08);
+        const pitch = clamp(1.02 + pitchJitter - impactBias, 0.68, 1.08);
         const brightness = clamp(2300 - impactBias * 1100, 700, 2600);
 
         const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * 0.035));

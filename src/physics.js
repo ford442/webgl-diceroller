@@ -342,28 +342,64 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
         rollingFriction = DEFAULT_DICE_PHYSICS.rollingFriction,
         restitution = DEFAULT_DICE_PHYSICS.restitution,
         linearDamping = DEFAULT_DICE_PHYSICS.linearDamping,
-        angularDamping = DEFAULT_DICE_PHYSICS.angularDamping
+        angularDamping = DEFAULT_DICE_PHYSICS.angularDamping,
+        centerOfMassOffset = null
     } = options;
 
     // TIGHTEN MARGINS: This prevents "floating" and balancing on edges
     collisionShape.setMargin(0.01);
 
-    const transform = new AmmoInstance.btTransform();
-    transform.setIdentity();
-    transform.setOrigin(new AmmoInstance.btVector3(position.x, position.y, position.z));
-
     const threeQuat = new THREE.Quaternion();
     threeQuat.setFromEuler(new THREE.Euler(rotation.x, rotation.y, rotation.z));
-    
+
+    const offset = centerOfMassOffset
+        ? new THREE.Vector3(centerOfMassOffset.x || 0, centerOfMassOffset.y || 0, centerOfMassOffset.z || 0)
+        : null;
+    const hasComOffset = !!offset && offset.lengthSq() > 1e-10;
+    let bodyShape = collisionShape;
+    let ownedCollisionShape = null;
+
+    if (hasComOffset) {
+        const childTransform = new AmmoInstance.btTransform();
+        childTransform.setIdentity();
+        const childOrigin = new AmmoInstance.btVector3(-offset.x, -offset.y, -offset.z);
+        childTransform.setOrigin(childOrigin);
+
+        ownedCollisionShape = new AmmoInstance.btCompoundShape();
+        ownedCollisionShape.addChildShape(childTransform, collisionShape);
+        ownedCollisionShape.recalculateLocalAabb();
+        bodyShape = ownedCollisionShape;
+
+        AmmoInstance.destroy(childOrigin);
+        AmmoInstance.destroy(childTransform);
+    }
+
+    const bodyOrigin = new THREE.Vector3(position.x, position.y, position.z);
+    if (hasComOffset) {
+        bodyOrigin.add(offset.clone().applyQuaternion(threeQuat));
+    }
+
+    const transform = new AmmoInstance.btTransform();
+    transform.setIdentity();
+    const origin = new AmmoInstance.btVector3(bodyOrigin.x, bodyOrigin.y, bodyOrigin.z);
+    transform.setOrigin(origin);
+
     const q = new AmmoInstance.btQuaternion(threeQuat.x, threeQuat.y, threeQuat.z, threeQuat.w);
     transform.setRotation(q);
 
     const motionState = new AmmoInstance.btDefaultMotionState(transform);
     const localInertia = new AmmoInstance.btVector3(0, 0, 0);
-    collisionShape.calculateLocalInertia(mass, localInertia);
+    bodyShape.calculateLocalInertia(mass, localInertia);
 
-    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, collisionShape, localInertia);
+    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, bodyShape, localInertia);
     const body = new AmmoInstance.btRigidBody(rbInfo);
+    if (hasComOffset) {
+        body._centerOfMassOffset = { x: offset.x, y: offset.y, z: offset.z };
+        body._ownedCollisionShape = ownedCollisionShape;
+        mesh.userData.centerOfMassOffset = body._centerOfMassOffset;
+    } else {
+        mesh.userData.centerOfMassOffset = null;
+    }
 
     // PHYSICS TUNING
     body.setFriction(friction);
@@ -382,6 +418,9 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
     // Free temporary Ammo.js heap objects (body copies the data it needs)
     AmmoInstance.destroy(rbInfo);
     AmmoInstance.destroy(localInertia);
+    AmmoInstance.destroy(origin);
+    AmmoInstance.destroy(q);
+    AmmoInstance.destroy(transform);
 
     return body;
 };
