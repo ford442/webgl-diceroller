@@ -27,6 +27,8 @@ const STUB_ENGINE = {
     addDie:             () => -1,
     removeDie:          () => {},
     clearAllDice:       () => {},
+    setDieMaterial:     () => {},
+    setDieDrag:         () => {},
     setDieHull:         () => {},
     applyImpulse:       () => {},
     applyTorqueImpulse: () => {},
@@ -134,17 +136,21 @@ export const loadHullForDie = (wasmId, sides) => {
 
 /**
  * Read collision events from the WASM engine.
- * Returns array of { idA, idB, impactSpeed } objects.
+ * Returns array of { idA, idB, impactSpeed, mass, inertiaScalar, linearSpeedSq, angularSpeedSq } objects.
  */
 export const pollCollisionEvents = () => {
     if (!_available) return [];
     const buf = _engine.getCollisionEvents();
     const out = [];
-    for (let i = 0; i < buf.length; i += 3) {
+    for (let i = 0; i < buf.length; i += 7) {
         out.push({
             idA: Math.round(buf[i]),
             idB: Math.round(buf[i + 1]),
             impactSpeed: buf[i + 2],
+            mass: buf[i + 3],
+            inertiaScalar: buf[i + 4],
+            linearSpeedSq: buf[i + 5],
+            angularSpeedSq: buf[i + 6],
         });
     }
     return out;

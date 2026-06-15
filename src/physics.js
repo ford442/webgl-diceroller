@@ -4,6 +4,14 @@ import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUti
 
 // Ensure Ammo is loaded
 let AmmoInstance = null;
+const ammoBodyAudioMeta = new Map();
+const ammoCollisionCooldowns = new Map();
+const ammoBodyDragMeta = new Map();
+const physicsSearchParams = new URLSearchParams(window.location.search);
+
+function getBodyPtr(body) {
+    return body?.ptr ?? body?.a ?? null;
+}
 
 export const initPhysics = async () => {
     // Ammo.js (v0.0.10) export is the Module object, not a factory function.
@@ -41,9 +49,138 @@ export const getAmmo = () => {
     return AmmoInstance;
 };
 
+export const registerBodyAudioMeta = (body, meta) => {
+    const ptr = getBodyPtr(body);
+    if (ptr == null) return;
+    ammoBodyAudioMeta.set(ptr, meta);
+};
+
+export const registerBodyDragMeta = (body, meta) => {
+    const ptr = getBodyPtr(body);
+    if (ptr == null) return;
+    ammoBodyDragMeta.set(ptr, meta);
+};
+
+export const unregisterBodyAudioMeta = (body) => {
+    const ptr = getBodyPtr(body);
+    if (ptr == null) return;
+    ammoBodyAudioMeta.delete(ptr);
+};
+
+export const unregisterBodyDragMeta = (body) => {
+    const ptr = getBodyPtr(body);
+    if (ptr == null) return;
+    ammoBodyDragMeta.delete(ptr);
+};
+
 export const stepPhysics = (world, deltaTime) => {
+    if (!physicsSearchParams.has('no-drag')) {
+        applyAmmoQuadraticDrag(deltaTime);
+    }
     // Higher sub-steps for better accuracy with fast moving dice
     world.stepSimulation(deltaTime, 4, 1/60);
+};
+
+/**
+ * Apply velocity-squared air resistance to each registered die.
+ *
+ * The drag impulse is proportional to F_drag ~ -Cd * |v|^2 * v_hat,
+ * which makes high-energy throws dissipate energy faster than gentle
+ * rolls and prevents "super dice" behaviour.
+ */
+function applyAmmoQuadraticDrag(deltaTime) {
+    if (!AmmoInstance?.wrapPointer) return;
+
+    for (const [ptr, meta] of ammoBodyDragMeta.entries()) {
+        if (!meta?.dragFactor) continue;
+        const body = AmmoInstance.wrapPointer(ptr, AmmoInstance.btRigidBody);
+        if (!body) continue;
+
+        const velocity = body.getLinearVelocity();
+        const vx = velocity.x();
+        const vy = velocity.y();
+        const vz = velocity.z();
+        const speedSq = vx * vx + vy * vy + vz * vz;
+        if (speedSq < 1e-6) continue;
+
+        const dragScale = meta.dragFactor * speedSq * deltaTime;
+        const dragImpulse = new AmmoInstance.btVector3(
+            -vx * dragScale,
+            -vy * dragScale,
+            -vz * dragScale
+        );
+        body.applyCentralImpulse(dragImpulse);
+        body.activate();
+        AmmoInstance.destroy(dragImpulse);
+    }
+}
+
+export const pollAmmoCollisionEvents = (world) => {
+    if (!world || !AmmoInstance?.castObject) return [];
+
+    const dispatcher = world.getDispatcher?.();
+    if (!dispatcher) return [];
+
+    const manifoldCount = dispatcher.getNumManifolds();
+    const now = performance.now();
+    const events = [];
+
+    for (let i = 0; i < manifoldCount; i++) {
+        const manifold = dispatcher.getManifoldByIndexInternal(i);
+        if (!manifold || manifold.getNumContacts() <= 0) continue;
+
+        const bodyA = AmmoInstance.castObject(manifold.getBody0(), AmmoInstance.btRigidBody);
+        const bodyB = AmmoInstance.castObject(manifold.getBody1(), AmmoInstance.btRigidBody);
+        const metaA = ammoBodyAudioMeta.get(getBodyPtr(bodyA));
+        const metaB = ammoBodyAudioMeta.get(getBodyPtr(bodyB));
+        if (!metaA && !metaB) continue;
+
+        let maxImpulse = 0;
+        for (let c = 0; c < manifold.getNumContacts(); c++) {
+            const point = manifold.getContactPoint(c);
+            const distance = point.getDistance();
+            if (distance > 0) continue;
+            maxImpulse = Math.max(maxImpulse, point.getAppliedImpulse?.() ?? 0);
+        }
+        if (maxImpulse <= 0.02) continue;
+
+        const pickEnergy = (body, meta) => {
+            if (!body || !meta) return -1;
+            const linear = body.getLinearVelocity();
+            const angular = body.getAngularVelocity();
+            const linearSpeedSq = linear.x() * linear.x() + linear.y() * linear.y() + linear.z() * linear.z();
+            const angularSpeedSq = angular.x() * angular.x() + angular.y() * angular.y() + angular.z() * angular.z();
+            return 0.5 * (meta.mass ?? 5) * linearSpeedSq + 0.5 * (meta.inertiaScalar ?? 0) * angularSpeedSq;
+        };
+
+        const energyA = pickEnergy(bodyA, metaA);
+        const energyB = pickEnergy(bodyB, metaB);
+        const sourceMeta = !metaB ? metaA : (!metaA ? metaB : (energyA >= energyB ? metaA : metaB));
+        const sourceBody = sourceMeta === metaA ? bodyA : bodyB;
+        const otherMeta = sourceMeta === metaA ? metaB : metaA;
+
+        const linear = sourceBody.getLinearVelocity();
+        const angular = sourceBody.getAngularVelocity();
+        const linearSpeedSq = linear.x() * linear.x() + linear.y() * linear.y() + linear.z() * linear.z();
+        const angularSpeedSq = angular.x() * angular.x() + angular.y() * angular.y() + angular.z() * angular.z();
+        const impactSpeed = Math.sqrt(maxImpulse / Math.max(sourceMeta?.mass ?? 5, 0.001));
+        const collisionKey = `${sourceMeta?.id ?? 'x'}:${otherMeta?.id ?? 'table'}`;
+        const lastAt = ammoCollisionCooldowns.get(collisionKey) ?? 0;
+        if ((now - lastAt) < 45) continue;
+        ammoCollisionCooldowns.set(collisionKey, now);
+
+        events.push({
+            idA: sourceMeta?.id ?? -1,
+            idB: otherMeta?.id ?? -1,
+            impactSpeed,
+            mass: sourceMeta?.mass ?? 5,
+            inertiaScalar: sourceMeta?.inertiaScalar ?? 0,
+            linearSpeedSq,
+            angularSpeedSq
+        });
+    }
+
+    return events;
 };
 
 export const createFloorAndWalls = (scene, world, tableConfig = null) => {
@@ -195,38 +332,93 @@ const createBox = (scene, world, sx, sy, sz, px, py, pz, mass, color, textureUrl
     createPhysicsBox(world, sx, sy, sz, px, py, pz, mass);
 };
 
+const DEFAULT_DICE_PHYSICS = {
+    mass: 5,
+    friction: 0.6,
+    rollingFriction: 0.1,
+    restitution: 0.2,
+    linearDamping: 0.05,
+    angularDamping: 0.1
+};
+
 // Spawn Dice with tuned physics
-export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation) => {
-    const mass = 5; // Lower mass works better with higher gravity for responsiveness
+export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation, options = {}) => {
+    const {
+        mass = DEFAULT_DICE_PHYSICS.mass,
+        friction = DEFAULT_DICE_PHYSICS.friction,
+        rollingFriction = DEFAULT_DICE_PHYSICS.rollingFriction,
+        restitution = DEFAULT_DICE_PHYSICS.restitution,
+        linearDamping = DEFAULT_DICE_PHYSICS.linearDamping,
+        angularDamping = DEFAULT_DICE_PHYSICS.angularDamping,
+        // Local offset toward the heavy (low-number) face. When set, the rigid
+        // body's centre of mass is shifted away from the visual mesh centroid,
+        // modelling the mass removed by recessed pips/numbers.
+        centerOfMassOffset = null
+    } = options;
 
     // TIGHTEN MARGINS: This prevents "floating" and balancing on edges
     collisionShape.setMargin(0.01);
 
-    const transform = new AmmoInstance.btTransform();
-    transform.setIdentity();
-    transform.setOrigin(new AmmoInstance.btVector3(position.x, position.y, position.z));
-
     const threeQuat = new THREE.Quaternion();
     threeQuat.setFromEuler(new THREE.Euler(rotation.x, rotation.y, rotation.z));
-    
+
+    const offset = centerOfMassOffset
+        ? new THREE.Vector3(centerOfMassOffset.x || 0, centerOfMassOffset.y || 0, centerOfMassOffset.z || 0)
+        : null;
+    const hasComOffset = !!offset && offset.lengthSq() > 1e-10;
+    let bodyShape = collisionShape;
+    let ownedCollisionShape = null;
+
+    if (hasComOffset) {
+        const childTransform = new AmmoInstance.btTransform();
+        childTransform.setIdentity();
+        const childOrigin = new AmmoInstance.btVector3(-offset.x, -offset.y, -offset.z);
+        childTransform.setOrigin(childOrigin);
+
+        ownedCollisionShape = new AmmoInstance.btCompoundShape();
+        ownedCollisionShape.addChildShape(childTransform, collisionShape);
+        ownedCollisionShape.recalculateLocalAabb();
+        bodyShape = ownedCollisionShape;
+
+        AmmoInstance.destroy(childOrigin);
+        AmmoInstance.destroy(childTransform);
+    }
+
+    const bodyOrigin = new THREE.Vector3(position.x, position.y, position.z);
+    if (hasComOffset) {
+        bodyOrigin.add(offset.clone().applyQuaternion(threeQuat));
+    }
+
+    const transform = new AmmoInstance.btTransform();
+    transform.setIdentity();
+    const origin = new AmmoInstance.btVector3(bodyOrigin.x, bodyOrigin.y, bodyOrigin.z);
+    transform.setOrigin(origin);
+
     const q = new AmmoInstance.btQuaternion(threeQuat.x, threeQuat.y, threeQuat.z, threeQuat.w);
     transform.setRotation(q);
 
     const motionState = new AmmoInstance.btDefaultMotionState(transform);
     const localInertia = new AmmoInstance.btVector3(0, 0, 0);
-    collisionShape.calculateLocalInertia(mass, localInertia);
+    bodyShape.calculateLocalInertia(mass, localInertia);
 
-    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, collisionShape, localInertia);
+    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, bodyShape, localInertia);
     const body = new AmmoInstance.btRigidBody(rbInfo);
+    if (hasComOffset) {
+        body._centerOfMassOffset = { x: offset.x, y: offset.y, z: offset.z };
+        body._ownedCollisionShape = ownedCollisionShape;
+        mesh.userData.centerOfMassOffset = body._centerOfMassOffset;
+    } else {
+        mesh.userData.centerOfMassOffset = null;
+    }
 
     // PHYSICS TUNING
-    body.setFriction(0.6);        // Prevent sliding too much
-    body.setRollingFriction(0.1); // Help them stop rolling
-    body.setRestitution(0.2);     // Bounciness (0 = no bounce, 1 = super ball)
+    body.setFriction(friction);
+    body.setRollingFriction(rollingFriction);
+    body.setRestitution(restitution);
 
     // Damping simulates air resistance/heavy feel
     // Linear 0.05, Angular 0.1 helps them stop spinning eventually
-    body.setDamping(0.05, 0.1);
+    body.setDamping(linearDamping, angularDamping);
 
     // Prevent sleeping too early (so they don't freeze in mid-air/roll)
     body.setActivationState(4); // 4 = DISABLE_DEACTIVATION initialy, we can let them sleep later if needed
@@ -236,6 +428,9 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
     // Free temporary Ammo.js heap objects (body copies the data it needs)
     AmmoInstance.destroy(rbInfo);
     AmmoInstance.destroy(localInertia);
+    AmmoInstance.destroy(origin);
+    AmmoInstance.destroy(q);
+    AmmoInstance.destroy(transform);
 
     return body;
 };
@@ -281,8 +476,9 @@ export const createConvexHullShape = (mesh) => {
         posArr[i * 3 + 1] = srcPos.getY(i);
         posArr[i * 3 + 2] = srcPos.getZ(i);
     }
-    let geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+    // Clone geometry to avoid modifying the visual mesh
+    let geometry = mesh.geometry.clone();
+    BufferGeometryUtils.deinterleaveGeometry(geometry);
 
     // Merge vertices to remove duplicates and reduce point count
     geometry = BufferGeometryUtils.mergeVertices(geometry);
@@ -300,4 +496,3 @@ export const createConvexHullShape = (mesh) => {
     }
     return shape;
 };
-

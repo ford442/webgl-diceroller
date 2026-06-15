@@ -83,6 +83,8 @@ npm run preview
 - `?no-wasm` forces the ammo fallback path even if `public/wasm/` exists.
 - `?dual-physics` steps ammo and WASM in parallel for validation/debugging.
 - `?worker-physics` (experimental) runs the WASM engine inside a Web Worker.
+- `?no-drag` disables quadratic air resistance on both ammo.js and WASM paths.
+- `?fair-dice` disables the pipping COM bias.
 - Render/perf flags:
   - `?webgpu` opts into the experimental WebGPU renderer path.
   - `?webgl` forces the stable WebGL renderer path.
@@ -93,6 +95,15 @@ npm run preview
   - `?debug` / `?debug-perf` shows render stats; `debug-perf` also logs slow frame systems.
 
 ## Architecture Details
+
+### Audio system
+- `src/audio/DiceCollisionAudio.js` synthesises dice impact sounds using the Web Audio API (no external sound assets).
+- Collision events from both the WASM engine (`pollPhysicsCollisionEvents`) and the ammo.js fallback (`pollAmmoCollisionEvents`) provide per-impact metadata: mass, linear velocity squared, angular velocity squared, and a scalar moment-of-inertia estimate.
+- The audio module computes kinetic energy as `E_k = 1/2*m*v^2 + 1/2*I*omega^2` and maps it to volume, pitch, and filter brightness:
+  - Louder for harder impacts, clamped to `[0.04, 1.0]`.
+  - Slight pitch jitter plus a lower pitch bias for heavier impacts.
+  - Table collisions (`idB === -1`) use a bandpass thud; die-on-die collisions use a highpass clack.
+- Audio starts in a suspended `AudioContext` and is resumed on the first user pointer or key event.
 
 ### `src/main.js`
 - Initializes Three.js `Scene` plus the renderer selected by `src/core/RendererFactory.js`.
@@ -217,6 +228,22 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 - Restitution: 0.2
 - Linear damping: 0.05, Angular damping: 0.1
 - Collision margin: 0.01
+
+### Pipping bias (mass-asymmetric dice)
+- Real dice lose material to recessed numbers, so the low-number face ("1") is heaviest and the high-number face is lightest.
+- `src/dice.js` computes a centre-of-mass offset toward the "1" face equal to `0.75%` of the die's bounding-box height (`DEFAULT_MASS_BIAS_RATIO`).
+- In the ammo.js path, `spawnDicePhysics` builds a `btCompoundShape` so the rigid-body COM is shifted away from the visual centroid.
+- In the WASM path, `applyDiceMassBiases` applies a gravity torque that approximates the same effect.
+- Toggle:
+  - `?fair-dice` disables the bias entirely (perfect Platonic-solid COM).
+  - `?bias-ratio=0.01` overrides the default magnitude (clamped to `[0, 0.05]`).
+
+### Quadratic drag (air resistance)
+- Dice experience velocity-squared drag in addition to linear/angular damping and collision friction.
+- `src/dice.js` defines a per-type `dragFactor` in `PHYSICS_PRESETS`.
+- `src/physics.js` → `stepPhysics` applies `applyAmmoQuadraticDrag` before each simulation step (`F_drag ~ -Cd * |v|^2 * v_hat`).
+- The WASM engine applies the same drag in `DicePhysicsEngine::integrate` via `setDieDrag`.
+- Disable with `?no-drag` for testing idealised friction-only behaviour.
 
 ### Adding New Environment Props
 1. Create a new file in `src/environment/PropName.js`.

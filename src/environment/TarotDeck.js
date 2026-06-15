@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { toCurrentTabletopY } from '../core/SceneMetrics.js';
 
 export function createTarotDeck(scene, physicsWorld, position = { x: -6, y: -2.74, z: -3 }, rotationY = Math.PI / 6) {
+    position = toCurrentTabletopY(position);
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.position.set(position.x, position.y, position.z);

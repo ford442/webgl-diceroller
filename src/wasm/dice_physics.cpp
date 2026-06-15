@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <vector>
 
 using namespace emscripten;
@@ -214,6 +215,8 @@ struct RigidBody {
 
     float restitution = 0.2f;
     float friction    = 0.6f;
+    float rollingFriction = 0.1f;
+    float dragFactor = 0.0f;
 
     bool  sleeping    = false;
     float sleepTimer  = 0.0f;
@@ -259,6 +262,10 @@ struct Contact {
 struct CollisionEvent {
     int idA = -1, idB = -1;
     float impactSpeed = 0.0f;
+    float mass = 0.0f;
+    float inertiaScalar = 0.0f;
+    float linearSpeedSq = 0.0f;
+    float angularSpeedSq = 0.0f;
 };
 
 // ---------------------------------------------------------------------------
@@ -381,7 +388,11 @@ public:
     static constexpr int MAX_EVENTS_PER_STEP = 1024;
 
     DicePhysicsEngine()
-        : gravity_(-15.0f), tableY_(-2.75f), tableHalfW_(18.0f), tableHalfD_(18.0f), nextId_(0) {}
+        : gravity_(-15.0f), tableY_(-2.75f), tableHalfW_(18.0f), tableHalfD_(18.0f), nextId_(0) {
+        val window = val::global("window");
+        std::string search = window["location"]["search"].as<std::string>();
+        noDrag_ = search.find("no-drag") != std::string::npos;
+    }
 
     void init(float gravity, float tableY, float tableHalfW, float tableHalfD) {
         gravity_ = gravity; tableY_ = tableY;
@@ -416,6 +427,23 @@ public:
     }
 
     void clearAllDice() { bodies_.clear(); contacts_.clear(); events_.clear(); }
+
+    void setDieMaterial(int id, float friction, float rollingFriction) {
+        for (auto& b : bodies_) {
+            if (b.id != id) continue;
+            b.friction = std::clamp(friction, 0.0f, 2.0f);
+            b.rollingFriction = std::clamp(rollingFriction, 0.0f, 1.0f);
+            break;
+        }
+    }
+
+    void setDieDrag(int id, float dragFactor) {
+        for (auto& b : bodies_) {
+            if (b.id != id) continue;
+            b.dragFactor = std::max(0.0f, dragFactor);
+            break;
+        }
+    }
 
     void setDieHull(int id, const std::vector<float>& flatVerts) {
         if (flatVerts.size() % 3 != 0) return;
@@ -528,11 +556,15 @@ public:
     // ------------------------------------------------------------------
     val getCollisionEvents() {
         eventBuffer_.clear();
-        eventBuffer_.reserve(events_.size() * 3);
+        eventBuffer_.reserve(events_.size() * 7);
         for (const auto& e : events_) {
             eventBuffer_.push_back(static_cast<float>(e.idA));
             eventBuffer_.push_back(static_cast<float>(e.idB));
             eventBuffer_.push_back(e.impactSpeed);
+            eventBuffer_.push_back(e.mass);
+            eventBuffer_.push_back(e.inertiaScalar);
+            eventBuffer_.push_back(e.linearSpeedSq);
+            eventBuffer_.push_back(e.angularSpeedSq);
         }
         events_.clear();
         return val(typed_memory_view(eventBuffer_.size(), eventBuffer_.data()));
@@ -609,6 +641,7 @@ private:
     std::vector<float> transformBuffer_;
     std::vector<float> eventBuffer_;
     DeterministicRNG rng_;
+    bool noDrag_ = false;
 
     static float radiusForSides(int sides) {
         switch (sides) {
@@ -622,6 +655,35 @@ private:
         }
     }
 
+    static float inertiaScalar(const RigidBody& b) {
+        if (!b.useHull || b.hull.verts.empty()) {
+            return 0.4f * b.mass * b.radius * b.radius;
+        }
+        Vec3 dim = b.hull.aabbMax - b.hull.aabbMin;
+        float ix = (1.0f / 12.0f) * b.mass * (dim.y*dim.y + dim.z*dim.z);
+        float iy = (1.0f / 12.0f) * b.mass * (dim.x*dim.x + dim.z*dim.z);
+        float iz = (1.0f / 12.0f) * b.mass * (dim.x*dim.x + dim.y*dim.y);
+        return (ix + iy + iz) / 3.0f;
+    }
+
+    static CollisionEvent makeEvent(
+        const RigidBody& primary,
+        int otherId,
+        float impactSpeed,
+        float linearSpeedSq = -1.0f,
+        float angularSpeedSq = -1.0f
+    ) {
+        return {
+            primary.id,
+            otherId,
+            impactSpeed,
+            primary.mass,
+            inertiaScalar(primary),
+            linearSpeedSq >= 0.0f ? linearSpeedSq : primary.velocity.lengthSq(),
+            angularSpeedSq >= 0.0f ? angularSpeedSq : primary.angularVelocity.lengthSq()
+        };
+    }
+
     static void wake(RigidBody& b) {
         b.sleeping = false;
         b.sleepTimer = 0.0f;
@@ -629,6 +691,12 @@ private:
 
     void integrate(RigidBody& b, float dt) {
         b.velocity.y += gravity_ * dt;
+        if (!noDrag_ && b.dragFactor > 0.0f) {
+            const float speedSq = b.velocity.lengthSq();
+            if (speedSq > 1e-6f) {
+                b.velocity -= b.velocity * (b.dragFactor * speedSq * dt);
+            }
+        }
         const float linDamp = 1.0f - 0.05f * dt;
         b.velocity = b.velocity * linDamp;
         const float angDamp = 1.0f - 0.10f * dt;
@@ -675,7 +743,9 @@ private:
                 Vec3 relVel = b.velocity - a.velocity;
                 float speed = std::abs(Vec3::dot(relVel, c.normal));
                 if (speed > 0.5f && events_.size() < static_cast<size_t>(MAX_EVENTS_PER_STEP)) {
-                    events_.push_back({a.id, b.id, speed});
+                    const float energyA = 0.5f * a.mass * a.velocity.lengthSq() + 0.5f * inertiaScalar(a) * a.angularVelocity.lengthSq();
+                    const float energyB = 0.5f * b.mass * b.velocity.lengthSq() + 0.5f * inertiaScalar(b) * b.angularVelocity.lengthSq();
+                    events_.push_back(energyA >= energyB ? makeEvent(a, b.id, speed) : makeEvent(b, a.id, speed));
                 }
 
                 contacts_.push_back(c);
@@ -764,6 +834,9 @@ private:
                 if (proj < minProj) { minProj = proj; deepest = wv; }
             }
             if (minProj < 0.0f) {
+                const float impactSpeed = std::max(0.0f, -b.velocity.y);
+                const float preImpactLinearSpeedSq = b.velocity.lengthSq();
+                const float preImpactAngularSpeedSq = b.angularVelocity.lengthSq();
                 b.position.y -= minProj;
                 if (b.velocity.y < 0.0f) {
                     b.velocity.y = -b.velocity.y * b.restitution;
@@ -780,27 +853,46 @@ private:
                         }
                     }
                     // Rolling friction
-                    const float rollFric = 1.0f - b.friction * 0.15f;
+                    const float rollFric = std::max(0.0f, 1.0f - b.rollingFriction);
                     b.velocity.x *= rollFric;
                     b.velocity.z *= rollFric;
                     b.angularVelocity = b.angularVelocity * rollFric;
                 }
                 // Collision event for table thump
-                if (std::abs(minProj) > 0.01f && b.velocity.y < -1.0f &&
+                if (std::abs(minProj) > 0.01f && impactSpeed > 1.0f &&
                     events_.size() < static_cast<size_t>(MAX_EVENTS_PER_STEP)) {
-                    events_.push_back({b.id, -1, std::abs(b.velocity.y)});
+                    events_.push_back(makeEvent(
+                        b,
+                        -1,
+                        impactSpeed,
+                        preImpactLinearSpeedSq,
+                        preImpactAngularSpeedSq
+                    ));
                 }
             }
         } else {
             // Sphere fallback
             if (b.position.y < floorY) {
+                const float impactSpeed = std::max(0.0f, -b.velocity.y);
+                const float preImpactLinearSpeedSq = b.velocity.lengthSq();
+                const float preImpactAngularSpeedSq = b.angularVelocity.lengthSq();
                 b.position.y = floorY;
                 if (b.velocity.y < 0.0f) {
                     b.velocity.y = -b.velocity.y * b.restitution;
-                    const float rollFric = 1.0f - b.friction * 0.1f;
+                    const float rollFric = std::max(0.0f, 1.0f - b.rollingFriction);
                     b.velocity.x *= rollFric;
                     b.velocity.z *= rollFric;
                     b.angularVelocity = b.angularVelocity * rollFric;
+                }
+                if (impactSpeed > 1.0f &&
+                    events_.size() < static_cast<size_t>(MAX_EVENTS_PER_STEP)) {
+                    events_.push_back(makeEvent(
+                        b,
+                        -1,
+                        impactSpeed,
+                        preImpactLinearSpeedSq,
+                        preImpactAngularSpeedSq
+                    ));
                 }
             }
         }
@@ -848,6 +940,8 @@ EMSCRIPTEN_BINDINGS(dice_physics) {
         .function("addDie",            &DicePhysicsEngine::addDie)
         .function("removeDie",         &DicePhysicsEngine::removeDie)
         .function("clearAllDice",      &DicePhysicsEngine::clearAllDice)
+        .function("setDieMaterial",    &DicePhysicsEngine::setDieMaterial)
+        .function("setDieDrag",        &DicePhysicsEngine::setDieDrag)
         .function("setDieHull",        &DicePhysicsEngine::setDieHull)
         .function("applyImpulse",      &DicePhysicsEngine::applyImpulse)
         .function("applyTorqueImpulse",&DicePhysicsEngine::applyTorqueImpulse)

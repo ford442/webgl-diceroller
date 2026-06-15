@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { spawnedDice, readDiceValue, areDiceSettled } from '../dice.js';
+import { CAMERA_EYE_Y } from './SceneMetrics.js';
 
 const DiceFocusState = {
     IDLE: 'IDLE',
@@ -53,7 +54,16 @@ export function createCameraController(camera) {
         return allStable;
     }
 
-    function update(deltaTime, time, { keys, cursorPos, isLocked, showResults, hideResults, lampData, LampMode }) {
+    function update(deltaTime, time, {
+        keys,
+        cursorPos,
+        isLocked,
+        showResults,
+        hideResults,
+        lampData,
+        LampMode,
+        onResultsReady
+    }) {
         // Dice Focus State Machine
         if (diceFocusState === DiceFocusState.WAITING_FOR_STOP) {
             if (checkDiceStability(lampData, LampMode)) {
@@ -111,6 +121,7 @@ export function createCameraController(camera) {
                     value: readDiceValue(d)
                 }));
                 showResults(results);
+                onResultsReady?.(results);
             }
         } else if (diceFocusState === DiceFocusState.HOLDING) {
             focusTimer -= deltaTime;
@@ -190,11 +201,9 @@ export function createCameraController(camera) {
             // Update position
             camera.position.add(velocity.clone().multiplyScalar(deltaTime));
 
-            // Ground collision
-            // 6.0 is the standing eye height relative to the floor.
-            // (Floor Y = -9.5, Table Y = -3.0. Standing height ~15.5 units above floor -> -9.5 + 15.5 = 6.0)
-            if (camera.position.y <= 6.0) {
-                camera.position.y = 6.0;
+            // Ground collision at standing eye height.
+            if (camera.position.y <= CAMERA_EYE_Y) {
+                camera.position.y = CAMERA_EYE_Y;
                 velocity.y = 0;
                 isOnGround = true;
             }

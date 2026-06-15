@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../../physics.js';
+import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
+
+const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
 
 export function createMug(scene, physicsWorld) {
     const ammo = getAmmo();
@@ -37,7 +40,7 @@ export function createMug(scene, physicsWorld) {
     innerMesh.position.y = 0.05;
     mugGroup.add(innerMesh);
 
-    mugGroup.position.set(5, -2.25, 5);
+    mugGroup.position.set(5, tabletopY(-2.25), 5);
     mugGroup.rotation.y = Math.random() * Math.PI * 2;
     scene.add(mugGroup);
 
@@ -76,7 +79,7 @@ export function createCoins(scene, physicsWorld) {
     const count = 15;
     const centerX = -4;
     const centerZ = 3;
-    const baseY = -2.75;
+    const baseY = tabletopY(-2.75);
 
     for (let i = 0; i < count; i++) {
         const material = materials[Math.floor(Math.random() * materials.length)];
@@ -126,7 +129,7 @@ export function createBook(scene, physicsWorld) {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    mesh.position.set(-6, -2.5, -6);
+    mesh.position.set(-6, tabletopY(-2.5), -6);
     mesh.rotation.y = 0.2;
     scene.add(mesh);
 
@@ -175,7 +178,7 @@ export function createMiniature(scene, physicsWorld) {
 
     const totalHeight = baseHeight + bodyHeight + headRadius * 2;
 
-    group.position.set(-2, -2.75 + totalHeight / 2, 2);
+    group.position.set(-2, tabletopY(-2.75) + totalHeight / 2, 2);
     group.rotation.y = Math.random() * Math.PI * 2;
 
     baseMesh.position.y -= totalHeight / 2;
@@ -214,7 +217,7 @@ export function createD20Holder(scene, physicsWorld) {
     indMesh.position.y = height / 2 + 0.001;
     holderGroup.add(indMesh);
 
-    holderGroup.position.set(-2, -2.55, -4);
+    holderGroup.position.set(-2, tabletopY(-2.55), -4);
     scene.add(holderGroup);
 
     const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
@@ -248,7 +251,7 @@ export function createGemstone(scene, physicsWorld) {
     mesh.receiveShadow = true;
     group.add(mesh);
 
-    group.position.set(-5, -2.25, 0);
+    group.position.set(-5, tabletopY(-2.25), 0);
     group.rotation.set(Math.random(), Math.random(), Math.random());
     scene.add(group);
 
@@ -320,7 +323,7 @@ export function createPotionBottle(scene, physicsWorld) {
     corkMesh.position.y = 0.85;
     bottleMesh.add(corkMesh);
 
-    bottleGroup.position.set(6, -2.15, -2);
+    bottleGroup.position.set(6, tabletopY(-2.15), -2);
     bottleGroup.rotation.y = Math.random() * Math.PI * 2;
     scene.add(bottleGroup);
 
@@ -400,7 +403,7 @@ export function createPencil(scene, physicsWorld) {
     leadMesh.position.y = -(bodyLen / 2 + tipLen + leadLen / 2);
     pencilGroup.add(leadMesh);
 
-    pencilGroup.position.set(0, -2.71, 4.5);
+    pencilGroup.position.set(0, tabletopY(-2.71), 4.5);
     pencilGroup.rotation.set(0, Math.random() * Math.PI * 2, Math.PI / 2, 'YXZ');
 
     scene.add(pencilGroup);
