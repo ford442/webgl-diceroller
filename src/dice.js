@@ -172,7 +172,18 @@ let diceModels = {};
 export let spawnedDice = [];
 const WASM_TRANSFORM_STRIDE = 7;
 let nextAudioBodyId = 1;
-const DEFAULT_MASS_BIAS_RATIO = 0.0075;
+const DEFAULT_MASS_BIAS_RATIO = 0.0075; // ~0.75% of die height, within the 0.5-1% range
+
+// Pipping bias: lower-number faces have less material removed, so the "1" face
+// is the heaviest side. We shift the centre of mass toward that face by a small
+// fraction of the die's bounding-box height. `?fair-dice` disables the effect;
+// `?bias-ratio=0.01` overrides the default magnitude (clamped to a sane range).
+const getMassBiasRatio = () => {
+    const raw = searchParams.get('bias-ratio');
+    if (raw === null) return DEFAULT_MASS_BIAS_RATIO;
+    const value = Number.parseFloat(raw);
+    return Number.isFinite(value) ? Math.max(0, Math.min(value, 0.05)) : DEFAULT_MASS_BIAS_RATIO;
+};
 
 // Helper for Crypto Randomness
 const getSecureRandom = () => {
@@ -199,6 +210,9 @@ const isUsingWasmPhysics = () => isWasmInitialized() && isWasmAvailable();
 const useMassBias = () => !searchParams.has('fair-dice');
 
 export const PHYSICS_PRESETS = {
+    // Per-die-type tuning. dragFactor controls velocity-squared air resistance
+    // (larger values stop hard throws faster). Friction/rollingFriction are
+    // also tuned so small, pointy dice settle more quickly than big d20s.
     d4: { mass: 5, friction: 0.85, rollingFriction: 0.35, dragFactor: 0.0024 },
     d6: { mass: 5, friction: 0.60, rollingFriction: 0.10, dragFactor: 0.0020 },
     d8: { mass: 5, friction: 0.55, rollingFriction: 0.08, dragFactor: 0.0019 },
@@ -445,7 +459,9 @@ export const loadDiceModels = async (onProgress) => {
                 if (oneFaceNormal && cleanMesh.geometry.boundingBox) {
                     const bboxSize = new THREE.Vector3();
                     cleanMesh.geometry.boundingBox.getSize(bboxSize);
-                    const massBiasMagnitude = bboxSize.y * DEFAULT_MASS_BIAS_RATIO;
+                    const massBiasMagnitude = bboxSize.y * getMassBiasRatio();
+                    // Vector points toward the "1" face (heaviest side), shifting
+                    // the centre of mass away from the geometric centroid.
                     cleanMesh.userData.massBiasOffset = oneFaceNormal.multiplyScalar(massBiasMagnitude);
                 } else {
                     cleanMesh.userData.massBiasOffset = null;

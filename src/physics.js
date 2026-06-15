@@ -81,6 +81,13 @@ export const stepPhysics = (world, deltaTime) => {
     world.stepSimulation(deltaTime, 4, 1/60);
 };
 
+/**
+ * Apply velocity-squared air resistance to each registered die.
+ *
+ * The drag impulse is proportional to F_drag ~ -Cd * |v|^2 * v_hat,
+ * which makes high-energy throws dissipate energy faster than gentle
+ * rolls and prevents "super dice" behaviour.
+ */
 function applyAmmoQuadraticDrag(deltaTime) {
     if (!AmmoInstance?.wrapPointer) return;
 
@@ -343,6 +350,9 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
         restitution = DEFAULT_DICE_PHYSICS.restitution,
         linearDamping = DEFAULT_DICE_PHYSICS.linearDamping,
         angularDamping = DEFAULT_DICE_PHYSICS.angularDamping,
+        // Local offset toward the heavy (low-number) face. When set, the rigid
+        // body's centre of mass is shifted away from the visual mesh centroid,
+        // modelling the mass removed by recessed pips/numbers.
         centerOfMassOffset = null
     } = options;
 

@@ -1,3 +1,15 @@
+/**
+ * Synthesised dice collision audio.
+ *
+ * Impact loudness and timbre are driven by the kinetic energy of the colliding
+ * die, approximated as:
+ *
+ *   E_k = 1/2 * m * v^2 + 1/2 * I * omega^2
+ *
+ * where m is mass, v is linear velocity, I is a scalar moment-of-inertia
+ * estimate, and omega is angular velocity. Harder impacts → louder, brighter
+ * and slightly lower-pitched sounds.
+ */
 const DEFAULTS = {
     maxVoices: 6,
     cooldownMs: 45,
@@ -54,8 +66,8 @@ export function createDiceCollisionAudio(options = {}) {
         const now = ctx.currentTime;
         const volume = clamp(totalKE / config.energyForMaxVolume, 0.04, 1.0);
         const impactBias = clamp(totalKE / 200, 0, 1);
-        const pitchJitter = (Math.random() - 0.5) * 0.08;
-        const pitch = clamp(1.02 + pitchJitter - impactBias, 0.68, 1.08);
+        const pitchJitter = (Math.random() - 0.5) * 0.1;
+        const pitch = clamp(1.0 + pitchJitter - impactBias, 0.7, 1.1);
         const brightness = clamp(2300 - impactBias * 1100, 700, 2600);
 
         const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * 0.035));
