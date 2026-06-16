@@ -13,7 +13,7 @@ import {
 import {
     getWasmEngine, isWasmAvailable, isWasmInitialized,
     loadHullForDie, pollCollisionEvents, seedPhysicsRNG, randomPhysicsFloat
-} from './wasm/WasmPhysicsBridge.js';
+} from './wasm/PhysicsBridge.js';
 import { TABLE_SURFACE_Y } from './core/SceneMetrics.js';
 const searchParams = new URLSearchParams(window.location.search);
 const WASM_TRANSFORM_STRIDE = 7;
@@ -931,6 +931,34 @@ export const applyWasmImpulseForDie = (mesh, impulse, torque) => {
     if (torque) {
         engine.applyTorqueImpulse(die.wasmId, torque.x, torque.y, torque.z);
     }
+};
+
+/**
+ * Kinematic / user-driven control primitives for WASM-authoritative
+ * interactions (drag & levitation). These let interaction.js hold and move a
+ * die entirely inside the WASM world without involving ammo.js.
+ */
+export const driveDieWasmTransform = (mesh, position, quaternion) => {
+    const die = findSpawnedDieByMesh(mesh);
+    if (!isUsingWasmPhysics() || !die || die.wasmId == null) return;
+    syncWasmTransformForDie(die, { position, quaternion });
+};
+
+export const setDieWasmVelocity = (mesh, linear = null, angular = null) => {
+    const die = findSpawnedDieByMesh(mesh);
+    if (!isUsingWasmPhysics() || !die || die.wasmId == null) return;
+    getWasmEngine().setDieVelocity(
+        die.wasmId,
+        linear?.x ?? 0, linear?.y ?? 0, linear?.z ?? 0,
+        angular?.x ?? 0, angular?.y ?? 0, angular?.z ?? 0
+    );
+};
+
+/** Current die position/orientation as tracked by the WASM engine (or null). */
+export const getDieWasmTransform = (mesh) => {
+    const die = findSpawnedDieByMesh(mesh);
+    if (!isUsingWasmPhysics() || !die || die.wasmId == null) return null;
+    return getWasmTransformForDie(die.wasmId);
 };
 
 export const syncAllDiceToWasm = () => {

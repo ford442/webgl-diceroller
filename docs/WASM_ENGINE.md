@@ -1,6 +1,9 @@
 # WASM Physics Engine — Integration Guide
 
-> **Status:** Phase 3 complete — SAT-based polyhedral collision, deterministic replay, collision events, build-time hull extraction, and experimental Worker threading.
+> **Status:** Phase 4 complete — the WASM engine runs in a production Web Worker
+> by default, exchanging transforms over a double-buffered SharedArrayBuffer
+> (with a postMessage fallback). Phase 3 features (SAT polyhedral collision,
+> deterministic replay, collision events, build-time hull extraction) remain.
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -90,6 +93,34 @@ available. `ammo.js` still exists for three reasons:
 - Drag constraints and levitation handoff (temporary until mirrored into WASM).
 - Optional `?dual-physics` validation runs where both engines step in parallel.
 
+### Worker topology (Phase 4 default)
+
+```
+┌───────────────────────────── Main thread ─────────────────────────────┐
+│  Three.js / WebGPU render · input · godrays · audio                     │
+│  PhysicsBridge (facade) → WorkerPhysicsBridge (sync proxy)              │
+│    • addDie() returns id immediately (mirrored monotonic counter)       │
+│    • getTransforms()/getDieIds() = Atomics read of SAB front buffer     │
+│    • step() is a no-op (worker self-paces)                              │
+└───────────┬───────────────────────────────────▲───────────────────────┘
+   commands  │ postMessage                       │ SharedArrayBuffer (transforms)
+   (init,    │                                   │ + postMessage (collision events)
+   addDie,   ▼                                   │
+   impulse) ┌────────────────── physics worker ──┴───────────────────────┐
+            │  dice_physics.worker.js                                      │
+            │   • owns DicePhysicsEngine (WASM)                            │
+            │   • setInterval fixed-timestep loop @ 120 Hz                 │
+            │   • copies heap transforms → SAB back buffer, flips `front`  │
+            └──────────────────────────────────────────────────────────── ┘
+```
+
+The SAB layout (header + two transform/id buffers) lives in `workerLayout.js`,
+the single source of truth shared by both threads. The worker writes the freshly
+stepped frame into the back buffer, stores `count`, then atomically flips
+`front`; readers load `front` then `count`, guaranteeing a coherent snapshot
+without locks. When the page is not cross-origin isolated the worker instead
+posts copied `snapshot` messages — it never transfers the WASM heap buffer.
+
 ### Data Transfer Strategy
 
 Transforms are exchanged via a `Float32Array` memory view:
@@ -145,9 +176,31 @@ cd src/wasm && ./build.sh
 
 ### Runtime flags
 
+- (default) the WASM engine runs in a **Web Worker** with SharedArrayBuffer
+  transport when the page is cross-origin isolated (COOP/COEP set).
+- `?no-worker` (or `?worker-physics=off`) runs the WASM engine **in-process** on
+  the main thread (the legacy `WasmPhysicsBridge` path).
 - `?no-wasm` forces the JS/ammo fallback path even if `public/wasm/` is present.
-- `?dual-physics` steps ammo and WASM in parallel for divergence checks.
-- `?worker-physics` (experimental) runs the WASM engine inside a Web Worker.
+- `?dual-physics` steps ammo and WASM in parallel for divergence checks
+  (implies the in-process path; dual validation needs both engines main-thread).
+- `?worker-physics` is the explicit opt-in alias for the now-default worker path.
+- `?ammo-drag` keeps drag/levitation on the legacy ammo constraint path; by
+  default interactions are driven kinematically inside the WASM world.
+
+### Cross-origin isolation (required for the fast path)
+
+SharedArrayBuffer requires the document to be **cross-origin isolated**:
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+These are set on both the Vite dev server and `vite preview` (`vite.config.js`).
+**Production/static hosting (test.1ink.us, go.1ink.us) must emit the same two
+headers** — otherwise `crossOriginIsolated` is false, `SharedArrayBuffer` is
+unavailable, and the worker bridge transparently downgrades to copy-out
+`postMessage` snapshots (correct, just a little more per-frame overhead).
 
 Output files land in `public/wasm/`:
 - `dice_physics.js`   — Emscripten ES module loader
@@ -361,10 +414,40 @@ const t2 = window.getWasmEngine().getTransforms();
 - [x] Hardening: max dice (500), max hull verts (64), memory cap (64 MB), NaN checks.
 - [x] Experimental Worker bridge (`src/wasm/WorkerPhysicsBridge.js`).
 
-### Phase 4+ (Future)
+### Phase 4 (Complete)
 
-- [ ] Full Worker cut-over with SharedArrayBuffer double-buffering.
-- [ ] Mirror drag/levitation constraints into WASM (retire ammo for dice).
+- [x] Production physics Web Worker (`dice_physics.worker.js`) hosting the engine.
+- [x] Self-paced fixed-timestep loop in the worker (main thread no longer steps).
+- [x] Double-buffered **SharedArrayBuffer** transform transport with an `Atomics`
+      seqno/front/count/settled header (`workerLayout.js`), tear-free reads.
+- [x] Graceful **postMessage-snapshot fallback** when not cross-origin isolated.
+- [x] Synchronous worker proxy via a mirrored monotonic id counter, so
+      `WorkerPhysicsBridge` is a drop-in for `WasmPhysicsBridge`.
+- [x] `PhysicsBridge` facade selects worker → main-thread → stub with fallback.
+- [x] Worker-driven drag/levitation by default (`?ammo-drag` opts out).
+- [x] COOP/COEP on dev **and** preview servers.
+- [x] `scripts/verify-worker-physics.mjs` (Playwright) — asserts worker default,
+      SAB transport, synchronous ids, and worker-driven gravity stepping.
+- [x] Fixed a latent bug in the experimental worker that transferred the WASM
+      heap buffer (`getTransforms().buffer`), which would detach module memory.
+
+#### Known limitations / follow-ups
+
+- `serializeState()` / `randomFloat()` are not available synchronously across the
+  worker boundary, so deterministic `replayRoll()` falls back to the in-process
+  path. A request/response round-trip could restore them if needed.
+- `applyDiceMassBiases()` posts one `applyTorqueImpulse` message per mass-biased
+  die per frame; batching into a single message would cut chatter at high counts.
+- The C++ constructor reads `window.location.search` via emval; `window` is
+  absent in a module worker, so the worker shims it before constructing the
+  engine. A cleaner fix is to guard that access in `dice_physics.cpp` (requires
+  an emcc rebuild) and pass the `no-drag` flag explicitly through `init()`.
+
+### Phase 5+ (Future)
+
+- [ ] True `setDieKinematic(id, bool)` in C++ so held dice ignore gravity/contacts
+      internally instead of being overwritten each frame (retire ammo dice bodies).
+- [~] Mirror drag/levitation into WASM (retire ammo for dice). **In progress:** `?wasm-drag` drives both interactions kinematically in the WASM world via `setDieTransform`/`setDieVelocity` (`src/interaction.js`, helpers in `src/dice.js`). Default off; ammo path remains the default and fallback. Remaining: soak-test under `?wasm-drag`, then drop the ammo dice bodies in `spawnDicePhysics`. Optional C++ follow-up: a true `setDieKinematic(id, bool)` flag so held dice ignore gravity/contacts internally instead of being overwritten each frame.
 - [ ] Web Audio integration: dice clack, table thump, lamp jiggle on collision.
 - [ ] Fuzz testing harness for the C++ solver.
 - [ ] SIMD optimisation (`-msimd128`) for SAT projections.

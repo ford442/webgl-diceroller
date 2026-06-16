@@ -96,7 +96,8 @@ export function createTavernWalls(scene, physicsWorld) {
         thickness,
         wallMaterial,
         woodMaterial,
-        scene.userData.postConfig?.godRaysEnabled !== false
+        scene.userData.postConfig?.godRaysEnabled !== false,
+        scene.userData.godRayMaterialFactory ?? null
     );
 
 
@@ -190,7 +191,7 @@ function createCeiling(group, physicsWorld, Ammo, wallMat, woodMat, width, depth
     }
 }
 
-function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight, wallDepth, thickness, wallMat, woodMat, godRaysEnabled = true) {
+function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight, wallDepth, thickness, wallMat, woodMat, godRaysEnabled = true, godRayMaterialFactory = null) {
     // Window Parameters
     const winWidth = 6;
     const winHeight = 10;
@@ -283,7 +284,7 @@ function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight,
     group.add(frameGroup);
 
     // --- God Rays ---
-    const godRayUpdate = godRaysEnabled ? createGodRays(group, xPos, winY, winZ) : null;
+    const godRayUpdate = godRaysEnabled ? createGodRays(group, xPos, winY, winZ, godRayMaterialFactory) : null;
 
 
     // --- Physics ---
@@ -309,25 +310,41 @@ function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight,
     return godRayUpdate;
 }
 
-function createGodRays(group, x, y, z) {
+function createGodRays(group, x, y, z, nodeMaterialFactory = null) {
     // Generate Noise Texture for Volumetric Effect
     const noiseTexture = generateNoiseTexture();
 
-    // Shader Material
-    const material = new THREE.ShaderMaterial({
-        uniforms: {
-            uTime: { value: 0.0 },
-            tNoise: { value: noiseTexture },
-            uColor: { value: new THREE.Color(0xddeeff) },
-            uSpeed: { value: 0.1 }
-        },
-        vertexShader: GodRayShader.vertexShader,
-        fragmentShader: GodRayShader.fragmentShader,
-        transparent: true,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending
-    });
+    // Material: TSL NodeMaterial on WebGPU (raw-GLSL ShaderMaterial is unsupported
+    // there), otherwise the classic ShaderMaterial on WebGL. Both share the same
+    // noise texture and produce the same scrolling-dust beam; `setTime` advances
+    // the animation regardless of which path built the material.
+    let material;
+    let setTime;
+    if (nodeMaterialFactory) {
+        const built = nodeMaterialFactory({
+            noiseTexture,
+            color: new THREE.Color(0xddeeff),
+            speed: 0.1
+        });
+        material = built.material;
+        setTime = built.setTime;
+    } else {
+        material = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0.0 },
+                tNoise: { value: noiseTexture },
+                uColor: { value: new THREE.Color(0xddeeff) },
+                uSpeed: { value: 0.1 }
+            },
+            vertexShader: GodRayShader.vertexShader,
+            fragmentShader: GodRayShader.fragmentShader,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+        setTime = (time) => { material.uniforms.uTime.value = time; };
+    }
 
     // Geometry: Cone/Cylinder
     const length = 40;
@@ -347,11 +364,9 @@ function createGodRays(group, x, y, z) {
 
     group.add(mesh);
 
-    // Update Function
+    // Update Function (advances the scrolling-dust animation)
     return (time) => {
-        if (material.uniforms) {
-            material.uniforms.uTime.value = time;
-        }
+        setTime(time);
     };
 }
 

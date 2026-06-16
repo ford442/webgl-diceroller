@@ -9,7 +9,10 @@ function getRendererPreference(searchParams) {
         return 'webgpu';
     }
 
-    return 'webgl';
+    // Default to the modern WebGPU path. When the browser lacks `navigator.gpu`
+    // or WebGPU init fails, createRenderer() gracefully falls back to WebGL.
+    // `?webgl` is the explicit escape hatch to the stable baseline renderer.
+    return 'webgpu';
 }
 
 function applySharedRendererConfig(renderer, width, height) {
@@ -23,13 +26,43 @@ function applySharedRendererConfig(renderer, width, height) {
     renderer.toneMappingExposure = 0.8;
 }
 
+function createWebGlRenderer({ antialias, width, height, requestedRenderer, fallbackReason }) {
+    const renderer = new THREE.WebGLRenderer({ antialias });
+    applySharedRendererConfig(renderer, width, height);
+
+    return {
+        renderer,
+        rendererType: 'webgl',
+        usingWebGPU: false,
+        usingWebGL: true,
+        requestedRenderer,
+        fallbackReason
+    };
+}
+
 export async function createRenderer(container, { antialias = false } = {}) {
     const width = container.clientWidth;
     const height = container.clientHeight;
     const searchParams = new URLSearchParams(window.location.search);
     const preferredRenderer = getRendererPreference(searchParams);
+    // Distinguish an explicit `?webgpu` request from the implicit default so a
+    // fallback on an unsupported browser logs calmly (info) rather than alarmingly
+    // (warn) for the common no-flag case.
+    const webgpuExplicit = searchParams.has('webgpu') || searchParams.has('wgpu');
 
     if (preferredRenderer === 'webgpu') {
+        const hasWebGpuApi = typeof navigator !== 'undefined' && Boolean(navigator.gpu);
+
+        if (!hasWebGpuApi) {
+            const reason = 'WebGPU unavailable (navigator.gpu missing); using WebGLRenderer.';
+            (webgpuExplicit ? console.warn : console.info)(`[RendererFactory] ${reason}`);
+            return createWebGlRenderer({
+                antialias, width, height,
+                requestedRenderer: preferredRenderer,
+                fallbackReason: reason
+            });
+        }
+
         try {
             const THREE_WEBGPU = await import('three/webgpu');
             const renderer = new THREE_WEBGPU.WebGPURenderer({ antialias });
@@ -45,21 +78,19 @@ export async function createRenderer(container, { antialias = false } = {}) {
                 fallbackReason: null
             };
         } catch (error) {
-            console.warn('[RendererFactory] WebGPU init failed, falling back to WebGLRenderer.', error);
+            const reason = `WebGPU init failed (${error?.message ?? error}); using WebGLRenderer fallback.`;
+            console.warn(`[RendererFactory] ${reason}`, error);
+            return createWebGlRenderer({
+                antialias, width, height,
+                requestedRenderer: preferredRenderer,
+                fallbackReason: reason
+            });
         }
     }
 
-    const renderer = new THREE.WebGLRenderer({ antialias });
-    applySharedRendererConfig(renderer, width, height);
-
-    return {
-        renderer,
-        rendererType: 'webgl',
-        usingWebGPU: false,
-        usingWebGL: true,
+    return createWebGlRenderer({
+        antialias, width, height,
         requestedRenderer: preferredRenderer,
-        fallbackReason: preferredRenderer === 'webgpu'
-            ? 'WebGPU init failed; using WebGLRenderer fallback.'
-            : null
-    };
+        fallbackReason: null
+    });
 }

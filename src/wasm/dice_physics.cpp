@@ -501,6 +501,10 @@ public:
             if (b.id != id) continue;
             b.velocity = {lvx, lvy, lvz};
             b.angularVelocity = {avx, avy, avz};
+            // Wake the body so the new velocity is actually integrated — step()
+            // skips sleeping bodies, so without this a settled die ignores
+            // user-driven velocity (e.g. ?wasm-drag release throws).
+            wake(b);
             break;
         }
     }

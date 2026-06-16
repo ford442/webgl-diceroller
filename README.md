@@ -1,7 +1,28 @@
-WebGL Dice Roller
+WebGPU Dice Roller
 ===========================================
 
-This is a WebGL application that uses the CubicVR engine to spawn 3D models of gaming dice (found on blender forums) and allows the user to fling them around like real dice.
+A Three.js application that spawns 3D models of gaming dice (d4–d20) in a tavern-themed
+scene and lets you fling, drag, and levitate them with realistic rigid-body physics.
+(Originally built on the CubicVR engine — preserved in `legacy/` — and since migrated to
+a modern Three.js + Vite stack.)
+
+## Rendering
+
+The app renders with **`WebGPURenderer` by default** on browsers that support WebGPU
+(`navigator.gpu`), using a TSL post-processing stack (bloom, vignette, optional
+chromatic aberration). On browsers without WebGPU — or if WebGPU init fails — it
+**automatically falls back to `WebGLRenderer`**, the stable baseline path.
+
+Renderer / post flags (work on both paths unless noted):
+
+- `?webgl` — force the WebGL baseline renderer (escape hatch / older browsers).
+- `?webgpu` / `?wgpu` — force WebGPU explicitly (redundant with the default).
+- `?renderer-info` — show a small badge with the active renderer type.
+- `?no-post` — disable post-processing entirely.
+- `?low-post` — lower post / bloom quality.
+- `?no-bloom` — disable bloom only.
+- `?no-godrays` — disable the tavern window volumetric light beams.
+- `?debug` / `?debug-perf` — show render stats (incl. renderer type and any fallback).
 
 ## WASM Physics Engine
 

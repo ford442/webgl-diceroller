@@ -4,7 +4,7 @@
 
 This is a **WebGL-based 3D dice roller application** built with Three.js. It simulates a tavern-themed environment where users can spawn, throw, and interact with various gaming dice (d4, d6, d8, d10, d12, d20) using realistic rigid-body physics. The project was originally built using the CubicVR engine (preserved in `legacy/`) and has been migrated to a modern Three.js + Vite stack.
 
-> **Note on naming:** The HTML `<title>` reads "WebGPU Dice Roller". The default runtime remains `THREE.WebGLRenderer`, but the repo now includes an opt-in `?webgpu` prototype path using Three.js `WebGPURenderer` with a TSL post stack. `?webgl` forces the stable WebGL path.
+> **Renderer default:** The default runtime is now `THREE.WebGPURenderer` (with a TSL post stack) on browsers that expose `navigator.gpu`; it automatically falls back to `THREE.WebGLRenderer` when WebGPU is unavailable or init fails. `?webgl` forces the stable WebGL baseline path (kept as the supported fallback for older browsers and testing). The HTML `<title>` "WebGPU Dice Roller" now matches the default.
 
 ## Technology Stack
 
@@ -13,7 +13,7 @@ This is a **WebGL-based 3D dice roller application** built with Three.js. It sim
 | 3D Engine | Three.js (`^0.181.2`) |
 | Physics | Custom `DicePhysicsEngine` WASM (SAT polyhedral) + ammo.js (`^0.0.10`) fallback/interaction bridge |
 | Build Tool | Vite (`^7.3.1`) |
-| Rendering | WebGLRenderer by default, optional WebGPURenderer prototype behind `?webgpu` |
+| Rendering | WebGPURenderer by default (auto-fallback to WebGLRenderer); `?webgl` forces the WebGL baseline |
 | Module System | ES Modules |
 | Test Automation | Playwright (`^1.58.2`, ad-hoc Node.js scripts only) |
 
@@ -87,18 +87,20 @@ npm run preview
 
 - `npm run dev` still works without compiled WASM artifacts; the bridge falls back to ammo.js automatically.
 - `?no-wasm` forces the ammo fallback path even if `public/wasm/` exists.
-- `?dual-physics` steps ammo and WASM in parallel for validation/debugging.
+- `?dual-physics` steps ammo and WASM in parallel for validation/debugging. Note: with `?wasm-drag`, drag/levitation no longer force an ammo step, but `?dual-physics` still steps ammo every frame so side-by-side validation of free-flight dice is unaffected.
+- `?wasm-drag` (experimental) routes left-click drag and double-click levitation through the WASM world instead of ammo.js constraints; auto-falls back to the ammo path when WASM is unavailable. Staging flag for retiring ammo for dice.
 - `?worker-physics` (experimental) runs the WASM engine inside a Web Worker.
 - `?no-drag` disables quadratic air resistance on both ammo.js and WASM paths.
 - `?fair-dice` disables the pipping COM bias.
 - Render/perf flags:
-  - `?webgpu` opts into the experimental WebGPU renderer path.
-  - `?webgl` forces the stable WebGL renderer path.
-  - `?no-post` disables the composer entirely.
-  - `?low-post` keeps post enabled but lowers bloom quality.
-  - `?no-bloom` disables only bloom.
-  - `?no-godrays` disables the tavern window volumetric beam meshes.
-  - `?debug` / `?debug-perf` shows render stats; `debug-perf` also logs slow frame systems.
+  - WebGPU is the default; `?webgpu` / `?wgpu` are redundant but still force it explicitly.
+  - `?webgl` forces the stable WebGL baseline path (escape hatch / older browsers).
+  - `?no-post` disables the composer entirely (both renderers).
+  - `?low-post` keeps post enabled but lowers bloom quality (both renderers).
+  - `?no-bloom` disables only bloom (both renderers).
+  - `?no-godrays` disables the tavern window volumetric beam meshes (both renderers).
+  - `?renderer-info` shows a small badge with the active renderer type.
+  - `?debug` / `?debug-perf` shows render stats (incl. renderer type + fallback); `debug-perf` also logs slow frame systems.
 
 ## Architecture Details
 
@@ -170,8 +172,10 @@ npm run preview
 - `registerInteractiveObject(mesh, callback)` — API for static props (e.g., lamp, skull, gong) to receive click events.
 - Left-click on a die starts a `btPoint2PointConstraint` drag. Mouse movement updates the constraint pivot on a camera-aligned plane.
 - Double-clicking a die (within 300ms) triggers **levitation**: the body becomes kinematic (`CF_KINEMATIC_OBJECT` flag | 2), rises with a blue glow (`0x0088ff` PointLight), spins, then is released with a random throw after 1.5s.
+- **`?wasm-drag` (experimental cutover):** routes drag + levitation through the WASM world instead of ammo. The die stays WASM-authoritative; drag drives `setDieVelocity` toward the cursor target each frame (velocity-clamped), levitation drives `setDieTransform`/`setDieVelocity` kinematically, and release hands back to the solver via `setDieVelocity`. No ammo constraint or kinematic flags are used, and the main loop skips the ammo step for these interactions (`interactionNeedsAmmoStep()`). Collision events still flow through `pollCollisionEvents()` to the audio system. Falls back to the ammo path automatically when WASM is unavailable. This is the staging ground for retiring ammo for dice.
+- The WASM control primitives live in `src/dice.js`: `driveDieWasmTransform`, `setDieWasmVelocity`, `getDieWasmTransform` (alongside `applyWasmImpulseForDie`).
 - `getHoveredDie(camera, normX, normY)` — returns the die under the cursor for hover cursor changes.
-- `updateInteraction()` — activates dragged bodies and updates levitation state each frame.
+- `updateInteraction(deltaTime)` — activates dragged bodies (ammo) or drives the WASM drag, and updates levitation state each frame.
 
 ### `src/ui.js`
 - `initUI(onUpdateDice, onRollAll)` — creates a DOM overlay in the top-right with number inputs for each dice type (d4–d20, range 0–10) and a "Roll All" button.
@@ -193,9 +197,9 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 - Shadows are aggressively optimized: small decorative props are listed in `SHADOW_DISABLED_PROP_NAMES` in `src/environment/PropRegistry.js`.
 
 ### Rendering Notes
-- WebGL remains the default and most compatible runtime.
-- `?webgpu` uses `WebGPURenderer` plus the TSL post pipeline. It is intentionally opt-in.
-- The tavern window god-ray mesh uses `THREE.ShaderMaterial`, so it is disabled automatically on the WebGPU path unless that effect is ported to TSL/WGSL later.
+- WebGPU is the default on supported browsers; WebGL is the automatic fallback and the most compatible baseline (force it with `?webgl`).
+- WebGPU uses `WebGPURenderer` plus the TSL post pipeline (bloom, vignette, optional chromatic aberration in high quality).
+- The tavern window god rays render on both paths: WebGL uses the raw-GLSL `GodRayShader.js` `ShaderMaterial`; WebGPU uses the TSL `MeshBasicNodeMaterial` in `src/shaders/GodRayNodeMaterial.js`. Toggle with `?no-godrays` independent of renderer.
 - `GodRayShader.js` is used for the scene-space moonlight beam mesh in `TavernWalls.js`; it is not part of the fullscreen composer pipeline.
 
 ## Asset Pipeline
@@ -336,5 +340,5 @@ python deploy.py
 - **ColladaLoader migration is complete** — dice models now load as Draco-compressed `.glb` files from `public/images/dice/`.
 - **WASM die-to-die contacts are now SAT-based polyhedral** (Phase 3). Bounding spheres remain as a fallback when hulls are not loaded.
 - **No automated test coverage** beyond the three ad-hoc Playwright smoke tests.
-- **GodRayShader** exists but is not wired into the current post-processing pipeline.
-- The HTML `<title>` says "WebGPU Dice Roller" but the renderer is WebGL.
+- **GodRayShader** drives the scene-space moonlight beam mesh (not the fullscreen composer); it has a TSL twin (`GodRayNodeMaterial.js`) for the WebGPU path.
+- The HTML `<title>` "WebGPU Dice Roller" now matches the default renderer (WebGPU, with WebGL fallback).

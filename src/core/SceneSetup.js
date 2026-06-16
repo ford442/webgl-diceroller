@@ -108,13 +108,26 @@ export async function setupScene(container) {
     const postConfig = {
         quality: postQuality,
         bloomEnabled: !disablePost && !disableBloom,
-        godRaysEnabled: !disableGodRays && !rendererState.usingWebGPU,
+        godRaysEnabled: !disableGodRays,
         lowEndDetected: isLowEndDevice,
         rendererType: rendererState.rendererType,
         requestedRenderer: rendererState.requestedRenderer,
         chromaticAberrationEnabled: rendererState.usingWebGPU && postQuality === 'high'
     };
     scene.userData.postConfig = postConfig;
+
+    // God rays use a raw-GLSL ShaderMaterial that WebGPURenderer can't compile,
+    // so preload a synchronous TSL NodeMaterial factory the tavern walls can use
+    // instead. WebGL keeps the original ShaderMaterial path (no factory stashed).
+    if (rendererState.usingWebGPU && postConfig.godRaysEnabled) {
+        try {
+            const { loadGodRayNodeMaterialFactory } = await import('../shaders/GodRayNodeMaterial.js');
+            scene.userData.godRayMaterialFactory = await loadGodRayNodeMaterialFactory();
+        } catch (error) {
+            console.warn('[SceneSetup] God ray TSL material unavailable; disabling on WebGPU.', error);
+            postConfig.godRaysEnabled = false;
+        }
+    }
 
     // Lights
     // Ambient light (low intensity)

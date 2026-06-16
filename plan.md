@@ -44,11 +44,12 @@ The current production path still uses Three.js `WebGLRenderer` by default. The 
 ### Current Prototype Status
 *   **Renderer abstraction:** `src/core/RendererFactory.js` can select `WebGPURenderer` behind `?webgpu` and falls back to `WebGLRenderer` when init fails or `?webgl` is forced.
 *   **Post stack split:** WebGL keeps `EffectComposer`; WebGPU uses Three.js TSL `PostProcessing`.
-*   **Known compatibility gap:** `ShaderMaterial`-based effects like the tavern window god rays do not run on the WebGPU path and are disabled there.
+*   **God rays at parity:** the tavern window god rays now run on both renderers — WebGL uses the raw-GLSL `GodRayShader.js` `ShaderMaterial`, WebGPU uses the equivalent TSL `MeshBasicNodeMaterial` in `src/shaders/GodRayNodeMaterial.js`. They share the same noise texture and animation, and remain togglable via `?no-godrays` independent of renderer.
+*   **No remaining `ShaderMaterial` gaps:** `GodRayShader` was the only raw-GLSL `ShaderMaterial` in `src/`; all other custom effects (bloom, vignette, chromatic aberration) already have TSL equivalents on the WebGPU path.
 
 ### Migration Steps
 1.  **Keep the opt-in boundary strict:** land WebGPU changes only when `?webgpu` visuals remain close to `?webgl`.
-2.  **Port custom shaders to TSL/WGSL:** replace `ShaderMaterial` effects, starting with `GodRayShader.js`, before making WebGPU the default.
+2.  **Port custom shaders to TSL/WGSL:** ✅ done — `GodRayShader.js` now has a TSL twin (`GodRayNodeMaterial.js`); no other `ShaderMaterial` effects remain to port.
 3.  **Audit materials and loaders:** verify environment maps, shadow quality, tone mapping, and texture color spaces match across both renderers.
 4.  **Add a regression harness:** compare `?webgl` and `?webgpu` screenshots or scene stats in Playwright where browser support allows it.
 5.  **Only then consider default-on WebGPU:** after parity and fallback behavior are stable.

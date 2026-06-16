@@ -12,7 +12,8 @@
     "build:wasm": "bash src/wasm/build.sh",
     "build:wasm_colab": "bash src/wasm/build_colab.sh",
     "convert:dice": "node scripts/convert-dice-to-glb.mjs",
-    "convert:props": "node scripts/convert-props.mjs"
+    "convert:props": "node scripts/convert-props.mjs",
+    "verify:worker-physics": "node scripts/verify-worker-physics.mjs"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.1.0",

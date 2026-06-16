@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 import { initPhysics, stepPhysics, pollAmmoCollisionEvents } from './physics.js';
-import { loadWasmEngine, isWasmAvailable, getWasmEngine } from './wasm/WasmPhysicsBridge.js';
+import { loadWasmEngine, isWasmAvailable, getWasmEngine } from './wasm/PhysicsBridge.js';
 import {
     updateDiceVisuals,
     throwDice,
@@ -11,7 +11,7 @@ import {
     applyDiceMassBiases
 } from './dice.js';
 import { showResults, hideResults } from './results.js';
-import { updateInteraction, hasActiveDiceInteraction } from './interaction.js';
+import { updateInteraction, interactionNeedsAmmoStep } from './interaction.js';
 import { createDiceCollisionAudio } from './audio/DiceCollisionAudio.js';
 import { updateAtmosphere } from './environment/Atmosphere.js';
 import { setupScene } from './core/SceneSetup.js';
@@ -145,6 +145,39 @@ function createDebugOverlay() {
     return overlay;
 }
 
+// Small, unobtrusive indicator of the active renderer. Shown when ?debug is on,
+// when ?renderer-info is requested, or whenever WebGPU fell back to WebGL so the
+// user understands they're on the degraded baseline path. In the happy WebGPU
+// case (no debug) nothing is shown, keeping the UI clean.
+function createRendererBadge(state, { persistent }) {
+    const container = document.getElementById('canvas-container') || document.body;
+    const badge = document.createElement('div');
+    const isFallback = Boolean(state?.fallbackReason);
+    const type = state?.rendererType ?? 'webgl';
+    badge.textContent = isFallback ? `renderer: ${type} (fallback)` : `renderer: ${type}`;
+    badge.title = state?.fallbackReason ?? '';
+    badge.style.position = 'absolute';
+    badge.style.bottom = '10px';
+    badge.style.left = '10px';
+    badge.style.backgroundColor = isFallback ? 'rgba(120, 40, 0, 0.7)' : 'rgba(0, 0, 0, 0.55)';
+    badge.style.color = isFallback ? '#ffd9b0' : '#bfe8ff';
+    badge.style.fontFamily = 'monospace';
+    badge.style.fontSize = '11px';
+    badge.style.padding = '4px 8px';
+    badge.style.borderRadius = '5px';
+    badge.style.zIndex = '1100';
+    badge.style.pointerEvents = 'none';
+    badge.style.transition = 'opacity 0.6s ease';
+    container.appendChild(badge);
+
+    // Persistent under ?debug/?renderer-info; otherwise (fallback notice) fade out.
+    if (!persistent) {
+        setTimeout(() => { badge.style.opacity = '0'; }, 4000);
+        setTimeout(() => { badge.remove(); }, 4800);
+    }
+    return badge;
+}
+
 init();
 
 async function init() {
@@ -172,6 +205,12 @@ async function init() {
         fairnessMonitor = createFairnessMonitor({ enabled: true });
         fairnessMonitor.init();
     }
+    // Surface the active renderer in-UI: persistently under ?debug/?renderer-info,
+    // or as a brief auto-fading notice whenever WebGPU fell back to WebGL.
+    const rendererInfoRequested = searchParams.has('renderer-info');
+    if (debugEnabled || rendererInfoRequested || rendererState?.fallbackReason) {
+        createRendererBadge(rendererState, { persistent: debugEnabled || rendererInfoRequested });
+    }
     window.addEventListener('pointerdown', () => collisionAudio?.resume(), { passive: true });
     window.addEventListener('keydown', () => collisionAudio?.resume(), { passive: true });
 
@@ -179,7 +218,10 @@ async function init() {
         if (!physicsWorld) return;
 
         const useWasm = isWasmAvailable();
-        const shouldStepAmmo = !useWasm || dualPhysicsValidation || hasActiveDiceInteraction();
+        // WASM-mode interactions (?wasm-drag) are driven entirely in the WASM
+        // world, so they don't force an ammo step. Ammo still steps for the
+        // ammo-authoritative drag/levitation path and dual-physics validation.
+        const shouldStepAmmo = !useWasm || dualPhysicsValidation || interactionNeedsAmmoStep();
         applyDiceMassBiases({
             deltaTime,
             applyAmmo: shouldStepAmmo,
@@ -213,9 +255,9 @@ async function init() {
         }
     });
 
-    scheduler.register('updates', 'interaction', () => {
+    scheduler.register('updates', 'interaction', ({ deltaTime }) => {
         if (!physicsWorld) return;
-        updateInteraction();
+        updateInteraction(deltaTime);
     }, { priority: -20 });
 
     scheduler.register('updates', 'atmosphere', ({ time }) => {
