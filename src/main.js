@@ -8,7 +8,8 @@ import {
     syncAllDiceToWasm,
     areDiceSettled,
     pollPhysicsCollisionEvents,
-    applyDiceMassBiases
+    applyDiceMassBiases,
+    spawnedDice
 } from './dice.js';
 import { showResults, hideResults } from './results.js';
 import { updateInteraction, interactionNeedsAmmoStep } from './interaction.js';
@@ -16,12 +17,25 @@ import { createDiceCollisionAudio } from './audio/DiceCollisionAudio.js';
 import { updateAtmosphere } from './environment/Atmosphere.js';
 import { setupScene } from './core/SceneSetup.js';
 import { LampMode } from './environment/Lamp.js';
+import {
+    getPropsByTag,
+    getPropsByCategory,
+    getPropDescriptor,
+    getRandomProps,
+    getClutterPool,
+    getAllTags,
+    getAllCategories,
+    selectDecorPoolEntries,
+    PROP_INDEX
+} from './environment/PropRegistry.js';
 import { loadTiers } from './core/LoadingTiers.js';
 import { setupInput } from './core/InputHandler.js';
 import { createCameraController, DiceFocusState } from './core/CameraController.js';
 import { createFrameScheduler } from './core/FrameScheduler.js';
 import { createCandleFlickerSystem, createFireplaceFlickerSystem } from './core/LightingSystems.js';
 import { createFairnessMonitor } from './debug/FairnessMonitor.js';
+import { createCullingSystem } from './core/CullingSystem.js';
+import { createRenderStats } from './debug/RenderStats.js';
 
 let camera, scene, renderer, composer;
 let physicsWorld;
@@ -42,13 +56,29 @@ const scheduler = createFrameScheduler({
     maxPhysicsSteps: 5,
     debugPerf: searchParams.has('debug-perf')
 });
+const cullingSystem = createCullingSystem({ enabled: !searchParams.has('no-cull') });
+
+// Prop library query API — pure module exports, exposed early (independent of the
+// async scene load) so it's available from the console for inspecting the 80+ prop
+// catalogue and for building themed-table / filtered-clutter features.
+window.PropRegistry = {
+    getPropsByTag,
+    getPropsByCategory,
+    getPropDescriptor,
+    getRandomProps,
+    getClutterPool,
+    getAllTags,
+    getAllCategories,
+    selectDecorPoolEntries,
+    PROP_INDEX
+};
 let postConfig;
 let shadowController;
-let debugOverlay = null;
-let frameMsSmoothed = 16.7;
+let renderStats = null;
 let rendererState;
 let fairnessMonitor = null;
 let collisionAudio = null;
+let collisionTotal = 0; // running count of collision events, for the debug HUD
 
 // "Eye-Head" Cursor Logic
 const cursorPos = new THREE.Vector2(0, 0); // Pixel coordinates relative to center
@@ -126,25 +156,6 @@ function createShadowController(rendererRef, sceneRef) {
     };
 }
 
-function createDebugOverlay() {
-    const container = document.getElementById('canvas-container') || document.body;
-    const overlay = document.createElement('div');
-    overlay.style.position = 'absolute';
-    overlay.style.top = '10px';
-    overlay.style.right = '360px';
-    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
-    overlay.style.color = '#d7f7d0';
-    overlay.style.fontFamily = 'monospace';
-    overlay.style.fontSize = '11px';
-    overlay.style.padding = '8px 10px';
-    overlay.style.borderRadius = '6px';
-    overlay.style.zIndex = '1100';
-    overlay.style.pointerEvents = 'none';
-    overlay.style.whiteSpace = 'pre-line';
-    container.appendChild(overlay);
-    return overlay;
-}
-
 // Small, unobtrusive indicator of the active renderer. Shown when ?debug is on,
 // when ?renderer-info is requested, or whenever WebGPU fell back to WebGL so the
 // user understands they're on the degraded baseline path. In the happy WebGPU
@@ -201,7 +212,27 @@ async function init() {
     window.__renderStats = scheduler.stats;
     collisionAudio = createDiceCollisionAudio();
     if (debugEnabled) {
-        debugOverlay = createDebugOverlay();
+        renderStats = createRenderStats({
+            renderer,
+            scene,
+            scheduler,
+            cullingSystem,
+            debugPerf: searchParams.has('debug-perf'),
+            getRendererState: () => rendererState,
+            getPost: () => postConfig,
+            getShadow: () => ({
+                autoUpdate: renderer.shadowMap.autoUpdate,
+                staticRefreshes: shadowController?.state.staticShadowRefreshes ?? 0
+            }),
+            getDice: () => ({ count: spawnedDice.length, settled: areDiceSettled() }),
+            getWasm: () => ({ available: isWasmAvailable(), active: isWasmAvailable() }),
+            getAudio: () => collisionAudio?.getStats?.() ?? null,
+            getCollisionTotal: () => collisionTotal
+        });
+        // Backtick toggles the HUD during playtesting without reloading.
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Backquote') renderStats?.toggle();
+        });
         fairnessMonitor = createFairnessMonitor({ enabled: true });
         fairnessMonitor.init();
     }
@@ -213,6 +244,11 @@ async function init() {
     }
     window.addEventListener('pointerdown', () => collisionAudio?.resume(), { passive: true });
     window.addEventListener('keydown', () => collisionAudio?.resume(), { passive: true });
+    // Lean into the tavern ambience while the player sits in FPS/pointer-lock mode.
+    document.addEventListener('pointerlockchange', () => {
+        const locked = document.pointerLockElement != null;
+        collisionAudio?.setAmbientIntensity(locked ? 1.0 : 0.5);
+    });
 
     scheduler.register('physicsStep', 'dicePhysics', ({ deltaTime }) => {
         if (!physicsWorld) return;
@@ -247,6 +283,7 @@ async function init() {
             ...pollPhysicsCollisionEvents(),
             ...pollAmmoCollisionEvents(physicsWorld)
         ];
+        collisionTotal += events.length;
         for (const ev of events) {
             collisionAudio?.handleCollisionEvent(ev);
             if (window.__onDiceCollision) {
@@ -290,8 +327,15 @@ async function init() {
         if (!shadowController) return;
         shadowController.update(time * 1000, areDiceSettled());
     });
-    scheduler.register('preRender', 'debugOverlay', ({ deltaTime }) => {
-        frameMsSmoothed = THREE.MathUtils.lerp(frameMsSmoothed, deltaTime * 1000, 0.1);
+    // Runs last in preRender (after the camera has moved this frame) so we cull
+    // against the up-to-date frustum, right before sceneRender.
+    scheduler.register('preRender', 'frustumCull', () => {
+        cullingSystem.update(camera);
+        scheduler.stats.culling = cullingSystem.stats;
+    }, { priority: 100 });
+    scheduler.register('preRender', 'debugStats', ({ deltaTime }) => {
+        // Keep window.__renderStats populated for external/test consumers even
+        // when the on-screen HUD isn't shown.
         scheduler.stats.shadow = {
             autoUpdate: renderer.shadowMap.autoUpdate,
             needsUpdate: renderer.shadowMap.needsUpdate,
@@ -299,19 +343,7 @@ async function init() {
             motionSources: shadowController?.state.externalMotionCount ?? 0
         };
         scheduler.stats.post = postConfig;
-        if (!debugOverlay) return;
-
-        const renderInfo = renderer.info.render;
-        const memoryInfo = renderer.info.memory;
-        const programs = renderer.info.programs?.length ?? 0;
-        debugOverlay.textContent = [
-            `frame ${frameMsSmoothed.toFixed(1)} ms`,
-            `renderer ${rendererState?.rendererType ?? 'unknown'}${rendererState?.fallbackReason ? ' fallback' : ''}`,
-            `draws ${renderInfo.calls} tris ${renderInfo.triangles}`,
-            `geom ${memoryInfo.geometries} tex ${memoryInfo.textures} prog ${programs}`,
-            `shadows ${renderer.shadowMap.autoUpdate ? 'dynamic' : 'static'} refresh ${shadowController?.state.staticShadowRefreshes ?? 0}`,
-            `post ${postConfig.quality}${postConfig.bloomEnabled ? ' +bloom' : ''}${postConfig.chromaticAberrationEnabled ? ' +ca' : ''}`
-        ].join('\n');
+        renderStats?.update({ deltaTime });
     });
 
     scheduler.register('render', 'sceneRender', () => {
@@ -372,7 +404,8 @@ async function init() {
     // Load all tiers
     let tierResult;
     try {
-    tierResult = await loadTiers(scene, camera, physicsWorld, { scheduler }, {
+    tierResult = await loadTiers(scene, camera, physicsWorld, { scheduler, cullingSystem }, {
+        audio: collisionAudio,
         onDiceRoll: () => {
             shadowController?.pulse('roll');
             cameraController.setState(DiceFocusState.WAITING_FOR_STOP);

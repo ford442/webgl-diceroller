@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
+import { playPropImpact } from '../audio/DiceCollisionAudio.js';
 
 export function createSkull(scene, physicsWorld, position = { x: -10, y: -2.4, z: -10 }, rotationY = 0.3) {
     const group = new THREE.Group();
@@ -100,6 +101,8 @@ export function createSkull(scene, physicsWorld, position = { x: -10, y: -2.4, z
     let isGlowing = false;
 
     const toggleGlow = () => {
+        // Hollow bone knock on interaction.
+        playPropImpact({ surface: 'bone', volume: 0.5 });
         isGlowing = !isGlowing;
         const intensity = isGlowing ? eyeLightIntensity : 0;
         leftLight.intensity = intensity;

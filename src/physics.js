@@ -176,7 +176,11 @@ export const pollAmmoCollisionEvents = (world) => {
             mass: sourceMeta?.mass ?? 5,
             inertiaScalar: sourceMeta?.inertiaScalar ?? 0,
             linearSpeedSq,
-            angularSpeedSq
+            angularSpeedSq,
+            // Material hints for the audio voice selector. A body with no audio
+            // meta (the table, or a prop that didn't register one) reads as wood.
+            surface: sourceMeta?.surface ?? 'die',
+            otherSurface: otherMeta?.surface ?? (otherMeta ? 'die' : 'table')
         });
     }
 

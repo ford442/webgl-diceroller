@@ -42,12 +42,15 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
     const layoutConfig = resolveTableLayoutConfig();
     const registerUpdateFn = (name, update, priority = 0) => registerUpdate(orchestrator, name, update, priority);
 
+    const cullingSystem = orchestrator.cullingSystem ?? null;
+
     const layoutManager = createLayoutManager({
         scene,
         physicsWorld,
         scheduler: orchestrator.scheduler,
         callbacks,
-        registerUpdate: registerUpdateFn
+        registerUpdate: registerUpdateFn,
+        cullingSystem
     });
 
     const context = {
@@ -57,6 +60,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         callbacks,
         state: {},
         scheduler: orchestrator.scheduler,
+        cullingSystem,
         registerUpdate: registerUpdateFn,
         createFloorAndWalls,
         layoutConfig,
@@ -106,6 +110,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         },
         {
             layoutConfig,
+            audio: callbacks.audio ?? null,
             onRerollLayout: async (overrides) => {
                 const result = await layoutManager.rerollLayout(overrides);
                 return result;

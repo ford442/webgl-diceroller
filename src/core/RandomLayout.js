@@ -31,7 +31,8 @@ export function createLayoutManager({
     physicsWorld,
     scheduler,
     callbacks,
-    registerUpdate
+    registerUpdate,
+    cullingSystem = null
 }) {
     let config = resolveTableLayoutConfig();
     let clutterHandles = [];
@@ -44,6 +45,7 @@ export function createLayoutManager({
         callbacks,
         scheduler,
         registerUpdate,
+        cullingSystem,
         get layoutConfig() {
             return config;
         }
@@ -53,6 +55,9 @@ export function createLayoutManager({
         clutterHandles = result?.handles ?? [];
         clutterUpdateHandle?.dispose?.();
         clutterUpdateHandle = null;
+        for (const root of clutterHandles) {
+            cullingSystem?.register(root);
+        }
         if (result?.update) {
             clutterUpdateHandle = registerUpdate('clutter', result.update);
         }
@@ -78,6 +83,9 @@ export function createLayoutManager({
     }
 
     function despawnClutter() {
+        for (const root of clutterHandles) {
+            cullingSystem?.unregister(root);
+        }
         despawnRandomClutter(clutterHandles, physicsWorld);
         clutterHandles = [];
         clutterUpdateHandle?.dispose?.();

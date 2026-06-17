@@ -1,4 +1,5 @@
-import { registerInteractiveObject } from '../interaction.js';
+import { registerInteractiveObject, unregisterInteractiveObject } from '../interaction.js';
+import { registerInteractable } from '../interactables/InteractableRegistry.js';
 import { LAMP_HANG_Y, toCurrentTabletopY } from '../core/SceneMetrics.js';
 import { shuffleWithRng } from './clutter/ClutterPlacement.js';
 import { LAYOUT_THEMES } from '../core/TableLayoutConfig.js';
@@ -66,9 +67,26 @@ function applyShadowPolicyToResult(result, enabled) {
     });
 }
 
+// Shadow LOD (bonus): props whose root sits far from the table centre contribute
+// little to what the camera sees, so we statically drop their shadow casting
+// (receiving is kept so they still read as lit). Static + distance-based, applied
+// once at spawn — no per-frame shadow-map churn.
+const FAR_SHADOW_DISTANCE = 26;
+
+function applyFarShadowLOD(result) {
+    const root = resolveRootObject(result);
+    if (!root) return;
+    const dist = Math.hypot(root.position.x, root.position.z);
+    if (dist <= FAR_SHADOW_DISTANCE) return;
+    root.traverse((child) => {
+        if (child.isMesh) child.castShadow = false;
+    });
+}
+
 export const TIER_PROP_DEFINITIONS = {
     tier0: [
         factoryEntry('TavernWalls', {
+            cull: false,
             call: (ctx) => getPropFactory('TavernWalls')(ctx.scene, ctx.physicsWorld),
             afterCreate: (result, ctx) => {
                 if (result?.fireplaceLight) ctx.state.fireplaceLight = result.fireplaceLight;
@@ -76,6 +94,7 @@ export const TIER_PROP_DEFINITIONS = {
             }
         }),
         factoryEntry('Room', {
+            cull: false,
             call: (ctx) => getPropFactory('Room')(ctx.scene)
         }),
         factoryEntry('Table', {
@@ -98,7 +117,7 @@ export const TIER_PROP_DEFINITIONS = {
     ],
     tier1: [
         factoryEntry('Bookshelf', { position: { x: -18, y: -10, z: 0 }, rotation: Math.PI / 2 }),
-        factoryEntry('DecorativeWalls', { call: (ctx) => getPropFactory('DecorativeWalls')(ctx.scene, ctx.physicsWorld) }),
+        factoryEntry('DecorativeWalls', { cull: false, call: (ctx) => getPropFactory('DecorativeWalls')(ctx.scene, ctx.physicsWorld) }),
         factoryEntry('Chair', { position: { x: -14, y: -9.5, z: 6 }, rotation: Math.PI / 3 }),
         factoryEntry('Chair', { name: 'ChairRight', factoryName: 'Chair', position: { x: 14, y: -9.5, z: -6 }, rotation: -Math.PI / 3 }),
         factoryEntry('Chest', {
@@ -106,8 +125,8 @@ export const TIER_PROP_DEFINITIONS = {
             rotation: Math.PI / 8,
             afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('chest', result.update)
         }),
-        factoryEntry('Rug', { call: (ctx) => getPropFactory('Rug')(ctx.scene) }),
-        factoryEntry('Atmosphere', { call: (ctx) => getPropFactory('Atmosphere')(ctx.scene) }),
+        factoryEntry('Rug', { cull: false, call: (ctx) => getPropFactory('Rug')(ctx.scene) }),
+        factoryEntry('Atmosphere', { cull: false, call: (ctx) => getPropFactory('Atmosphere')(ctx.scene) }),
         factoryEntry('Lamp', {
             call: async (ctx) => {
                 const result = await getPropFactory('Lamp')();
@@ -117,6 +136,7 @@ export const TIER_PROP_DEFINITIONS = {
             },
             afterCreate: (result, ctx) => {
                 registerInteractiveObject(result.group, result.toggle);
+                registerInteractable('lamp', { trigger: result.toggle });
                 ctx.state.lampData = result;
                 ctx.callbacks.setLampData?.(result);
                 ctx.registerUpdate('lamp', result.update);
@@ -146,7 +166,11 @@ export const TIER_PROP_DEFINITIONS = {
         factoryEntry('Skull', {
             position: { x: -11, y: -2.4, z: 11 },
             rotation: Math.PI / 6,
-            afterCreate: (result) => result?.toggleGlow && registerInteractiveObject(result.group, result.toggleGlow)
+            afterCreate: (result) => {
+                if (!result?.toggleGlow) return;
+                registerInteractiveObject(result.group, result.toggleGlow);
+                registerInteractable('skull', { trigger: result.toggleGlow });
+            }
         }),
         factoryEntry('MerchantScale', {
             randomPool: true,
@@ -223,6 +247,7 @@ export const TIER_PROP_DEFINITIONS = {
             afterCreate: (result, ctx) => {
                 if (!result) return;
                 registerInteractiveObject(result.group, result.interact);
+                registerInteractable('gong', { trigger: result.interact });
                 ctx.state.gongData = result;
                 ctx.callbacks.setGongData?.(result);
                 ctx.registerUpdate('gong', result.update);
@@ -234,13 +259,19 @@ export const TIER_PROP_DEFINITIONS = {
             afterCreate: (result, ctx) => {
                 if (!result) return;
                 registerInteractiveObject(result.group, result.interact);
+                registerInteractable('mysticOrb', { trigger: result.interact });
                 ctx.registerUpdate('mysticOrb', result.update);
             }
         }),
         factoryEntry('DMScreen', { randomPool: true, position: { x: 0, y: -2.75, z: -16 }, rotation: 0 }),
         factoryEntry('DragonScale', { randomPool: true, position: { x: -14, y: -2.75, z: 0 }, rotation: Math.PI / 3 }),
         factoryEntry('Spyglass', { randomPool: true, position: { x: 14, y: -2.75, z: 6 }, rotation: -Math.PI / 6 }),
-        factoryEntry('PlayingCards', { randomPool: true, position: { x: -2, y: -2.75, z: 13 }, rotation: Math.PI / 8 }),
+        factoryEntry('PlayingCards', {
+            randomPool: true,
+            position: { x: -2, y: -2.75, z: 13 },
+            rotation: Math.PI / 8,
+            afterCreate: (result) => result?.interact && registerInteractiveObject(result.group, result.interact)
+        }),
         factoryEntry('Key', { randomPool: true, position: { x: 10, y: -2.75, z: 13 }, rotation: Math.PI / 4 }),
         factoryEntry('Padlock', { randomPool: true, position: { x: -14, y: -2.75, z: -4 }, rotation: Math.PI / 6 }),
         factoryEntry('Lockpicks', { randomPool: true, position: { x: -13, y: -2.75, z: -3 }, rotation: Math.PI / 8 }),
@@ -275,8 +306,8 @@ export const TIER_PROP_DEFINITIONS = {
         }),
         factoryEntry('Sundial', { randomPool: true, position: { x: 8, y: -2.75, z: 8 }, rotation: -Math.PI / 6 }),
         factoryEntry('AleKeg', { randomPool: true, position: { x: -16, y: -2.75, z: -10 }, rotation: Math.PI / 4 }),
-        factoryEntry('Flute', { randomPool: true, name: 'FluteBack', factoryName: 'Flute', position: { x: -16, y: -2.75, z: -10 }, rotation: Math.PI / 4 }),
-        factoryEntry('Flute', { randomPool: true, name: 'FluteFront', factoryName: 'Flute', position: { x: 2, y: -2.75, z: 14 }, rotation: -Math.PI / 8 }),
+        factoryEntry('Flute', { randomPool: true, name: 'FluteBack', factoryName: 'Flute', position: { x: -16, y: -2.75, z: -10 }, rotation: Math.PI / 4, afterCreate: (result) => result?.interact && registerInteractiveObject(result.group, result.interact) }),
+        factoryEntry('Flute', { randomPool: true, name: 'FluteFront', factoryName: 'Flute', position: { x: 2, y: -2.75, z: 14 }, rotation: -Math.PI / 8, afterCreate: (result) => result?.interact && registerInteractiveObject(result.group, result.interact) }),
         factoryEntry('Apple', { randomPool: true, position: { x: 13, y: -2.75, z: 7 }, rotation: Math.PI / 6 }),
         factoryEntry('PocketFlask', { randomPool: true, position: { x: -4, y: -2.75, z: 2 }, rotation: Math.PI / 4 }),
         factoryEntry('WoodenSpoon', { randomPool: true, position: { x: 10, y: -2.75, z: 12 }, rotation: Math.PI / 3 })
@@ -284,6 +315,144 @@ export const TIER_PROP_DEFINITIONS = {
 };
 
 export const DECORATIVE_TIER_ENTRIES = [...TIER_PROP_DEFINITIONS.tier2, ...TIER_PROP_DEFINITIONS.tier3];
+
+// ---------------------------------------------------------------------------
+// Tagging, categories, and querying
+// ---------------------------------------------------------------------------
+//
+// A descriptor index is built ONCE at module load (≈90 entries, trivial cost)
+// so the query helpers below are cheap lookups and never touch the hot spawn
+// loop. Each prop gets a `category` and a set of `tags`, either declared
+// explicitly on the tier entry (`factoryEntry('X', { category, tags })`) or
+// derived from the data already present (tier, randomPool, tabletop position,
+// shadow policy). Adding a tag/category to an entry is a one-line change.
+
+const FURNITURE_NAMES = new Set(['Bookshelf', 'Chair', 'Chest', 'Rug']);
+const INTERACTIVE_NAMES = new Set(['Skull', 'Gong', 'Lamp', 'MysticOrb']);
+const WALL_DECOR_NAMES = new Set(['Shield', 'BountyPoster', 'DecorativeWalls']);
+
+// Central semantic tag groupings. Keyed by factory name so a prop can be tagged
+// once here regardless of how many tier entries reference it. Merged with any
+// `tags` declared on the entry itself.
+const SEMANTIC_TAGS = {
+    weapon: ['Dagger', 'Sword', 'Shield', 'BattleAxe', 'Warhammer', 'Crossbow', 'Helmet', 'Dart'],
+    drinkware: ['Mug', 'Tankard', 'Goblet', 'Chalice', 'DrinkingHorn', 'AleKeg', 'Waterskin', 'PocketFlask'],
+    paper: ['Scroll', 'Map', 'PlayingCards', 'CharacterSheet', 'BountyPoster', 'ScrollCase', 'LeatherJournal', 'WritingSet', 'DMScreen', 'Spellbook'],
+    light: ['Lantern', 'Candelabra', 'FloatingCandles'],
+    magic: ['CrystalBall', 'MysticOrb', 'Wand', 'Runestones', 'Spellbook', 'Amulet', 'DragonScale', 'PotionSet'],
+    treasure: ['Coin', 'CoinPouch', 'Gemstones', 'Crown', 'Chalice', 'Amulet'],
+    food: ['TavernMeal', 'CheeseWheel', 'Apple'],
+    game: ['PlayingCards', 'TarotDeck', 'DiceTower', 'DiceTray', 'DiceJail', 'DiceBag'],
+    tool: ['Compass', 'Spyglass', 'MagnifyingGlass', 'Astrolabe', 'Sundial', 'Abacus', 'Lockpicks', 'Key', 'Padlock', 'PocketWatch', 'Spectacles', 'Rope']
+};
+
+// factoryName -> Set(semantic tags), inverted from SEMANTIC_TAGS once.
+const SEMANTIC_TAGS_BY_NAME = (() => {
+    const map = new Map();
+    for (const [tag, names] of Object.entries(SEMANTIC_TAGS)) {
+        for (const name of names) {
+            if (!map.has(name)) map.set(name, new Set());
+            map.get(name).add(tag);
+        }
+    }
+    return map;
+})();
+
+function deriveCategory(entry, tier) {
+    if (entry.category) return entry.category;
+    const name = entry.factoryName || entry.name;
+    if (INTERACTIVE_NAMES.has(name)) return 'interactive';
+    if (WALL_DECOR_NAMES.has(name)) return 'wallDecor';
+    if (tier === 'tier0') return 'core';
+    if (tier === 'tier1') return FURNITURE_NAMES.has(name) ? 'furniture' : 'ambiance';
+    return 'tableClutter';
+}
+
+function isTabletopEntry(entry) {
+    const pos = entry.position;
+    if (!pos) return false;
+    return entry.tabletop === true || (entry.tabletop !== false && isLegacyTabletopPosition(pos));
+}
+
+function deriveTags(entry, tier, category) {
+    const name = entry.factoryName || entry.name;
+    const tags = new Set(entry.tags ?? []);
+    tags.add(category);
+    if (entry.randomPool) tags.add('randomPool');
+    if (isTabletopEntry(entry)) tags.add('tabletop');
+    if (SHADOW_DISABLED_PROP_NAMES.has(name)) tags.add('small');
+    const semantic = SEMANTIC_TAGS_BY_NAME.get(name);
+    if (semantic) for (const t of semantic) tags.add(t);
+    return tags;
+}
+
+/**
+ * Flat, immutable-ish descriptor list for every prop entry across all tiers.
+ * Each descriptor: { entry, name, factoryName, tier, category, tags(Set),
+ * randomPool, position }.
+ */
+export const PROP_INDEX = [];
+const indexByName = new Map();      // entry.name -> descriptor
+const indexByEntry = new Map();     // entry object -> descriptor
+const indexByTag = new Map();       // tag -> descriptor[]
+const indexByCategory = new Map();  // category -> descriptor[]
+
+for (const [tier, entries] of Object.entries(TIER_PROP_DEFINITIONS)) {
+    for (const entry of entries) {
+        const factoryName = entry.factoryName || entry.name;
+        const category = deriveCategory(entry, tier);
+        const tags = deriveTags(entry, tier, category);
+        const descriptor = {
+            entry,
+            name: entry.name,
+            factoryName,
+            tier,
+            category,
+            tags,
+            randomPool: !!entry.randomPool,
+            position: entry.position ?? null
+        };
+        PROP_INDEX.push(descriptor);
+        indexByName.set(entry.name, descriptor);
+        indexByEntry.set(entry, descriptor);
+        if (!indexByCategory.has(category)) indexByCategory.set(category, []);
+        indexByCategory.get(category).push(descriptor);
+        for (const tag of tags) {
+            if (!indexByTag.has(tag)) indexByTag.set(tag, []);
+            indexByTag.get(tag).push(descriptor);
+        }
+    }
+}
+
+/** Descriptor lookup by entry name (e.g. 'PlayingCards', 'ChairRight'). */
+export const getPropDescriptor = (name) => indexByName.get(name) ?? null;
+
+/** All descriptors carrying a given tag. */
+export const getPropsByTag = (tag) => (indexByTag.get(tag) ?? []).slice();
+
+/** All descriptors in a given category. */
+export const getPropsByCategory = (category) => (indexByCategory.get(category) ?? []).slice();
+
+/** Sorted list of every tag in use (handy for building UI filters). */
+export const getAllTags = () => [...indexByTag.keys()].sort();
+
+/** Sorted list of every category in use. */
+export const getAllCategories = () => [...indexByCategory.keys()].sort();
+
+/** The candidate pool for randomized tabletop layouts (randomPool entries). */
+export const getClutterPool = () => PROP_INDEX.filter((d) => d.randomPool);
+
+// Deterministic, seedable PRNG (mulberry32-style). Shared so query-based
+// selection and the legacy decor selection produce identical sequences.
+function createPoolRng(seed) {
+    let state = ((seed ?? 1) >>> 0) + 0x9E3779B9;
+    return () => {
+        state = (state + 0x6D2B79F5) >>> 0;
+        let t = Math.imul(state ^ (state >>> 15), 1 | state);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
 
 function getDecorThemeWeight(entry, themeId) {
     const theme = LAYOUT_THEMES[themeId];
@@ -294,29 +463,94 @@ function getDecorThemeWeight(entry, themeId) {
     return 1;
 }
 
-export function selectDecorPoolEntries(entries, maxRandom, { seed, theme = 'default' } = {}) {
-    const pool = entries.filter((entry) => entry.randomPool);
-    const rng = (() => {
-        let state = ((seed ?? 1) >>> 0) + 0x9E3779B9;
-        return () => {
-            state = (state + 0x6D2B79F5) >>> 0;
-            let t = Math.imul(state ^ (state >>> 15), 1 | state);
-            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-        };
-    })();
+/**
+ * General-purpose seeded random prop selection over the descriptor index.
+ *
+ *   getRandomProps({ count: 6, tiers: ['tier2', 'tier3'], tags: ['small'],
+ *                    exclude: ['Skull'], seed, theme })
+ *
+ * Filtering is by ALL provided criteria (intersection). `count <= 0` returns the
+ * full filtered set in deterministic shuffled order. Returns the underlying tier
+ * entries (ready to hand to `spawnProp`). By default only `randomPool` props are
+ * considered (the random-extras pool); pass `randomPoolOnly: false` to include
+ * always-on props too.
+ *
+ * Selection uses the same seeded, theme-weighted ordering as the layout system,
+ * so passing only `{ count, seed, theme }` reproduces `selectDecorPoolEntries`
+ * exactly.
+ */
+export function getRandomProps({
+    count = 0,
+    tiers = null,
+    tags = null,
+    category = null,
+    exclude = [],
+    seed = 1,
+    theme = 'default',
+    randomPoolOnly = true
+} = {}) {
+    const excludeSet = new Set(exclude);
+    const tierSet = tiers ? new Set(tiers) : null;
+    const tagList = tags ?? null;
 
-    const weighted = pool.map((entry) => ({
-        entry,
-        sortKey: rng() / getDecorThemeWeight(entry, theme)
+    const pool = PROP_INDEX.filter((d) => {
+        if (randomPoolOnly && !d.randomPool) return false;
+        if (tierSet && !tierSet.has(d.tier)) return false;
+        if (category && d.category !== category) return false;
+        if (excludeSet.has(d.name) || excludeSet.has(d.factoryName)) return false;
+        if (tagList && !tagList.every((t) => d.tags.has(t))) return false;
+        return true;
+    });
+
+    const rng = createPoolRng(seed);
+    const weighted = pool.map((d) => ({
+        entry: d.entry,
+        sortKey: rng() / getDecorThemeWeight(d.entry, theme)
     }));
     weighted.sort((a, b) => a.sortKey - b.sortKey);
-    return weighted.slice(0, Math.max(0, maxRandom)).map((item) => item.entry);
+    const limit = count > 0 ? count : weighted.length;
+    return weighted.slice(0, limit).map((item) => item.entry);
+}
+
+/**
+ * Backward-compatible decor selection used by `spawnTierWithRandomPool`. The
+ * `entries` argument is retained for API stability; selection now flows through
+ * `getRandomProps` over the shared descriptor index (whose randomPool subset is
+ * exactly the randomPool subset of DECORATIVE_TIER_ENTRIES, in the same order),
+ * so output is bit-identical to the previous implementation.
+ */
+export function selectDecorPoolEntries(entries, maxRandom, { seed, theme = 'default' } = {}) {
+    return getRandomProps({ count: Math.max(0, maxRandom), seed, theme });
+}
+
+// Test/debug hook: `?forceProps=Flute,PlayingCards` guarantees those randomPool
+// props spawn regardless of seed, so e2e tests can target their interactions
+// deterministically. Has no effect on normal play.
+function getForcedProps() {
+    try {
+        const raw = new URLSearchParams(window.location.search).get('forceProps');
+        return raw ? new Set(raw.split(',').map((s) => s.trim()).filter(Boolean)) : null;
+    } catch {
+        return null;
+    }
 }
 
 export async function spawnTierWithRandomPool(entries, maxRandom, context, { seed, theme } = {}) {
     const always = entries.filter((entry) => !entry.randomPool);
     const selected = selectDecorPoolEntries(entries, maxRandom, { seed: seed ?? context.layoutConfig?.seed, theme: theme ?? context.layoutConfig?.theme });
+
+    const forced = getForcedProps();
+    if (forced) {
+        const isSelected = (entry) => selected.includes(entry);
+        for (const entry of entries) {
+            if (!entry.randomPool) continue;
+            const name = entry.factoryName || entry.name;
+            if ((forced.has(name) || forced.has(entry.name)) && !isSelected(entry)) {
+                selected.push(entry);
+            }
+        }
+    }
+
     const records = [];
 
     for (const entry of always) {
@@ -364,11 +598,26 @@ export async function spawnProp(entry, context) {
 
     if (entry.shadow === 'off' || SHADOW_DISABLED_PROP_NAMES.has(factoryName)) {
         applyShadowPolicyToResult(result, false);
+    } else if (entry.shadow !== 'on') {
+        applyFarShadowLOD(result);
     }
 
-    return { entry, result, updateHandle };
+    const root = resolveRootObject(result);
+    if (root && context.cullingSystem && entry.cull !== false) {
+        context.cullingSystem.register(root, { important: entry.important === true });
+    }
+
+    const disposers = typeof result?.dispose === 'function' ? [result.dispose] : undefined;
+    return { entry, result, updateHandle, disposers };
 }
 
 export function despawnProp(record, context) {
+    const root = resolveRootObject(record?.result);
+    if (root) {
+        context.cullingSystem?.unregister(root);
+        // Drop any raycast interaction registered against this prop's root so a
+        // re-rolled layout doesn't leave stale clickable entries behind.
+        unregisterInteractiveObject(root);
+    }
     disposePropSpawn(record, context.physicsWorld);
 }

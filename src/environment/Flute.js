@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { playFluteMelody } from '../audio/DiceCollisionAudio.js';
+import { registerInteractable } from '../interactables/InteractableRegistry.js';
+import { tween } from '../interactables/tween.js';
 
 export function createFlute(scene, physicsWorld, position = { x: 0, y: -2.75, z: 0 }, rotationY = 0) {
     const ammo = getAmmo();
@@ -92,5 +95,42 @@ export function createFlute(scene, physicsWorld, position = { x: 0, y: -2.75, z:
     
     createStaticBody(physicsWorld, dummyGroup, shape);
 
-    return { group };
+    // --- Interaction: click to play a short melody, with a gentle lift/wobble ---
+    let playCount = 0;
+    let animating = false;
+    const baseY = group.position.y;
+    const baseRotX = group.rotation.x;
+
+    const interact = () => {
+        playCount++;
+        playFluteMelody();
+        if (!animating) {
+            animating = true;
+            tween({
+                duration: 520,
+                onUpdate: (e) => {
+                    // A soft breathy lift + tilt while "played".
+                    const lift = Math.sin(e * Math.PI);
+                    group.position.y = baseY + lift * 0.12;
+                    group.rotation.x = baseRotX + lift * 0.12;
+                },
+                onComplete: () => {
+                    group.position.y = baseY;
+                    group.rotation.x = baseRotX;
+                    animating = false;
+                }
+            });
+        }
+    };
+
+    registerInteractable('flute', {
+        trigger: interact,
+        getState: () => ({ playCount })
+    });
+
+    return {
+        group,
+        interact,
+        dispose: () => { /* interactable handle is shared/overwritten across flutes */ }
+    };
 }

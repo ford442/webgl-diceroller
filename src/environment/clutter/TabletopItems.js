@@ -79,18 +79,43 @@ export function createCoins(scene, physicsWorld, options = {}) {
         envMapIntensity: 0.9
     });
 
-    const materials = [goldMaterial, silverMaterial, copperMaterial];
+    // The coin colours (gold/silver/copper) are baked into per-instance colours,
+    // so all 15 coins render as a single InstancedMesh (one draw call) sharing one
+    // metallic material instead of 15 separate meshes.
+    const coinColors = [
+        new THREE.Color(0xffd700), // gold
+        new THREE.Color(0xc0c0c0), // silver
+        new THREE.Color(0xb87333)  // copper
+    ];
+    const instanceMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        metalness: 1.0,
+        roughness: 0.3,
+        envMapIntensity: 1.1
+    });
+    // Dispose the now-unused per-colour materials kept for backwards reference.
+    goldMaterial.dispose();
+    silverMaterial.dispose();
+    copperMaterial.dispose();
+
     const count = 15;
     const placement = resolvePlacement(options, { x: -4, z: 3 });
     const centerX = placement.x;
     const centerZ = placement.z;
     const baseY = tabletopY(-2.75);
 
+    const coins = new THREE.InstancedMesh(geometry, instanceMaterial, count);
+    coins.castShadow = true;
+    coins.receiveShadow = true;
+    coins.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    const dummy = new THREE.Object3D();
+    const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, thickness / 2, radius));
+    // Track the per-coin static bodies so disposeObject3D can free them on reroll.
+    coins.userData.physicsBodies = [];
+
     for (let i = 0; i < count; i++) {
-        const material = materials[Math.floor(randomUnit(options) * materials.length)];
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        // Preserve the original per-coin random sequence for seeded reproducibility.
+        coins.setColorAt(i, coinColors[Math.floor(randomUnit(options) * coinColors.length)]);
 
         const angle = randomUnit(options) * Math.PI * 2;
         const dist = randomUnit(options) * 1.5;
@@ -101,21 +126,27 @@ export function createCoins(scene, physicsWorld, options = {}) {
         if (i > 5) y += thickness;
         if (i > 10) y += thickness;
 
-        mesh.position.set(x, y, z);
-        mesh.rotation.y = randomUnit(options) * Math.PI * 2;
+        dummy.position.set(x, y, z);
+        dummy.rotation.set(0, randomUnit(options) * Math.PI * 2, 0);
 
         if (randomUnit(options) > 0.8) {
-            mesh.rotation.x = (randomUnit(options) - 0.5) * 0.5;
-            mesh.rotation.z = (randomUnit(options) - 0.5) * 0.5;
-            mesh.position.y += 0.05;
+            dummy.rotation.x = (randomUnit(options) - 0.5) * 0.5;
+            dummy.rotation.z = (randomUnit(options) - 0.5) * 0.5;
+            dummy.position.y += 0.05;
         }
 
-        scene.add(mesh);
-        options.track?.(mesh);
+        dummy.updateMatrix();
+        coins.setMatrixAt(i, dummy.matrix);
 
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, thickness / 2, radius));
-        createStaticBody(physicsWorld, mesh, shape);
+        // One static physics body per coin (cheap; matches prior collision feel).
+        coins.userData.physicsBodies.push(createStaticBody(physicsWorld, dummy, shape));
     }
+
+    coins.instanceMatrix.needsUpdate = true;
+    if (coins.instanceColor) coins.instanceColor.needsUpdate = true;
+
+    scene.add(coins);
+    options.track?.(coins);
 }
 
 export function createBook(scene, physicsWorld, options = {}) {

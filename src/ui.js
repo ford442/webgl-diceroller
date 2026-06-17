@@ -51,6 +51,52 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
         container.appendChild(row);
     });
 
+    // --- Dice-set presets: quickly load a themed handful of dice ---
+    const PRESETS = {
+        'Standard set': { d4: 1, d6: 1, d8: 1, d10: 1, d12: 1, d20: 1 },
+        'Single d20': { d4: 0, d6: 0, d8: 0, d10: 0, d12: 0, d20: 1 },
+        "Bard's Luck": { d4: 1, d6: 1, d8: 0, d10: 0, d12: 0, d20: 2 },
+        'Fistful of d6': { d4: 0, d6: 5, d8: 0, d10: 0, d12: 0, d20: 0 },
+        "Wizard's Arsenal": { d4: 2, d6: 2, d8: 2, d10: 1, d12: 1, d20: 1 }
+    };
+
+    const applyPreset = (preset) => {
+        diceTypes.forEach((type) => {
+            counts[type] = preset[type] ?? 0;
+            if (inputs[type]) inputs[type].value = String(counts[type]);
+        });
+        onUpdateDice(counts);
+    };
+
+    const presetRow = document.createElement('div');
+    presetRow.style.display = 'flex';
+    presetRow.style.alignItems = 'center';
+    presetRow.style.gap = '6px';
+    presetRow.style.marginTop = '6px';
+    const presetLabel = document.createElement('label');
+    presetLabel.textContent = 'Set:';
+    const presetSelect = document.createElement('select');
+    presetSelect.style.flex = '1';
+    const placeholder = document.createElement('option');
+    placeholder.textContent = 'Presets…';
+    placeholder.value = '';
+    presetSelect.appendChild(placeholder);
+    Object.keys(PRESETS).forEach((name) => {
+        const opt = document.createElement('option');
+        opt.textContent = name;
+        opt.value = name;
+        presetSelect.appendChild(opt);
+    });
+    presetSelect.addEventListener('change', () => {
+        const preset = PRESETS[presetSelect.value];
+        if (preset) applyPreset(preset);
+        presetSelect.value = '';
+    });
+    presetSelect.addEventListener('mousedown', (e) => e.stopPropagation());
+    presetRow.appendChild(presetLabel);
+    presetRow.appendChild(presetSelect);
+    container.appendChild(presetRow);
+
     const rollBtn = document.createElement('button');
     rollBtn.textContent = 'Roll All';
     rollBtn.style.marginTop = '10px';
@@ -58,6 +104,57 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
     rollBtn.addEventListener('click', () => onRollAll());
     rollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
     container.appendChild(rollBtn);
+
+    // --- Audio volume / mute (persisted in localStorage by the audio module) ---
+    const audio = layoutHooks?.audio;
+    if (audio) {
+        const audioRow = document.createElement('div');
+        audioRow.style.display = 'flex';
+        audioRow.style.alignItems = 'center';
+        audioRow.style.gap = '6px';
+        audioRow.style.marginTop = '8px';
+        audioRow.addEventListener('mousedown', (e) => e.stopPropagation());
+
+        const muteBtn = document.createElement('button');
+        muteBtn.style.cursor = 'pointer';
+        muteBtn.style.minWidth = '34px';
+        muteBtn.title = 'Mute / unmute';
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = '0';
+        slider.max = '1';
+        slider.step = '0.01';
+        slider.value = String(audio.getMasterVolume?.() ?? 0.6);
+        slider.style.flex = '1';
+        slider.title = 'Volume';
+
+        const syncMuteIcon = () => {
+            const isMuted = audio.isMuted?.() || parseFloat(slider.value) <= 0;
+            muteBtn.textContent = isMuted ? '🔇' : '🔊';
+            slider.style.opacity = audio.isMuted?.() ? '0.4' : '1';
+        };
+
+        slider.addEventListener('input', () => {
+            audio.resume?.();
+            audio.setMasterVolume?.(parseFloat(slider.value));
+            // Adjusting the slider above zero implicitly unmutes.
+            if (parseFloat(slider.value) > 0 && audio.isMuted?.()) audio.setMuted?.(false);
+            syncMuteIcon();
+        });
+        muteBtn.addEventListener('click', () => {
+            audio.resume?.();
+            audio.toggleMute?.();
+            syncMuteIcon();
+        });
+        muteBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+        slider.addEventListener('mousedown', (e) => e.stopPropagation());
+
+        syncMuteIcon();
+        audioRow.appendChild(muteBtn);
+        audioRow.appendChild(slider);
+        container.appendChild(audioRow);
+    }
 
     let densitySelect;
     let themeSelect;

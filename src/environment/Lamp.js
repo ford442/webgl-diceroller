@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { loadPropMesh } from '../core/PropAssetLoader.js';
 import { getLampTextures } from '../core/TexturePipeline.js';
+import { playPropImpact } from '../audio/DiceCollisionAudio.js';
 
 // Light Effect Modes
 export const LampMode = {
@@ -302,6 +303,8 @@ export async function createLamp() {
     };
 
     const toggle = () => {
+        // Soft metallic click + faint chain rattle.
+        playPropImpact({ surface: 'click', volume: 0.45 });
         isOn = !isOn;
         updateLights();
     };

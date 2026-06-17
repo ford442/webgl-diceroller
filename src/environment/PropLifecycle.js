@@ -24,12 +24,20 @@ export function disposeObject3D(root, physicsWorld) {
     const bodies = new Set();
     root.traverse((obj) => {
         if (obj.userData?.physicsBody) bodies.add(obj.userData.physicsBody);
+        // InstancedMesh-style props store their per-instance static bodies here.
+        if (Array.isArray(obj.userData?.physicsBodies)) {
+            for (const body of obj.userData.physicsBodies) {
+                if (body) bodies.add(body);
+            }
+        }
     });
 
     root.parent?.remove(root);
 
     root.traverse((obj) => {
         if (!obj.isMesh) return;
+        // Frees per-instance attribute buffers (instanceMatrix / instanceColor).
+        if (obj.isInstancedMesh) obj.dispose?.();
         obj.geometry?.dispose?.();
         const material = obj.material;
         if (Array.isArray(material)) material.forEach((mat) => mat?.dispose?.());

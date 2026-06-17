@@ -229,6 +229,21 @@ console.log('=== Lamp Verification Test ===');
         console.log('✓ No lamp-related console errors (other 404s are expected without full WASM build)');
     }
 
+    // Interactable hook check: the lamp toggle is reachable programmatically
+    // (drives the in-game click handler and is now exposed for e2e).
+    const lampInteract = await page.evaluate(() => {
+        const api = window.__interactables && window.__interactables.lamp;
+        if (!api || typeof api.trigger !== 'function') return { ok: false };
+        try { api.trigger(); api.trigger(); return { ok: true }; }
+        catch (e) { return { ok: false, err: String(e) }; }
+    });
+    if (lampInteract.ok) {
+        console.log('✓ Lamp interactable hook works (window.__interactables.lamp.trigger)');
+    } else {
+        console.error('FAIL: lamp interactable hook missing or threw', lampInteract.err || '');
+        pass = false;
+    }
+
     await browser.close();
 
     if (pass) {

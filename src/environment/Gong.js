@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { playPropImpact } from '../audio/DiceCollisionAudio.js';
 
 export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z: -15 }, rotationY = Math.PI / 4) {
     const group = new THREE.Group();
@@ -183,6 +184,8 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
     const shakeDuration = 0.5;
 
     const triggerGong = () => {
+        // Big shimmering metal strike to match the visual flash.
+        playPropImpact({ surface: 'gong', volume: 0.85 });
         // Activate rings
         const now = performance.now() / 1000;
         rings.forEach((ring, i) => {

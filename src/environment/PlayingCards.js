@@ -1,11 +1,22 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { registerInteractable } from '../interactables/InteractableRegistry.js';
+import { tween } from '../interactables/tween.js';
+
+const SUITS = [
+    { suit: '♠', color: '#000000' },
+    { suit: '♥', color: '#cc0000' },
+    { suit: '♣', color: '#000000' },
+    { suit: '♦', color: '#cc0000' }
+];
+const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
 export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -2.75, z: -8 }, rotationY = 0) {
     const group = new THREE.Group();
     group.name = 'PlayingCards';
 
     const ammo = getAmmo();
+    const cards = []; // interactive scattered cards, populated below
 
     // Dimensions for a standard playing card
     const width = 1.0;
@@ -72,6 +83,7 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
         mesh.rotation.y = card.angle;
 
         group.add(mesh);
+        cards.push({ mesh, baseRotX: mesh.rotation.x, flipped: false, isBack: !!card.isBack });
 
         // Physics for each card
         const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, thickness/2, height/2));
@@ -121,7 +133,76 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
 
     scene.add(group);
 
-    return { group };
+    // --- Interaction: each click "draws" the next card — flips it with a little
+    // hop and reveals a fresh random face, so the cards feel playable rather than
+    // static. Clicking a face-up card flips it back down. ---
+    let cursor = 0;
+    let draws = 0;
+    let lastCard = null;
+    const animating = new Set();
+
+    const drawRandom = () => {
+        const s = SUITS[Math.floor(Math.random() * SUITS.length)];
+        const rank = RANKS[Math.floor(Math.random() * RANKS.length)];
+        return { rank, suit: s.suit, color: s.color };
+    };
+
+    const flipCard = (entry) => {
+        if (!entry || animating.has(entry)) return null;
+        animating.add(entry);
+        const revealing = !entry.flipped;
+        let revealed = null;
+
+        // When revealing, swap in a freshly drawn face texture (dispose the old).
+        if (revealing) {
+            revealed = drawRandom();
+            lastCard = revealed;
+            const tex = generateCardFrontTexture(revealed.suit, revealed.rank, revealed.color);
+            const newFront = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, metalness: 0.05 });
+            const mats = entry.mesh.material;
+            const old = mats[2];
+            mats[2] = newFront;
+            if (old && old.map && old !== mats[3]) { old.map.dispose?.(); old.dispose?.(); }
+        }
+
+        const from = entry.mesh.rotation.x;
+        const to = from + Math.PI;
+        const baseY = entry.mesh.position.y;
+        tween({
+            duration: 360,
+            onUpdate: (e) => {
+                entry.mesh.rotation.x = from + (to - from) * e;
+                entry.mesh.position.y = baseY + Math.sin(e * Math.PI) * 0.25; // hop
+            },
+            onComplete: () => {
+                entry.mesh.rotation.x = to % (Math.PI * 2);
+                entry.mesh.position.y = baseY;
+                entry.flipped = !entry.flipped;
+                animating.delete(entry);
+            }
+        });
+        return revealed;
+    };
+
+    const interact = () => {
+        if (cards.length === 0) return;
+        draws++;
+        const entry = cards[cursor % cards.length];
+        cursor++;
+        flipCard(entry);
+    };
+
+    registerInteractable('playingCards', {
+        trigger: interact,
+        flip: (index) => flipCard(cards[index]),
+        getState: () => ({ draws, lastCard, cardCount: cards.length })
+    });
+
+    return {
+        group,
+        interact,
+        dispose: () => { /* interactable handle is shared/overwritten across spawns */ }
+    };
 }
 
 function generateCardFrontTexture(suit, rank, color) {

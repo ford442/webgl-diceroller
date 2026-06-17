@@ -335,6 +335,33 @@ function _renderHistory() {
             });
     });
     historyList.appendChild(copyBtn);
+
+    // Clear-history button
+    const clearBtn = document.createElement('button');
+    clearBtn.style.cssText = `
+        display: block;
+        width: calc(100% - 24px);
+        margin: 0 12px 8px;
+        padding: 5px;
+        background: rgba(120,30,30,0.25);
+        border: 1px solid ${GOLD_DARK};
+        border-radius: 4px;
+        color: ${GOLD_DIM};
+        font-family: ${FONT};
+        font-size: 11px;
+        cursor: pointer;
+        letter-spacing: 0.5px;
+    `;
+    clearBtn.textContent = '🗑 Clear History';
+    clearBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+    clearBtn.addEventListener('click', clearHistory);
+    historyList.appendChild(clearBtn);
+}
+
+/** Clear the roll-history log. */
+export function clearHistory() {
+    rollHistory = [];
+    _renderHistory();
 }
 
 function _emptyHistoryHTML() {

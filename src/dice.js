@@ -227,6 +227,31 @@ loader.setDRACOLoader(dracoLoader);
 let diceModels = {};
 export let spawnedDice = [];
 let nextAudioBodyId = 1;
+
+// Object pool of Three.js dice meshes, keyed by type. Spawning a die reuses a
+// pooled mesh instead of cloning a fresh one, and removing a die returns its
+// mesh here instead of disposing it. Pooled meshes share the (single) template
+// geometry + material per type, so we never dispose those during gameplay —
+// which also avoids freeing a GPU buffer still referenced by other live dice.
+const diceMeshPool = {};
+
+function acquireDiceMesh(type) {
+    const pool = diceMeshPool[type];
+    if (pool && pool.length > 0) {
+        const mesh = pool.pop();
+        mesh.visible = true;
+        return mesh;
+    }
+    const template = diceModels[type];
+    return template ? template.clone() : null;
+}
+
+function releaseDiceMesh(scene, type, mesh) {
+    if (!mesh) return;
+    scene.remove(mesh);
+    mesh.userData.body = null;
+    (diceMeshPool[type] ??= []).push(mesh);
+}
 const DEFAULT_MASS_BIAS_RATIO = 0.0075; // ~0.75% of die height, within the 0.5-1% range
 
 // Pipping bias: lower-number faces have less material removed, so the "1" face
@@ -560,7 +585,7 @@ export const spawnObjects = (scene, world, config = null) => {
         const template = diceModels[type];
         if (!template) return;
 
-        const mesh = template.clone();
+        const mesh = acquireDiceMesh(type);
 
         // Lower spawn height (was 5 + index) to reduce "drop hardness"
         const x = (getSecureRandom() - 0.5) * 4;
@@ -597,7 +622,8 @@ export const spawnObjects = (scene, world, config = null) => {
             id: audioBodyId,
             type,
             mass: physicsPreset.mass,
-            inertiaScalar
+            inertiaScalar,
+            surface: 'die'
         });
         registerBodyDragMeta(body, {
             dragFactor: physicsPreset.dragFactor ?? 0
@@ -704,10 +730,9 @@ export const clearDice = (scene, world) => {
     const Ammo = getAmmo();
     const engine = isUsingWasmPhysics() ? getWasmEngine() : null;
     spawnedDice.forEach(die => {
-        scene.remove(die.mesh);
-        if (die.mesh.geometry) die.mesh.geometry.dispose();
-        const mats = Array.isArray(die.mesh.material) ? die.mesh.material : [die.mesh.material];
-        mats.forEach(m => m && m.dispose());
+        // Return the mesh to the pool (geometry/material are shared and kept alive)
+        // rather than disposing them.
+        releaseDiceMesh(scene, die.type, die.mesh);
         world.removeRigidBody(die.body);
         unregisterBodyAudioMeta(die.body);
         unregisterBodyDragMeta(die.body);
@@ -754,11 +779,8 @@ export const updateDiceSet = (scene, world, targetCounts) => {
                     if (isUsingWasmPhysics() && die.wasmId != null) {
                         getWasmEngine().removeDie(die.wasmId);
                     }
-                    // Remove visual and free Three.js resources
-                    scene.remove(die.mesh);
-                    if (die.mesh.geometry) die.mesh.geometry.dispose();
-                    const mats = Array.isArray(die.mesh.material) ? die.mesh.material : [die.mesh.material];
-                    mats.forEach(m => m && m.dispose());
+                    // Return the visual to the pool (shared geometry/material kept).
+                    releaseDiceMesh(scene, die.type, die.mesh);
                     // Remove from array
                     spawnedDice.splice(i, 1);
                     toRemove--;
