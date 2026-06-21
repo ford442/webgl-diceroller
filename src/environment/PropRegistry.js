@@ -152,6 +152,7 @@ export const TIER_PROP_DEFINITIONS = {
         })
     ],
     tier2: [
+        factoryEntry('Horseshoe', { randomPool: true }),
         factoryEntry('DiceTower', { position: { x: 0, y: -3.0, z: -14 }, rotation: 0 }),
         factoryEntry('DiceTray', { position: { x: 12, y: -2.75, z: 10 }, rotation: Math.PI / 6 }),
         factoryEntry('DiceJail', { position: { x: -13, y: -2.75, z: -13 }, rotation: -Math.PI / 4 }),
