@@ -342,3 +342,16 @@ python deploy.py
 - **No automated test coverage** beyond the three ad-hoc Playwright smoke tests.
 - **GodRayShader** drives the scene-space moonlight beam mesh (not the fullscreen composer); it has a TSL twin (`GodRayNodeMaterial.js`) for the WebGPU path.
 - The HTML `<title>` "WebGPU Dice Roller" now matches the default renderer (WebGPU, with WebGL fallback).
+
+## Cursor Cloud specific instructions
+
+Setup is just `npm install` (the startup update script). No lint or unit/test suite exists; see "Testing Instructions" above for the ad-hoc Playwright smoke scripts (they target the preview server on `:4173`).
+
+Running/verifying the app in this headless, software-rendered, WASM-absent environment has a few non-obvious gotchas:
+
+- **Use the `?webgl` baseline path.** There is no GPU, so WebGPU is unavailable. The default renderer falls back to the Three.js WebGL2 *TSL* backend, which throws `Cannot read properties of undefined (reading 'buffers')` under SwiftShader and never finishes loading. Forcing `?webgl` (the classic `WebGLRenderer`) renders fine.
+- **Add `?fair-dice` when WASM is not compiled.** Emscripten is not installed, so there are no `public/wasm/` artifacts and physics uses the ammo.js fallback. The default pipping-bias path then calls `btCompoundShape.recalculateLocalAabb()`, which the bundled `ammo.js@0.0.10` build does not expose — this throws `Failed to load scene tiers: TypeError: ...recalculateLocalAabb is not a function` and the scene never becomes ready. `?fair-dice` disables the COM-bias compound-shape path and the scene loads (`window.sceneReady === true`). Building the WASM module (`npm run build:wasm`, needs Emscripten) is the alternative that routes the bias through the WASM engine instead.
+- So a reliable local URL is e.g. `http://localhost:5173/?webgl&no-post&fair-dice&renderer-info` (dev) or the same on `:4173` (preview). Trigger a roll programmatically with `window.replayRoll(seed)` or via the top-right "Roll All" button / `R` key.
+- **Browser WebGL needs software flags.** Launch Chrome/Chromium with `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`; rendering is slow but functional.
+- **`npm run build` fails here** because it runs `build:wasm` first (needs Emscripten at `/root/emsdk`). To build only the frontend bundle, run `npx vite build` (succeeds and is what `npm run preview` serves).
+- **Dev server + low-resource browsers:** Vite dev serves 160+ unbundled ES modules, which can trip `net::ERR_INSUFFICIENT_RESOURCES` in a resource-constrained browser. Playwright's chromium and the bundled preview server (fewer requests) both load fine.
