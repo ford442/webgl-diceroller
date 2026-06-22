@@ -145,7 +145,7 @@ export async function setupScene(container) {
 
     // Lights
     // Ambient light (low intensity)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.05); // Very low ambient to make candle pop
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
     scene.add(ambientLight);
 
     // Warm PointLight (Candle) - Key Light
@@ -181,8 +181,8 @@ export async function setupScene(container) {
     scene.add(spotLight);
     scene.add(spotLight.target);
 
-    // Fog for depth
-    scene.fog = new THREE.FogExp2(0x111111, 0.02);
+    // Fog for depth — linear so the table stays crisp; background fades from 15–45 units
+    scene.fog = new THREE.Fog(0x111111, 15, 45);
 
     // Post-Processing
     // Auto-detect low-end GPUs: disable post-processing if texture size is limited.
