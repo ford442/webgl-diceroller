@@ -16,6 +16,8 @@
  *   • State serialisation helpers for replay
  */
 
+import { publicAssetUrl } from '../core/publicAssetUrl.js';
+
 // ---------------------------------------------------------------------------
 // No-op stub
 // ---------------------------------------------------------------------------
@@ -73,7 +75,7 @@ export const loadWasmEngine = async () => {
 
     try {
         const dynamicImport = new Function('u', 'return import(u)');
-        const moduleFactory = await dynamicImport('/wasm/dice_physics.js');
+        const moduleFactory = await dynamicImport(publicAssetUrl('wasm/dice_physics.js'));
         // UMD Emscripten output: try .default first, then the module itself
         const ModuleFactory = moduleFactory.default || moduleFactory;
         const Module = await ModuleFactory();
@@ -84,7 +86,7 @@ export const loadWasmEngine = async () => {
 
         // Pre-load hulls.json for fast die registration
         try {
-            const res = await fetch('/wasm/hulls.json');
+            const res = await fetch(publicAssetUrl('wasm/hulls.json'));
             if (res.ok) _hulls = await res.json();
         } catch (e) {
             console.warn('[WasmPhysics] Could not load hulls.json:', e);
