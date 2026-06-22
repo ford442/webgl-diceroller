@@ -74,6 +74,17 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
     };
 }
 
+async function compilePmremSceneShader(pmremGenerator) {
+    if (typeof pmremGenerator.compileCubemapShader !== 'function') {
+        return;
+    }
+
+    const compileResult = pmremGenerator.compileCubemapShader();
+    if (typeof compileResult?.then === 'function') {
+        await compileResult;
+    }
+}
+
 export async function setupScene(container) {
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;
@@ -232,15 +243,33 @@ export async function setupScene(container) {
         console.log('Post-processing disabled: low-end GPU detected');
     }
 
-    // Environment Map
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    pmremGenerator.compileEquirectangularShader();
     await preloadSharedTextures(renderer);
-    const tavernEnvironment = new TavernEnvironment();
-    await tavernEnvironment.load();
-    scene.environment = pmremGenerator.fromScene(tavernEnvironment).texture;
-    pmremGenerator.dispose();
-    tavernEnvironment.dispose();
+
+    // Three r181 still trips an internal WebGPU PMREMGenerator bug when
+    // `fromScene()` is used during startup, which crashes the bootstrap path and
+    // can even lose the device. Keep the richer tavern PMREM on WebGL, and let
+    // WebGPU fall back to direct lighting only until upstream support stabilizes.
+    if (rendererState.usingWebGPU) {
+        console.warn('[SceneSetup] Skipping tavern PMREM environment on WebGPU due to a Three.js renderer bug.');
+        scene.environment = null;
+    } else {
+        const tavernEnvironment = new TavernEnvironment();
+        await tavernEnvironment.load();
+
+        // `fromScene()` renders the source scene into an internal cubemap, so it
+        // needs the cubemap PMREM path, not the equirectangular one.
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        try {
+            await compilePmremSceneShader(pmremGenerator);
+            scene.environment = pmremGenerator.fromScene(tavernEnvironment).texture;
+        } catch (error) {
+            console.warn('[SceneSetup] Failed to build tavern PMREM environment map; continuing without reflections.', error);
+            scene.environment = null;
+        } finally {
+            pmremGenerator.dispose();
+            tavernEnvironment.dispose();
+        }
+    }
 
     return { scene, camera, renderer, composer, pointLight, spotLight, postConfig, postPasses, rendererState };
 }
