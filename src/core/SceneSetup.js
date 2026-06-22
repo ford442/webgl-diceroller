@@ -27,17 +27,20 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
     const scenePass = pass(scene, camera);
     scenePass.setSize(width, height);
 
-    let outputNode = scenePass.getTextureNode('output');
-    let bloomNode = null;
+    // Keep the scene-color node separate from the composed output. Passing the
+    // same node into bloom() and then reassigning outputNode = outputNode.add(bloom)
+    // creates a circular TSL graph and blows the WebGPU node builder stack.
+    const sceneColorNode = scenePass.getTextureNode('output');
+    let colorNode = sceneColorNode;
 
     if (postConfig.bloomEnabled) {
-        bloomNode = bloom(
-            outputNode,
+        const bloomNode = bloom(
+            sceneColorNode,
             postConfig.quality === 'low' ? 0.35 : 0.6,
             postConfig.quality === 'low' ? 0.25 : 0.4,
             0.6
         );
-        outputNode = outputNode.add(bloomNode);
+        colorNode = sceneColorNode.add(bloomNode);
     }
 
     const vignetteOffset = uniform(1.2);
@@ -46,12 +49,12 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
         const vignetteUv = screenUV.sub(vec2(0.5, 0.5)).mul(vignetteOffset);
         const vignetteColor = vec3(float(1.0).sub(vignetteDarkness));
         return vec4(
-            mix(outputNode.rgb, vignetteColor, vignetteUv.dot(vignetteUv)),
-            outputNode.a
+            mix(colorNode.rgb, vignetteColor, vignetteUv.dot(vignetteUv)),
+            colorNode.a
         );
     })();
 
-    outputNode = vignetteNode;
+    let outputNode = vignetteNode;
 
     if (postConfig.quality === 'high') {
         outputNode = chromaticAberration(outputNode, 0.2, vec2(0.5, 0.5), 1.08);
@@ -66,7 +69,7 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
         },
         setSize(nextWidth, nextHeight) {
             scenePass.setSize(nextWidth, nextHeight);
-            bloomNode?.setSize?.(nextWidth, nextHeight);
+            // BloomNode resizes itself in updateBefore() once blur materials exist.
         },
         dispose() {
             postProcessing.dispose();
