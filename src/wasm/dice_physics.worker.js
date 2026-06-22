@@ -48,9 +48,8 @@ let stepTimer = null;
 // ---------------------------------------------------------------------------
 
 async function boot() {
-    // Dynamically import the Emscripten output from /wasm/ at runtime.  Using a
-    // constructed import avoids Vite trying to bundle the prebuilt artifact, and
-    // matches WasmPhysicsBridge.js so `locateFile` resolves dice_physics.wasm.
+    // Dynamically import the Emscripten output from public/wasm/ at runtime.
+    // Using a constructed import avoids Vite trying to bundle the prebuilt artifact.
     const dynamicImport = new Function('u', 'return import(u)');
     const factoryMod = await dynamicImport(publicAssetUrl('wasm/dice_physics.js'));
     const Factory = factoryMod.default || factoryMod;
