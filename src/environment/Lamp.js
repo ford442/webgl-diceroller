@@ -146,8 +146,12 @@ export async function createLamp() {
     // Use largest horizontal dimension so a rotated model doesn't cause
     // wildly wrong scale factors that explode the geometry.
     const rawWidth = Math.max(size.x, size.z) || 1.0;
-    const targetWidth = 22.0;
-    const scaleFactor = targetWidth / rawWidth;
+    const rawHeight = size.y || 1.0;
+    // Keep the fixture compact so the shades sit above the dice zone instead of
+    // filling the camera view. The OBJ includes long chains, so cap height too.
+    const targetWidth = 16.0;
+    const maxHangHeight = 9.0;
+    const scaleFactor = Math.min(targetWidth / rawWidth, maxHangHeight / rawHeight);
 
     const visualWrapper = new THREE.Group();
     visualWrapper.name = 'LampVisualWrapper';
@@ -213,12 +217,16 @@ export async function createLamp() {
     const lasers = [];
 
     lightPositions.forEach((pos, i) => {
-        const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 95, 26);
+        const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 48, 42);
         light.position.copy(pos);
         light.castShadow = (i === 1); // only center light casts shadows
-        light.shadow.bias = -0.0004;
+        light.shadow.bias = -0.0002;
+        light.shadow.normalBias = 0.02;
+        light.shadow.radius = 6;
         light.shadow.mapSize.width = 512;
         light.shadow.mapSize.height = 512;
+        light.shadow.camera.near = 0.5;
+        light.shadow.camera.far = 45;
         light.shadow.autoUpdate = false;
         light.shadow.needsUpdate = true;
 
@@ -233,10 +241,11 @@ export async function createLamp() {
         lampGroup.add(light);
         lampGroup.add(bulb);
 
-        lights.push({ light, bulb, originalIntensity: 95 });
+        lights.push({ light, bulb, originalIntensity: 48 });
     });
 
-    // Decorative laser beams (only visible in LASER/CRITICAL modes)
+    // Decorative laser beams (only visible in LASER/CRITICAL modes). Keep them
+    // collapsed so invisible geometry does not extend the lamp bounds over the table.
     const laserLength = 15;
     lightPositions.forEach((pos, i) => {
         const laserMat = new THREE.MeshBasicMaterial({
@@ -249,9 +258,10 @@ export async function createLamp() {
             new THREE.CylinderGeometry(0.018, 0.018, laserLength, 6),
             laserMat
         );
-        // Position so the "beam" originates near the bulb and points downward
         laser.position.set(pos.x, pos.y - (laserLength * 0.5) - 0.3, pos.z);
         laser.rotation.z = (i - 1) * 0.12;
+        laser.scale.y = 0.001;
+        laser.visible = false;
         lampGroup.add(laser);
         lasers.push(laser);
     });
@@ -285,7 +295,11 @@ export async function createLamp() {
         strobeState = false;
         strobeTimer = 0;
         criticalTime = 0;
-        lasers.forEach(l => l.material.opacity = 0);
+        lasers.forEach(l => {
+            l.material.opacity = 0;
+            l.visible = false;
+            l.scale.y = 0.001;
+        });
         updateLights();
     };
 
@@ -346,6 +360,8 @@ export async function createLamp() {
 
             case LampMode.LASER:
                 lasers.forEach((laser, i) => {
+                    laser.visible = true;
+                    laser.scale.y = 1;
                     laser.material.opacity = 0.6 + Math.sin(elapsedTime * 5 + i) * 0.2;
                     laser.rotation.y = elapsedTime * 2 + i * (Math.PI * 2 / 3);
                 });
@@ -361,10 +377,12 @@ export async function createLamp() {
                 const critColor = flash ? 0xffd700 : 0xffffff;
                 lights.forEach(l => {
                     l.light.color.setHex(critColor);
-                    l.light.intensity = flash ? 155 : 95;
+                    l.light.intensity = flash ? 80 : 48;
                     l.bulb.material.color.setHex(critColor);
                 });
                 lasers.forEach((laser, i) => {
+                    laser.visible = true;
+                    laser.scale.y = 1;
                     laser.material.color.setHex(0xffd700);
                     laser.material.opacity = 0.85;
                     laser.rotation.y = criticalTime * 8 + i * (Math.PI * 2 / 3);
