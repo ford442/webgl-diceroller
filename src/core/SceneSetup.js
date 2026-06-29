@@ -8,12 +8,12 @@ import { VignetteShader } from '../shaders/VignetteShader.js';
 import { TavernEnvironment } from '../environment/TavernEnvironment.js';
 import { createRenderer } from './RendererFactory.js';
 import { preloadSharedTextures } from './TexturePipeline.js';
-import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z, TABLE_SURFACE_Y } from './SceneMetrics.js';
+import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z, TABLE_SURFACE_Y, LAMP_HANG_Y } from './SceneMetrics.js';
 
 async function createWebGpuPostPipeline(renderer, scene, camera, { width, height, postConfig }) {
     const [
         { PostProcessing },
-        { pass, uniform, float, vec2, vec3, vec4, mix, Fn, screenUV },
+        { pass, uniform, float, vec2, vec3, vec4, mix, Fn, screenUV, clamp },
         { bloom },
         { chromaticAberration }
     ] = await Promise.all([
@@ -44,12 +44,12 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
     }
 
     const vignetteOffset = uniform(1.2);
-    const vignetteDarkness = uniform(1.8);
+    const vignetteStrength = uniform(0.85);
     const vignetteNode = Fn(() => {
         const vignetteUv = screenUV.sub(vec2(0.5, 0.5)).mul(vignetteOffset);
-        const vignetteColor = vec3(float(1.0).sub(vignetteDarkness));
+        const vignetteMix = clamp(vignetteUv.dot(vignetteUv).mul(vignetteStrength), 0, 1);
         return vec4(
-            mix(colorNode.rgb, vignetteColor, vignetteUv.dot(vignetteUv)),
+            mix(colorNode.rgb, vec3(0, 0, 0), vignetteMix),
             colorNode.a
         );
     })();
@@ -144,14 +144,15 @@ export async function setupScene(container) {
     }
 
     // Lights
-    // Ambient light — kept low but bright enough to read dice pips in shadow.
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.22);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
     scene.add(ambientLight);
 
-    // Soft fill over the dice zone so numbers stay legible between lamp pools.
-    const tableFillLight = new THREE.PointLight(0xfff4e0, 1.8, 28);
-    tableFillLight.position.set(0, TABLE_SURFACE_Y + 9, 0);
-    scene.add(tableFillLight);
+    // Warm overhead pool on the velvet dice zone (no shadows — fill only).
+    const diceZoneLight = new THREE.SpotLight(0xfff2d6, 2.8, 40, Math.PI / 4, 0.65, 1.2);
+    diceZoneLight.position.set(0, LAMP_HANG_Y - 6, 0);
+    diceZoneLight.target.position.set(0, TABLE_SURFACE_Y, 0);
+    scene.add(diceZoneLight);
+    scene.add(diceZoneLight.target);
 
     // Warm PointLight (Candle) - Key Light
     // Initial setup, position will be updated by clutter
@@ -170,8 +171,7 @@ export async function setupScene(container) {
     scene.add(pointLight);
 
     // Cool SpotLight (Moonlight) - Shining through the window
-    // More blue, lower intensity for contrast (0x4444dd)
-    const spotLight = new THREE.SpotLight(0x4444dd, 5.0);
+    const spotLight = new THREE.SpotLight(0x5566bb, 2.2);
     spotLight.position.set(-45, 15, -5); // Outside the window
     spotLight.target.position.set(0, TABLE_SURFACE_Y, 0); // Aim at table center
     spotLight.angle = Math.PI / 10;
@@ -238,7 +238,7 @@ export async function setupScene(container) {
             // Vignette
             const vignettePass = new ShaderPass(VignetteShader);
             vignettePass.uniforms['offset'].value = 1.2;
-            vignettePass.uniforms['darkness'].value = 1.8; // Darker vignette
+            vignettePass.uniforms['darkness'].value = 0.85;
             composer.addPass(vignettePass);
             postPasses.vignettePass = vignettePass;
 
