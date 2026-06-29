@@ -9,9 +9,10 @@ import {
     areDiceSettled,
     pollPhysicsCollisionEvents,
     applyDiceMassBiases,
-    spawnedDice
+    spawnedDice,
+    readAllDiceValues
 } from './dice.js';
-import { showResults, hideResults } from './results.js';
+import { showResults, hideResults, updateDiceHud } from './results.js';
 import { updateInteraction, interactionNeedsAmmoStep } from './interaction.js';
 import { createDiceCollisionAudio } from './audio/DiceCollisionAudio.js';
 import { updateAtmosphere } from './environment/Atmosphere.js';
@@ -315,6 +316,15 @@ async function init() {
         });
     }, { priority: -10 });
 
+    scheduler.register('preRender', 'diceHud', () => {
+        if (!spawnedDice.length) {
+            updateDiceHud([]);
+            return;
+        }
+        const rolling = !areDiceSettled();
+        updateDiceHud(readAllDiceValues(), { rolling });
+    }, { priority: -5 });
+
     scheduler.register('preRender', 'gongFlash', () => {
         if (gongData?.getFlashIntensity) {
             gongFlashIntensity = gongData.getFlashIntensity();
@@ -495,6 +505,8 @@ async function init() {
         hideResults();
         if (lampData) lampData.setRolling(true);
     };
+    window.readAllDiceValues = readAllDiceValues;
+    window.areDiceSettled = areDiceSettled;
     window.rerollTableLayout = (overrides) => layoutManager?.rerollLayout(overrides);
     window.getTableLayoutConfig = () => layoutManager?.getConfig();
 }

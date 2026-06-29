@@ -213,7 +213,7 @@ export async function createLamp() {
     const lasers = [];
 
     lightPositions.forEach((pos, i) => {
-        const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 95, 26);
+        const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 130, 34);
         light.position.copy(pos);
         light.castShadow = (i === 1); // only center light casts shadows
         light.shadow.bias = -0.0004;
@@ -233,7 +233,7 @@ export async function createLamp() {
         lampGroup.add(light);
         lampGroup.add(bulb);
 
-        lights.push({ light, bulb, originalIntensity: 95 });
+        lights.push({ light, bulb, originalIntensity: 130 });
     });
 
     // Decorative laser beams (only visible in LASER/CRITICAL modes)

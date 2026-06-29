@@ -8,7 +8,7 @@ import { VignetteShader } from '../shaders/VignetteShader.js';
 import { TavernEnvironment } from '../environment/TavernEnvironment.js';
 import { createRenderer } from './RendererFactory.js';
 import { preloadSharedTextures } from './TexturePipeline.js';
-import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z } from './SceneMetrics.js';
+import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z, TABLE_SURFACE_Y } from './SceneMetrics.js';
 
 async function createWebGpuPostPipeline(renderer, scene, camera, { width, height, postConfig }) {
     const [
@@ -144,9 +144,14 @@ export async function setupScene(container) {
     }
 
     // Lights
-    // Ambient light (low intensity)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
+    // Ambient light — kept low but bright enough to read dice pips in shadow.
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.22);
     scene.add(ambientLight);
+
+    // Soft fill over the dice zone so numbers stay legible between lamp pools.
+    const tableFillLight = new THREE.PointLight(0xfff4e0, 1.8, 28);
+    tableFillLight.position.set(0, TABLE_SURFACE_Y + 9, 0);
+    scene.add(tableFillLight);
 
     // Warm PointLight (Candle) - Key Light
     // Initial setup, position will be updated by clutter
@@ -168,7 +173,7 @@ export async function setupScene(container) {
     // More blue, lower intensity for contrast (0x4444dd)
     const spotLight = new THREE.SpotLight(0x4444dd, 5.0);
     spotLight.position.set(-45, 15, -5); // Outside the window
-    spotLight.target.position.set(0, -3, 0); // Aim at table center
+    spotLight.target.position.set(0, TABLE_SURFACE_Y, 0); // Aim at table center
     spotLight.angle = Math.PI / 10;
     spotLight.distance = 100;
     spotLight.penumbra = 0.5;
