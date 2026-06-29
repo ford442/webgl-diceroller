@@ -78,6 +78,55 @@ function _computeFaceNormals(geometry) {
 }
 
 /**
+ * Reduce many clustered normals (bevels/rounds on the mesh) down to the
+ * `sides` principal face directions by greedy farthest-point selection.
+ */
+function _selectPrincipalFaceNormals(allNormals, sides) {
+    if (!allNormals.length) return [];
+    if (allNormals.length <= sides) return allNormals.map((n) => n.clone());
+
+    const selected = [];
+    const used = new Set();
+
+    // Seed with the normal that best aligns with ±Y — a real die face, not a bevel.
+    let seed = 0;
+    let seedScore = Math.abs(allNormals[0].y);
+    for (let i = 1; i < allNormals.length; i++) {
+        const score = Math.abs(allNormals[i].y);
+        if (score > seedScore) {
+            seedScore = score;
+            seed = i;
+        }
+    }
+    selected.push(allNormals[seed].clone());
+    used.add(seed);
+
+    while (selected.length < sides) {
+        let bestIdx = -1;
+        let bestSeparation = -1;
+
+        for (let i = 0; i < allNormals.length; i++) {
+            if (used.has(i)) continue;
+            let minAlignment = Infinity;
+            for (const s of selected) {
+                minAlignment = Math.min(minAlignment, Math.abs(allNormals[i].dot(s)));
+            }
+            const separation = 1 - minAlignment;
+            if (separation > bestSeparation) {
+                bestSeparation = separation;
+                bestIdx = i;
+            }
+        }
+
+        if (bestIdx < 0) break;
+        selected.push(allNormals[bestIdx].clone());
+        used.add(bestIdx);
+    }
+
+    return selected;
+}
+
+/**
  * Assign integer values 1..N to face normals.
  *
  * Assumes the Blender source models are exported with the +Y axis pointing up,
@@ -181,16 +230,29 @@ export const readDiceValue = (die) => {
     _invQ.copy(dieQuaternion).invert();
     _localUp.set(0, 1, 0).applyQuaternion(_invQ);
 
-    // The face whose local normal is most aligned with local-up is facing up
-    let maxDot  = -Infinity;
+    // d4: the result is the face resting on the table (normal points down).
+    // All other dice: the face pointing up is the result.
+    const useBottomFace = die.type === 'd4';
+    let bestDot = useBottomFace ? Infinity : -Infinity;
     let bestIdx = 0;
     for (let i = 0; i < faceNormals.length; i++) {
         const d = faceNormals[i].dot(_localUp);
-        if (d > maxDot) { maxDot = d; bestIdx = i; }
+        if (useBottomFace) {
+            if (d < bestDot) { bestDot = d; bestIdx = i; }
+        } else if (d > bestDot) {
+            bestDot = d;
+            bestIdx = i;
+        }
     }
 
     return faceValues[bestIdx];
 };
+
+/** Read current values for every spawned die (for the live HUD). */
+export const readAllDiceValues = () => spawnedDice.map((die) => ({
+    type: die.type,
+    value: readDiceValue(die)
+}));
 
 export const areDiceSettled = () => {
     if (spawnedDice.length === 0) return true;
@@ -531,8 +593,12 @@ export const loadDiceModels = async (onProgress) => {
                 cleanMesh.userData.physicsShape = createConvexHullShape(cleanMesh);
                 cleanMesh.geometry.computeBoundingBox();
 
-                // Precompute face normals and value map for result reading
-                const faceNormals = _computeFaceNormals(cleanMesh.geometry);
+                // Precompute principal face normals and value map for result reading.
+                // Rounded dice meshes cluster into dozens of bevel normals — keep only
+                // the N principal directions that match the die's actual faces.
+                const sides = getDieSides(d.type);
+                const allNormals = _computeFaceNormals(cleanMesh.geometry);
+                const faceNormals = _selectPrincipalFaceNormals(allNormals, sides);
                 cleanMesh.userData.faceNormals = faceNormals;
                 cleanMesh.userData.faceValues  = _assignFaceValues(faceNormals);
                 const oneFaceNormal = _getFaceNormalForValue(cleanMesh.userData.faceNormals, cleanMesh.userData.faceValues, 1);
