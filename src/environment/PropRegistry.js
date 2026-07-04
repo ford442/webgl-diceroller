@@ -5,6 +5,7 @@ import { shuffleWithRng } from './clutter/ClutterPlacement.js';
 import { LAYOUT_THEMES } from '../core/TableLayoutConfig.js';
 import { disposePropSpawn } from './PropLifecycle.js';
 import './Bone.js';
+import './Cauldron.js';
 
 const environmentModules = import.meta.glob('./*.js', { eager: true });
 
@@ -313,7 +314,8 @@ export const TIER_PROP_DEFINITIONS = {
         factoryEntry('Flute', { randomPool: true, name: 'FluteFront', factoryName: 'Flute', position: { x: 2, y: -2.75, z: 14 }, rotation: -Math.PI / 8, afterCreate: (result) => result?.interact && registerInteractiveObject(result.group, result.interact) }),
         factoryEntry('Apple', { randomPool: true, position: { x: 13, y: -2.75, z: 7 }, rotation: Math.PI / 6 }),
         factoryEntry('PocketFlask', { randomPool: true, position: { x: -4, y: -2.75, z: 2 }, rotation: Math.PI / 4 }),
-        factoryEntry('WoodenSpoon', { randomPool: true, position: { x: 10, y: -2.75, z: 12 }, rotation: Math.PI / 3 })
+        factoryEntry('WoodenSpoon', { randomPool: true, position: { x: 10, y: -2.75, z: 12 }, rotation: Math.PI / 3 }),
+        factoryEntry('Cauldron', { randomPool: true, position: { x: 12, y: -2.75, z: -4 }, rotation: 0 })
     ]
 };
 
