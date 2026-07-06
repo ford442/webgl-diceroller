@@ -28,7 +28,7 @@ const WASM_TRANSFORM_STRIDE = 7;
  */
 function _computeFaceNormals(geometry) {
     const CLUSTER_THRESHOLD = 0.98; // ~11.5° tolerance — tight enough for all die types
-    const faceNormals = [];
+    const faceClusters = [];
 
     const pos = geometry.attributes.position;
     const index = geometry.index;
@@ -61,86 +61,157 @@ function _computeFaceNormals(geometry) {
         _n.crossVectors(_e1, _e2);
 
         if (_n.lengthSq() < 1e-10) continue; // skip degenerate triangles
+        const area = _n.length() * 0.5;
         _n.normalize();
 
-        // Check against existing clusters
-        let found = false;
-        for (const fn of faceNormals) {
-            if (fn.dot(_n) > CLUSTER_THRESHOLD) {
-                found = true;
+        // Check against existing clusters. Accumulate by area so broad die
+        // faces dominate bevels and engraved-number side walls.
+        let cluster = null;
+        for (const existing of faceClusters) {
+            if (existing.normal.dot(_n) > CLUSTER_THRESHOLD) {
+                cluster = existing;
                 break;
             }
         }
-        if (!found) faceNormals.push(_n.clone());
+        if (!cluster) {
+            cluster = {
+                normal: _n.clone(),
+                sum: new THREE.Vector3(),
+                area: 0
+            };
+            faceClusters.push(cluster);
+        }
+        cluster.sum.addScaledVector(_n, area);
+        cluster.area += area;
     }
 
-    return faceNormals;
+    return faceClusters.map((cluster) => {
+        const normal = cluster.sum.lengthSq() > 1e-10
+            ? cluster.sum.clone().normalize()
+            : cluster.normal.clone();
+        normal.userData = { area: cluster.area };
+        return normal;
+    });
 }
 
 /**
  * Reduce many clustered normals (bevels/rounds on the mesh) down to the
- * `sides` principal face directions by greedy farthest-point selection.
+ * `sides` principal face directions.
  */
 function _selectPrincipalFaceNormals(allNormals, sides) {
     if (!allNormals.length) return [];
     if (allNormals.length <= sides) return allNormals.map((n) => n.clone());
 
     const selected = [];
-    const used = new Set();
 
-    // Seed with the normal that best aligns with ±Y — a real die face, not a bevel.
-    let seed = 0;
-    let seedScore = Math.abs(allNormals[0].y);
-    for (let i = 1; i < allNormals.length; i++) {
-        const score = Math.abs(allNormals[i].y);
-        if (score > seedScore) {
-            seedScore = score;
-            seed = i;
+    // Prefer high-area planes. The old farthest-point pass used abs(dot),
+    // which treated opposite faces as duplicates and could choose bevels.
+    const byArea = allNormals
+        .slice()
+        .sort((a, b) => (b.userData?.area ?? 0) - (a.userData?.area ?? 0));
+
+    for (const normal of byArea) {
+        if (selected.length >= sides) break;
+        if (selected.every((existing) => existing.dot(normal) < 0.92)) {
+            selected.push(normal.clone());
         }
     }
-    selected.push(allNormals[seed].clone());
-    used.add(seed);
 
-    while (selected.length < sides) {
-        let bestIdx = -1;
-        let bestSeparation = -1;
-
-        for (let i = 0; i < allNormals.length; i++) {
-            if (used.has(i)) continue;
-            let minAlignment = Infinity;
-            for (const s of selected) {
-                minAlignment = Math.min(minAlignment, Math.abs(allNormals[i].dot(s)));
-            }
-            const separation = 1 - minAlignment;
-            if (separation > bestSeparation) {
-                bestSeparation = separation;
-                bestIdx = i;
-            }
+    // Fallback for odd meshes: keep filling with unique directions.
+    for (const normal of byArea) {
+        if (selected.length >= sides) break;
+        if (!selected.some((existing) => existing.dot(normal) > 0.98)) {
+            selected.push(normal.clone());
         }
-
-        if (bestIdx < 0) break;
-        selected.push(allNormals[bestIdx].clone());
-        used.add(bestIdx);
     }
 
     return selected;
 }
 
+const FACE_VALUE_NORMAL_MAPS = {
+    d4: [
+        { normal: [-0.627, -0.023, -0.779], value: 4 },
+        { normal: [0.606, -0.795, -0.036], value: 3 },
+        { normal: [-0.525, -0.020, 0.851], value: 2 },
+        { normal: [0.545, 0.837, -0.035], value: 1 }
+    ],
+    d6: [
+        { normal: [0, 1, 0], value: 1 },
+        { normal: [0, 0, 1], value: 2 },
+        { normal: [-1, 0, 0], value: 3 },
+        { normal: [1, 0, 0], value: 4 },
+        { normal: [0, 0, -1], value: 5 },
+        { normal: [0, -1, 0], value: 6 }
+    ],
+    d12: [
+        { normal: [0.632, -0.447, -0.632], value: 1 },
+        { normal: [0.883, 0.447, -0.140], value: 2 },
+        { normal: [0.140, 0.447, -0.883], value: 3 },
+        { normal: [-0.406, -0.447, -0.797], value: 4 },
+        { normal: [0, -1, 0], value: 5 },
+        { normal: [-0.140, -0.447, 0.883], value: 6 },
+        { normal: [-0.632, 0.447, 0.632], value: 7 },
+        { normal: [0.406, 0.447, 0.797], value: 8 },
+        { normal: [0.797, -0.447, 0.406], value: 9 },
+        { normal: [-0.883, -0.447, 0.140], value: 10 },
+        { normal: [-0.797, 0.447, -0.406], value: 11 },
+        { normal: [0, 1, 0], value: 12 }
+    ],
+    d20: [
+        { normal: [0.111, 0.745, 0.658], value: 1 },
+        { normal: [-0.512, -0.746, 0.426], value: 2 },
+        { normal: [-0.942, -0.334, 0.030], value: 3 },
+        { normal: [0.497, -0.334, 0.801], value: 4 },
+        { normal: [0.624, -0.746, 0.232], value: 5 },
+        { normal: [-0.900, 0.333, 0.282], value: 6 },
+        { normal: [0, -1, 0], value: 7 },
+        { normal: [-0.206, -0.333, 0.920], value: 8 },
+        { normal: [-0.444, 0.331, 0.832], value: 9 },
+        { normal: [0.694, 0.333, 0.638], value: 10 },
+        { normal: [-0.693, -0.333, -0.639], value: 11 },
+        { normal: [0.513, 0.745, -0.425], value: 12 },
+        { normal: [0, 1, 0], value: 13 },
+        { normal: [0.445, -0.333, -0.831], value: 14 },
+        { normal: [0.900, -0.333, -0.282], value: 15 },
+        { normal: [-0.498, 0.333, -0.801], value: 16 },
+        { normal: [0.942, 0.333, -0.031], value: 17 },
+        { normal: [0.206, 0.334, -0.920], value: 18 },
+        { normal: [-0.625, 0.745, -0.232], value: 19 },
+        { normal: [-0.111, -0.746, -0.656], value: 20 }
+    ]
+};
+
 /**
  * Assign integer values 1..N to face normals.
  *
- * Assumes the Blender source models are exported with the +Y axis pointing up,
- * i.e. after the `rotateX(-Math.PI / 2)` applied in loadDiceModels the face
- * that was originally "up" in Blender (the highest-value face) ends up with
- * the most positive Y normal component.  Sorting ascending therefore maps
- * lowest-Y normal → value 1 (face resting on the table) and highest-Y normal
- * → value N (face visible to the player).
- *
- * If values appear reversed for a particular model, flip the sort order here.
+ * Prefer source-model maps where the model numbering has been verified. Fall
+ * back to the old Y-sort convention for dice without an explicit map.
  */
-function _assignFaceValues(faceNormals) {
+function _assignFaceValues(faceNormals, type = null) {
     const n = faceNormals.length;
     if (n === 0) return [];
+
+    const mappedNormals = FACE_VALUE_NORMAL_MAPS[type];
+    if (mappedNormals?.length === n) {
+        const assigned = faceNormals.map((faceNormal) => {
+            let best = null;
+            let bestDot = -Infinity;
+            for (const entry of mappedNormals) {
+                const normal = new THREE.Vector3(...entry.normal).normalize();
+                const dot = faceNormal.dot(normal);
+                if (dot > bestDot) {
+                    bestDot = dot;
+                    best = entry;
+                }
+            }
+            return bestDot > 0.92 ? best.value : null;
+        });
+
+        if (assigned.every((value) => value !== null) && new Set(assigned).size === n) {
+            return assigned;
+        }
+        console.warn(`[DiceReader] Explicit face map did not match ${type}; using Y-sort fallback`, assigned);
+    }
 
     // Sort ascending by Y: lowest Y → value 1, highest Y → value N
     const sorted = faceNormals
@@ -230,8 +301,9 @@ export const readDiceValue = (die) => {
     _invQ.copy(dieQuaternion).invert();
     _localUp.set(0, 1, 0).applyQuaternion(_invQ);
 
-    // d4: the result is the face resting on the table (normal points down).
-    // All other dice: the face pointing up is the result.
+    // d4 values are printed around the top vertex; selecting the bottom face
+    // and using the source-model map yields that visible vertex value.
+    // All other dice use the face pointing up.
     const useBottomFace = die.type === 'd4';
     let bestDot = useBottomFace ? Infinity : -Infinity;
     let bestIdx = 0;
@@ -253,6 +325,42 @@ export const readAllDiceValues = () => spawnedDice.map((die) => ({
     type: die.type,
     value: readDiceValue(die)
 }));
+
+export const getDiceValueDebugSnapshot = () => spawnedDice.map((die) => {
+    const model = diceModels[die.type];
+    const faceNormals = model?.userData?.faceNormals ?? [];
+    const faceValues = model?.userData?.faceValues ?? [];
+    const value = readDiceValue(die);
+    const dieQuaternion = getDieQuaternion(die);
+
+    _invQ.copy(dieQuaternion).invert();
+    _localUp.set(0, 1, 0).applyQuaternion(_invQ);
+
+    const useBottomFace = die.type === 'd4';
+    let bestDot = useBottomFace ? Infinity : -Infinity;
+    let bestIdx = -1;
+    for (let i = 0; i < faceNormals.length; i++) {
+        const dot = faceNormals[i].dot(_localUp);
+        if ((useBottomFace && dot < bestDot) || (!useBottomFace && dot > bestDot)) {
+            bestDot = dot;
+            bestIdx = i;
+        }
+    }
+
+    return {
+        type: die.type,
+        value,
+        selectedFaceIndex: bestIdx,
+        selectedFaceValue: bestIdx >= 0 ? faceValues[bestIdx] : null,
+        selectedDot: bestDot,
+        localUp: { x: _localUp.x, y: _localUp.y, z: _localUp.z },
+        faceMap: faceNormals.map((normal, index) => ({
+            index,
+            value: faceValues[index],
+            normal: { x: normal.x, y: normal.y, z: normal.z }
+        }))
+    };
+});
 
 export const areDiceSettled = () => {
     if (spawnedDice.length === 0) return true;
@@ -600,7 +708,7 @@ export const loadDiceModels = async (onProgress) => {
                 const allNormals = _computeFaceNormals(cleanMesh.geometry);
                 const faceNormals = _selectPrincipalFaceNormals(allNormals, sides);
                 cleanMesh.userData.faceNormals = faceNormals;
-                cleanMesh.userData.faceValues  = _assignFaceValues(faceNormals);
+                cleanMesh.userData.faceValues  = _assignFaceValues(faceNormals, d.type);
                 const oneFaceNormal = _getFaceNormalForValue(cleanMesh.userData.faceNormals, cleanMesh.userData.faceValues, 1);
                 if (oneFaceNormal && cleanMesh.geometry.boundingBox) {
                     const bboxSize = new THREE.Vector3();

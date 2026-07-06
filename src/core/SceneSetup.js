@@ -144,14 +144,23 @@ export async function setupScene(container) {
     }
 
     // Lights
-    // Ambient light — kept low but bright enough to read dice pips in shadow.
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.22);
+    // Ambient light — still tavern-low, but high enough that recessed pips
+    // remain readable outside the direct lamp pool.
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.32);
     scene.add(ambientLight);
 
     // Soft fill over the dice zone so numbers stay legible between lamp pools.
-    const tableFillLight = new THREE.PointLight(0xfff4e0, 1.8, 28);
-    tableFillLight.position.set(0, TABLE_SURFACE_Y + 9, 0);
+    const tableFillLight = new THREE.PointLight(0xfff4e0, 3.2, 40, 1.45);
+    tableFillLight.position.set(0, TABLE_SURFACE_Y + 12, 0);
     scene.add(tableFillLight);
+
+    const diceReadLight = new THREE.SpotLight(0xfff7e6, 3.4, 34, Math.PI / 3.2, 0.85, 1.2);
+    diceReadLight.name = 'DiceReadLight';
+    diceReadLight.position.set(0, TABLE_SURFACE_Y + 16, 3);
+    diceReadLight.target.position.set(0, TABLE_SURFACE_Y, 0);
+    diceReadLight.castShadow = false;
+    scene.add(diceReadLight);
+    scene.add(diceReadLight.target);
 
     // Warm PointLight (Candle) - Key Light
     // Initial setup, position will be updated by clutter

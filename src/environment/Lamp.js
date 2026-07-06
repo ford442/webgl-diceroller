@@ -186,8 +186,9 @@ export async function createLamp() {
             const b = new THREE.Box3().setFromObject(shade);
             const c = b.getCenter(new THREE.Vector3());
             const h = b.getSize(new THREE.Vector3()).y;
-            // Position light at ~75% depth inside the shade (down from top rim)
-            c.y -= h * 0.25;
+            // Position light in the lower shade, but not so deep that the
+            // table receives three tiny hot spots instead of one broad pool.
+            c.y -= h * 0.15;
             return { center: c, box: b };
         });
         shadeData.sort((a, b) => a.center.x - b.center.x);
@@ -201,7 +202,7 @@ export async function createLamp() {
     if (lightPositions.length === 0) {
         const scaledW = rawWidth * scaleFactor;
         const spacing = scaledW * 0.30;
-        const approxY = -size.y * scaleFactor * 0.82; // deep in the lower half
+        const approxY = -size.y * scaleFactor * 0.68; // lower half, broad table coverage
         lightPositions = [
             new THREE.Vector3(-spacing, approxY, 0),
             new THREE.Vector3(0, approxY, 0),
@@ -213,7 +214,7 @@ export async function createLamp() {
     const lasers = [];
 
     lightPositions.forEach((pos, i) => {
-        const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 130, 34);
+        const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 175, 48, 1.35);
         light.position.copy(pos);
         light.castShadow = (i === 1); // only center light casts shadows
         light.shadow.bias = -0.0004;
@@ -233,7 +234,7 @@ export async function createLamp() {
         lampGroup.add(light);
         lampGroup.add(bulb);
 
-        lights.push({ light, bulb, originalIntensity: 130 });
+        lights.push({ light, bulb, originalIntensity: 175 });
     });
 
     // Decorative laser beams (only visible in LASER/CRITICAL modes)

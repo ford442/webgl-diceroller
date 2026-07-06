@@ -10,7 +10,8 @@ import {
     pollPhysicsCollisionEvents,
     applyDiceMassBiases,
     spawnedDice,
-    readAllDiceValues
+    readAllDiceValues,
+    getDiceValueDebugSnapshot
 } from './dice.js';
 import { showResults, hideResults, updateDiceHud } from './results.js';
 import { updateInteraction, interactionNeedsAmmoStep } from './interaction.js';
@@ -506,6 +507,7 @@ async function init() {
         if (lampData) lampData.setRolling(true);
     };
     window.readAllDiceValues = readAllDiceValues;
+    window.getDiceValueDebugSnapshot = getDiceValueDebugSnapshot;
     window.areDiceSettled = areDiceSettled;
     window.rerollTableLayout = (overrides) => layoutManager?.rerollLayout(overrides);
     window.getTableLayoutConfig = () => layoutManager?.getConfig();
