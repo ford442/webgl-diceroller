@@ -70,6 +70,7 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
         },
         setSize(nextWidth, nextHeight) {
             scenePass.setSize(nextWidth, nextHeight);
+            // BloomNode resizes itself in updateBefore() once blur materials exist.
         },
         dispose() {
             postProcessing.dispose();

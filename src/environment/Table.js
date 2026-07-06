@@ -36,8 +36,10 @@ export function createTable(scene) {
 
     // VELVET Material for dice zone
     const velvetMaterial = new THREE.MeshStandardMaterial({
-        color: 0x4a0e0e, // Deep red velvet
-        roughness: 0.95,
+        color: 0x641616, // Deep red velvet, lifted for dice readability
+        emissive: 0x120202,
+        emissiveIntensity: 0.08,
+        roughness: 0.82,
         metalness: 0.05,
         bumpScale: 0.02
     });

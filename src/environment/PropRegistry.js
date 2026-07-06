@@ -4,6 +4,8 @@ import { LAMP_HANG_Y, toCurrentTabletopY } from '../core/SceneMetrics.js';
 import { shuffleWithRng } from './clutter/ClutterPlacement.js';
 import { LAYOUT_THEMES } from '../core/TableLayoutConfig.js';
 import { disposePropSpawn } from './PropLifecycle.js';
+import './Bone.js';
+import './Cauldron.js';
 
 const environmentModules = import.meta.glob('./*.js', { eager: true });
 
@@ -40,7 +42,7 @@ const resolveEntryPosition = (entry) => (
 );
 
 export const SHADOW_DISABLED_PROP_NAMES = new Set([
-    'Dart', 'Bell', 'Pencil', 'Key', 'CoinPouch', 'PocketFlask', 'Compass', 'WaxSeal',
+    'Dart', 'Bell', 'Pencil', 'Bone', 'Key', 'CoinPouch', 'PocketFlask', 'Compass', 'WaxSeal',
     'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
     'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet',
     'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus',
@@ -211,6 +213,7 @@ export const TIER_PROP_DEFINITIONS = {
         factoryEntry('CharacterSheet', { randomPool: true, position: { x: 14, y: -2.75, z: 8 }, rotation: -Math.PI / 6 }),
         factoryEntry('BountyPoster', { randomPool: true, position: { x: -20, y: 4, z: -20 }, rotation: Math.PI / 4 }),
         factoryEntry('Pencil', { randomPool: true, position: { x: -8, y: -2.75, z: 14 }, rotation: Math.PI / 5 }),
+        factoryEntry('Bone', { randomPool: true, position: { x: 5, y: -2.75, z: 5 }, rotation: Math.PI / 3 }),
         factoryEntry('CoinPouch', { randomPool: true, position: { x: 9, y: -2.75, z: 13 }, rotation: -Math.PI / 8 }),
         factoryEntry('Lute', { randomPool: true, position: { x: -14, y: -1.85, z: -10 }, rotation: Math.PI / 4 }),
         factoryEntry('Runestones', { randomPool: true, position: { x: 12, y: -2.75, z: -12 }, rotation: -Math.PI / 12 }),
@@ -311,7 +314,8 @@ export const TIER_PROP_DEFINITIONS = {
         factoryEntry('Flute', { randomPool: true, name: 'FluteFront', factoryName: 'Flute', position: { x: 2, y: -2.75, z: 14 }, rotation: -Math.PI / 8, afterCreate: (result) => result?.interact && registerInteractiveObject(result.group, result.interact) }),
         factoryEntry('Apple', { randomPool: true, position: { x: 13, y: -2.75, z: 7 }, rotation: Math.PI / 6 }),
         factoryEntry('PocketFlask', { randomPool: true, position: { x: -4, y: -2.75, z: 2 }, rotation: Math.PI / 4 }),
-        factoryEntry('WoodenSpoon', { randomPool: true, position: { x: 10, y: -2.75, z: 12 }, rotation: Math.PI / 3 })
+        factoryEntry('WoodenSpoon', { randomPool: true, position: { x: 10, y: -2.75, z: 12 }, rotation: Math.PI / 3 }),
+        factoryEntry('Cauldron', { randomPool: true, position: { x: 12, y: -2.75, z: -4 }, rotation: 0 })
     ]
 };
 
@@ -341,7 +345,7 @@ const SEMANTIC_TAGS = {
     paper: ['Scroll', 'Map', 'PlayingCards', 'CharacterSheet', 'BountyPoster', 'ScrollCase', 'LeatherJournal', 'WritingSet', 'DMScreen', 'Spellbook'],
     light: ['Lantern', 'Candelabra', 'FloatingCandles'],
     magic: ['CrystalBall', 'MysticOrb', 'Wand', 'Runestones', 'Spellbook', 'Amulet', 'DragonScale', 'PotionSet'],
-    treasure: ['Coin', 'CoinPouch', 'Gemstones', 'Crown', 'Chalice', 'Amulet'],
+    treasure: ['Coin', 'CoinPouch', 'Gemstones', 'Crown', 'Chalice', 'Amulet', 'Bone'],
     food: ['TavernMeal', 'CheeseWheel', 'Apple'],
     game: ['PlayingCards', 'TarotDeck', 'DiceTower', 'DiceTray', 'DiceJail', 'DiceBag'],
     tool: ['Compass', 'Spyglass', 'MagnifyingGlass', 'Astrolabe', 'Sundial', 'Abacus', 'Lockpicks', 'Key', 'Padlock', 'PocketWatch', 'Spectacles', 'Rope']

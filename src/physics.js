@@ -381,7 +381,10 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
 
         ownedCollisionShape = new AmmoInstance.btCompoundShape();
         ownedCollisionShape.addChildShape(childTransform, collisionShape);
-        ownedCollisionShape.recalculateLocalAabb();
+        // npm ammo.js (v0.0.10) omits recalculateLocalAabb; addChildShape updates the AABB.
+        if (typeof ownedCollisionShape.recalculateLocalAabb === 'function') {
+            ownedCollisionShape.recalculateLocalAabb();
+        }
         bodyShape = ownedCollisionShape;
 
         AmmoInstance.destroy(childOrigin);

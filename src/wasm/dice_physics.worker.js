@@ -22,6 +22,7 @@
  * import.meta.url), { type: 'module' })`.
  */
 
+import { publicAssetUrl } from '../core/publicAssetUrl.js';
 import {
     MAX_DICE, STRIDE, HEADER_INTS, H_SEQNO, H_FRONT, H_COUNT, H_SETTLED,
     idsOffset, xfOffset,
@@ -47,16 +48,15 @@ let stepTimer = null;
 // ---------------------------------------------------------------------------
 
 async function boot() {
-    // Dynamically import the Emscripten output from /wasm/ at runtime.  Using a
-    // constructed import avoids Vite trying to bundle the prebuilt artifact, and
-    // matches WasmPhysicsBridge.js so `locateFile` resolves dice_physics.wasm.
+    // Dynamically import the Emscripten output from public/wasm/ at runtime.
+    // Using a constructed import avoids Vite trying to bundle the prebuilt artifact.
     const dynamicImport = new Function('u', 'return import(u)');
-    const factoryMod = await dynamicImport('/wasm/dice_physics.js');
+    const factoryMod = await dynamicImport(publicAssetUrl('wasm/dice_physics.js'));
     const Factory = factoryMod.default || factoryMod;
     Module = await Factory();
 
     try {
-        const res = await fetch('/wasm/hulls.json');
+        const res = await fetch(publicAssetUrl('wasm/hulls.json'));
         if (res.ok) hulls = await res.json();
     } catch (e) {
         // Hulls are optional; collision quality degrades but sim still runs.

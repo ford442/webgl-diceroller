@@ -190,8 +190,9 @@ export async function createLamp() {
             const b = new THREE.Box3().setFromObject(shade);
             const c = b.getCenter(new THREE.Vector3());
             const h = b.getSize(new THREE.Vector3()).y;
-            // Position light at ~75% depth inside the shade (down from top rim)
-            c.y -= h * 0.25;
+            // Position light in the lower shade, but not so deep that the
+            // table receives three tiny hot spots instead of one broad pool.
+            c.y -= h * 0.15;
             return { center: c, box: b };
         });
         shadeData.sort((a, b) => a.center.x - b.center.x);
@@ -205,7 +206,7 @@ export async function createLamp() {
     if (lightPositions.length === 0) {
         const scaledW = rawWidth * scaleFactor;
         const spacing = scaledW * 0.30;
-        const approxY = -size.y * scaleFactor * 0.82; // deep in the lower half
+        const approxY = -size.y * scaleFactor * 0.68; // lower half, broad table coverage
         lightPositions = [
             new THREE.Vector3(-spacing, approxY, 0),
             new THREE.Vector3(0, approxY, 0),

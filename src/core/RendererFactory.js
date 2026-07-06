@@ -23,7 +23,7 @@ function applySharedRendererConfig(renderer, width, height) {
     renderer.shadowMap.autoUpdate = false;
     renderer.shadowMap.needsUpdate = true;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.8;
+    renderer.toneMappingExposure = 1.3;
 }
 
 function createWebGlRenderer({ antialias, width, height, requestedRenderer, fallbackReason }) {
