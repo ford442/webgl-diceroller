@@ -10,6 +10,9 @@ import { createRenderer } from './RendererFactory.js';
 import { preloadSharedTextures } from './TexturePipeline.js';
 import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z, TABLE_SURFACE_Y } from './SceneMetrics.js';
 
+const VIGNETTE_OFFSET = 1.0;
+const VIGNETTE_DARKNESS = 1.0;
+
 async function createWebGpuPostPipeline(renderer, scene, camera, { width, height, postConfig }) {
     const [
         { PostProcessing },
@@ -27,14 +30,12 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
     const scenePass = pass(scene, camera);
     scenePass.setSize(width, height);
 
-    // Keep the scene-color node separate from the composed output. Passing the
-    // same node into bloom() and then reassigning outputNode = outputNode.add(bloom)
-    // creates a circular TSL graph and blows the WebGPU node builder stack.
     const sceneColorNode = scenePass.getTextureNode('output');
     let colorNode = sceneColorNode;
+    let bloomNode = null;
 
     if (postConfig.bloomEnabled) {
-        const bloomNode = bloom(
+        bloomNode = bloom(
             sceneColorNode,
             postConfig.quality === 'low' ? 0.35 : 0.6,
             postConfig.quality === 'low' ? 0.25 : 0.4,
@@ -43,8 +44,8 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
         colorNode = sceneColorNode.add(bloomNode);
     }
 
-    const vignetteOffset = uniform(1.2);
-    const vignetteDarkness = uniform(1.8);
+    const vignetteOffset = uniform(VIGNETTE_OFFSET);
+    const vignetteDarkness = uniform(VIGNETTE_DARKNESS);
     const vignetteNode = Fn(() => {
         const vignetteUv = screenUV.sub(vec2(0.5, 0.5)).mul(vignetteOffset);
         const vignetteColor = vec3(float(1.0).sub(vignetteDarkness));
@@ -143,35 +144,32 @@ export async function setupScene(container) {
         }
     }
 
-    // Lights
-    // Ambient light — still tavern-low, but high enough that recessed pips
-    // remain readable outside the direct lamp pool.
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.32);
+    // Lights — bias toward readable dice faces on the velvet zone.
+    const ambientIntensity = rendererState.usingWebGPU ? 0.16 : 0.09;
+    const ambientLight = new THREE.AmbientLight(0xfff8f0, ambientIntensity);
     scene.add(ambientLight);
 
-    // Soft fill over the dice zone so numbers stay legible between lamp pools.
-    const tableFillLight = new THREE.PointLight(0xfff4e0, 3.2, 40, 1.45);
-    tableFillLight.position.set(0, TABLE_SURFACE_Y + 12, 0);
-    scene.add(tableFillLight);
+    const hemisphereLight = new THREE.HemisphereLight(0xc8d4ff, 0x3a2418, rendererState.usingWebGPU ? 0.38 : 0.24);
+    scene.add(hemisphereLight);
 
-    const diceReadLight = new THREE.SpotLight(0xfff7e6, 3.4, 34, Math.PI / 3.2, 0.85, 1.2);
-    diceReadLight.name = 'DiceReadLight';
-    diceReadLight.position.set(0, TABLE_SURFACE_Y + 16, 3);
-    diceReadLight.target.position.set(0, TABLE_SURFACE_Y, 0);
-    diceReadLight.castShadow = false;
-    scene.add(diceReadLight);
-    scene.add(diceReadLight.target);
+    const diceFillLight = new THREE.DirectionalLight(0xfff0dd, 0.32);
+    diceFillLight.position.set(2, 16, 10);
+    diceFillLight.target.position.set(0, TABLE_SURFACE_Y, 0);
+    diceFillLight.castShadow = false;
+    scene.add(diceFillLight);
+    scene.add(diceFillLight.target);
 
     // Warm PointLight (Candle) - Key Light
     // Initial setup, position will be updated by clutter
     // Deeper orange/red for a warmer, cozier feel (0xff9933)
-    const pointLight = new THREE.PointLight(0xff9933, 2.5, 20);
+    const pointLight = new THREE.PointLight(0xff9933, 2.2, 22);
     pointLight.position.set(3, 6, 3); // Default if no candle
     pointLight.castShadow = true;
-    pointLight.shadow.bias = -0.001; // Adjusted bias to prevent acne
+    pointLight.shadow.bias = -0.001;
+    pointLight.shadow.normalBias = 0.02;
     pointLight.shadow.mapSize.width = 512;
     pointLight.shadow.mapSize.height = 512;
-    pointLight.shadow.radius = 5; // Softer shadows
+    pointLight.shadow.radius = 6;
     pointLight.shadow.camera.near = 0.1;
     pointLight.shadow.camera.far = 25;
     pointLight.shadow.autoUpdate = false;
@@ -180,7 +178,7 @@ export async function setupScene(container) {
 
     // Cool SpotLight (Moonlight) - Shining through the window
     // More blue, lower intensity for contrast (0x4444dd)
-    const spotLight = new THREE.SpotLight(0x4444dd, 5.0);
+    const spotLight = new THREE.SpotLight(0x4444dd, 3.5);
     spotLight.position.set(-45, 15, -5); // Outside the window
     spotLight.target.position.set(0, TABLE_SURFACE_Y, 0); // Aim at table center
     spotLight.angle = Math.PI / 10;
@@ -195,8 +193,8 @@ export async function setupScene(container) {
     scene.add(spotLight);
     scene.add(spotLight.target);
 
-    // Fog for depth — linear so the table stays crisp; background fades from 15–45 units
-    scene.fog = new THREE.Fog(0x111111, 15, 45);
+    // Fog for depth
+    scene.fog = new THREE.FogExp2(0x111111, 0.015);
 
     // Post-Processing
     // Auto-detect low-end GPUs: disable post-processing if texture size is limited.
@@ -246,8 +244,8 @@ export async function setupScene(container) {
 
             // Vignette
             const vignettePass = new ShaderPass(VignetteShader);
-            vignettePass.uniforms['offset'].value = 1.2;
-            vignettePass.uniforms['darkness'].value = 1.8; // Darker vignette
+            vignettePass.uniforms['offset'].value = VIGNETTE_OFFSET;
+            vignettePass.uniforms['darkness'].value = VIGNETTE_DARKNESS;
             composer.addPass(vignettePass);
             postPasses.vignettePass = vignettePass;
 
