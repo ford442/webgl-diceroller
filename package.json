@@ -7,13 +7,21 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run build:wasm && vite build",
+    "build:js": "vite build",
     "build_colab": "npm run build:wasm_colab && vite build",
     "preview": "vite preview",
     "build:wasm": "bash src/wasm/build.sh",
     "build:wasm_colab": "bash src/wasm/build_colab.sh",
     "convert:dice": "node scripts/convert-dice-to-glb.mjs",
     "convert:props": "node scripts/convert-props.mjs",
-    "verify:worker-physics": "node scripts/verify-worker-physics.mjs"
+    "verify:worker-physics": "node scripts/verify-worker-physics.mjs",
+    "verify:godrays": "node scripts/verify-godrays.mjs",
+    "verify:wasm-primitives": "node scripts/verify-wasm-primitives.mjs",
+    "test:debug": "node tests/debug.js",
+    "test:lamp": "node tests/lamp.js",
+    "test:cauldron": "node tests/cauldron.js",
+    "test:flute": "node tests/flute.js",
+    "test:playingcards": "node tests/playingcards.js"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.1.0",

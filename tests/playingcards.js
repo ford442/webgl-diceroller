@@ -1,28 +1,15 @@
-const { chromium } = require('playwright');
+const { runTest } = require('./helpers/browser');
 
 // E2E: PlayingCards are present AND interactive (clicking draws/flips a card).
 // `forceProps=PlayingCards` guarantees the randomPool prop spawns regardless of seed.
-(async () => {
-    console.log("Starting browser...");
-    const browser = await chromium.launch({
-        args: [
-            '--use-gl=swiftshader',
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu-shader-disk-cache'
-        ]
-    });
-    const page = await browser.newPage();
-    const errors = [];
-    page.on('pageerror', err => errors.push(err.message));
+// ?webgl forces the stable baseline renderer (headless WebGPU init can stall).
+const url = 'http://localhost:4173/?webgl&no-post&forceProps=PlayingCards';
 
-    // ?webgl forces the stable baseline renderer (headless WebGPU init can stall).
-    const url = 'http://localhost:4173/?webgl&no-post&forceProps=PlayingCards';
+runTest(async (page, errors) => {
     console.log(`Navigating to ${url} ...`);
     await page.goto(url, { waitUntil: 'load', timeout: 60000 });
 
-    console.log("Waiting for the playingCards interactable to register...");
+    console.log('Waiting for the playingCards interactable to register...');
     await page.waitForFunction(() => !!(window.__interactables && window.__interactables.playingCards), null, { timeout: 150000 });
 
     const inScene = await page.evaluate(() => {
@@ -64,7 +51,6 @@ const { chromium } = require('playwright');
     if (errors.length) { console.error('FAILURE: page errors:', errors.slice(0, 5)); pass = false; }
     else console.log('✓ No page errors');
 
-    await browser.close();
     console.log(pass ? '\n=== PLAYING CARDS TEST PASSED ===' : '\n=== PLAYING CARDS TEST FAILED ===');
-    process.exit(pass ? 0 : 1);
-})();
+    return pass;
+}, { args: ['--use-gl=swiftshader', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu-shader-disk-cache'], logConsole: false });

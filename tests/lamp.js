@@ -1,5 +1,5 @@
-const { chromium } = require('playwright');
 const fs = require('fs');
+const { launchPage } = require('./helpers/browser');
 
 /**
  * Verification script for the fixed billiard lamp.
@@ -57,34 +57,7 @@ if (process.env.NODE_ENV === 'static' || process.argv.includes('--static')) {
 console.log('=== Lamp Verification Test ===');
 
 (async () => {
-    const browser = await chromium.launch({
-        headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--use-gl=angle',
-            '--use-angle=swiftshader',
-            '--enable-unsafe-swiftshader'
-        ]
-    });
-    const page = await browser.newPage();
-
-    const consoleErrors = [];
-    const consoleWarnings = [];
-    page.on('console', msg => {
-        const text = msg.text();
-        if (msg.type() === 'error') {
-            consoleErrors.push(text);
-            console.log(`[BROWSER ERROR] ${text}`);
-        } else if (msg.type() === 'warning' && text.toLowerCase().includes('lamp')) {
-            consoleWarnings.push(text);
-        }
-    });
-    page.on('pageerror', err => {
-        consoleErrors.push(err.message);
-        console.log(`[PAGE ERROR] ${err.message}`);
-    });
+    const { browser, page, errors: consoleErrors } = await launchPage({ logConsole: false });
 
     // Use the verification server started by our test harness (port 8123 serves dist/)
     const urls = [
@@ -185,6 +158,7 @@ console.log('=== Lamp Verification Test ===');
         console.error('FAIL:', result.error);
         pass = false;
     } else {
+        // LAMP_HANG_Y = ROOM_CEILING_Y(20) - 0.35 (src/core/SceneMetrics.js)
         if (Math.abs(result.lampY - 19.65) > 0.1) {
             console.warn(`WARN: lamp.group.position.y = ${result.lampY} (expected ~19.65)`);
         } else {
