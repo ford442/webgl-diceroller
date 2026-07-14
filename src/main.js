@@ -12,7 +12,9 @@ import {
     spawnedDice,
     readAllDiceValues,
     getDiceValueDebugSnapshot,
-    replaceDiceSet
+    replaceDiceSet,
+    updateDiceSet,
+    getSpawnedDiceCounts
 } from './dice.js';
 import { showResults, hideResults, updateDiceHud, showNotationResults } from './results.js';
 import { updateInteraction, interactionNeedsAmmoStep } from './interaction.js';
@@ -47,6 +49,12 @@ import { createFairnessMonitor } from './debug/FairnessMonitor.js';
 import { createCullingSystem } from './core/CullingSystem.js';
 import { createRenderStats } from './debug/RenderStats.js';
 import { createRollSession } from './roll/RollSession.js';
+import {
+    REPLAY_VERSION,
+    buildShareableRollUrl,
+    generateRollSeed,
+    parseShareableRollParams
+} from './roll/ShareableRoll.js';
 
 let camera, scene, renderer, composer;
 let physicsWorld;
@@ -495,16 +503,21 @@ async function init() {
 
     const rollSessionRef = { current: null };
 
+    const rollHandlerRef = { roll: null, lastRoll: null };
+
     // Load all tiers
     let tierResult;
     try {
     tierResult = await loadTiers(scene, camera, physicsWorld, { scheduler, cullingSystem }, {
         audio: collisionAudio,
-        onDiceRoll: () => {
-            shadowController?.pulse('roll');
-            cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
-            hideResults();
-            if (lampData) lampData.setRolling(true);
+        onRollAll: () => rollHandlerRef.roll?.(),
+        rollShareHooks: {
+            hasShareableRoll: () => rollHandlerRef.lastRoll?.seed != null,
+            buildShareUrl: () => {
+                const last = rollHandlerRef.lastRoll;
+                if (!last?.seed) return null;
+                return buildShareableRollUrl(last.seed, last.counts);
+            }
         },
         notationHooks: {
             onNotationRoll: async (expression) => {
@@ -561,6 +574,12 @@ async function init() {
         world: physicsWorld,
         replaceDiceSet,
         throwDice: (s, w, seed) => {
+            if (seed != null) {
+                rollHandlerRef.lastRoll = {
+                    seed: seed >>> 0,
+                    counts: getSpawnedDiceCounts()
+                };
+            }
             throwDice(s, w, seed);
             cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
             if (lampData) lampData.setRolling(true);
@@ -569,6 +588,20 @@ async function init() {
         areDiceSettled,
         onComplete: (result) => showNotationResults(result)
     });
+
+    rollHandlerRef.roll = (explicitSeed = null) => {
+        const seed = explicitSeed ?? generateRollSeed();
+        rollHandlerRef.lastRoll = {
+            seed: seed >>> 0,
+            counts: getSpawnedDiceCounts()
+        };
+        shadowController?.pulse('roll');
+        throwDice(scene, physicsWorld, seed);
+        cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
+        hideResults();
+        if (lampData) lampData.setRolling(true);
+        return seed;
+    };
 
     // Input handling
     inputState = setupInput({
@@ -579,13 +612,7 @@ async function init() {
         isLockedRef,
         cursorPos,
         crosshairUI,
-        onRoll: (seed = null) => {
-            shadowController?.pulse('roll');
-            throwDice(scene, physicsWorld, seed);
-            cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
-            hideResults();
-            if (lampData) lampData.setRolling(true);
-        },
+        onRoll: () => rollHandlerRef.roll(),
         onRerollLayout: layoutManager ? async () => {
             const result = await layoutManager.rerollLayout({ newSeed: true });
             ui?.updateLayoutStatus?.(result);
@@ -611,11 +638,7 @@ async function init() {
     window.fairnessMonitor = fairnessMonitor;
     window.resetFairnessMonitor = () => fairnessMonitor?.reset();
     window.replayRoll = (seed) => {
-        shadowController?.pulse('roll');
-        throwDice(scene, physicsWorld, seed);
-        cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
-        hideResults();
-        if (lampData) lampData.setRolling(true);
+        rollHandlerRef.roll(seed);
     };
     window.readAllDiceValues = readAllDiceValues;
     window.getDiceValueDebugSnapshot = getDiceValueDebugSnapshot;
@@ -623,6 +646,32 @@ async function init() {
     window.rollNotation = (expression, seed = null) => rollSessionRef.current?.roll(expression, seed);
     window.rerollTableLayout = (overrides) => layoutManager?.rerollLayout(overrides);
     window.getTableLayoutConfig = () => layoutManager?.getConfig();
+    window.getLastRollShareUrl = () => {
+        const last = rollHandlerRef.lastRoll;
+        if (!last?.seed) return null;
+        return buildShareableRollUrl(last.seed, last.counts);
+    };
+    window.REPLAY_VERSION = REPLAY_VERSION;
+
+    const replayRequest = parseShareableRollParams(searchParams);
+    if (replayRequest) {
+        if (replayRequest.error === 'unsupported_version') {
+            console.warn(
+                `[ShareableRoll] Unsupported replay version v=${replayRequest.version} (need v=${REPLAY_VERSION}); skipping auto-replay.`
+            );
+        } else {
+            if (!isWasmAvailable()) {
+                console.warn(
+                    '[ShareableRoll] WASM physics is not available; replay uses ammo fallback and may not match the original roll. Run `npm run build:wasm` for bit-identical replay.'
+                );
+            }
+            if (replayRequest.diceCounts) {
+                updateDiceSet(scene, physicsWorld, replayRequest.diceCounts);
+                ui?.updateCounts?.(replayRequest.diceCounts);
+            }
+            rollHandlerRef.roll(replayRequest.seed);
+        }
+    }
 }
 
 function applyLivePixelRatio(container, nextRatio) {

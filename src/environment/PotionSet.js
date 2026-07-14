@@ -45,79 +45,60 @@ export function createPotionSet(scene, physicsWorld, position = { x: 12, y: -2.7
     topStep.receiveShadow = true;
     group.add(topStep);
 
-    // Physics for Stand (Compound or Simple Box)
-    // Box 1: Bottom full width/depth.
-    if (ammo && physicsWorld) {
-        const botShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth/2, stepHeight/2, stepDepth));
-    
-        // Box 2: Top step.
-        if (ammo && physicsWorld) {
-            const topShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth/2, stepHeight/2, stepDepth/2));
-        
-            // --- 2. Potions ---
-        
-            // Potion A: Health (Red, Round) - On Top Step
-            const healthPotion = createRoundPotion(0xff0000);
-            healthPotion.position.set(-1.0, stepHeight * 2, -0.5);
-            group.add(healthPotion);
-        
-            // Potion B: Mana (Blue, Square) - On Top Step
-            const manaPotion = createSquarePotion(0x0000ff);
-            manaPotion.position.set(1.0, stepHeight * 2, -0.5);
-            group.add(manaPotion);
-        
-            // Potion C: Stamina (Green, Conical) - On Bottom Step
-            const staminaPotion = createConicalPotion(0x00ff00);
-            staminaPotion.position.set(0, stepHeight, 0.8);
-            group.add(staminaPotion);
-        
-        
-            // --- Positioning the Group ---
-            // Table Top Y = -2.75.
-            // We want the bottom of the stand (y=0 local) to be at -2.75.
-            group.position.set(position.x, position.y, position.z);
-            group.rotation.y = rotationY;
-        
-            scene.add(group);
-        
-            // --- Physics Creation (Now that Group is placed) ---
-        
-            function addBodyForMesh(mesh, shape, offsetY = 0) {
-                const worldPos = new THREE.Vector3();
-                mesh.getWorldPosition(worldPos);
-                const worldQuat = new THREE.Quaternion();
-                mesh.getWorldQuaternion(worldQuat);
-        
-                const dummy = new THREE.Object3D();
-                dummy.position.copy(worldPos);
-                dummy.quaternion.copy(worldQuat);
-        
-                // Apply local vertical offset (e.g. for objects built from y=0 up)
-                if (offsetY !== 0) {
-                    dummy.translateY(offsetY);
-                }
-        
-                createStaticBody(physicsWorld, dummy, shape);
-        }
-    }
+    // --- 2. Potions ---
+    const healthPotion = createRoundPotion(0xff0000);
+    healthPotion.position.set(-1.0, stepHeight * 2, -0.5);
+    group.add(healthPotion);
+
+    const manaPotion = createSquarePotion(0x0000ff);
+    manaPotion.position.set(1.0, stepHeight * 2, -0.5);
+    group.add(manaPotion);
+
+    const staminaPotion = createConicalPotion(0x00ff00);
+    staminaPotion.position.set(0, stepHeight, 0.8);
+    group.add(staminaPotion);
+
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
+    scene.add(group);
+
+    if (!ammo || !physicsWorld) {
+        return { group };
     }
 
-    // Stand Bodies (Box geometries are centered, no offset needed)
+    const botShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth / 2, stepHeight / 2, stepDepth));
+    const topShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth / 2, stepHeight / 2, stepDepth / 2));
+
+    function addBodyForMesh(mesh, shape, offsetY = 0) {
+        const worldPos = new THREE.Vector3();
+        mesh.getWorldPosition(worldPos);
+        const worldQuat = new THREE.Quaternion();
+        mesh.getWorldQuaternion(worldQuat);
+
+        const dummy = new THREE.Object3D();
+        dummy.position.copy(worldPos);
+        dummy.quaternion.copy(worldQuat);
+
+        if (offsetY !== 0) {
+            dummy.translateY(offsetY);
+        }
+
+        createStaticBody(physicsWorld, dummy, shape);
+    }
+
     addBodyForMesh(botStep, botShape);
     addBodyForMesh(topStep, topShape);
 
-    // Potion Bodies (Meshes are built from y=0 up, shapes are centered)
-    // Health (Sphere approx, radius 0.4) -> Center at 0.4
     const healthShape = new ammo.btSphereShape(0.4);
     addBodyForMesh(healthPotion, healthShape, 0.4);
 
-    // Mana (Box approx, height 1.0) -> Center at 0.5
     const manaShape = new ammo.btBoxShape(new ammo.btVector3(0.3, 0.5, 0.3));
     addBodyForMesh(manaPotion, manaShape, 0.5);
 
-    // Stamina (Cylinder approx, height ~1.0) -> Center at 0.5
     const staminaShape = new ammo.btCylinderShape(new ammo.btVector3(0.3, 0.5, 0.3));
     addBodyForMesh(staminaPotion, staminaShape, 0.5);
+
+    return { group };
 }
 
 function createRoundPotion(color) {

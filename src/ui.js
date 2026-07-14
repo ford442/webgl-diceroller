@@ -1,6 +1,6 @@
 import { DENSITY_PRESETS, LAYOUT_THEMES, buildShareableTableUrl } from './core/TableLayoutConfig.js';
 
-export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHooks = null) => {
+export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHooks = null, rollShareHooks = null) => {
     const canvasContainer = document.getElementById('canvas-container') || document.body;
     const container = document.createElement('div');
     container.style.position = 'absolute';
@@ -216,6 +216,32 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
     rollBtn.addEventListener('click', () => onRollAll());
     rollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
     container.appendChild(rollBtn);
+
+    if (rollShareHooks?.buildShareUrl) {
+        const shareRollBtn = document.createElement('button');
+        shareRollBtn.textContent = 'Share Roll';
+        shareRollBtn.style.cursor = 'pointer';
+        shareRollBtn.style.marginTop = '4px';
+        shareRollBtn.title = 'Copy a link that replays this exact roll';
+        shareRollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+        shareRollBtn.addEventListener('click', async () => {
+            if (rollShareHooks.hasShareableRoll && !rollShareHooks.hasShareableRoll()) {
+                shareRollBtn.textContent = 'Roll first';
+                setTimeout(() => { shareRollBtn.textContent = 'Share Roll'; }, 1500);
+                return;
+            }
+            const url = rollShareHooks.buildShareUrl();
+            if (!url) return;
+            try {
+                await navigator.clipboard.writeText(url);
+                shareRollBtn.textContent = 'Copied!';
+                setTimeout(() => { shareRollBtn.textContent = 'Share Roll'; }, 1500);
+            } catch {
+                window.prompt('Share this roll:', url);
+            }
+        });
+        container.appendChild(shareRollBtn);
+    }
 
     // --- Audio volume / mute (persisted in localStorage by the audio module) ---
     const audio = layoutHooks?.audio;
