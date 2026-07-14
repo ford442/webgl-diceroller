@@ -71,3 +71,12 @@ export const deserializePhysicsState = (data) => active.deserializePhysicsState(
 export const isUsingWorkerPhysics = () => active === workerBridge;
 export const isUsingSharedArrayBuffer = () =>
     active === workerBridge && workerBridge.isUsingSharedArrayBuffer();
+
+/** Flush batched per-frame worker commands (no-op on the main-thread bridge). */
+export const flushWorkerCommandBatch = () => {
+    if (active === workerBridge) workerBridge.flushWorkerCommandBatch();
+};
+
+/** Worker transport stats for ?debug-perf (null when not on the worker bridge). */
+export const getWorkerPhysicsStats = () =>
+    active === workerBridge ? workerBridge.getWorkerPhysicsStats() : null;

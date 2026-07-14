@@ -53,4 +53,11 @@ export interface PhysicsBridgeModule {
     serializePhysicsState(): Promise<Uint8Array>;
     seededPhysicsThrow(seed: number, dice: { id: number; index: number }[], tableSurfaceY: number): void;
     deserializePhysicsState(data: Uint8Array): void;
+    flushWorkerCommandBatch?(): void;
+    getWorkerPhysicsStats?(): {
+        usingCommandBatch: boolean;
+        usingSAB: boolean;
+        msgsPerSecond: number;
+        batchRecords: number;
+    } | null;
 }

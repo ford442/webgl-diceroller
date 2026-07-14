@@ -137,6 +137,11 @@ export function createRenderStats({
             ? `${dice.count} dice${dice.count ? (dice.settled ? ' · settled' : ' · moving') : ''}`
             : '';
         lines.push(`physics ${physicsLabel}  ${diceLabel}`.trimEnd());
+        if (debugPerf && wasm?.worker) {
+            const w = wasm.worker;
+            const sab = w.usingSAB ? 'sab-cmd' : 'batch-cmd';
+            lines.push(`worker ${sab}  ${w.msgsPerSecond.toFixed(0)} msg/s`);
+        }
 
         lines.push(`draws ${render.calls ?? 0}  tris ${compact(render.triangles)}`);
         lines.push(`geom ${memory.geometries ?? 0}  tex ${memory.textures ?? 0}  prog ${programs}`);

@@ -5,24 +5,65 @@
  * synchronous API as WasmPhysicsBridge.js so it is a drop-in replacement —
  * `dice.js` / `main.js` cannot tell which bridge they are talking to.
  *
- * The trick that makes the API synchronous despite the worker boundary: the C++
- * engine allocates die ids from a monotonic counter (`nextId_++`, never reused;
- * reset()→0, clearAllDice() keeps it).  We mirror that counter on the main
- * thread so `addDie()` can return the id immediately, then post the command to
- * the worker which performs the identical allocation.  The worker reports its
- * actual id back so we can assert the mirror never drifts.
+ * High-frequency commands (torque, transforms, velocities, impulses) are
+ * accumulated into a per-frame scratch buffer and flushed once per frame —
+ * either into a SharedArrayBuffer command ring (zero postMessages) or via a
+ * single `batch` postMessage when SAB is unavailable.
  *
- * Transforms flow back through a double-buffered SharedArrayBuffer when the page
- * is cross-origin isolated; otherwise the worker posts copied snapshots.  Either
- * way `getTransforms()` / `getDieIds()` are synchronous reads of the latest
- * frame.
+ * Structural commands (init, addDie, removeDie, …) stay on plain postMessage.
  */
 
 import {
     MAX_DICE, STRIDE, HEADER_INTS, H_FRONT, H_COUNT, H_SETTLED,
-    idsOffset, xfOffset, SAB_BYTES, sabSupported,
+    H_CMD_HEAD, H_CMD_TAIL,
+    idsOffset, xfOffset, SAB_BYTES, CMD_RING_FLOATS, CMD_RING_OFFSET,
+    sabSupported,
 } from './workerLayout.js';
 import { parsePhysicsFlags } from './physicsFlags.js';
+import {
+    OP, copyIntoRing, countRecords,
+} from './workerCommands.js';
+
+// ---------------------------------------------------------------------------
+// Debug / perf counters (surfaced via getWorkerPhysicsStats)
+// ---------------------------------------------------------------------------
+
+const _stats = {
+    structuralMsgs: 0,
+    batchMsgs: 0,
+    batchRecords: 0,
+    lastSampleAt: typeof performance !== 'undefined' ? performance.now() : 0,
+    msgsPerSecond: 0,
+};
+
+function _noteStructuralMsg() {
+    _stats.structuralMsgs++;
+}
+
+function _noteBatchMsg(recordCount) {
+    _stats.batchMsgs++;
+    _stats.batchRecords += recordCount;
+}
+
+export function getWorkerPhysicsStats() {
+    const now = typeof performance !== 'undefined' ? performance.now() : 0;
+    const dt = (now - _stats.lastSampleAt) / 1000;
+    if (dt >= 0.2) {
+        _stats.msgsPerSecond = dt > 0
+            ? (_stats.structuralMsgs + _stats.batchMsgs) / dt
+            : 0;
+        _stats.structuralMsgs = 0;
+        _stats.batchMsgs = 0;
+        _stats.batchRecords = 0;
+        _stats.lastSampleAt = now;
+    }
+    return {
+        usingCommandBatch: true,
+        usingSAB: _usingSAB,
+        msgsPerSecond: _stats.msgsPerSecond,
+        batchRecords: _stats.batchRecords,
+    };
+}
 
 const REQUEST_TIMEOUT_MS = 15000;
 
@@ -34,12 +75,17 @@ class WorkerEngineProxy {
     constructor(worker, sab) {
         this.worker = worker;
 
-        // Mirror of the engine's monotonic id allocator.
         this._nextId = 0;
         this._count = 0;
 
-        // SAB views (null in snapshot-fallback mode).
         this.sab = sab;
+        this.cmdRing = null;
+        this._cmdHead = 0;
+
+        // Per-frame scratch (used for accumulation; SAB flush copies from here).
+        this._scratch = new Float32Array(1024);
+        this._scratchLen = 0;
+
         if (sab) {
             this.header = new Int32Array(sab, 0, HEADER_INTS);
             this.idsView = [
@@ -50,17 +96,17 @@ class WorkerEngineProxy {
                 new Float32Array(sab, xfOffset(0), MAX_DICE * STRIDE),
                 new Float32Array(sab, xfOffset(1), MAX_DICE * STRIDE),
             ];
+            this.cmdRing = new Float32Array(sab, CMD_RING_OFFSET, CMD_RING_FLOATS);
+            Atomics.store(this.header, H_CMD_HEAD, 0);
+            Atomics.store(this.header, H_CMD_TAIL, 0);
         } else {
             this.header = null;
         }
 
-        // Snapshot-fallback latest frame.
         this._snapIds = new Float32Array(0);
         this._snapXf = new Float32Array(0);
         this._snapCount = 0;
         this._snapSettled = true;
-
-        // Collision events accumulate between polls.
         this._eventChunks = [];
 
         // Async request/response (serializeState, etc.).
@@ -105,7 +151,9 @@ class WorkerEngineProxy {
         }
     }
 
-    _send(type, payload = {}, transfer = []) {
+_send(type, payload = {}, transfer = []) {
+        this.flushCommandBatch();
+        _noteStructuralMsg();
         this.worker.postMessage({ type, payload }, transfer);
     }
 
@@ -123,6 +171,56 @@ class WorkerEngineProxy {
         });
     }
 
+    _ensureScratch(room) {
+        if (this._scratchLen + room <= this._scratch.length) return;
+        const next = new Float32Array(Math.max(this._scratch.length * 2, this._scratchLen + room));
+        next.set(this._scratch.subarray(0, this._scratchLen));
+        this._scratch = next;
+    }
+
+    _enqueue(opcode, id, a, b, c, d, e, f, g) {
+        const len = opcode === OP.SET_TRANSFORM ? 9
+            : opcode === OP.SET_VELOCITY ? 8
+                : 5;
+        this._ensureScratch(len);
+        const i = this._scratchLen;
+        this._scratch[i] = opcode;
+        this._scratch[i + 1] = id;
+        this._scratch[i + 2] = a;
+        this._scratch[i + 3] = b;
+        this._scratch[i + 4] = c;
+        if (len > 5) {
+            this._scratch[i + 5] = d;
+            this._scratch[i + 6] = e;
+            this._scratch[i + 7] = f;
+            if (len > 8) this._scratch[i + 8] = g;
+        }
+        this._scratchLen += len;
+    }
+
+    /** Flush accumulated per-frame commands to the worker (call once per frame). */
+    flushCommandBatch() {
+        if (this._scratchLen === 0) return;
+
+        const batch = this._scratch.subarray(0, this._scratchLen);
+        const records = countRecords(batch, 0, this._scratchLen);
+
+        if (this.cmdRing && this.header) {
+            const head = Atomics.load(this.header, H_CMD_HEAD);
+            this._cmdHead = copyIntoRing(this.cmdRing, CMD_RING_FLOATS, head, batch);
+            Atomics.store(this.header, H_CMD_HEAD, this._cmdHead);
+        } else {
+            const copy = batch.slice();
+            _noteBatchMsg(records);
+            this.worker.postMessage(
+                { type: 'batch', payload: { commands: copy } },
+                [copy.buffer]
+            );
+        }
+
+        this._scratchLen = 0;
+    }
+
     // --- lifecycle ---------------------------------------------------------
     init(gravity, tableY, tableHalfW, tableHalfD) {
         this._send('init', {
@@ -133,8 +231,14 @@ class WorkerEngineProxy {
     }
 
     reset() {
+        this._scratchLen = 0;
         this._nextId = 0;
         this._count = 0;
+        if (this.header) {
+            Atomics.store(this.header, H_CMD_HEAD, 0);
+            Atomics.store(this.header, H_CMD_TAIL, 0);
+            this._cmdHead = 0;
+        }
         this._send('reset');
     }
 
@@ -154,7 +258,7 @@ class WorkerEngineProxy {
     }
 
     clearAllDice() {
-        this._count = 0;                 // engine keeps nextId_ across clearAllDice
+        this._count = 0;
         this._send('clearAllDice');
     }
 
@@ -164,24 +268,26 @@ class WorkerEngineProxy {
     }
     setDieDrag(id, drag) { this._send('setDieDrag', { id, drag }); }
 
-    // --- forces ------------------------------------------------------------
-    applyImpulse(id, fx, fy, fz) { this._send('applyImpulse', { id, fx, fy, fz }); }
-    applyTorqueImpulse(id, tx, ty, tz) { this._send('applyTorqueImpulse', { id, tx, ty, tz }); }
+    // --- forces (batched) --------------------------------------------------
+    applyImpulse(id, fx, fy, fz) {
+        this._enqueue(OP.APPLY_IMPULSE, id, fx, fy, fz);
+    }
+    applyTorqueImpulse(id, tx, ty, tz) {
+        this._enqueue(OP.APPLY_TORQUE, id, tx, ty, tz);
+    }
 
-    // --- state sync --------------------------------------------------------
+    // --- state sync (batched) ----------------------------------------------
     setDieTransform(id, px, py, pz, qx, qy, qz, qw) {
-        this._send('setDieTransform', { id, px, py, pz, qx, qy, qz, qw });
+        this._enqueue(OP.SET_TRANSFORM, id, px, py, pz, qx, qy, qz, qw);
     }
     setDieVelocity(id, lvx, lvy, lvz, avx, avy, avz) {
-        this._send('setDieVelocity', { id, lvx, lvy, lvz, avx, avy, avz });
+        this._enqueue(OP.SET_VELOCITY, id, lvx, lvy, lvz, avx, avy, avz);
     }
     setDieKinematic(id, kinematic) {
         this._send('setDieKinematic', { id, kinematic });
     }
 
     // --- simulation --------------------------------------------------------
-    // The worker self-paces its own fixed-timestep loop, so the main thread no
-    // longer drives stepping.  This is intentionally a no-op.
     step() { /* worker-driven */ }
 
     // --- queries -----------------------------------------------------------
@@ -259,6 +365,10 @@ let _initialized = false;
 let _usingSAB = false;
 const _searchParams = new URLSearchParams(self.location ? self.location.search : '');
 
+export const flushWorkerCommandBatch = () => {
+    _engine?.flushCommandBatch?.();
+};
+
 export const loadWasmEngine = async () => {
     if (_initialized) return _available;
 
@@ -271,7 +381,6 @@ export const loadWasmEngine = async () => {
     try {
         const worker = new Worker(new URL('./dice_physics.worker.js', import.meta.url), { type: 'module' });
 
-        // Wait for the worker to finish booting the WASM module (or fail).
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error('worker boot timeout')), 15000);
             const onReady = (e) => {
@@ -323,8 +432,6 @@ export const getWasmEngine = () => {
     return _engine;
 };
 
-// Hulls are loaded inside the worker and attached at addDie time, so this is a
-// no-op in worker mode (kept for API parity with WasmPhysicsBridge).
 export const loadHullForDie = () => {};
 
 export const pollCollisionEvents = () => {
