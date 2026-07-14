@@ -19,6 +19,19 @@ import {
 } from './wasm/PhysicsBridge.js';
 import { computeSeededThrowParams, applyThrowParams, createSeededRng } from './wasm/seededThrowParams.js';
 import { TABLE_SURFACE_Y } from './core/SceneMetrics.js';
+import { ensureBodyPipGroups } from './dice/DiceGeometryGroups.js';
+import {
+    createDiceMaterials,
+    applyMaterialsToDieMesh,
+    disposeDiceMaterials
+} from './dice/DiceMaterials.js';
+import {
+    resolveDiceAppearanceConfig,
+    persistDiceAppearanceConfig,
+    DICE_TYPES as APPEARANCE_DICE_TYPES,
+    buildDicePresencePayload,
+    mergeDicePresencePayload
+} from './dice/DiceAppearanceConfig.js';
 const searchParams = new URLSearchParams(window.location.search);
 const WASM_TRANSFORM_STRIDE = 7;
 
@@ -455,6 +468,90 @@ let diceModels = {};
 export let spawnedDice = [];
 let nextAudioBodyId = 1;
 
+let diceAppearanceConfig = null;
+let diceAppearanceScene = null;
+let diceAppearanceEnvMap = null;
+let diceAppearanceQualityProfile = null;
+
+function getAppearanceOptions() {
+    return {
+        envMap: diceAppearanceEnvMap ?? diceAppearanceScene?.environment ?? null,
+        qualityProfile: diceAppearanceQualityProfile ?? (typeof window !== 'undefined' ? window.qualityProfile : null)
+    };
+}
+
+function applyAppearanceToMesh(mesh, type, { disposePrevious = true } = {}) {
+    if (!diceAppearanceConfig || !mesh) return;
+    const appearance = diceAppearanceConfig[type];
+    if (!appearance) return;
+
+    const previous = mesh.material;
+    const materials = createDiceMaterials(appearance.preset, appearance, getAppearanceOptions());
+    applyMaterialsToDieMesh(mesh, materials);
+    mesh.userData.diceAppearance = { ...appearance };
+
+    if (disposePrevious) disposeDiceMaterials(previous);
+}
+
+function applyAppearanceToTemplate(type) {
+    applyAppearanceToMesh(diceModels[type], type);
+}
+
+export function initDiceAppearance(scene, options = {}) {
+    diceAppearanceScene = scene;
+    diceAppearanceEnvMap = options.envMap ?? scene?.environment ?? null;
+    diceAppearanceQualityProfile = options.qualityProfile ?? options.adaptiveProfile ?? null;
+    diceAppearanceConfig = resolveDiceAppearanceConfig();
+    APPEARANCE_DICE_TYPES.forEach((type) => applyAppearanceToTemplate(type));
+}
+
+export function getDiceAppearanceConfig() {
+    if (!diceAppearanceConfig) diceAppearanceConfig = resolveDiceAppearanceConfig();
+    return diceAppearanceConfig;
+}
+
+export function setDieTypeAppearance(type, partial) {
+    if (!diceAppearanceConfig) diceAppearanceConfig = resolveDiceAppearanceConfig();
+    diceAppearanceConfig[type] = { ...diceAppearanceConfig[type], ...partial };
+    refreshDiceAppearance(type);
+    persistDiceAppearanceConfig(diceAppearanceConfig);
+    return diceAppearanceConfig[type];
+}
+
+export function refreshDiceAppearance(type = null) {
+    const types = type ? [type] : APPEARANCE_DICE_TYPES;
+    const toDispose = new Set();
+
+    types.forEach((dieType) => {
+        const targets = [];
+        if (diceModels[dieType]) targets.push(diceModels[dieType]);
+        spawnedDice.forEach((die) => {
+            if (die.type === dieType) targets.push(die.mesh);
+        });
+        (diceMeshPool[dieType] ?? []).forEach((mesh) => targets.push(mesh));
+
+        targets.forEach((mesh) => {
+            if (!mesh) return;
+            const previous = mesh.material;
+            applyAppearanceToMesh(mesh, dieType, { disposePrevious: false });
+            const track = (mat) => { if (mat) toDispose.add(mat); };
+            if (Array.isArray(previous)) previous.forEach(track);
+            else track(previous);
+        });
+    });
+
+    toDispose.forEach((mat) => mat?.dispose?.());
+}
+
+export function applyDicePresencePayload(presence) {
+    diceAppearanceConfig = mergeDicePresencePayload(getDiceAppearanceConfig(), presence);
+    refreshDiceAppearance();
+    persistDiceAppearanceConfig(diceAppearanceConfig);
+    return diceAppearanceConfig;
+}
+
+export { buildDicePresencePayload };
+
 // Object pool of Three.js dice meshes, keyed by type. Spawning a die reuses a
 // pooled mesh instead of cloning a fresh one, and removing a die returns its
 // mesh here instead of disposing it. Pooled meshes share the (single) template
@@ -748,33 +845,12 @@ export const loadDiceModels = async (onProgress) => {
                 geometry.applyMatrix4(mesh.matrixWorld);
                 geometry.rotateX(-Math.PI / 2);
                 geometry.center();
+                ensureBodyPipGroups(geometry);
 
-                let material = mesh.material;
-                const upgradeMaterial = (mat) => new THREE.MeshStandardMaterial({
-                    color: mat.color || 0xeeeeee,
-                    map: mat.map || null,
-                    roughnessMap: mat.roughnessMap || null,
-                    normalMap: mat.normalMap || null,
-                    aoMap: mat.aoMap || null,
-                    roughness: mat.roughnessMap ? 1.0 : 0.2,
-                    metalness: 0.0,
-                    envMapIntensity: 1.0
-                });
-
-                // Ensure colour maps decode in sRGB (glTF base-colour textures).
-                if (mesh.material) {
-                    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-                    mats.forEach((m) => { if (m.map) m.map.colorSpace = THREE.SRGBColorSpace; });
-                }
-
-                if (material) {
-                    material = Array.isArray(material) ? material.map(upgradeMaterial) : upgradeMaterial(material);
-                } else {
-                    console.warn(`No material found for ${d.file}, using default material`);
-                    material = new THREE.MeshStandardMaterial({ color: 0xff00ff, roughness: 0.2, metalness: 0.0 });
-                }
-
-                const cleanMesh = new THREE.Mesh(geometry, material);
+                const cleanMesh = new THREE.Mesh(
+                    geometry,
+                    new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.3, metalness: 0.0 })
+                );
                 cleanMesh.position.set(0, 0, 0);
                 cleanMesh.rotation.set(0, 0, 0);
                 cleanMesh.scale.set(1, 1, 1);

@@ -1,5 +1,6 @@
-import { loadDiceModels, spawnObjects, updateDiceSet } from '../dice.js';
+import { loadDiceModels, spawnObjects, updateDiceSet, initDiceAppearance, getDiceAppearanceConfig, setDieTypeAppearance, diceModels } from '../dice.js';
 import { initUI, createCrosshair } from '../ui.js';
+import { createDiceCasePanel } from '../ui/DiceCasePanel.js';
 import { initResultsUI } from '../results.js';
 import { initInteraction } from '../interaction.js';
 import { createFloorAndWalls } from '../physics.js';
@@ -99,6 +100,10 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         updateLoadingBar(percent);
         if (label) updateLoadingText(`Loading dice models... (${label})`);
     });
+    initDiceAppearance(scene, {
+        envMap: scene.environment ?? null,
+        qualityProfile: callbacks.qualityProfile ?? null
+    });
     spawnObjects(scene, physicsWorld);
 
     updateLoadingText('Setting up game...');
@@ -129,6 +134,17 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
 
     const interaction = initInteraction(camera, scene, physicsWorld, callbacks.interactionHooks || {});
     callbacks.setInteraction?.(interaction);
+
+    const diceCasePanel = createDiceCasePanel({
+        getConfig: getDiceAppearanceConfig,
+        onTypeChange: (type, partial) => setDieTypeAppearance(type, partial),
+        getTemplateMesh: (type) => diceModels[type] ?? null,
+        getEnvMap: () => scene.environment ?? null,
+        getQualityProfile: () => callbacks.qualityProfile ?? window.qualityProfile ?? null
+    });
+    orchestrator.scheduler.register('updates', 'diceCasePreview', ({ deltaTime }) => {
+        diceCasePanel.updatePreview(deltaTime);
+    }, { priority: -20 });
 
     updateLoadingText('Loading furniture and props...');
     await yieldToMain();
@@ -181,6 +197,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         lampData: context.state.lampData,
         gongResult: context.state.gongData,
         fireplaceLight: context.state.fireplaceLight,
-        tierRenderStats
+        tierRenderStats,
+        diceCasePanel
     };
 }
