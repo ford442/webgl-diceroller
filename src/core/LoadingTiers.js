@@ -109,7 +109,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
             updateDiceSet(scene, physicsWorld, newCounts);
         },
         () => {
-            callbacks.onDiceRoll?.();
+            callbacks.onRollAll?.();
         },
         {
             layoutConfig,
@@ -120,7 +120,8 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
             },
             onShareTable: () => layoutManager.getConfig()
         },
-        callbacks.notationHooks ?? null
+        callbacks.notationHooks ?? null,
+        callbacks.rollShareHooks ?? null
     );
     const crosshairUI = createCrosshair();
 

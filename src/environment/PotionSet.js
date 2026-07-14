@@ -45,7 +45,7 @@ export function createPotionSet(scene, physicsWorld, position = { x: 12, y: -2.7
     topStep.receiveShadow = true;
     group.add(topStep);
 
-    // --- Potions ---
+    // --- 2. Potions ---
     const healthPotion = createRoundPotion(0xff0000);
     healthPotion.position.set(-1.0, stepHeight * 2, -0.5);
     group.add(healthPotion);
