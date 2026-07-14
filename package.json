@@ -26,6 +26,7 @@
     "test:cauldron": "node tests/cauldron.js",
     "test:flute": "node tests/flute.js",
     "test:playingcards": "node tests/playingcards.js",
+    "test:mobile-touch": "node tests/mobile-touch.js",
     "test:notation": "node tests/notation.test.mjs"
   },
   "devDependencies": {

@@ -365,6 +365,7 @@ function createGodRays(group, x, y, z, nodeMaterialFactory = null) {
     const geometry = new THREE.CylinderGeometry(radiusTop, radiusBottom, length, 32, 1, true);
 
     const mesh = new THREE.Mesh(geometry, material);
+    mesh.userData.isGodRay = true;
 
     // Position and Orient
     mesh.position.set(x, y, z); // Window center

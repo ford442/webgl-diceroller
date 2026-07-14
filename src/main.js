@@ -50,6 +50,9 @@ import { createRollHistoryPanel } from './ui/RollHistoryPanel.js';
 import { createCullingSystem } from './core/CullingSystem.js';
 import { createRenderStats } from './debug/RenderStats.js';
 import { createRollSession } from './roll/RollSession.js';
+import { applyViewportToCamera } from './core/SceneMetrics.js';
+import { bootstrapAdaptiveQuality, updateAdaptiveQualityProbe } from './core/AdaptiveQuality.js';
+import { isTouchPrimaryDevice } from './core/DeviceCapabilities.js';
 
 let camera, scene, renderer, composer;
 let physicsWorld;
@@ -87,6 +90,8 @@ window.PropRegistry = {
     PROP_INDEX
 };
 let postConfig;
+let spotLight;
+let adaptiveQualityState = null;
 let shadowController;
 let renderStats = null;
 let tierRenderStats = null;
@@ -304,6 +309,7 @@ async function init() {
     rendererState = sceneSetup.rendererState;
     pointLight = sceneSetup.pointLight;
     postConfig = sceneSetup.postConfig;
+    spotLight = sceneSetup.spotLight;
     shadowController = createShadowController(renderer, scene);
     console.info(
         `[Renderer] Active backend: ${rendererState?.rendererType ?? 'webgl'}`
@@ -356,6 +362,29 @@ async function init() {
         debugPerf: searchParams.has('debug-perf'),
         onPixelRatioChange: (nextRatio) => applyLivePixelRatio(container, nextRatio)
     });
+
+    const adaptiveBootstrap = bootstrapAdaptiveQuality({
+        scene,
+        renderer,
+        postConfig,
+        composer,
+        spotLight,
+        rendererState,
+        scheduler
+    });
+    adaptiveQualityState = {
+        probe: adaptiveBootstrap.probe,
+        initialProfile: adaptiveBootstrap.initialProfile,
+        appliedProfile: adaptiveBootstrap.initialProfile,
+        scene,
+        renderer,
+        postConfig,
+        composer,
+        spotLight,
+        rendererState
+    };
+    window.qualityProfile = postConfig.adaptiveProfile;
+    window.isTouchPrimaryDevice = isTouchPrimaryDevice();
     window.addEventListener('pointerdown', () => collisionAudio?.resume(), { passive: true });
     window.addEventListener('keydown', () => collisionAudio?.resume(), { passive: true });
     // Lean into the tavern ambience while the player sits in FPS/pointer-lock mode.
@@ -425,7 +454,8 @@ async function init() {
             hideResults,
             lampData,
             LampMode,
-            onResultsReady: handleResultsReady
+            onResultsReady: handleResultsReady,
+            touchPrimary: inputState?.touchPrimary === true
         });
     }, { priority: -10 });
 
@@ -468,6 +498,13 @@ async function init() {
         scheduler.stats.post = postConfig;
         scheduler.stats.pixelRatio = rendererState?.pixelRatio;
         pixelRatioMonitor?.update({ deltaTime });
+        if (adaptiveQualityState?.probe) {
+            updateAdaptiveQualityProbe(adaptiveQualityState.probe, { time }, adaptiveQualityState);
+            if (adaptiveQualityState.probe.done) {
+                window.qualityProfile = postConfig.adaptiveProfile;
+                adaptiveQualityState.probe = null;
+            }
+        }
         renderStats?.update({ deltaTime });
     });
 
@@ -613,6 +650,7 @@ async function init() {
         renderer,
         camera,
         interaction,
+        cameraController,
         diceFocusStateRef: { get value() { return cameraController.getState(); }, set value(v) { cameraController.setState(v); } },
         isLockedRef,
         cursorPos,
@@ -624,6 +662,7 @@ async function init() {
         } : null,
         getLampData: () => lampData
     });
+    window.touchInputEnabled = inputState?.touchInput?.enabled === true;
 
     rollHistoryPanel = createRollHistoryPanel({
         rollHistory,
@@ -753,8 +792,8 @@ function onWindowResize() {
     const height = container.clientHeight;
     const pixelRatio = rendererState?.pixelRatio ?? renderer.getPixelRatio();
 
-    camera.aspect = 1; // Fixed 1:1 aspect ratio
-    camera.updateProjectionMatrix();
+    const { startZ } = applyViewportToCamera(camera, width, height);
+    cameraController?.reframeDefaultDistance?.(startZ);
     applyRendererSize(renderer, width, height, pixelRatio);
     syncComposerPixelRatio(composer, width, height, pixelRatio);
 }

@@ -1241,6 +1241,57 @@ export const applyWasmImpulseForDie = (mesh, impulse, torque) => {
     }
 };
 
+const _flickForward = new THREE.Vector3();
+const _flickRight = new THREE.Vector3();
+const _flickImpulse = new THREE.Vector3();
+const _flickTorque = new THREE.Vector3();
+const MAX_FLICK_IMPULSE = 28;
+
+/**
+ * Apply a screen-space flick as horizontal table impulses to every spawned die.
+ */
+export function applyFlickImpulseToDice(camera, velX, velY, { normOriginX = 0, normOriginY = 0 } = {}) {
+    if (!spawnedDice.length) return;
+
+    camera.getWorldDirection(_flickForward);
+    _flickForward.y = 0;
+    if (_flickForward.lengthSq() < 1e-6) _flickForward.set(0, 0, -1);
+    _flickForward.normalize();
+
+    _flickRight.crossVectors(_flickForward, new THREE.Vector3(0, 1, 0)).normalize();
+    _flickImpulse
+        .copy(_flickRight).multiplyScalar(velX * 0.04)
+        .add(_flickForward.clone().multiplyScalar(-velY * 0.04));
+
+    const speed = Math.hypot(velX, velY);
+    const strength = Math.min(MAX_FLICK_IMPULSE, 8 + speed * 0.06);
+    if (_flickImpulse.lengthSq() < 1e-4) return;
+    _flickImpulse.setLength(strength);
+
+    _flickTorque.set(
+        (normOriginY + 0.2) * strength * 0.08,
+        strength * 0.04,
+        (-normOriginX) * strength * 0.08
+    );
+
+    const Ammo = isAmmoAvailable() ? getAmmo() : null;
+    spawnedDice.forEach((die) => {
+        if (isUsingWasmPhysics() && die.wasmId != null) {
+            applyWasmImpulseForDie(die.mesh, _flickImpulse, _flickTorque);
+            return;
+        }
+        if (die.body && Ammo) {
+            const impulse = new Ammo.btVector3(_flickImpulse.x, _flickImpulse.y, _flickImpulse.z);
+            die.body.applyCentralImpulse(impulse);
+            Ammo.destroy(impulse);
+            const torque = new Ammo.btVector3(_flickTorque.x, _flickTorque.y, _flickTorque.z);
+            die.body.applyTorqueImpulse(torque);
+            Ammo.destroy(torque);
+            die.body.activate();
+        }
+    });
+}
+
 /**
  * Kinematic / user-driven control primitives for WASM-authoritative
  * interactions (drag & levitation). These let interaction.js hold and move a
