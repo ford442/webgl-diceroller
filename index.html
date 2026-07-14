@@ -39,6 +39,27 @@
         width: 100% !important;
         height: 100% !important;
       }
+      /* Screen-reader-only text (aria-live region, etc.) */
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      /* Visible keyboard focus for DOM controls over the 3D canvas */
+      #canvas-container button:focus-visible,
+      #canvas-container input:focus-visible,
+      #canvas-container select:focus-visible,
+      #canvas-container textarea:focus-visible,
+      #roll-history-toggle:focus-visible {
+        outline: 2px solid #ffd700;
+        outline-offset: 2px;
+      }
     </style>
   </head>
   <body>

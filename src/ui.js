@@ -6,6 +6,9 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
     const touchUi = isTouchPrimaryDevice();
 
     const container = document.createElement('div');
+    container.id = 'dice-controls-panel';
+    container.setAttribute('role', 'region');
+    container.setAttribute('aria-label', 'Dice controls');
     container.style.position = 'absolute';
     container.style.top = touchUi ? '8px' : '10px';
     container.style.right = touchUi ? '8px' : '10px';
@@ -37,14 +40,17 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         row.style.alignItems = 'center';
 
         const label = document.createElement('label');
+        label.htmlFor = `dice-count-${type}`;
         label.textContent = type.toUpperCase() + ': ';
         label.style.marginRight = '10px';
 
         const input = document.createElement('input');
+        input.id = `dice-count-${type}`;
         input.type = 'number';
         input.min = '0';
         input.max = '10';
         input.value = counts[type];
+        input.setAttribute('aria-label', `${type} count`);
         input.style.width = touchUi ? '56px' : '40px';
         input.style.minHeight = touchUi ? '44px' : 'auto';
         input.style.fontSize = touchUi ? '16px' : 'inherit';
@@ -85,8 +91,11 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
     presetRow.style.gap = '6px';
     presetRow.style.marginTop = '6px';
     const presetLabel = document.createElement('label');
+    presetLabel.htmlFor = 'dice-preset-select';
     presetLabel.textContent = 'Set:';
     const presetSelect = document.createElement('select');
+    presetSelect.id = 'dice-preset-select';
+    presetSelect.setAttribute('aria-label', 'Dice set preset');
     presetSelect.style.flex = '1';
     const placeholder = document.createElement('option');
     placeholder.textContent = 'Presets…';
@@ -122,9 +131,11 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         let historyIndex = -1;
 
         const notationInput = document.createElement('input');
+        notationInput.id = 'notation-roll-input';
         notationInput.type = 'text';
         notationInput.placeholder = 'e.g. 3d6+2, 2d20kh1';
         notationInput.spellcheck = false;
+        notationInput.setAttribute('aria-label', 'Dice notation expression');
         notationInput.style.width = '100%';
         notationInput.style.boxSizing = 'border-box';
         notationInput.style.padding = '4px 6px';
@@ -184,6 +195,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         notationBtnRow.style.marginTop = '4px';
 
         const notationRollBtn = document.createElement('button');
+        notationRollBtn.type = 'button';
         notationRollBtn.textContent = 'Roll';
         notationRollBtn.style.flex = '1';
         notationRollBtn.style.cursor = 'pointer';
@@ -208,6 +220,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
 
         NOTATION_PRESETS.forEach((preset) => {
             const chip = document.createElement('button');
+            chip.type = 'button';
             chip.textContent = preset;
             chip.style.cssText = 'font-size:10px;padding:2px 6px;cursor:pointer;border-radius:3px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:white;';
             chip.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -221,7 +234,10 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
     }
 
     const rollBtn = document.createElement('button');
+    rollBtn.type = 'button';
+    rollBtn.id = 'roll-all-btn';
     rollBtn.textContent = 'Roll All';
+    rollBtn.setAttribute('aria-keyshortcuts', 'R');
     rollBtn.style.cursor = 'pointer';
     rollBtn.addEventListener('click', () => onRollAll());
     rollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -253,6 +269,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
 
     if (rollShareHooks?.buildShareUrl) {
         const shareRollBtn = document.createElement('button');
+        shareRollBtn.type = 'button';
         shareRollBtn.textContent = 'Share Roll';
         shareRollBtn.style.cursor = 'pointer';
         shareRollBtn.style.marginTop = '4px';
@@ -288,6 +305,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         audioRow.addEventListener('mousedown', (e) => e.stopPropagation());
 
         const muteBtn = document.createElement('button');
+        muteBtn.type = 'button';
         muteBtn.style.cursor = 'pointer';
         muteBtn.style.minWidth = '34px';
         muteBtn.title = 'Mute / unmute';
@@ -299,7 +317,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         slider.step = '0.01';
         slider.value = String(audio.getMasterVolume?.() ?? 0.6);
         slider.style.flex = '1';
-        slider.title = 'Volume';
+        slider.setAttribute('aria-label', 'Volume');
 
         const syncMuteIcon = () => {
             const isMuted = audio.isMuted?.() || parseFloat(slider.value) <= 0;
@@ -350,10 +368,13 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         densityRow.style.gap = '8px';
 
         const densityLabel = document.createElement('label');
+        densityLabel.htmlFor = 'layout-density-select';
         densityLabel.textContent = 'Density';
         densityLabel.style.fontSize = '12px';
 
         densitySelect = document.createElement('select');
+        densitySelect.id = 'layout-density-select';
+        densitySelect.setAttribute('aria-label', 'Table clutter density');
         densitySelect.style.flex = '1';
         Object.keys(DENSITY_PRESETS).forEach((key) => {
             const option = document.createElement('option');
@@ -374,10 +395,13 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         themeRow.style.gap = '8px';
 
         const themeLabel = document.createElement('label');
+        themeLabel.htmlFor = 'layout-theme-select';
         themeLabel.textContent = 'Theme';
         themeLabel.style.fontSize = '12px';
 
         themeSelect = document.createElement('select');
+        themeSelect.id = 'layout-theme-select';
+        themeSelect.setAttribute('aria-label', 'Table layout theme');
         themeSelect.style.flex = '1';
         Object.values(LAYOUT_THEMES).forEach((theme) => {
             const option = document.createElement('option');
@@ -392,7 +416,10 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         container.appendChild(themeRow);
 
         rerollBtn = document.createElement('button');
+        rerollBtn.type = 'button';
+        rerollBtn.id = 'reroll-layout-btn';
         rerollBtn.textContent = 'New Table';
+        rerollBtn.setAttribute('aria-keyshortcuts', 'Shift+R');
         rerollBtn.style.cursor = 'pointer';
         rerollBtn.style.marginTop = '4px';
         rerollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -414,6 +441,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         container.appendChild(rerollBtn);
 
         shareBtn = document.createElement('button');
+        shareBtn.type = 'button';
         shareBtn.textContent = 'Copy Table Link';
         shareBtn.style.cursor = 'pointer';
         shareBtn.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -471,10 +499,11 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         <div style="font-weight: bold; margin-bottom: 5px;">Controls:</div>
         <div>🖱️ <b>Left Click</b> - Grab/throw dice</div>
         <div>🖱️ <b>Right Click</b> - Enter FPS mode</div>
+        <div>⌨️ <b>Tab</b> - Focus dice controls, layout, and history</div>
         <div>⌨️ <b>WASD</b> - Move (FPS mode)</div>
         <div>⌨️ <b>ESC</b> - Exit FPS mode</div>
         <div>⌨️ <b>R</b> - Roll all dice</div>
-        <div>⌨️ <b>H</b> - Roll history & statistics</div>
+        <div>⌨️ <b>H</b> - Roll history &amp; statistics</div>
         <div>⌨️ <b>Enter</b> - Roll notation expression</div>
         <div>⌨️ <b>Shift+R</b> - New table layout</div>
     `;

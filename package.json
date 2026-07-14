@@ -27,11 +27,13 @@
     "test:flute": "node tests/flute.js",
     "test:playingcards": "node tests/playingcards.js",
     "test:mobile-touch": "node tests/mobile-touch.js",
-    "test:notation": "node tests/notation.test.mjs"
+    "test:notation": "node tests/notation.test.mjs",
     "test:share-roll": "node tests/share-roll.test.mjs",
-    "test:share-roll-replay": "node tests/share-roll-replay.js"
+    "test:share-roll-replay": "node tests/share-roll-replay.js",
+    "test:a11y": "node tests/a11y.js"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@gltf-transform/core": "^4.1.0",
     "@gltf-transform/extensions": "^4.1.0",
     "@gltf-transform/functions": "^4.1.0",
