@@ -18,6 +18,10 @@
  *   │ Buffer 0:  ids[MAX_DICE] (f32)   transforms[MAX_DICE*7] (f32)│
  *   ├────────────────────────────────────────────────────────────┤
  *   │ Buffer 1:  ids[MAX_DICE] (f32)   transforms[MAX_DICE*7] (f32)│
+ *   ├────────────────────────────────────────────────────────────┤
+ *   │ Command ring: CMD_RING_FLOATS (f32) — batched per-frame ops  │
+ *   │   header[4] cmdHead  — producer (main thread)                  │
+ *   │   header[5] cmdTail  — consumer (worker)                     │
  *   └────────────────────────────────────────────────────────────┘
  *
  * The worker writes the freshly stepped frame into the *back* buffer, stores the
@@ -38,13 +42,30 @@ export const H_SEQNO = 0;
 export const H_FRONT = 1;
 export const H_COUNT = 2;
 export const H_SETTLED = 3;
+// Batched per-frame command ring (float slots).  Main thread publishes head
+// after each flush; the worker drains up to head and advances tail.
+export const H_CMD_HEAD = 4;
+export const H_CMD_TAIL = 5;
 
 // Per-buffer byte sizes.
 export const IDS_BYTES = MAX_DICE * 4;            // f32 ids
 export const XF_BYTES = MAX_DICE * STRIDE * 4;    // f32 transforms
 export const BUFFER_BYTES = IDS_BYTES + XF_BYTES;
 
-export const SAB_BYTES = HEADER_BYTES + 2 * BUFFER_BYTES;
+import { MAX_RECORD_LEN } from './workerCommands.js';
+
+// Ring holds several frames of worst-case batched commands (transform = 9 floats).
+export const CMD_RING_FLOATS = MAX_DICE * MAX_RECORD_LEN * 8;
+export const CMD_RING_BYTES = CMD_RING_FLOATS * 4;
+
+/** Transform double-buffer region (unchanged size). */
+export const TRANSFORM_SAB_BYTES = HEADER_BYTES + 2 * BUFFER_BYTES;
+
+/** Full SharedArrayBuffer: transforms + command ring. */
+export const SAB_BYTES = TRANSFORM_SAB_BYTES + CMD_RING_BYTES;
+
+/** Byte offset of the command ring (f32 slots). */
+export const CMD_RING_OFFSET = TRANSFORM_SAB_BYTES;
 
 /** Byte offset of the ids region for buffer `b` (0|1). */
 export const idsOffset = (b) => HEADER_BYTES + b * BUFFER_BYTES;

@@ -431,14 +431,18 @@ const t2 = window.getWasmEngine().getTransforms();
       SAB transport, synchronous ids, and worker-driven gravity stepping.
 - [x] Fixed a latent bug in the experimental worker that transferred the WASM
       heap buffer (`getTransforms().buffer`), which would detach module memory.
+- [x] Batched per-frame command transport for high-frequency ops
+      (`applyTorqueImpulse`, `setDieTransform`, `setDieVelocity`, `applyImpulse`):
+      accumulated on the main thread and flushed once per frame into a
+      SharedArrayBuffer command ring (zero postMessages in steady state) or a
+      single `batch` postMessage when SAB is unavailable. Structural commands
+      (`init`, `addDie`, …) remain on plain postMessage.
 
 #### Known limitations / follow-ups
 
 - `serializeState()` / `randomFloat()` are not available synchronously across the
   worker boundary, so deterministic `replayRoll()` falls back to the in-process
   path. A request/response round-trip could restore them if needed.
-- `applyDiceMassBiases()` posts one `applyTorqueImpulse` message per mass-biased
-  die per frame; batching into a single message would cut chatter at high counts.
 - URL-driven engine flags (`?no-drag`, etc.) are parsed on the main thread in
   `physicsFlags.js` and forwarded into WASM via `DicePhysicsEngine.setFlags()`
   (both the in-process bridge and the worker init payload). The C++ constructor

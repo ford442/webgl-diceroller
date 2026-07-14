@@ -52,4 +52,11 @@ export interface PhysicsBridgeModule {
     randomPhysicsFloat(): number;
     serializePhysicsState(): Uint8Array;
     deserializePhysicsState(data: Uint8Array): void;
+    flushWorkerCommandBatch?(): void;
+    getWorkerPhysicsStats?(): {
+        usingCommandBatch: boolean;
+        usingSAB: boolean;
+        msgsPerSecond: number;
+        batchRecords: number;
+    } | null;
 }
