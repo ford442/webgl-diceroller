@@ -73,10 +73,14 @@ export function createScrollCase(scene, physicsWorld, position = { x: 0, y: -2.6
     // half-extents are (radius, half_height, radius).
     // Our cylinder is along X axis after rotation. But wait, createStaticBody applies group's transform!
     // So the shape should match the local geometry (cylinder along Y).
-    const halfExtents = new ammo.btVector3(capRadius, tubeLength / 2 + capLength / 2, capRadius);
-    const shape = new ammo.btCylinderShape(halfExtents);
-
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const halfExtents = new ammo.btVector3(capRadius, tubeLength / 2 + capLength / 2, capRadius);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btCylinderShape(halfExtents);
+        
+            createStaticBody(physicsWorld, group, shape);
+        }
+    }
 
     return {
         group

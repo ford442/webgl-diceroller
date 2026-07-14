@@ -80,10 +80,12 @@ export function createBone(scene, physicsWorld, position = { x: 5, y: -2.75, z: 
         const halfY = (shaftLength + knuckleRadius * 2) / 2;
         const halfZ = knuckleRadius;
 
-        const shape = new Ammo.btBoxShape(new Ammo.btVector3(halfX, halfY, halfZ));
-
-        // Use group as proxy for the static body
-        createStaticBody(physicsWorld, group, shape);
+        if (Ammo && physicsWorld) {
+            const shape = new Ammo.btBoxShape(new Ammo.btVector3(halfX, halfY, halfZ));
+    
+            // Use group as proxy for the static body
+            createStaticBody(physicsWorld, group, shape);
+        }
     }
 
     return { group };

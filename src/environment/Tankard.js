@@ -219,17 +219,19 @@ export function createTankard(scene, physicsWorld, position = { x: 5, y: -2.75, 
     const Ammo = getAmmo();
     if (Ammo && physicsWorld) {
         // Use a cylinder shape for the main body
-        const shape = new Ammo.btCylinderShape(
-            new Ammo.btVector3(bodyRadius + 0.1, bodyHeight / 2, bodyRadius + 0.1)
-        );
-        
-        // Create a proxy for physics positioning (center of mass)
-        const proxy = new THREE.Object3D();
-        proxy.position.copy(group.position);
-        proxy.position.y += bodyHeight / 2;
-        proxy.quaternion.copy(group.quaternion);
-        
-        createStaticBody(physicsWorld, proxy, shape);
+        if (Ammo && physicsWorld) {
+            const shape = new Ammo.btCylinderShape(
+                new Ammo.btVector3(bodyRadius + 0.1, bodyHeight / 2, bodyRadius + 0.1)
+            );
+            
+            // Create a proxy for physics positioning (center of mass)
+            const proxy = new THREE.Object3D();
+            proxy.position.copy(group.position);
+            proxy.position.y += bodyHeight / 2;
+            proxy.quaternion.copy(group.quaternion);
+            
+            createStaticBody(physicsWorld, proxy, shape);
+        }
     }
 
     // ========== ANIMATION ==========

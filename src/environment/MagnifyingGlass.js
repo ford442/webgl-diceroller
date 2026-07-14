@@ -107,11 +107,13 @@ export function createMagnifyingGlass(scene, physicsWorld, position = { x: 0, y:
     // Width (X) = rim diameter
     // Height (Y) = thickness (max radius * 2)
     // Length (Z) = totalLength
-    const shape = new ammo.btBoxShape(new ammo.btVector3(rimOuterRadius, handleRadius, totalLength / 2));
-
-    // Note: createStaticBody assumes the group origin is the center of mass.
-    // Our zOffset calculation above should have centered the geometry within the group.
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btBoxShape(new ammo.btVector3(rimOuterRadius, handleRadius, totalLength / 2));
+    
+        // Note: createStaticBody assumes the group origin is the center of mass.
+        // Our zOffset calculation above should have centered the geometry within the group.
+        createStaticBody(physicsWorld, group, shape);
+    }
 
     return group;
 }

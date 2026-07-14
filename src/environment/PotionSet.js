@@ -47,55 +47,59 @@ export function createPotionSet(scene, physicsWorld, position = { x: 12, y: -2.7
 
     // Physics for Stand (Compound or Simple Box)
     // Box 1: Bottom full width/depth.
-    const botShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth/2, stepHeight/2, stepDepth));
-
-    // Box 2: Top step.
-    const topShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth/2, stepHeight/2, stepDepth/2));
-
-    // --- 2. Potions ---
-
-    // Potion A: Health (Red, Round) - On Top Step
-    const healthPotion = createRoundPotion(0xff0000);
-    healthPotion.position.set(-1.0, stepHeight * 2, -0.5);
-    group.add(healthPotion);
-
-    // Potion B: Mana (Blue, Square) - On Top Step
-    const manaPotion = createSquarePotion(0x0000ff);
-    manaPotion.position.set(1.0, stepHeight * 2, -0.5);
-    group.add(manaPotion);
-
-    // Potion C: Stamina (Green, Conical) - On Bottom Step
-    const staminaPotion = createConicalPotion(0x00ff00);
-    staminaPotion.position.set(0, stepHeight, 0.8);
-    group.add(staminaPotion);
-
-
-    // --- Positioning the Group ---
-    // Table Top Y = -2.75.
-    // We want the bottom of the stand (y=0 local) to be at -2.75.
-    group.position.set(position.x, position.y, position.z);
-    group.rotation.y = rotationY;
-
-    scene.add(group);
-
-    // --- Physics Creation (Now that Group is placed) ---
-
-    function addBodyForMesh(mesh, shape, offsetY = 0) {
-        const worldPos = new THREE.Vector3();
-        mesh.getWorldPosition(worldPos);
-        const worldQuat = new THREE.Quaternion();
-        mesh.getWorldQuaternion(worldQuat);
-
-        const dummy = new THREE.Object3D();
-        dummy.position.copy(worldPos);
-        dummy.quaternion.copy(worldQuat);
-
-        // Apply local vertical offset (e.g. for objects built from y=0 up)
-        if (offsetY !== 0) {
-            dummy.translateY(offsetY);
+    if (ammo && physicsWorld) {
+        const botShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth/2, stepHeight/2, stepDepth));
+    
+        // Box 2: Top step.
+        if (ammo && physicsWorld) {
+            const topShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth/2, stepHeight/2, stepDepth/2));
+        
+            // --- 2. Potions ---
+        
+            // Potion A: Health (Red, Round) - On Top Step
+            const healthPotion = createRoundPotion(0xff0000);
+            healthPotion.position.set(-1.0, stepHeight * 2, -0.5);
+            group.add(healthPotion);
+        
+            // Potion B: Mana (Blue, Square) - On Top Step
+            const manaPotion = createSquarePotion(0x0000ff);
+            manaPotion.position.set(1.0, stepHeight * 2, -0.5);
+            group.add(manaPotion);
+        
+            // Potion C: Stamina (Green, Conical) - On Bottom Step
+            const staminaPotion = createConicalPotion(0x00ff00);
+            staminaPotion.position.set(0, stepHeight, 0.8);
+            group.add(staminaPotion);
+        
+        
+            // --- Positioning the Group ---
+            // Table Top Y = -2.75.
+            // We want the bottom of the stand (y=0 local) to be at -2.75.
+            group.position.set(position.x, position.y, position.z);
+            group.rotation.y = rotationY;
+        
+            scene.add(group);
+        
+            // --- Physics Creation (Now that Group is placed) ---
+        
+            function addBodyForMesh(mesh, shape, offsetY = 0) {
+                const worldPos = new THREE.Vector3();
+                mesh.getWorldPosition(worldPos);
+                const worldQuat = new THREE.Quaternion();
+                mesh.getWorldQuaternion(worldQuat);
+        
+                const dummy = new THREE.Object3D();
+                dummy.position.copy(worldPos);
+                dummy.quaternion.copy(worldQuat);
+        
+                // Apply local vertical offset (e.g. for objects built from y=0 up)
+                if (offsetY !== 0) {
+                    dummy.translateY(offsetY);
+                }
+        
+                createStaticBody(physicsWorld, dummy, shape);
         }
-
-        createStaticBody(physicsWorld, dummy, shape);
+    }
     }
 
     // Stand Bodies (Box geometries are centered, no offset needed)

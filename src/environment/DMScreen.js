@@ -76,59 +76,50 @@ export function createDMScreen(scene, physicsWorld, position = { x: 0, y: -2.75,
 
     scene.add(group);
 
-    // --- Physics ---
-    // Create a compound shape for the 3 panels
-    const compoundShape = new ammo.btCompoundShape();
+    let body = null;
+    if (ammo && physicsWorld) {
+        const compoundShape = new ammo.btCompoundShape();
 
-    // Helper to add a box shape to the compound shape
-    const addShape = (width, height, depth, posX, posY, posZ, rotY) => {
-        const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
+        const addShape = (width, height, depth, posX, posY, posZ, rotY) => {
+            const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
+            const transform = new ammo.btTransform();
+            transform.setIdentity();
+            transform.setOrigin(new ammo.btVector3(posX, posY, posZ));
+
+            const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY);
+            const btQuat = new ammo.btQuaternion(q.x, q.y, q.z, q.w);
+            transform.setRotation(btQuat);
+
+            compoundShape.addChildShape(transform, shape);
+        };
+
+        addShape(centerPanelWidth, panelHeight, panelThickness, 0, panelHeight / 2, 0, 0);
+
+        const leftCenter = new THREE.Vector3(-sidePanelWidth / 2, 0, 0);
+        leftCenter.applyAxisAngle(new THREE.Vector3(0, 1, 0), sidePanelAngle);
+        addShape(sidePanelWidth, panelHeight, panelThickness, leftPivotX + leftCenter.x, panelHeight / 2, leftPivotZ + leftCenter.z, sidePanelAngle);
+
+        const rightCenter = new THREE.Vector3(sidePanelWidth / 2, 0, 0);
+        rightCenter.applyAxisAngle(new THREE.Vector3(0, 1, 0), -sidePanelAngle);
+        addShape(sidePanelWidth, panelHeight, panelThickness, rightPivotX + rightCenter.x, panelHeight / 2, rightPivotZ + rightCenter.z, -sidePanelAngle);
+
+        const mass = 0;
+        const localInertia = new ammo.btVector3(0, 0, 0);
         const transform = new ammo.btTransform();
         transform.setIdentity();
-        transform.setOrigin(new ammo.btVector3(posX, posY, posZ));
+        transform.setOrigin(new ammo.btVector3(position.x, position.y, position.z));
 
-        const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY);
-        const btQuat = new ammo.btQuaternion(q.x, q.y, q.z, q.w);
-        transform.setRotation(btQuat);
+        const groupQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
+        const btGroupQuat = new ammo.btQuaternion(groupQuat.x, groupQuat.y, groupQuat.z, groupQuat.w);
+        transform.setRotation(btGroupQuat);
 
-        compoundShape.addChildShape(transform, shape);
-    };
-
-    // Add Center Panel Shape
-    addShape(centerPanelWidth, panelHeight, panelThickness, 0, panelHeight / 2, 0, 0);
-
-    // Add Left Panel Shape
-    // We need the world-relative (or group-relative) center of the left panel
-    const leftCenter = new THREE.Vector3(-sidePanelWidth / 2, 0, 0);
-    leftCenter.applyAxisAngle(new THREE.Vector3(0, 1, 0), sidePanelAngle);
-    addShape(sidePanelWidth, panelHeight, panelThickness, leftPivotX + leftCenter.x, panelHeight / 2, leftPivotZ + leftCenter.z, sidePanelAngle);
-
-    // Add Right Panel Shape
-    const rightCenter = new THREE.Vector3(sidePanelWidth / 2, 0, 0);
-    rightCenter.applyAxisAngle(new THREE.Vector3(0, 1, 0), -sidePanelAngle);
-    addShape(sidePanelWidth, panelHeight, panelThickness, rightPivotX + rightCenter.x, panelHeight / 2, rightPivotZ + rightCenter.z, -sidePanelAngle);
-
-    // Create the body
-    const mass = 0; // Static body
-    const localInertia = new ammo.btVector3(0, 0, 0);
-
-    const transform = new ammo.btTransform();
-    transform.setIdentity();
-    transform.setOrigin(new ammo.btVector3(position.x, position.y, position.z));
-
-    const groupQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
-    const btGroupQuat = new ammo.btQuaternion(groupQuat.x, groupQuat.y, groupQuat.z, groupQuat.w);
-    transform.setRotation(btGroupQuat);
-
-    const motionState = new ammo.btDefaultMotionState(transform);
-    const rbInfo = new ammo.btRigidBodyConstructionInfo(mass, motionState, compoundShape, localInertia);
-    const body = new ammo.btRigidBody(rbInfo);
-
-    // Add friction and restitution
-    body.setFriction(0.8);
-    body.setRestitution(0.1);
-
-    physicsWorld.addRigidBody(body);
+        const motionState = new ammo.btDefaultMotionState(transform);
+        const rbInfo = new ammo.btRigidBodyConstructionInfo(mass, motionState, compoundShape, localInertia);
+        body = new ammo.btRigidBody(rbInfo);
+        body.setFriction(0.8);
+        body.setRestitution(0.1);
+        physicsWorld.addRigidBody(body);
+    }
 
     return { group, body };
 }

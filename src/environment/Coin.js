@@ -54,9 +54,13 @@ export function createCoin(scene, physicsWorld, position = { x: 8, y: -2.75, z: 
         if (ammo) {
             // Note: btCylinderShape expects a vector with half extents.
             // By default Three.js cylinder is along Y. ammo.btCylinderShape assumes Y as well.
-            const halfExtents = new ammo.btVector3(radius, height / 2, radius);
-            const shape = new ammo.btCylinderShape(halfExtents);
-            createStaticBody(physicsWorld, coinMesh, shape);
+            if (ammo && physicsWorld) {
+                const halfExtents = new ammo.btVector3(radius, height / 2, radius);
+                if (ammo && physicsWorld) {
+                    const shape = new ammo.btCylinderShape(halfExtents);
+                    createStaticBody(physicsWorld, coinMesh, shape);
+                }
+            }
         }
     }
 

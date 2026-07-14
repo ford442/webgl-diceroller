@@ -131,14 +131,16 @@ export function createCauldron(scene, physicsWorld, position = { x: 12, y: -2.75
         // Physics body covers from bottom of the cauldron up to the rim
         // Total height from bottom to rim is rimHeight.
         const totalHeight = rimHeight;
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(physRadius, totalHeight / 2, physRadius));
-
-        const dummy = new THREE.Object3D();
-        dummy.position.copy(group.position);
-        dummy.position.y += totalHeight / 2;
-        dummy.quaternion.copy(group.quaternion);
-
-        createStaticBody(physicsWorld, dummy, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btCylinderShape(new ammo.btVector3(physRadius, totalHeight / 2, physRadius));
+    
+            const dummy = new THREE.Object3D();
+            dummy.position.copy(group.position);
+            dummy.position.y += totalHeight / 2;
+            dummy.quaternion.copy(group.quaternion);
+    
+            createStaticBody(physicsWorld, dummy, shape);
+        }
     }
 
     return { group, update };

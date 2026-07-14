@@ -141,8 +141,10 @@ export function createScroll(scene, physicsWorld, position = { x: 8, y: -2.4, z:
 
     const ammo = getAmmo();
     // btCylinderShape(halfExtents)
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, length / 2, radius));
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, length / 2, radius));
+        createStaticBody(physicsWorld, group, shape);
+    }
 }
 
 function generateSpiralTexture() {

@@ -73,14 +73,16 @@ export function createGoblet(scene, physicsWorld, position = { x: 5, y: -2.75, z
         const height = 4.0 * 0.6; // Max height * scale
 
         // Physics shape is centered, so we need to offset the position
-        const shape = new Ammo.btCylinderShape(new Ammo.btVector3(radius, height / 2, radius));
-
-        const proxy = new THREE.Object3D();
-        proxy.position.copy(group.position);
-        proxy.position.y += height / 2; // Move up by half height since group origin is at bottom
-        proxy.quaternion.copy(group.quaternion);
-
-        createStaticBody(physicsWorld, proxy, shape);
+        if (Ammo && physicsWorld) {
+            const shape = new Ammo.btCylinderShape(new Ammo.btVector3(radius, height / 2, radius));
+    
+            const proxy = new THREE.Object3D();
+            proxy.position.copy(group.position);
+            proxy.position.y += height / 2; // Move up by half height since group origin is at bottom
+            proxy.quaternion.copy(group.quaternion);
+    
+            createStaticBody(physicsWorld, proxy, shape);
+        }
     }
 
     return { group };

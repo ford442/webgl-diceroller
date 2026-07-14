@@ -72,16 +72,18 @@ export function createSundial(scene, physicsWorld, position = { x: 5, y: -2.75, 
     // --- Physics ---
     if (ammo) {
         // Use a simple cylinder shape for the base
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(baseRadius, baseHeight / 2, baseRadius));
-        // Let's fix that directly by adjusting visuals:
-        group.position.set(position.x, position.y + baseHeight / 2, position.z);
-
-        // Now adjust local visual positions down by baseHeight / 2
-        baseMesh.position.set(0, 0, 0);
-        ringMesh.position.set(0, baseHeight / 2 + 0.02, 0);
-        gnomonMesh.position.set(-0.2, baseHeight / 2, 0);
-
-        createStaticBody(physicsWorld, group, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btCylinderShape(new ammo.btVector3(baseRadius, baseHeight / 2, baseRadius));
+            // Let's fix that directly by adjusting visuals:
+            group.position.set(position.x, position.y + baseHeight / 2, position.z);
+    
+            // Now adjust local visual positions down by baseHeight / 2
+            baseMesh.position.set(0, 0, 0);
+            ringMesh.position.set(0, baseHeight / 2 + 0.02, 0);
+            gnomonMesh.position.set(-0.2, baseHeight / 2, 0);
+    
+            createStaticBody(physicsWorld, group, shape);
+        }
     }
 
     return { group };

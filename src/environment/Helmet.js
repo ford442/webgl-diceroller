@@ -124,17 +124,19 @@ export function createHelmet(scene, physicsWorld, position = { x: -16, y: -2.75,
     const physHeight = helmetHeight;
     const physRadius = helmetRadius + 0.05; // Slightly larger to encompass details
 
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(physRadius, physHeight / 2, physRadius));
-
-    // Shift visual meshes down relative to group, and move group up.
-    group.position.y = position.y + physHeight / 2;
-
-    const childrenToMove = [...group.children];
-    childrenToMove.forEach(child => {
-        child.position.y -= physHeight / 2;
-    });
-
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(physRadius, physHeight / 2, physRadius));
+    
+        // Shift visual meshes down relative to group, and move group up.
+        group.position.y = position.y + physHeight / 2;
+    
+        const childrenToMove = [...group.children];
+        childrenToMove.forEach(child => {
+            child.position.y -= physHeight / 2;
+        });
+    
+        createStaticBody(physicsWorld, group, shape);
+    }
 
     return {
         group

@@ -144,6 +144,9 @@ class WorkerEngineProxy {
     setDieVelocity(id, lvx, lvy, lvz, avx, avy, avz) {
         this._send('setDieVelocity', { id, lvx, lvy, lvz, avx, avy, avz });
     }
+    setDieKinematic(id, kinematic) {
+        this._send('setDieKinematic', { id, kinematic });
+    }
 
     // --- simulation --------------------------------------------------------
     // The worker self-paces its own fixed-timestep loop, so the main thread no

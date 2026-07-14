@@ -127,50 +127,62 @@ export function createDiceJail(scene, physicsWorld, position = { x: -12, y: -2.7
     // --- Physics (Compound Shape) ---
     // Hollow box to allow dice inside (theoretically)
     if (ammo) {
-        const compoundShape = new ammo.btCompoundShape();
-
-        // Helper
-        function addShape(s, px, py, pz) {
-            const transform = new ammo.btTransform();
-            transform.setIdentity();
-            transform.setOrigin(new ammo.btVector3(px, py, pz));
-            compoundShape.addChildShape(transform, s);
+        if (ammo && physicsWorld) {
+            const compoundShape = new ammo.btCompoundShape();
+    
+            // Helper
+            function addShape(s, px, py, pz) {
+                if (ammo && physicsWorld) {
+                    const transform = new ammo.btTransform();
+                    transform.setIdentity();
+                    transform.setOrigin(new ammo.btVector3(px, py, pz));
+                    compoundShape.addChildShape(transform, s);
+                }
+        
+                // Base
+                if (ammo && physicsWorld) {
+                    const baseShape = new ammo.btBoxShape(new ammo.btVector3(size/2, thickness/2, size/2));
+                    addShape(baseShape, 0, thickness/2, 0);
+            
+                    // Top
+                    if (ammo && physicsWorld) {
+                        const topShape = new ammo.btBoxShape(new ammo.btVector3(size/2, thickness/2, size/2));
+                        addShape(topShape, 0, height - thickness/2, 0);
+                
+                        // Walls (Invisible colliders)
+                        // Thickness 0.1
+                        const wallThick = 0.1;
+                        const wallH = height - 2*thickness;
+                        if (ammo && physicsWorld) {
+                            const wallShapeFB = new ammo.btBoxShape(new ammo.btVector3(size/2, wallH/2, wallThick/2));
+                            if (ammo && physicsWorld) {
+                                const wallShapeLR = new ammo.btBoxShape(new ammo.btVector3(wallThick/2, wallH/2, size/2));
+                        
+                                // Front (Z+)
+                                addShape(wallShapeFB, 0, height/2, halfSize - wallThick/2);
+                                // Back (Z-)
+                                addShape(wallShapeFB, 0, height/2, -halfSize + wallThick/2);
+                                // Left (X-)
+                                addShape(wallShapeLR, -halfSize + wallThick/2, height/2, 0);
+                                // Right (X+)
+                                addShape(wallShapeLR, halfSize - wallThick/2, height/2, 0);
+                        
+                                // Position on Table
+                                // Table Top -2.75.
+                                // Group Origin is at Bottom Corner (0,0,0) of the cage local space.
+                                // Base is at 0...thickness.
+                                // So Group Y should be -2.75.
+                                group.position.set(position.x, position.y, position.z);
+                                group.rotation.y = rotationY;
+                        
+                                scene.add(group);
+                                createStaticBody(physicsWorld, group, compoundShape);
+                            }
+                        }
+                    }
+                }
+                }
         }
-
-        // Base
-        const baseShape = new ammo.btBoxShape(new ammo.btVector3(size/2, thickness/2, size/2));
-        addShape(baseShape, 0, thickness/2, 0);
-
-        // Top
-        const topShape = new ammo.btBoxShape(new ammo.btVector3(size/2, thickness/2, size/2));
-        addShape(topShape, 0, height - thickness/2, 0);
-
-        // Walls (Invisible colliders)
-        // Thickness 0.1
-        const wallThick = 0.1;
-        const wallH = height - 2*thickness;
-        const wallShapeFB = new ammo.btBoxShape(new ammo.btVector3(size/2, wallH/2, wallThick/2));
-        const wallShapeLR = new ammo.btBoxShape(new ammo.btVector3(wallThick/2, wallH/2, size/2));
-
-        // Front (Z+)
-        addShape(wallShapeFB, 0, height/2, halfSize - wallThick/2);
-        // Back (Z-)
-        addShape(wallShapeFB, 0, height/2, -halfSize + wallThick/2);
-        // Left (X-)
-        addShape(wallShapeLR, -halfSize + wallThick/2, height/2, 0);
-        // Right (X+)
-        addShape(wallShapeLR, halfSize - wallThick/2, height/2, 0);
-
-        // Position on Table
-        // Table Top -2.75.
-        // Group Origin is at Bottom Corner (0,0,0) of the cage local space.
-        // Base is at 0...thickness.
-        // So Group Y should be -2.75.
-        group.position.set(position.x, position.y, position.z);
-        group.rotation.y = rotationY;
-
-        scene.add(group);
-        createStaticBody(physicsWorld, group, compoundShape);
     }
 
     return group;

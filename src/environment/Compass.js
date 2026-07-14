@@ -121,8 +121,10 @@ export function createCompass(scene, physicsWorld, position = { x: 8, y: -2.65, 
 
     // Physics
     // Simple cylinder collision shape for the compass
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height/2, radius));
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height/2, radius));
+        createStaticBody(physicsWorld, group, shape);
+    }
 
     return group;
 }

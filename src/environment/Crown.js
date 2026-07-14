@@ -136,20 +136,22 @@ export function createCrown(scene, physicsWorld, position = { x: -14, y: -2.75, 
 
     // --- Physics ---
     // Cylinder shape covering the whole crown
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(radiusTop, height / 2, radiusTop));
-
-    // The visual group's Y origin is at the bottom (y=0).
-    // The physics shape origin should be at y = height / 2.
-    // Shift visual meshes down relative to group, and move group up.
-    group.position.y = position.y + height / 2;
-
-    // Offset all children down by height/2
-    const childrenToMove = [...group.children];
-    childrenToMove.forEach(child => {
-        child.position.y -= height / 2;
-    });
-
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(radiusTop, height / 2, radiusTop));
+    
+        // The visual group's Y origin is at the bottom (y=0).
+        // The physics shape origin should be at y = height / 2.
+        // Shift visual meshes down relative to group, and move group up.
+        group.position.y = position.y + height / 2;
+    
+        // Offset all children down by height/2
+        const childrenToMove = [...group.children];
+        childrenToMove.forEach(child => {
+            child.position.y -= height / 2;
+        });
+    
+        createStaticBody(physicsWorld, group, shape);
+    }
 
     return {
         group

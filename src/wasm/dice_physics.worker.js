@@ -230,6 +230,9 @@ function handle(type, payload) {
         case 'setDieVelocity':
             engine.setDieVelocity(payload.id, payload.lvx, payload.lvy, payload.lvz, payload.avx, payload.avy, payload.avz);
             break;
+        case 'setDieKinematic':
+            engine.setDieKinematic(payload.id, payload.kinematic);
+            break;
         case 'applyImpulse':
             engine.applyImpulse(payload.id, payload.fx, payload.fy, payload.fz);
             break;

@@ -131,22 +131,24 @@ export function createPadlock(scene, physicsWorld, position = { x: 0, y: -2.75, 
         const physHeight = bodyDepth; // Lying flat
         const physDepth = bodyHeight + shackleRadius + shackleTube;
 
-        const shape = new ammo.btBoxShape(new ammo.btVector3(physWidth / 2, physHeight / 2, physDepth / 2));
-
-        // Center the physics body roughly over the padlock group
-        // The shackle shifts the center of mass slightly into negative Z.
-        const zOffset = - (shackleRadius / 2);
-
-        // We'll attach the physics body to a proxy mesh to handle the offset properly
-        const proxyGeo = new THREE.BoxGeometry(physWidth, physHeight, physDepth);
-        const proxyMesh = new THREE.Mesh(proxyGeo);
-        proxyMesh.visible = false;
-
-        // Local position offset
-        proxyMesh.position.set(0, physHeight / 2, zOffset);
-        padlockGroup.add(proxyMesh);
-
-        // createStaticBody handles world position/rotation of the mesh
-        createStaticBody(physicsWorld, proxyMesh, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btBoxShape(new ammo.btVector3(physWidth / 2, physHeight / 2, physDepth / 2));
+    
+            // Center the physics body roughly over the padlock group
+            // The shackle shifts the center of mass slightly into negative Z.
+            const zOffset = - (shackleRadius / 2);
+    
+            // We'll attach the physics body to a proxy mesh to handle the offset properly
+            const proxyGeo = new THREE.BoxGeometry(physWidth, physHeight, physDepth);
+            const proxyMesh = new THREE.Mesh(proxyGeo);
+            proxyMesh.visible = false;
+    
+            // Local position offset
+            proxyMesh.position.set(0, physHeight / 2, zOffset);
+            padlockGroup.add(proxyMesh);
+    
+            // createStaticBody handles world position/rotation of the mesh
+            createStaticBody(physicsWorld, proxyMesh, shape);
+        }
     }
 }

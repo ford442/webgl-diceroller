@@ -38,6 +38,7 @@ const STUB_ENGINE = {
     applyTorqueImpulse: () => {},
     setDieTransform:    () => {},
     setDieVelocity:     () => {},
+    setDieKinematic:    () => {},
     getTransforms:      () => new Float32Array(0),
     getDieIds:          () => new Float32Array(0),
     getDieCount:        () => 0,
