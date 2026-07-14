@@ -55,6 +55,7 @@ import { createRollSession } from './roll/RollSession.js';
 import { applyViewportToCamera } from './core/SceneMetrics.js';
 import { bootstrapAdaptiveQuality, updateAdaptiveQualityProbe } from './core/AdaptiveQuality.js';
 import { isTouchPrimaryDevice } from './core/DeviceCapabilities.js';
+import { createDiceGameFeelSystem } from './effects/DiceGameFeel.js';
 import {
     REPLAY_VERSION,
     buildShareableRollUrl,
@@ -114,6 +115,7 @@ let rollHistoryPanel = null;
 let pendingRollMeta = { seed: null, expression: null, diceSet: {} };
 let collisionAudio = null;
 let collisionTotal = 0; // running count of collision events, for the debug HUD
+let diceGameFeel = null;
 
 function captureDiceSet() {
     const diceSet = {};
@@ -130,6 +132,7 @@ function beginRoll(seed = null, expression = null) {
         diceSet: captureDiceSet()
     };
     shadowController?.pulse('roll');
+    diceGameFeel?.clearRollState();
     throwDice(scene, physicsWorld, seed);
     cameraController?.setState(DiceFocusState.WAITING_FOR_STOP);
     hideResults();
@@ -141,6 +144,7 @@ function handleResultsReady(results) {
     rollStats?.recordResults(results);
     fairnessMonitor?.render();
     rollHistoryPanel?.refresh();
+    diceGameFeel?.onResultsReady(results);
     pendingRollMeta = { seed: null, expression: null, diceSet: {} };
 }
 
@@ -325,6 +329,7 @@ async function init() {
     );
     window.__renderStats = scheduler.stats;
     collisionAudio = createDiceCollisionAudio();
+    diceGameFeel = createDiceGameFeelSystem(scene, { postConfig, rendererState });
     rollHistory = createRollHistory();
     rollStats = createRollStats();
     if (debugEnabled) {
@@ -437,6 +442,7 @@ async function init() {
         collisionTotal += events.length;
         for (const ev of events) {
             collisionAudio?.handleCollisionEvent(ev);
+            diceGameFeel?.handleCollisionEvent(ev);
             if (window.__onDiceCollision) {
                 window.__onDiceCollision(ev);
             }
@@ -475,6 +481,11 @@ async function init() {
         const rolling = !areDiceSettled();
         updateDiceHud(readAllDiceValues(), { rolling });
     }, { priority: -5 });
+
+    scheduler.register('preRender', 'diceGameFeel', ({ deltaTime }) => {
+        if (!diceGameFeel) return;
+        scheduler.stats.gameFeel = diceGameFeel.update(deltaTime);
+    }, { priority: 95 });
 
     scheduler.register('preRender', 'gongFlash', () => {
         if (gongData?.getFlashIntensity) {
@@ -598,6 +609,7 @@ async function init() {
             onNotationRoll: async (expression) => {
                 if (!rollSessionRef.current) throw new Error('Roll session not ready');
                 shadowController?.pulse('roll');
+                diceGameFeel?.clearRollState();
                 hideResults();
                 cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
                 if (lampData) lampData.setRolling(true);
@@ -655,6 +667,7 @@ async function init() {
                     counts: getSpawnedDiceCounts()
                 };
             }
+            diceGameFeel?.clearRollState();
             throwDice(s, w, seed);
             cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
             if (lampData) lampData.setRolling(true);
@@ -671,6 +684,7 @@ async function init() {
             counts: getSpawnedDiceCounts()
         };
         shadowController?.pulse('roll');
+        diceGameFeel?.clearRollState();
         throwDice(scene, physicsWorld, seed);
         cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
         hideResults();

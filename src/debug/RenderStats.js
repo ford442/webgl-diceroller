@@ -182,6 +182,11 @@ export function createRenderStats({
         const audioLabel = audio ? `  audio ${audio.played}` : '';
         lines.push(`collisions ${collisionRate.toFixed(0)}/s${audioLabel}`);
 
+        const gameFeel = scheduler?.stats?.gameFeel;
+        if (gameFeel) {
+            lines.push(`feel px ${gameFeel.activeParticles}  blur ${gameFeel.motionBlurDice}  crit ${gameFeel.critCount}`);
+        }
+
         if (debugPerf && scheduler?.stats?.phaseTimes) {
             const pt = scheduler.stats.phaseTimes;
             lines.push('— phases (ms) —');
