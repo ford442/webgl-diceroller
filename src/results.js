@@ -1,5 +1,5 @@
 /**
- * results.js — Dice Result Display & Roll History
+ * results.js — Dice Result Display
  *
  * Public API:
  *   initResultsUI()          — create DOM elements (call once after page loads)
@@ -8,14 +8,9 @@
  *   hideResults()            — hide the overlay (call before each new roll)
  */
 
-const MAX_HISTORY = 20;
-
-let rollHistory   = [];
 let resultsOverlay = null;
 let diceHudPanel   = null;
 let diceHudRow     = null;
-let historyPanel   = null;
-let historyList    = null;
 
 // ---------------------------------------------------------------------------
 // Tavern theme tokens
@@ -35,7 +30,6 @@ const BORDER     = '2px solid #8B6914';
 export function initResultsUI() {
     _createDiceHud();
     _createResultsOverlay();
-    _createHistoryPanel();
 }
 
 /**
@@ -81,7 +75,7 @@ export function updateDiceHud(diceResults, options = {}) {
 }
 
 /**
- * Show animated result cards and record the roll in history.
+ * Show animated result cards for a completed roll.
  * @param {Array<{type: string, value: number|null}>} diceResults
  */
 export function showResults(diceResults) {
@@ -91,7 +85,6 @@ export function showResults(diceResults) {
     if (valid.length === 0) return;
 
     const total = valid.reduce((s, r) => s + r.value, 0);
-    _addToHistory(valid, total);
 
     // Build card row
     resultsOverlay.innerHTML = '';
@@ -228,74 +221,6 @@ function _createResultsOverlay() {
     container.appendChild(resultsOverlay);
 }
 
-function _createHistoryPanel() {
-    const container = document.getElementById('canvas-container') || document.body;
-
-    historyPanel = document.createElement('div');
-    historyPanel.id = 'dice-history-panel';
-    historyPanel.style.cssText = `
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        background: ${BG_PANEL};
-        border: 1px solid ${GOLD_DARK};
-        border-radius: 8px;
-        color: ${GOLD_DIM};
-        font-family: ${FONT};
-        font-size: 12px;
-        z-index: 1000;
-        min-width: 200px;
-        max-width: 264px;
-        overflow: hidden;
-    `;
-
-    // ── Header ──
-    const header = document.createElement('div');
-    header.style.cssText = `
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 7px 12px;
-        background: rgba(139, 105, 20, 0.25);
-        border-bottom: 1px solid ${GOLD_DARK};
-        cursor: pointer;
-        user-select: none;
-    `;
-    header.innerHTML = `
-        <span style="font-weight:bold;letter-spacing:1px;">📜 Roll History</span>
-        <span id="hist-toggle" style="font-size:10px;">▼</span>
-    `;
-
-    // ── Scrollable content ──
-    const content = document.createElement('div');
-    content.id = 'hist-content';
-    content.style.cssText = `
-        max-height: 260px;
-        overflow-y: auto;
-        padding: 4px 0;
-    `;
-
-    historyList = document.createElement('div');
-    historyList.id = 'hist-list';
-    historyList.innerHTML = _emptyHistoryHTML();
-    content.appendChild(historyList);
-
-    historyPanel.appendChild(header);
-    historyPanel.appendChild(content);
-
-    // Collapse toggle
-    let collapsed = false;
-    header.addEventListener('click', () => {
-        collapsed = !collapsed;
-        content.style.display = collapsed ? 'none' : 'block';
-        const toggle = document.getElementById('hist-toggle');
-        if (toggle) toggle.textContent = collapsed ? '▶' : '▼';
-    });
-    header.addEventListener('mousedown', (e) => e.stopPropagation());
-
-    container.appendChild(historyPanel);
-}
-
 function _makeResultCard(result, { compact = false, rolling = false } = {}) {
     const card = document.createElement('div');
     card.style.cssText = `
@@ -322,140 +247,4 @@ function _makeResultCard(result, { compact = false, rolling = false } = {}) {
     card.appendChild(typeEl);
     card.appendChild(valueEl);
     return card;
-}
-
-// Canonical die type order for consistent history display
-const DICE_TYPE_ORDER = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
-
-function _addToHistory(diceResults, total) {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-    // Group by die type: { d6: [3,5], d20: [14] }
-    const grouped = {};
-    diceResults.forEach(r => {
-        if (!grouped[r.type]) grouped[r.type] = [];
-        grouped[r.type].push(r.value);
-    });
-
-    // Sort by canonical order and format: "2d6: 3, 5  •  1d20: 14"
-    const rollStr = DICE_TYPE_ORDER
-        .filter(type => grouped[type])
-        .map(type => `${grouped[type].length}${type}: ${grouped[type].join(', ')}`)
-        .join('  •  ');
-
-    rollHistory.unshift({ timeStr, rollStr, total, diceResults: [...diceResults] });
-    if (rollHistory.length > MAX_HISTORY) rollHistory.pop();
-
-    _renderHistory();
-}
-
-function _renderHistory() {
-    if (!historyList) return;
-
-    if (rollHistory.length === 0) {
-        historyList.innerHTML = _emptyHistoryHTML();
-        return;
-    }
-
-    historyList.innerHTML = '';
-
-    rollHistory.forEach((entry, idx) => {
-        const row = document.createElement('div');
-        row.style.cssText = `
-            padding: 5px 12px;
-            border-bottom: 1px solid rgba(139,105,20,0.2);
-            line-height: 1.45;
-            ${idx === 0 ? 'background: rgba(139,105,20,0.12);' : ''}
-        `;
-
-        const timeEl = document.createElement('div');
-        timeEl.style.cssText = `font-size:10px; color:${GOLD_DARK};`;
-        timeEl.textContent = entry.timeStr;
-
-        const rollEl = document.createElement('div');
-        rollEl.style.cssText = `font-size:11px; color:${GOLD_DIM};`;
-        rollEl.textContent = entry.rollStr;
-
-        const totalEl = document.createElement('div');
-        totalEl.style.cssText = `font-size:12px; color:${GOLD}; font-weight:bold;`;
-        totalEl.textContent = `Total: ${entry.total}`;
-
-        row.appendChild(timeEl);
-        row.appendChild(rollEl);
-        row.appendChild(totalEl);
-        historyList.appendChild(row);
-    });
-
-    // Copy-last-roll button
-    const copyBtn = document.createElement('button');
-    copyBtn.style.cssText = `
-        display: block;
-        width: calc(100% - 24px);
-        margin: 6px 12px 8px;
-        padding: 5px;
-        background: rgba(139,105,20,0.25);
-        border: 1px solid ${GOLD_DARK};
-        border-radius: 4px;
-        color: ${GOLD_DIM};
-        font-family: ${FONT};
-        font-size: 11px;
-        cursor: pointer;
-        letter-spacing: 0.5px;
-    `;
-    copyBtn.textContent = '📋 Copy Last Roll';
-    copyBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-
-    const resetCopyBtn = () => {
-        copyBtn.textContent = '📋 Copy Last Roll';
-        copyBtn.style.color = GOLD_DIM;
-    };
-
-    copyBtn.addEventListener('click', () => {
-        if (rollHistory.length === 0) return;
-        const latest = rollHistory[0];
-        const text = `[${latest.timeStr}] ${latest.rollStr} | Total: ${latest.total}`;
-        navigator.clipboard.writeText(text)
-            .then(() => {
-                copyBtn.textContent = '✓ Copied!';
-                copyBtn.style.color = GOLD;
-                setTimeout(resetCopyBtn, 1500);
-            })
-            .catch(() => {
-                copyBtn.textContent = '⚠ Copy unavailable';
-                setTimeout(resetCopyBtn, 1500);
-            });
-    });
-    historyList.appendChild(copyBtn);
-
-    // Clear-history button
-    const clearBtn = document.createElement('button');
-    clearBtn.style.cssText = `
-        display: block;
-        width: calc(100% - 24px);
-        margin: 0 12px 8px;
-        padding: 5px;
-        background: rgba(120,30,30,0.25);
-        border: 1px solid ${GOLD_DARK};
-        border-radius: 4px;
-        color: ${GOLD_DIM};
-        font-family: ${FONT};
-        font-size: 11px;
-        cursor: pointer;
-        letter-spacing: 0.5px;
-    `;
-    clearBtn.textContent = '🗑 Clear History';
-    clearBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-    clearBtn.addEventListener('click', clearHistory);
-    historyList.appendChild(clearBtn);
-}
-
-/** Clear the roll-history log. */
-export function clearHistory() {
-    rollHistory = [];
-    _renderHistory();
-}
-
-function _emptyHistoryHTML() {
-    return `<div style="text-align:center;padding:10px 8px;color:${GOLD_DARK};font-style:italic;">No rolls yet…</div>`;
 }

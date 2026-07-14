@@ -43,6 +43,9 @@ import { createCameraController, DiceFocusState } from './core/CameraController.
 import { createFrameScheduler } from './core/FrameScheduler.js';
 import { createCandleFlickerSystem, createFireplaceFlickerSystem } from './core/LightingSystems.js';
 import { createFairnessMonitor } from './debug/FairnessMonitor.js';
+import { createRollHistory } from './roll/RollHistory.js';
+import { createRollStats } from './roll/RollStats.js';
+import { createRollHistoryPanel } from './ui/RollHistoryPanel.js';
 import { createCullingSystem } from './core/CullingSystem.js';
 import { createRenderStats } from './debug/RenderStats.js';
 
@@ -90,8 +93,41 @@ let rendererBadge = null;
 let pixelRatioMonitor = null;
 let rendererRecoveryCleanup = null;
 let fairnessMonitor = null;
+let rollHistory = null;
+let rollStats = null;
+let rollHistoryPanel = null;
+let pendingRollMeta = { seed: null, expression: null, diceSet: {} };
 let collisionAudio = null;
 let collisionTotal = 0; // running count of collision events, for the debug HUD
+
+function captureDiceSet() {
+    const diceSet = {};
+    spawnedDice.forEach((die) => {
+        diceSet[die.type] = (diceSet[die.type] ?? 0) + 1;
+    });
+    return diceSet;
+}
+
+function beginRoll(seed = null, expression = null) {
+    pendingRollMeta = {
+        seed: seed ?? null,
+        expression: expression ?? null,
+        diceSet: captureDiceSet()
+    };
+    shadowController?.pulse('roll');
+    throwDice(scene, physicsWorld, seed);
+    cameraController?.setState(DiceFocusState.WAITING_FOR_STOP);
+    hideResults();
+    if (lampData) lampData.setRolling(true);
+}
+
+function handleResultsReady(results) {
+    rollHistory?.appendRoll(results, pendingRollMeta);
+    rollStats?.recordResults(results);
+    fairnessMonitor?.render();
+    rollHistoryPanel?.refresh();
+    pendingRollMeta = { seed: null, expression: null, diceSet: {} };
+}
 
 // "Eye-Head" Cursor Logic
 const cursorPos = new THREE.Vector2(0, 0); // Pixel coordinates relative to center
@@ -273,6 +309,8 @@ async function init() {
     );
     window.__renderStats = scheduler.stats;
     collisionAudio = createDiceCollisionAudio();
+    rollHistory = createRollHistory();
+    rollStats = createRollStats();
     if (debugEnabled) {
         renderStats = createRenderStats({
             renderer,
@@ -300,7 +338,7 @@ async function init() {
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Backquote') renderStats?.toggle();
         });
-        fairnessMonitor = createFairnessMonitor({ enabled: true });
+        fairnessMonitor = createFairnessMonitor({ enabled: true, rollStats });
         fairnessMonitor.init();
     }
     // Surface the active renderer in-UI: persistently under ?debug/?renderer-info,
@@ -385,7 +423,7 @@ async function init() {
             hideResults,
             lampData,
             LampMode,
-            onResultsReady: (results) => fairnessMonitor?.recordResults(results)
+            onResultsReady: handleResultsReady
         });
     }, { priority: -10 });
 
@@ -496,12 +534,7 @@ async function init() {
     try {
     tierResult = await loadTiers(scene, camera, physicsWorld, { scheduler, cullingSystem }, {
         audio: collisionAudio,
-        onDiceRoll: () => {
-            shadowController?.pulse('roll');
-            cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
-            hideResults();
-            if (lampData) lampData.setRolling(true);
-        },
+        onDiceRoll: () => beginRoll(),
         setLampData: (data) => { lampData = data; },
         setGongData: (data) => { gongData = data; },
         setCandleFlamePos: (pos) => {
@@ -551,18 +584,18 @@ async function init() {
         isLockedRef,
         cursorPos,
         crosshairUI,
-        onRoll: (seed = null) => {
-            shadowController?.pulse('roll');
-            throwDice(scene, physicsWorld, seed);
-            cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
-            hideResults();
-            if (lampData) lampData.setRolling(true);
-        },
+        onRoll: (seed = null) => beginRoll(seed),
         onRerollLayout: layoutManager ? async () => {
             const result = await layoutManager.rerollLayout({ newSeed: true });
             ui?.updateLayoutStatus?.(result);
         } : null,
         getLampData: () => lampData
+    });
+
+    rollHistoryPanel = createRollHistoryPanel({
+        rollHistory,
+        rollStats,
+        onReplay: (seed) => beginRoll(seed)
     });
 
     // Expose for debugging/verification
@@ -581,14 +614,14 @@ async function init() {
     window.forceShadowRefresh = () => shadowController?.forceRefresh('debug');
     window.postConfig = postConfig;
     window.fairnessMonitor = fairnessMonitor;
-    window.resetFairnessMonitor = () => fairnessMonitor?.reset();
-    window.replayRoll = (seed) => {
-        shadowController?.pulse('roll');
-        throwDice(scene, physicsWorld, seed);
-        cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
-        hideResults();
-        if (lampData) lampData.setRolling(true);
+    window.rollHistory = rollHistory;
+    window.rollStats = rollStats;
+    window.resetFairnessMonitor = () => {
+        rollStats?.reset();
+        fairnessMonitor?.render();
+        rollHistoryPanel?.refresh();
     };
+    window.replayRoll = (seed) => beginRoll(seed);
     window.readAllDiceValues = readAllDiceValues;
     window.getDiceValueDebugSnapshot = getDiceValueDebugSnapshot;
     window.areDiceSettled = areDiceSettled;
