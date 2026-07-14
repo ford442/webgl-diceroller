@@ -543,6 +543,19 @@ export const PHYSICS_PRESETS = {
 
 export const findSpawnedDieByMesh = (mesh) => spawnedDice.find((die) => die.mesh === mesh) || null;
 
+/** Map a physics collision id (WASM die id or ammo audioBodyId) back to a spawned die. */
+export const findSpawnedDieByPhysicsId = (id) => {
+    if (id < 0) return null;
+    const useWasmIds = isUsingWasmPhysics();
+    for (const die of spawnedDice) {
+        if (useWasmIds && die.wasmId === id) return die;
+        if (!useWasmIds && die.audioBodyId === id) return die;
+        // Dual-physics / mixed authority: accept either id.
+        if (die.wasmId === id || die.audioBodyId === id) return die;
+    }
+    return null;
+};
+
 function estimateInertiaScalar(geometry, mass) {
     const bbox = geometry.boundingBox ?? geometry.computeBoundingBox?.();
     const source = bbox || geometry.boundingBox;
