@@ -114,25 +114,35 @@ export function createCrossbow(scene, physicsWorld, position = { x: 5, y: -2.75,
     if (Ammo && physicsWorld) {
         // We'll use a compound shape or a simple box that covers the main body
         // A box for the stock is sufficient to prevent dice clipping
-        const stockShape = new Ammo.btBoxShape(new Ammo.btVector3(0.4, 0.3, 3.0));
-
-        // Compound shape to include the bow arms
-        const compoundShape = new Ammo.btCompoundShape();
-
-        // Stock transform
-        const stockTrans = new Ammo.btTransform();
-        stockTrans.setIdentity();
-        stockTrans.setOrigin(new Ammo.btVector3(0, 0.3, 0));
-        compoundShape.addChildShape(stockTrans, stockShape);
-
-        // Arm box
-        const armShape = new Ammo.btBoxShape(new Ammo.btVector3(3.2, 0.1, 0.2));
-        const armTrans = new Ammo.btTransform();
-        armTrans.setIdentity();
-        armTrans.setOrigin(new Ammo.btVector3(0, 0.3, 2.0));
-        compoundShape.addChildShape(armTrans, armShape);
-
-        createStaticBody(physicsWorld, group, compoundShape);
+        if (Ammo && physicsWorld) {
+            const stockShape = new Ammo.btBoxShape(new Ammo.btVector3(0.4, 0.3, 3.0));
+    
+            // Compound shape to include the bow arms
+            if (Ammo && physicsWorld) {
+                const compoundShape = new Ammo.btCompoundShape();
+        
+                // Stock transform
+                if (Ammo && physicsWorld) {
+                    const stockTrans = new Ammo.btTransform();
+                    stockTrans.setIdentity();
+                    stockTrans.setOrigin(new Ammo.btVector3(0, 0.3, 0));
+                    compoundShape.addChildShape(stockTrans, stockShape);
+            
+                    // Arm box
+                    if (Ammo && physicsWorld) {
+                        const armShape = new Ammo.btBoxShape(new Ammo.btVector3(3.2, 0.1, 0.2));
+                        if (Ammo && physicsWorld) {
+                            const armTrans = new Ammo.btTransform();
+                            armTrans.setIdentity();
+                            armTrans.setOrigin(new Ammo.btVector3(0, 0.3, 2.0));
+                            compoundShape.addChildShape(armTrans, armShape);
+                    
+                            createStaticBody(physicsWorld, group, compoundShape);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     return { group };

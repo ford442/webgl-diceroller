@@ -219,6 +219,9 @@ struct RigidBody {
 
     bool  sleeping    = false;
     float sleepTimer  = 0.0f;
+    // User-held dice (drag/levitation): skip integration and act as an
+    // infinite-mass collision partner so other dice bounce off cleanly.
+    bool  kinematic   = false;
 
     void computeInertiaFromHull() {
         if (!useHull || hull.verts.empty()) {
@@ -503,8 +506,24 @@ public:
             b.angularVelocity = {avx, avy, avz};
             // Wake the body so the new velocity is actually integrated — step()
             // skips sleeping bodies, so without this a settled die ignores
-            // user-driven velocity (e.g. ?wasm-drag release throws).
+            // user-driven velocity (e.g. drag release throws).
             wake(b);
+            break;
+        }
+    }
+
+    void setDieKinematic(int id, bool kinematic) {
+        for (auto& b : bodies_) {
+            if (b.id != id) continue;
+            b.kinematic = kinematic;
+            if (kinematic) {
+                b.velocity = {};
+                b.angularVelocity = {};
+                b.sleeping = false;
+                b.sleepTimer = 0.0f;
+            } else {
+                wake(b);
+            }
             break;
         }
     }
@@ -530,7 +549,10 @@ public:
 
     bool areAllSettled() const {
         if (bodies_.empty()) return false;
-        for (const auto& b : bodies_) if (!b.sleeping) return false;
+        for (const auto& b : bodies_) {
+            if (b.kinematic) continue;
+            if (!b.sleeping) return false;
+        }
         return true;
     }
 
@@ -704,6 +726,7 @@ private:
     }
 
     void integrate(RigidBody& b, float dt) {
+        if (b.kinematic) return;
         b.velocity.y += gravity_ * dt;
         if (!noDrag_ && b.dragFactor > 0.0f) {
             const float speedSq = b.velocity.lengthSq();
@@ -727,6 +750,7 @@ private:
             for (size_t j = i + 1; j < bodies_.size(); ++j) {
                 auto& a = bodies_[i];
                 auto& b = bodies_[j];
+                if (a.kinematic && b.kinematic) continue;
                 if (a.sleeping && b.sleeping) continue;
 
                 // Broadphase sphere reject
@@ -779,11 +803,13 @@ private:
                 float velN = Vec3::dot(relVel, c.normal);
                 if (velN > 0.0f) continue;
 
-                float denom = a.invMass + b.invMass;
+                const float invMassA = a.kinematic ? 0.0f : a.invMass;
+                const float invMassB = b.kinematic ? 0.0f : b.invMass;
+                float denom = invMassA + invMassB;
                 Vec3 raCrossN = Vec3::cross(rA, c.normal);
                 Vec3 rbCrossN = Vec3::cross(rB, c.normal);
-                denom += Vec3::dot(raCrossN, a.applyInvInertiaWorld(raCrossN));
-                denom += Vec3::dot(rbCrossN, b.applyInvInertiaWorld(rbCrossN));
+                if (!a.kinematic) denom += Vec3::dot(raCrossN, a.applyInvInertiaWorld(raCrossN));
+                if (!b.kinematic) denom += Vec3::dot(rbCrossN, b.applyInvInertiaWorld(rbCrossN));
                 if (denom < 1e-6f) continue;
 
                 float rest = std::min(a.restitution, b.restitution);
@@ -793,10 +819,14 @@ private:
                 float jApplied = c.normalImpulse - jOld;
 
                 Vec3 impulse = c.normal * jApplied;
-                a.velocity -= impulse * a.invMass;
-                b.velocity += impulse * b.invMass;
-                a.angularVelocity -= a.applyInvInertiaWorld(Vec3::cross(rA, impulse));
-                b.angularVelocity += b.applyInvInertiaWorld(Vec3::cross(rB, impulse));
+                if (!a.kinematic) {
+                    a.velocity -= impulse * invMassA;
+                    a.angularVelocity -= a.applyInvInertiaWorld(Vec3::cross(rA, impulse));
+                }
+                if (!b.kinematic) {
+                    b.velocity += impulse * invMassB;
+                    b.angularVelocity += b.applyInvInertiaWorld(Vec3::cross(rB, impulse));
+                }
 
                 // Friction
                 relVel = (b.velocity + Vec3::cross(b.angularVelocity, rB))
@@ -813,10 +843,14 @@ private:
                     c.frictionImpulse = std::clamp(jtOld + jt, -maxFriction, maxFriction);
                     float jtApplied = c.frictionImpulse - jtOld;
                     Vec3 fImpulse = tangent * jtApplied;
-                    a.velocity -= fImpulse * a.invMass;
-                    b.velocity += fImpulse * b.invMass;
-                    a.angularVelocity -= a.applyInvInertiaWorld(Vec3::cross(rA, fImpulse));
-                    b.angularVelocity += b.applyInvInertiaWorld(Vec3::cross(rB, fImpulse));
+                    if (!a.kinematic) {
+                        a.velocity -= fImpulse * invMassA;
+                        a.angularVelocity -= a.applyInvInertiaWorld(Vec3::cross(rA, fImpulse));
+                    }
+                    if (!b.kinematic) {
+                        b.velocity += fImpulse * invMassB;
+                        b.angularVelocity += b.applyInvInertiaWorld(Vec3::cross(rB, fImpulse));
+                    }
                 }
             }
         }
@@ -826,15 +860,20 @@ private:
             if (c.penetration <= POSITION_SLOP) continue;
             auto& a = bodies_[c.a];
             auto& b = bodies_[c.b];
-            float corrMag = (c.penetration - POSITION_SLOP) * 0.6f / (a.invMass + b.invMass);
+            const float invMassA = a.kinematic ? 0.0f : a.invMass;
+            const float invMassB = b.kinematic ? 0.0f : b.invMass;
+            const float invSum = invMassA + invMassB;
+            if (invSum < 1e-6f) continue;
+            float corrMag = (c.penetration - POSITION_SLOP) * 0.6f / invSum;
             Vec3 corr = c.normal * corrMag;
-            a.position -= corr * a.invMass;
-            b.position += corr * b.invMass;
+            if (!a.kinematic) a.position -= corr * invMassA;
+            if (!b.kinematic) b.position += corr * invMassB;
         }
     }
 
     void resolveTableCollision(RigidBody& b, float dt) {
         (void)dt;
+        if (b.kinematic) return;
         const float floorY = tableY_ + b.radius;
 
         if (b.useHull && !b.hull.verts.empty()) {
@@ -921,6 +960,7 @@ private:
     }
 
     void checkSleep(RigidBody& b, float dt) const {
+        if (b.kinematic) return;
         const float SPEED_THRESHOLD = 0.05f;
         const float SLEEP_DELAY = 0.5f;
         float speed = b.velocity.length() + b.angularVelocity.length() * b.radius;
@@ -962,6 +1002,7 @@ EMSCRIPTEN_BINDINGS(dice_physics) {
         .function("applyTorqueImpulse",&DicePhysicsEngine::applyTorqueImpulse)
         .function("setDieTransform",   &DicePhysicsEngine::setDieTransform)
         .function("setDieVelocity",    &DicePhysicsEngine::setDieVelocity)
+        .function("setDieKinematic",   &DicePhysicsEngine::setDieKinematic)
         .function("step",              &DicePhysicsEngine::step)
         .function("getDieCount",       &DicePhysicsEngine::getDieCount)
         .function("areAllSettled",     &DicePhysicsEngine::areAllSettled)

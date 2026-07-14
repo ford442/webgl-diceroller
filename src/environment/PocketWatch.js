@@ -144,8 +144,10 @@ export function createPocketWatch(scene, physicsWorld, position = { x: 6, y: -2.
     // --- Physics ---
     // Simple cylinder shape
     if (ammo) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, thickness / 2, radius));
-        createStaticBody(physicsWorld, group, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, thickness / 2, radius));
+            createStaticBody(physicsWorld, group, shape);
+        }
     }
 }
 

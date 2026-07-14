@@ -57,12 +57,33 @@ export async function run() {
 
     const fellUnderGravity = (yStart != null && yLater != null && yLater < yStart - 0.1);
 
+    // Drag scenario: kinematic hold + release impulse (worker command path).
+    const dragId = e.addDie(6, 0, 6, 0);
+    const hasKinematic = typeof e.setDieKinematic === 'function';
+    let dragHeld = false;
+    let dragMovedOnRelease = false;
+    if (hasKinematic) {
+        e.setDieKinematic(dragId, true);
+        for (let i = 0; i < 20; i++) {
+            e.setDieTransform(dragId, 2, 4, 1, 0, 0, 0, 1);
+            await new Promise(r => setTimeout(r, 25));
+        }
+        const holdY = yForId(e, dragId);
+        dragHeld = holdY != null && Math.abs(holdY - 4) < 0.35;
+        e.setDieKinematic(dragId, false);
+        e.applyImpulse(dragId, 0, -8, 0);
+        await new Promise(r => setTimeout(r, 400));
+        const afterY = yForId(e, dragId);
+        dragMovedOnRelease = holdY != null && afterY != null && afterY < holdY - 0.15;
+    }
+
     return {
         ok: true,
         usingWorker, usingSAB, crossOriginIsolated,
         idsSync, id0, id1,
         countVisible,
         yStart, yLater, fellUnderGravity,
+        hasKinematic, dragHeld, dragMovedOnRelease,
     };
 }
 `;
@@ -110,7 +131,8 @@ try {
 }
 
 // Non-zero exit on logical failure so CI can gate on it.
-const pass = result && result.ok && result.usingWorker && result.idsSync && result.fellUnderGravity;
+const pass = result && result.ok && result.usingWorker && result.idsSync && result.fellUnderGravity
+    && (!result.hasKinematic || (result.dragHeld && result.dragMovedOnRelease));
 if (!pass) {
     console.error('[verify] FAILED');
     process.exit(1);

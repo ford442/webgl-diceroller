@@ -95,7 +95,7 @@ export function createAstrolabe(scene, physicsWorld, position, rotationY) {
 
     // --- Physics ---
     let body = null;
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const Ammo = getAmmo();
 
         // Use a cylinder shape that encompasses the rings
@@ -103,15 +103,17 @@ export function createAstrolabe(scene, physicsWorld, position, rotationY) {
         const totalHeight = baseHeight + supportHeight + ringRadius;
         const collisionRadius = ringRadius * 1.1; // Slightly larger for padding
 
-        const shape = new Ammo.btCylinderShape(new Ammo.btVector3(collisionRadius, totalHeight / 2, collisionRadius));
-
-        // Create an invisible proxy mesh to align the physics body
-        const proxyMesh = new THREE.Mesh();
-        proxyMesh.position.copy(group.position);
-        proxyMesh.position.y += totalHeight / 2; // Move origin to center of cylinder
-        proxyMesh.quaternion.copy(group.quaternion);
-
-        body = createStaticBody(physicsWorld, proxyMesh, shape);
+        if (Ammo && physicsWorld) {
+            const shape = new Ammo.btCylinderShape(new Ammo.btVector3(collisionRadius, totalHeight / 2, collisionRadius));
+    
+            // Create an invisible proxy mesh to align the physics body
+            const proxyMesh = new THREE.Mesh();
+            proxyMesh.position.copy(group.position);
+            proxyMesh.position.y += totalHeight / 2; // Move origin to center of cylinder
+            proxyMesh.quaternion.copy(group.quaternion);
+    
+            body = createStaticBody(physicsWorld, proxyMesh, shape);
+        }
     }
 
     return {

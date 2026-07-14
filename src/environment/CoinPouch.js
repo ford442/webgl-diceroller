@@ -95,6 +95,8 @@ export function createCoinPouch(scene, physicsWorld, position = { x: -6, y: -2.7
     string1.position.y -= height / 2;
     string2.position.y -= height / 2;
 
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
+        createStaticBody(physicsWorld, group, shape);
+    }
 }

@@ -119,24 +119,26 @@ export function createBookshelf(scene, physicsWorld, position = { x: 0, y: 0, z:
     // --- Physics ---
     // Simple Box Shape for the whole unit
     if (ammo) {
-        const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, height/2, depth/2));
-
-        // Adjust center for physics body (created at center of mass)
-        // Group is at 'position'. Center of bookshelf logic is at y=height/2 relative to position.
-        // createStaticBody uses mesh position.
-        // We can attach physics to a hidden proxy mesh at the center.
-
-        const proxyGeo = new THREE.BoxGeometry(width, height, depth);
-        const proxyMesh = new THREE.Mesh(proxyGeo);
-        proxyMesh.visible = false;
-        proxyMesh.position.set(position.x, position.y + height/2, position.z);
-        // Apply rotation
-        proxyMesh.rotation.y = rotationY;
-
-        // Just add to scene invisibly to track transform
-        scene.add(proxyMesh);
-
-        createStaticBody(physicsWorld, proxyMesh, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, height/2, depth/2));
+    
+            // Adjust center for physics body (created at center of mass)
+            // Group is at 'position'. Center of bookshelf logic is at y=height/2 relative to position.
+            // createStaticBody uses mesh position.
+            // We can attach physics to a hidden proxy mesh at the center.
+    
+            const proxyGeo = new THREE.BoxGeometry(width, height, depth);
+            const proxyMesh = new THREE.Mesh(proxyGeo);
+            proxyMesh.visible = false;
+            proxyMesh.position.set(position.x, position.y + height/2, position.z);
+            // Apply rotation
+            proxyMesh.rotation.y = rotationY;
+    
+            // Just add to scene invisibly to track transform
+            scene.add(proxyMesh);
+    
+            createStaticBody(physicsWorld, proxyMesh, shape);
+        }
     }
 }
 

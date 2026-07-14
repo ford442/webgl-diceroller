@@ -117,8 +117,10 @@ export function createPencil(scene, physicsWorld, position = { x: -4, y: -2.75, 
     if (Ammo) {
         // Physics CylinderShape matches the Y-aligned group geometry perfectly.
         // Size: X=radius, Y=halfLength, Z=radius
-        const shape = new Ammo.btCylinderShape(new Ammo.btVector3(pencilRadius, totalLength / 2, pencilRadius));
-        createStaticBody(physicsWorld, group, shape);
+        if (Ammo && physicsWorld) {
+            const shape = new Ammo.btCylinderShape(new Ammo.btVector3(pencilRadius, totalLength / 2, pencilRadius));
+            createStaticBody(physicsWorld, group, shape);
+        }
     }
 
     return { group: group };

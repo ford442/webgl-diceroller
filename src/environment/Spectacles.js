@@ -141,11 +141,13 @@ export function createSpectacles(scene, physicsWorld, position = { x: 6, y: -2.7
     // Depth is the lens diameter, ~ 2 * lensRadius.
     const ammo = getAmmo();
     if (ammo) {
-        const shape = new ammo.btBoxShape(new ammo.btVector3(
-            (lensRadius * 2 + bridgeWidth) / 2 + 0.1,
-            0.05 / 2,
-            (lensRadius * 2) / 2 + 0.1
-        ));
-        createStaticBody(physicsWorld, group, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btBoxShape(new ammo.btVector3(
+                (lensRadius * 2 + bridgeWidth) / 2 + 0.1,
+                0.05 / 2,
+                (lensRadius * 2) / 2 + 0.1
+            ));
+            createStaticBody(physicsWorld, group, shape);
+        }
     }
 }

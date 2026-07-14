@@ -161,8 +161,10 @@ export function createBountyPoster(scene, physicsWorld, position = { x: -10, y: 
     const Ammo = getAmmo();
     if (Ammo) {
         // Simple box shape for the paper
-        const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, thickness / 2, length / 2));
-        createStaticBody(physicsWorld, mesh, shape);
+        if (Ammo && physicsWorld) {
+            const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, thickness / 2, length / 2));
+            createStaticBody(physicsWorld, mesh, shape);
+        }
     }
 
     return { group: mesh };

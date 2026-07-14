@@ -27,90 +27,96 @@ export function createDiceTower(scene, physicsWorld, position = { x: 12, y: -3.0
 
     // --- Physics Compound Shape ---
     // We use a compound shape to represent the hollow tower and ramps
-    const compoundShape = new ammo.btCompoundShape();
-
-    // Helper to add parts
-    function addPart(w, h, d, x, y, z, rotX=0, rotY=0, rotZ=0) {
-        // Visual
-        const geo = new THREE.BoxGeometry(w, h, d);
-        const mesh = new THREE.Mesh(geo, woodMat);
-        mesh.position.set(x, y, z);
-        mesh.rotation.set(rotX, rotY, rotZ);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        group.add(mesh);
-
-        // Physics
-        const shape = new ammo.btBoxShape(new ammo.btVector3(w/2, h/2, d/2));
-        const transform = new ammo.btTransform();
-        transform.setIdentity();
-        transform.setOrigin(new ammo.btVector3(x, y, z));
-
-        const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rotX, rotY, rotZ));
-        transform.setRotation(new ammo.btQuaternion(q.x, q.y, q.z, q.w));
-
-        compoundShape.addChildShape(transform, shape);
+    if (ammo && physicsWorld) {
+        const compoundShape = new ammo.btCompoundShape();
+    
+        // Helper to add parts
+        function addPart(w, h, d, x, y, z, rotX=0, rotY=0, rotZ=0) {
+            // Visual
+            const geo = new THREE.BoxGeometry(w, h, d);
+            const mesh = new THREE.Mesh(geo, woodMat);
+            mesh.position.set(x, y, z);
+            mesh.rotation.set(rotX, rotY, rotZ);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            group.add(mesh);
+    
+            // Physics
+            if (ammo && physicsWorld) {
+                const shape = new ammo.btBoxShape(new ammo.btVector3(w/2, h/2, d/2));
+                if (ammo && physicsWorld) {
+                    const transform = new ammo.btTransform();
+                    transform.setIdentity();
+                    transform.setOrigin(new ammo.btVector3(x, y, z));
+            
+                    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rotX, rotY, rotZ));
+                    transform.setRotation(new ammo.btQuaternion(q.x, q.y, q.z, q.w));
+            
+                    compoundShape.addChildShape(transform, shape);
+                }
+            
+                // --- Tower Structure ---
+            
+                // 1. Back Wall
+                addPart(width, height, thickness, 0, height/2, -depth/2 + thickness/2);
+            
+                // 2. Side Walls
+                // Left
+                addPart(thickness, height, depth, -width/2 + thickness/2, height/2, 0);
+                // Right
+                addPart(thickness, height, depth, width/2 - thickness/2, height/2, 0);
+            
+                // 3. Front Wall (Top Half)
+                // Covers top section to hide initial drop mechanism/funnel effect
+                const frontH = height / 3;
+                addPart(width, frontH, thickness, 0, height - frontH/2, depth/2 - thickness/2);
+            
+                // --- Internal Ramps ---
+                // Zig-zag pattern: Back->Front, Front->Back, Back->Front (Exit)
+                const rampThick = 0.2;
+                const rampW = width - thickness*2 - 0.1; // Fit inside walls with small margin
+                const rampLen = depth * 0.9;
+            
+                // Ramp 1 (Top): Slopes down towards Front
+                // Positioned high, angled down (+X rotation)
+                addPart(rampW, rampThick, rampLen, 0, 11, -0.5, 0.6, 0, 0);
+            
+                // Ramp 2 (Middle): Slopes down towards Back
+                // Positioned middle, angled down-back (-X rotation)
+                addPart(rampW, rampThick, rampLen, 0, 7, 0.5, -0.6, 0, 0);
+            
+                // Ramp 3 (Bottom/Exit): Slopes down towards Front
+                // Positioned low, leads to tray
+                addPart(rampW, rampThick, rampLen + 1, 0, 3, -0.5, 0.6, 0, 0);
+            
+                // --- Catch Tray ---
+                // Extends from the front of the tower to catch dice
+                const trayDepth = 8;
+                const trayHeight = 2;
+                const trayZ = depth/2 + trayDepth/2 - thickness; // Center Z of tray floor
+            
+                // Tray Floor
+                addPart(width, thickness, trayDepth, 0, thickness/2, trayZ);
+            
+                // Tray Side Walls
+                addPart(thickness, trayHeight, trayDepth, -width/2 + thickness/2, trayHeight/2, trayZ);
+                addPart(thickness, trayHeight, trayDepth, width/2 - thickness/2, trayHeight/2, trayZ);
+            
+                // Tray Front Wall
+                addPart(width, trayHeight, thickness, 0, trayHeight/2, trayZ + trayDepth/2 - thickness/2);
+            
+            
+                // --- Positioning ---
+                // Place on the table (Table surface is at approx Y = -2.75)
+                // Tower base is at Y=0 relative to group.
+                group.position.set(position.x, position.y, position.z);
+                group.rotation.y = rotationY;
+            
+                scene.add(group);
+            
+                // Create Static Physics Body
+                createStaticBody(physicsWorld, group, compoundShape);
+                }
+            }
     }
-
-    // --- Tower Structure ---
-
-    // 1. Back Wall
-    addPart(width, height, thickness, 0, height/2, -depth/2 + thickness/2);
-
-    // 2. Side Walls
-    // Left
-    addPart(thickness, height, depth, -width/2 + thickness/2, height/2, 0);
-    // Right
-    addPart(thickness, height, depth, width/2 - thickness/2, height/2, 0);
-
-    // 3. Front Wall (Top Half)
-    // Covers top section to hide initial drop mechanism/funnel effect
-    const frontH = height / 3;
-    addPart(width, frontH, thickness, 0, height - frontH/2, depth/2 - thickness/2);
-
-    // --- Internal Ramps ---
-    // Zig-zag pattern: Back->Front, Front->Back, Back->Front (Exit)
-    const rampThick = 0.2;
-    const rampW = width - thickness*2 - 0.1; // Fit inside walls with small margin
-    const rampLen = depth * 0.9;
-
-    // Ramp 1 (Top): Slopes down towards Front
-    // Positioned high, angled down (+X rotation)
-    addPart(rampW, rampThick, rampLen, 0, 11, -0.5, 0.6, 0, 0);
-
-    // Ramp 2 (Middle): Slopes down towards Back
-    // Positioned middle, angled down-back (-X rotation)
-    addPart(rampW, rampThick, rampLen, 0, 7, 0.5, -0.6, 0, 0);
-
-    // Ramp 3 (Bottom/Exit): Slopes down towards Front
-    // Positioned low, leads to tray
-    addPart(rampW, rampThick, rampLen + 1, 0, 3, -0.5, 0.6, 0, 0);
-
-    // --- Catch Tray ---
-    // Extends from the front of the tower to catch dice
-    const trayDepth = 8;
-    const trayHeight = 2;
-    const trayZ = depth/2 + trayDepth/2 - thickness; // Center Z of tray floor
-
-    // Tray Floor
-    addPart(width, thickness, trayDepth, 0, thickness/2, trayZ);
-
-    // Tray Side Walls
-    addPart(thickness, trayHeight, trayDepth, -width/2 + thickness/2, trayHeight/2, trayZ);
-    addPart(thickness, trayHeight, trayDepth, width/2 - thickness/2, trayHeight/2, trayZ);
-
-    // Tray Front Wall
-    addPart(width, trayHeight, thickness, 0, trayHeight/2, trayZ + trayDepth/2 - thickness/2);
-
-
-    // --- Positioning ---
-    // Place on the table (Table surface is at approx Y = -2.75)
-    // Tower base is at Y=0 relative to group.
-    group.position.set(position.x, position.y, position.z);
-    group.rotation.y = rotationY;
-
-    scene.add(group);
-
-    // Create Static Physics Body
-    createStaticBody(physicsWorld, group, compoundShape);
 }

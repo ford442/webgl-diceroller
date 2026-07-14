@@ -161,7 +161,7 @@ export function createLute(scene, physicsWorld, position = { x: 0, y: 0, z: 0 },
     scene.add(luteGroup);
 
     // --- Physics ---
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         // Approximate the whole thing with a box or compound shape.
         // A box covering the body and neck.
         // Body length ~3. Neck length ~2. Total ~5.
@@ -172,11 +172,13 @@ export function createLute(scene, physicsWorld, position = { x: 0, y: 0, z: 0 },
         // Simpler: Just a box for the body, and maybe a box for the neck if needed.
         // But createStaticBody just takes one shape. We can use a compound shape if we really want to.
         // For static clutter, a box covering the main body is usually enough to stop dice cleanly.
-        const shape = new ammo.btBoxShape(new ammo.btVector3(1.5, 0.5, 2.5)); // Half sizes
-
-        // The physics body will be centered on the group origin (0,0,0) which is center of the body.
-        // This is perfectly fine for the Lute body.
-        createStaticBody(physicsWorld, luteGroup, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btBoxShape(new ammo.btVector3(1.5, 0.5, 2.5)); // Half sizes
+    
+            // The physics body will be centered on the group origin (0,0,0) which is center of the body.
+            // This is perfectly fine for the Lute body.
+            createStaticBody(physicsWorld, luteGroup, shape);
+        }
     }
 
     return luteGroup;

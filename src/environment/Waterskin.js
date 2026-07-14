@@ -76,8 +76,10 @@ export function createWaterskin(scene, physicsWorld, position = { x: 5, y: -2.75
         const sy = 0.96;
         const sz = 3.6;
 
-        const shape = new ammo.btBoxShape(new ammo.btVector3(sx * 0.5, sy * 0.5, sz * 0.5));
-        body = createStaticBody(physicsWorld, group, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btBoxShape(new ammo.btVector3(sx * 0.5, sy * 0.5, sz * 0.5));
+            body = createStaticBody(physicsWorld, group, shape);
+        }
     }
 
     return {

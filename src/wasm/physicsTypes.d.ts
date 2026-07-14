@@ -19,6 +19,7 @@ export interface PhysicsEngine {
     applyTorqueImpulse(id: number, tx: number, ty: number, tz: number): void;
     setDieTransform(id: number, px: number, py: number, pz: number, qx: number, qy: number, qz: number, qw: number): void;
     setDieVelocity(id: number, lvx: number, lvy: number, lvz: number, avx: number, avy: number, avz: number): void;
+    setDieKinematic(id: number, kinematic: boolean): void;
     getTransforms(): Float32Array;
     getDieIds(): Float32Array;
     getDieCount(): number;

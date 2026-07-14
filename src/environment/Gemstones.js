@@ -47,12 +47,14 @@ export function createGemstones(scene, physicsWorld, position = { x: 6, y: -2.75
         gems.push(gem);
 
         // Physics for each gem
-        const shape = new ammo.btBoxShape(new ammo.btVector3(config.size * 0.5, config.size * 0.4, config.size * 0.5));
-        const dummy = new THREE.Object3D();
-        dummy.position.copy(gem.position).applyEuler(group.rotation).add(group.position);
-        dummy.rotation.copy(gem.rotation);
-        dummy.position.y = group.position.y + config.size * 0.4;
-        createStaticBody(physicsWorld, dummy, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btBoxShape(new ammo.btVector3(config.size * 0.5, config.size * 0.4, config.size * 0.5));
+            const dummy = new THREE.Object3D();
+            dummy.position.copy(gem.position).applyEuler(group.rotation).add(group.position);
+            dummy.rotation.copy(gem.rotation);
+            dummy.position.y = group.position.y + config.size * 0.4;
+            createStaticBody(physicsWorld, dummy, shape);
+        }
     });
 
     // Add a small velvet cloth underneath

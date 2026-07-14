@@ -62,29 +62,31 @@ export function createMiniature(scene, physicsWorld, position = { x: 10, y: -2.7
     // A cylinder shape that covers the whole miniature for simplicity.
     const totalHeight = baseHeight + bodyHeight + headRadius * 2;
     // For Ammo.btCylinderShape, Y axis is the height. The argument is half-extents.
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius));
-
-    // Wait, the group's position is the *bottom* of the miniature.
-    // Ammo's createStaticBody sets the physics body's origin to the group's position.
-    // A btCylinderShape is centered at its origin. So if we attach it to the group,
-    // the physics cylinder will be centered at -2.75, and extending down into the table!
-    // Let's create a dummy mesh at the center of the miniature for physics, or adjust.
-    // Since createStaticBody expects a mesh/group to grab position/quaternion, we can create
-    // an invisible dummy mesh inside the group, but wait, if it's inside the group,
-    // its world position is offset. But createStaticBody just reads mesh.position (local)
-    // unless we pass world coords. Wait, src/physics.js createStaticBody does:
-    // transform.setOrigin(new AmmoInstance.btVector3(mesh.position.x, mesh.position.y, mesh.position.z));
-    // It assumes `mesh.position` is world space. So we must pass an object that is in world space.
-
-    // Let's create an invisible dummy Mesh directly in the scene, just for physics.
-    const dummyGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-    const dummyMat = new THREE.MeshBasicMaterial({ visible: false });
-    const physMesh = new THREE.Mesh(dummyGeo, dummyMat);
-
-    // Set physMesh world position to the center of the miniature.
-    physMesh.position.set(position.x, position.y + totalHeight / 2, position.z);
-    physMesh.rotation.y = rotationY;
-    scene.add(physMesh);
-
-    createStaticBody(physicsWorld, physMesh, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius));
+    
+        // Wait, the group's position is the *bottom* of the miniature.
+        // Ammo's createStaticBody sets the physics body's origin to the group's position.
+        // A btCylinderShape is centered at its origin. So if we attach it to the group,
+        // the physics cylinder will be centered at -2.75, and extending down into the table!
+        // Let's create a dummy mesh at the center of the miniature for physics, or adjust.
+        // Since createStaticBody expects a mesh/group to grab position/quaternion, we can create
+        // an invisible dummy mesh inside the group, but wait, if it's inside the group,
+        // its world position is offset. But createStaticBody just reads mesh.position (local)
+        // unless we pass world coords. Wait, src/physics.js createStaticBody does:
+        // transform.setOrigin(new AmmoInstance.btVector3(mesh.position.x, mesh.position.y, mesh.position.z));
+        // It assumes `mesh.position` is world space. So we must pass an object that is in world space.
+    
+        // Let's create an invisible dummy Mesh directly in the scene, just for physics.
+        const dummyGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+        const dummyMat = new THREE.MeshBasicMaterial({ visible: false });
+        const physMesh = new THREE.Mesh(dummyGeo, dummyMat);
+    
+        // Set physMesh world position to the center of the miniature.
+        physMesh.position.set(position.x, position.y + totalHeight / 2, position.z);
+        physMesh.rotation.y = rotationY;
+        scene.add(physMesh);
+    
+        createStaticBody(physicsWorld, physMesh, shape);
+    }
 }

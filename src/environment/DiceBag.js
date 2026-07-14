@@ -65,51 +65,53 @@ export function createDiceBag(scene, physicsWorld, position = { x: -10, y: -1.95
     if (ammo) {
         // Approximate with a Cylinder or Sphere
         // Sphere is easier for dice to roll off
-        const shape = new ammo.btSphereShape(radius);
-        // Note: Physics shape origin is center of mass.
-        // Our visual mesh center is at Y=0.8 (local).
-        // The group is at Y=-2.75.
-        // If we make a static body for the Group, the shape is centered at Group origin.
-        // So the sphere will be centered at -2.75.
-        // But our visual sphere is centered at -2.75 + 0.8 = -1.95.
-        // We need to offset the shape or the body?
-        // createStaticBody uses mesh.position.
-        // If we pass 'group', it uses group.position (-6, -2.75, 2).
-        // The shape will be centered there.
-        // The visual sphere center is at Y=0.8 relative to that.
-        // So the physics sphere will be at the bottom of the visual sphere.
-        // That means the visual sphere will float above the physics sphere?
-        // No, visual is UP. Physics is DOWN.
-        // Visual starts at 0 (bottom) goes to 1.6.
-        // Physics sphere (radius 1) goes from -1 to 1.
-        // We want physics sphere to match visual.
-        // Physics center should be at local Y=0.8.
-
-        // createStaticBody implementation:
-        // transform.setOrigin(mesh.position)
-        // It doesn't support offset shape.
-
-        // We can use a Compound Shape or just create the body on the bodyMesh instead of the group?
-        // If we use bodyMesh, we need its world position.
-        // bodyMesh.position is local (0, 0.8, 0).
-        // World position is group.position + local.
-        // But createStaticBody reads mesh.position. If mesh is child, mesh.position is local.
-        // We should calculate world position.
-
-        // Let's use a workaround: Create a hidden mesh for physics that is centered correctly.
-        // Or just adjust the group so center is at center of mass.
-
-        // Let's adjust group.
-        // Shift visuals so center is 0.
-        bodyMesh.position.y = 0; // Center at 0.
-        neckMesh.position.y = 0.7;
-        stringMesh.position.y = 0.7;
-
-        // Visual bottom is now at -0.8.
-        // To sit on table (-2.75), Group Y must be -2.75 + 0.8 = -1.95.
-        group.position.set(position.x, -1.95, position.z);
-
-        createStaticBody(physicsWorld, group, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btSphereShape(radius);
+            // Note: Physics shape origin is center of mass.
+            // Our visual mesh center is at Y=0.8 (local).
+            // The group is at Y=-2.75.
+            // If we make a static body for the Group, the shape is centered at Group origin.
+            // So the sphere will be centered at -2.75.
+            // But our visual sphere is centered at -2.75 + 0.8 = -1.95.
+            // We need to offset the shape or the body?
+            // createStaticBody uses mesh.position.
+            // If we pass 'group', it uses group.position (-6, -2.75, 2).
+            // The shape will be centered there.
+            // The visual sphere center is at Y=0.8 relative to that.
+            // So the physics sphere will be at the bottom of the visual sphere.
+            // That means the visual sphere will float above the physics sphere?
+            // No, visual is UP. Physics is DOWN.
+            // Visual starts at 0 (bottom) goes to 1.6.
+            // Physics sphere (radius 1) goes from -1 to 1.
+            // We want physics sphere to match visual.
+            // Physics center should be at local Y=0.8.
+    
+            // createStaticBody implementation:
+            // transform.setOrigin(mesh.position)
+            // It doesn't support offset shape.
+    
+            // We can use a Compound Shape or just create the body on the bodyMesh instead of the group?
+            // If we use bodyMesh, we need its world position.
+            // bodyMesh.position is local (0, 0.8, 0).
+            // World position is group.position + local.
+            // But createStaticBody reads mesh.position. If mesh is child, mesh.position is local.
+            // We should calculate world position.
+    
+            // Let's use a workaround: Create a hidden mesh for physics that is centered correctly.
+            // Or just adjust the group so center is at center of mass.
+    
+            // Let's adjust group.
+            // Shift visuals so center is 0.
+            bodyMesh.position.y = 0; // Center at 0.
+            neckMesh.position.y = 0.7;
+            stringMesh.position.y = 0.7;
+    
+            // Visual bottom is now at -0.8.
+            // To sit on table (-2.75), Group Y must be -2.75 + 0.8 = -1.95.
+            group.position.set(position.x, -1.95, position.z);
+    
+            createStaticBody(physicsWorld, group, shape);
+        }
     }
 
     return group;

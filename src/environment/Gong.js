@@ -119,18 +119,20 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
     scene.add(group);
 
     // --- Physics ---
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const ammo = getAmmo();
         
         // Box shape for the wooden frame
-        const frameShape = new ammo.btBoxShape(new ammo.btVector3(baseWidth / 2, postHeight / 2, baseDepth / 2));
-        const framePhysMesh = new THREE.Mesh(
-            new THREE.BoxGeometry(baseWidth, postHeight, baseDepth),
-            new THREE.MeshBasicMaterial({ visible: false })
-        );
-        framePhysMesh.position.set(position.x, position.y + baseHeight / 2, position.z);
-        scene.add(framePhysMesh);
-        createStaticBody(physicsWorld, framePhysMesh, frameShape);
+        if (ammo && physicsWorld) {
+            const frameShape = new ammo.btBoxShape(new ammo.btVector3(baseWidth / 2, postHeight / 2, baseDepth / 2));
+            const framePhysMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(baseWidth, postHeight, baseDepth),
+                new THREE.MeshBasicMaterial({ visible: false })
+            );
+            framePhysMesh.position.set(position.x, position.y + baseHeight / 2, position.z);
+            scene.add(framePhysMesh);
+            createStaticBody(physicsWorld, framePhysMesh, frameShape);
+        }
 
         // Cylinder shape for the gong disc
         const gongPhysMesh = new THREE.Mesh(
@@ -141,8 +143,10 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
         gongPhysMesh.rotation.z = Math.PI / 2;
         scene.add(gongPhysMesh);
         
-        const gongShape = new ammo.btCylinderShape(new ammo.btVector3(gongRadius, gongThickness / 2, gongRadius));
-        createStaticBody(physicsWorld, gongPhysMesh, gongShape);
+        if (ammo && physicsWorld) {
+            const gongShape = new ammo.btCylinderShape(new ammo.btVector3(gongRadius, gongThickness / 2, gongRadius));
+            createStaticBody(physicsWorld, gongPhysMesh, gongShape);
+        }
     }
 
     // --- Interactive Effects ---

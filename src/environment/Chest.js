@@ -208,7 +208,7 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     scene.add(group);
 
     // ========== PHYSICS ==========
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const ammo = getAmmo();
         // Static Box Shape enclosing base + lid
         // Total Height = baseHeight + lidRadius (0.8 + 0.5 = 1.3).
@@ -216,16 +216,18 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
         // Group Origin is at bottom of chest.
 
         const totalHeight = baseHeight + lidRadius;
-        const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, totalHeight/2, depth/2));
-
-        // Create a proxy object for physics positioning (center of mass)
-        const proxy = new THREE.Object3D();
-        const offset = new THREE.Vector3(0, totalHeight/2, 0);
-
-        proxy.position.copy(group.position).add(offset);
-        proxy.quaternion.copy(group.quaternion);
-
-        createStaticBody(physicsWorld, proxy, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, totalHeight/2, depth/2));
+    
+            // Create a proxy object for physics positioning (center of mass)
+            const proxy = new THREE.Object3D();
+            const offset = new THREE.Vector3(0, totalHeight/2, 0);
+    
+            proxy.position.copy(group.position).add(offset);
+            proxy.quaternion.copy(group.quaternion);
+    
+            createStaticBody(physicsWorld, proxy, shape);
+        }
     }
 
     // ========== ANIMATION ==========

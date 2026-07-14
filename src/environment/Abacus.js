@@ -120,17 +120,19 @@ export function createAbacus(scene, physicsWorld, position = { x: -3, y: -2.75, 
     scene.add(group);
 
     // Physics
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         // Simple bounding box for the whole abacus
-        const shape = new ammo.btBoxShape(new ammo.btVector3(frameWidth / 2, frameHeight / 2, frameThickness / 2));
-
-        // createStaticBody uses group.position and group.quaternion
-        // Wait, the bounding box was built assuming the abacus is standing up.
-        // btBoxShape dimensions match the visual dimensions before the group rotation.
-        // Because the physics body uses the group's quaternion, it will rotate the box.
-        // So the dimensions (frameWidth/2, frameHeight/2, frameThickness/2) correspond to X, Y, Z.
-        // This is correct since we applied the rotation to the group.
-        createStaticBody(physicsWorld, group, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btBoxShape(new ammo.btVector3(frameWidth / 2, frameHeight / 2, frameThickness / 2));
+    
+            // createStaticBody uses group.position and group.quaternion
+            // Wait, the bounding box was built assuming the abacus is standing up.
+            // btBoxShape dimensions match the visual dimensions before the group rotation.
+            // Because the physics body uses the group's quaternion, it will rotate the box.
+            // So the dimensions (frameWidth/2, frameHeight/2, frameThickness/2) correspond to X, Y, Z.
+            // This is correct since we applied the rotation to the group.
+            createStaticBody(physicsWorld, group, shape);
+        }
     }
 
     return {

@@ -81,8 +81,10 @@ export function createParchment(scene, physicsWorld, options = {}) {
     scene.add(mesh);
     options.track?.(mesh);
 
-    const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, depth / 2));
-    createStaticBody(physicsWorld, mesh, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, depth / 2));
+        createStaticBody(physicsWorld, mesh, shape);
+    }
 }
 
 function generateTarotTexture(name, number, color) {
@@ -167,7 +169,9 @@ export function createTarotCards(scene, physicsWorld, options = {}) {
         mesh.rotation.y = (randomUnit(options) - 0.5) * 0.5;
 
         group.add(mesh);
-        createStaticBody(physicsWorld, mesh, new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, height / 2)));
+        if (ammo && physicsWorld) {
+            createStaticBody(physicsWorld, mesh, new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, height / 2)));
+        }
     });
 
     scene.add(group);
@@ -245,8 +249,10 @@ export function createWantedPoster(scene, physicsWorld, options = {}) {
     scene.add(mesh);
     options.track?.(mesh);
 
-    const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, height / 2));
-    createStaticBody(physicsWorld, mesh, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, height / 2));
+        createStaticBody(physicsWorld, mesh, shape);
+    }
 }
 
 function generateDMChartsTexture() {
@@ -329,8 +335,10 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
     scene.add(centerMesh);
     options.track?.(centerMesh);
 
-    const centerShape = new ammo.btBoxShape(new ammo.btVector3(centerWidth / 2, height / 2, thickness / 2));
-    createStaticBody(physicsWorld, centerMesh, centerShape);
+    if (ammo && physicsWorld) {
+        const centerShape = new ammo.btBoxShape(new ammo.btVector3(centerWidth / 2, height / 2, thickness / 2));
+        createStaticBody(physicsWorld, centerMesh, centerShape);
+    }
 
     const angleRad = Math.PI / 6;
 
@@ -342,8 +350,10 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
     scene.add(leftWingMesh);
     options.track?.(leftWingMesh);
 
-    const leftShape = new ammo.btBoxShape(new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2));
-    createStaticBody(physicsWorld, leftWingMesh, leftShape);
+    if (ammo && physicsWorld) {
+        const leftShape = new ammo.btBoxShape(new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2));
+        createStaticBody(physicsWorld, leftWingMesh, leftShape);
+    }
 
     const rightWingMesh = new THREE.Mesh(wingGeo, materials);
     rightWingMesh.rotation.y = -angleRad;
@@ -353,6 +363,8 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
     scene.add(rightWingMesh);
     options.track?.(rightWingMesh);
 
-    const rightShape = new ammo.btBoxShape(new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2));
-    createStaticBody(physicsWorld, rightWingMesh, rightShape);
+    if (ammo && physicsWorld) {
+        const rightShape = new ammo.btBoxShape(new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2));
+        createStaticBody(physicsWorld, rightWingMesh, rightShape);
+    }
 }

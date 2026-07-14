@@ -64,13 +64,15 @@ export function createCheeseWheel(scene, physicsWorld, position = { x: 12, y: -2
     scene.add(group);
 
     // Physics
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const ammo = getAmmo();
         // Approximate with a full cylinder shape for physics
         // btCylinderShape expects a vector of half-extents.
         // For a cylinder along Y axis, the half-extents are (radius, height/2, radius).
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
-        createStaticBody(physicsWorld, group, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
+            createStaticBody(physicsWorld, group, shape);
+        }
     }
 
     return { group };

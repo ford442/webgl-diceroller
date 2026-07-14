@@ -139,20 +139,22 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
     scene.add(group);
 
     // --- Physics ---
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const ammo = getAmmo();
         
         // Cylinder shape for the pedestal
-        const pedestalShape = new ammo.btCylinderShape(
-            new ammo.btVector3(pedestalBaseRadius, pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight, pedestalBaseRadius)
-        );
-        const pedestalPhysMesh = new THREE.Mesh(
-            new THREE.CylinderGeometry(pedestalBaseRadius, pedestalBaseRadius, pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight, 16),
-            new THREE.MeshBasicMaterial({ visible: false })
-        );
-        pedestalPhysMesh.position.set(position.x, position.y + (pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight) / 2, position.z);
-        scene.add(pedestalPhysMesh);
-        createStaticBody(physicsWorld, pedestalPhysMesh, pedestalShape);
+        if (ammo && physicsWorld) {
+            const pedestalShape = new ammo.btCylinderShape(
+                new ammo.btVector3(pedestalBaseRadius, pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight, pedestalBaseRadius)
+            );
+            const pedestalPhysMesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(pedestalBaseRadius, pedestalBaseRadius, pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight, 16),
+                new THREE.MeshBasicMaterial({ visible: false })
+            );
+            pedestalPhysMesh.position.set(position.x, position.y + (pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight) / 2, position.z);
+            scene.add(pedestalPhysMesh);
+            createStaticBody(physicsWorld, pedestalPhysMesh, pedestalShape);
+        }
     }
 
     // --- State ---

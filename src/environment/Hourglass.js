@@ -127,10 +127,12 @@ export function createHourglass(scene, physicsWorld, position = { x: -12, y: -1.
     scene.add(group);
 
     // Physics
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const ammo = getAmmo();
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
-        createStaticBody(physicsWorld, group, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
+            createStaticBody(physicsWorld, group, shape);
+        }
     }
 
     return group;
