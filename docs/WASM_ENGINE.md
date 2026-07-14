@@ -429,14 +429,17 @@ const t2 = window.getWasmEngine().getTransforms();
 - [x] COOP/COEP on dev **and** preview servers.
 - [x] `scripts/verify-worker-physics.mjs` (Playwright) — asserts worker default,
       SAB transport, synchronous ids, and worker-driven gravity stepping.
+- [x] `scripts/verify-worker-replay.mjs` (Playwright) — asserts `seededPhysicsThrow`
+      replay determinism on the worker path and async `serializePhysicsState()`.
 - [x] Fixed a latent bug in the experimental worker that transferred the WASM
       heap buffer (`getTransforms().buffer`), which would detach module memory.
 
 #### Known limitations / follow-ups
 
-- `serializeState()` / `randomFloat()` are not available synchronously across the
-  worker boundary, so deterministic `replayRoll()` falls back to the in-process
-  path. A request/response round-trip could restore them if needed.
+- `randomFloat()` is not available synchronously across the worker boundary;
+  deterministic rolls use the `seededThrow` worker command (via `seededPhysicsThrow`)
+  so RNG draws and impulses stay ordered in the worker. `serializePhysicsState()`
+  is async on the worker path (request/response with a transferred `ArrayBuffer`).
 - `applyDiceMassBiases()` posts one `applyTorqueImpulse` message per mass-biased
   die per frame; batching into a single message would cut chatter at high counts.
 - URL-driven engine flags (`?no-drag`, etc.) are parsed on the main thread in

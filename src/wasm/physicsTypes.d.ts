@@ -50,6 +50,7 @@ export interface PhysicsBridgeModule {
     pollCollisionEvents(): CollisionEvent[];
     seedPhysicsRNG(seed: number): void;
     randomPhysicsFloat(): number;
-    serializePhysicsState(): Uint8Array;
+    serializePhysicsState(): Promise<Uint8Array>;
+    seededPhysicsThrow(seed: number, dice: { id: number; index: number }[], tableSurfaceY: number): void;
     deserializePhysicsState(data: Uint8Array): void;
 }

@@ -63,6 +63,8 @@ export const pollCollisionEvents = () => active.pollCollisionEvents();
 export const seedPhysicsRNG = (seed) => active.seedPhysicsRNG(seed);
 export const randomPhysicsFloat = () => active.randomPhysicsFloat();
 export const serializePhysicsState = () => active.serializePhysicsState();
+export const seededPhysicsThrow = (seed, dice, tableSurfaceY) =>
+    active.seededPhysicsThrow(seed, dice, tableSurfaceY);
 export const deserializePhysicsState = (data) => active.deserializePhysicsState(data);
 
 /** True when the worker backend is live and using SharedArrayBuffer transport. */

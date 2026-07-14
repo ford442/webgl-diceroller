@@ -14,8 +14,10 @@ import {
 } from './physics.js';
 import {
     getWasmEngine, isWasmAvailable, isWasmInitialized,
-    loadHullForDie, pollCollisionEvents, seedPhysicsRNG, randomPhysicsFloat
+    loadHullForDie, pollCollisionEvents, seedPhysicsRNG, randomPhysicsFloat,
+    seededPhysicsThrow, isUsingWorkerPhysics,
 } from './wasm/PhysicsBridge.js';
+import { computeSeededThrowParams, applyThrowParams } from './wasm/seededThrowParams.js';
 import { TABLE_SURFACE_Y } from './core/SceneMetrics.js';
 const searchParams = new URLSearchParams(window.location.search);
 const WASM_TRANSFORM_STRIDE = 7;
@@ -1034,10 +1036,29 @@ export const throwDice = (scene, world, seed = null) => {
     const engine = isUsingWasmPhysics() ? getWasmEngine() : null;
 
     const useDeterministic = seed !== null && isUsingWasmPhysics();
-    if (useDeterministic) {
+    const wasmDice = engine
+        ? spawnedDice
+            .map((die, index) => ({ id: die.wasmId, index }))
+            .filter((d) => d.id != null)
+        : [];
+
+    let paramsById = null;
+    const workerThrow = useDeterministic && isUsingWorkerPhysics();
+
+    if (workerThrow) {
+        seededPhysicsThrow(seed, wasmDice, TABLE_SURFACE_Y);
+        paramsById = new Map(
+            computeSeededThrowParams(createSeededRng(seed), wasmDice, TABLE_SURFACE_Y)
+                .map((p) => [p.id, p])
+        );
+    } else if (useDeterministic && engine) {
         seedPhysicsRNG(seed);
+        const params = computeSeededThrowParams(() => randomPhysicsFloat(), wasmDice, TABLE_SURFACE_Y);
+        applyThrowParams(engine, params);
+        paramsById = new Map(params.map((p) => [p.id, p]));
     }
-    const rand = () => useDeterministic ? randomPhysicsFloat() : getSecureRandom();
+
+    const rand = () => (useDeterministic ? randomPhysicsFloat() : getSecureRandom());
 
     spawnedDice.forEach((die, index) => {
         const body = die.body;
@@ -1050,26 +1071,45 @@ export const throwDice = (scene, world, seed = null) => {
             Ammo.destroy(zeroVec);
         }
 
-        // Group them near the top center for the throw
-        const x = (rand() - 0.5) * 4;
-        const y = TABLE_SURFACE_Y + 6.75 + (index * 0.5);
-        const z = (rand() - 0.5) * 4;
+        let x;
+        let y;
+        let z;
+        let q;
+        let forceX;
+        let forceY;
+        let forceZ;
+        let spinX;
+        let spinY;
+        let spinZ;
 
-        // Random starting orientation
-        const q = new THREE.Quaternion();
-        q.setFromEuler(new THREE.Euler(
-            rand() * Math.PI * 2,
-            rand() * Math.PI * 2,
-            rand() * Math.PI * 2
-        ));
+        const preset = paramsById?.get(die.wasmId);
+        if (paramsById) {
+            if (!preset) return;
+            ({ x, y, z, forceX, forceY, forceZ, spinX, spinY, spinZ } = preset);
+            q = new THREE.Quaternion(preset.qx, preset.qy, preset.qz, preset.qw);
+        } else {
+            x = (rand() - 0.5) * 4;
+            y = TABLE_SURFACE_Y + 6.75 + (index * 0.5);
+            z = (rand() - 0.5) * 4;
+            q = new THREE.Quaternion();
+            q.setFromEuler(new THREE.Euler(
+                rand() * Math.PI * 2,
+                rand() * Math.PI * 2,
+                rand() * Math.PI * 2
+            ));
+            forceX = (rand() - 0.5) * 25;
+            forceY = rand() * 10 - 5;
+            forceZ = (rand() - 0.5) * 25;
+            spinX = (rand() - 0.5) * 100;
+            spinY = (rand() - 0.5) * 100;
+            spinZ = (rand() - 0.5) * 100;
 
-        if (engine && die.wasmId != null) {
-            engine.setDieTransform(
-                die.wasmId,
-                x, y, z,
-                q.x, q.y, q.z, q.w
-            );
-            engine.setDieVelocity(die.wasmId, 0, 0, 0, 0, 0, 0);
+            if (engine && die.wasmId != null) {
+                engine.setDieTransform(die.wasmId, x, y, z, q.x, q.y, q.z, q.w);
+                engine.setDieVelocity(die.wasmId, 0, 0, 0, 0, 0, 0);
+                engine.applyImpulse(die.wasmId, forceX, forceY, forceZ);
+                engine.applyTorqueImpulse(die.wasmId, spinX, spinY, spinZ);
+            }
         }
 
         if (body && transform && Ammo) {
@@ -1092,14 +1132,6 @@ export const throwDice = (scene, world, seed = null) => {
             body.getMotionState().setWorldTransform(transform);
             body.activate();
 
-            const forceX = (rand() - 0.5) * 25;
-            const forceY = (rand()) * 10 - 5;
-            const forceZ = (rand() - 0.5) * 25;
-
-            const spinX = (rand() - 0.5) * 100;
-            const spinY = (rand() - 0.5) * 100;
-            const spinZ = (rand() - 0.5) * 100;
-
             const impulse = new Ammo.btVector3(forceX, forceY, forceZ);
             body.applyCentralImpulse(impulse);
             Ammo.destroy(impulse);
@@ -1107,25 +1139,6 @@ export const throwDice = (scene, world, seed = null) => {
             const torque = new Ammo.btVector3(spinX, spinY, spinZ);
             body.applyTorqueImpulse(torque);
             Ammo.destroy(torque);
-
-            if (engine && die.wasmId != null) {
-                engine.applyImpulse(die.wasmId, forceX, forceY, forceZ);
-                engine.applyTorqueImpulse(die.wasmId, spinX, spinY, spinZ);
-            }
-            return;
-        }
-
-        const forceX = (rand() - 0.5) * 25;
-        const forceY = (rand()) * 10 - 5;
-        const forceZ = (rand() - 0.5) * 25;
-
-        const spinX = (rand() - 0.5) * 100;
-        const spinY = (rand() - 0.5) * 100;
-        const spinZ = (rand() - 0.5) * 100;
-
-        if (engine && die.wasmId != null) {
-            engine.applyImpulse(die.wasmId, forceX, forceY, forceZ);
-            engine.applyTorqueImpulse(die.wasmId, spinX, spinY, spinZ);
         }
     });
 

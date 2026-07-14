@@ -27,6 +27,7 @@ import {
     MAX_DICE, STRIDE, HEADER_INTS, H_SEQNO, H_FRONT, H_COUNT, H_SETTLED,
     idsOffset, xfOffset,
 } from './workerLayout.js';
+import { computeSeededThrowParams, applyThrowParams } from './seededThrowParams.js';
 
 const FIXED_DT = 1 / 120;          // worker simulates at 120 Hz
 const STEP_MS = 1000 * FIXED_DT;
@@ -242,6 +243,28 @@ function handle(type, payload) {
         case 'seedRNG':
             engine.seedRNG(payload.seed);
             break;
+        case 'serializeState': {
+            const vec = engine.serializeState();
+            const arr = new Uint8Array(vec.size());
+            for (let i = 0; i < vec.size(); i++) arr[i] = vec.get(i);
+            if (typeof vec.delete === 'function') vec.delete();
+            self.postMessage(
+                { type: 'response', payload: { reqId: payload.reqId, byteLength: arr.byteLength, data: arr.buffer } },
+                [arr.buffer]
+            );
+            break;
+        }
+        case 'seededThrow': {
+            engine.seedRNG(payload.seed >>> 0);
+            const params = computeSeededThrowParams(
+                () => engine.randomFloat(),
+                payload.dice,
+                payload.tableSurfaceY
+            );
+            applyThrowParams(engine, params);
+            publish();
+            break;
+        }
         case 'deserializeState': {
             const vec = new Module.VectorU8();
             for (const b of payload.data) vec.push_back(b);
