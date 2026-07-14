@@ -42,14 +42,16 @@ export function createHorseshoe(scene, physicsWorld, position = { x: 0, y: 0, z:
     // Box dimensions: x, y, z. We need half-extents for btBoxShape.
     if (ammo && physicsWorld) {
         const halfExtents = new ammo.btVector3(1.0, 0.15, 1.0);
-        const shape = new ammo.btBoxShape(halfExtents);
-
-        // createStaticBody expects a mesh/object with position and quaternion
-        const dummy = new THREE.Object3D();
-        dummy.position.copy(group.position);
-        dummy.quaternion.copy(group.quaternion);
-
-        createStaticBody(physicsWorld, dummy, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btBoxShape(halfExtents);
+    
+            // createStaticBody expects a mesh/object with position and quaternion
+            const dummy = new THREE.Object3D();
+            dummy.position.copy(group.position);
+            dummy.quaternion.copy(group.quaternion);
+    
+            createStaticBody(physicsWorld, dummy, shape);
+        }
 
         // Clean up Ammo memory for vector
         ammo.destroy(halfExtents);

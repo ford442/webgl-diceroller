@@ -18,7 +18,7 @@ export async function run() {
     const ok = await loadWasmEngine();
     if (!ok || !isWasmAvailable()) return { ok: false, reason: 'WASM not available' };
     const e = getWasmEngine();
-    const methods = ['addDie','setDieTransform','setDieVelocity','applyImpulse',
+    const methods = ['addDie','setDieTransform','setDieVelocity','setDieKinematic','applyImpulse',
         'applyTorqueImpulse','getTransforms','getDieIds','getCollisionEvents','step'];
     const missing = methods.filter((m) => typeof e[m] !== 'function');
     if (missing.length) return { ok: false, reason: 'missing methods: ' + missing.join(',') };

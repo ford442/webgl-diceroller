@@ -86,7 +86,7 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
 
     // Physics
     // Simple Box Collider for the whole chair approx
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const Ammo = getAmmo();
         const transform = new Ammo.btTransform();
         transform.setIdentity();

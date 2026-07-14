@@ -187,6 +187,8 @@ export function createBattleAxe(scene, physicsWorld, position = { x: 15, y: -6, 
 
     // Now create physics
     const Ammo = getAmmo();
-    const physicsShape = new Ammo.btCylinderShape(new Ammo.btVector3(handleRad, handleLen/2, handleRad));
-    createStaticBody(physicsWorld, group, physicsShape);
+    if (Ammo && physicsWorld) {
+        const physicsShape = new Ammo.btCylinderShape(new Ammo.btVector3(handleRad, handleLen/2, handleRad));
+        createStaticBody(physicsWorld, group, physicsShape);
+    }
 }

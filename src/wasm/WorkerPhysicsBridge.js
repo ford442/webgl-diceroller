@@ -252,6 +252,9 @@ class WorkerEngineProxy {
     setDieVelocity(id, lvx, lvy, lvz, avx, avy, avz) {
         this._enqueue(OP.SET_VELOCITY, id, lvx, lvy, lvz, avx, avy, avz);
     }
+    setDieKinematic(id, kinematic) {
+        this._send('setDieKinematic', { id, kinematic });
+    }
 
     // --- simulation --------------------------------------------------------
     step() { /* worker-driven */ }

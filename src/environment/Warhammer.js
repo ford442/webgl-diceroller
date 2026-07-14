@@ -75,33 +75,23 @@ export function createWarhammer(scene, physicsWorld, position, rotationAngle) {
 
     // --- Ammo.js Physics ---
     const Ammo = getAmmo();
-    const transform = new Ammo.btTransform();
-    transform.setIdentity();
+    let body = null;
+    if (Ammo && physicsWorld) {
+        const transform = new Ammo.btTransform();
+        transform.setIdentity();
 
-    // Collider uses a slightly simplified convex hull / compound shape
-    // to match the visual geometry while keeping Ammo.js performance reasonable.
-    // Visual mesh uses full PBR materials.
-    // For simplicity, we can use a btCompoundShape or just a single box that covers it all.
-    // Total length: handleLength + pommel + head depth ~ 7.0
-    // Total width/height based on head: 2.5, 1.2
+        const hx = (handleLength + pommelRadius * 2) / 2;
+        const hy = headHeight / 2;
+        const hz = headDepth / 2;
 
-    // Half extents
-    const hx = (handleLength + pommelRadius * 2) / 2;
-    const hy = headHeight / 2;
-    const hz = headDepth / 2;
-
-    const shape = new Ammo.btBoxShape(new Ammo.btVector3(hx, hy, hz));
-
-    const compoundShape = new Ammo.btCompoundShape();
-
-    const localTransform = new Ammo.btTransform();
-    localTransform.setIdentity();
-    // Offset the collision shape up so its bottom touches the group's origin
-    localTransform.setOrigin(new Ammo.btVector3(0, hy, 0));
-
-    compoundShape.addChildShape(localTransform, shape);
-
-    const body = createStaticBody(physicsWorld, group, compoundShape);
+        const shape = new Ammo.btBoxShape(new Ammo.btVector3(hx, hy, hz));
+        const compoundShape = new Ammo.btCompoundShape();
+        const localTransform = new Ammo.btTransform();
+        localTransform.setIdentity();
+        localTransform.setOrigin(new Ammo.btVector3(0, hy, 0));
+        compoundShape.addChildShape(localTransform, shape);
+        body = createStaticBody(physicsWorld, group, compoundShape);
+    }
 
     return {
         group,

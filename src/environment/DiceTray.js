@@ -127,8 +127,10 @@ export function createDiceTray(scene, physicsWorld, position = { x: -4, y: -2.75
         floorProxy.position.copy(wPos);
         floorProxy.quaternion.copy(wQuat);
 
-        const floorShape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, floorThickness / 2, depth / 2));
-        createStaticBody(physicsWorld, floorProxy, floorShape);
+        if (Ammo && physicsWorld) {
+            const floorShape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, floorThickness / 2, depth / 2));
+            createStaticBody(physicsWorld, floorProxy, floorShape);
+        }
 
         // Helper function for walls
         const createWallPhysics = (mesh, w, h, d) => {
@@ -146,8 +148,10 @@ export function createDiceTray(scene, physicsWorld, position = { x: -4, y: -2.75
             proxy.position.copy(wp);
             proxy.quaternion.copy(wq);
 
-            const shape = new Ammo.btBoxShape(new Ammo.btVector3(w / 2, h / 2, d / 2));
-            createStaticBody(physicsWorld, proxy, shape);
+            if (Ammo && physicsWorld) {
+                const shape = new Ammo.btBoxShape(new Ammo.btVector3(w / 2, h / 2, d / 2));
+                createStaticBody(physicsWorld, proxy, shape);
+            }
             group.remove(dummy);
         };
 

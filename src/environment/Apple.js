@@ -52,17 +52,21 @@ export function createApple(scene, physicsWorld, position = { x: -3, y: -2.75, z
     // Physics
     // Using btBoxShape as it's safe and verified in the codebase
     // Half-extents for the box encompassing the apple
-    const halfExtents = new ammo.btVector3(radius, radius * 0.9 + (stemHeight / 2), radius);
-    const shape = new ammo.btBoxShape(halfExtents);
-
-    // Because the apple body sits above the group's origin (group.position is at the bottom),
-    // we need to shift the physical shape up to match the visual mass.
-    const proxyMesh = new THREE.Mesh();
-    proxyMesh.position.copy(group.position);
-    proxyMesh.position.y += radius * 0.9; // Shift center of mass up
-    proxyMesh.rotation.copy(group.rotation);
-
-    createStaticBody(physicsWorld, proxyMesh, shape);
+    if (ammo && physicsWorld) {
+        const halfExtents = new ammo.btVector3(radius, radius * 0.9 + (stemHeight / 2), radius);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btBoxShape(halfExtents);
+        
+            // Because the apple body sits above the group's origin (group.position is at the bottom),
+            // we need to shift the physical shape up to match the visual mass.
+            const proxyMesh = new THREE.Mesh();
+            proxyMesh.position.copy(group.position);
+            proxyMesh.position.y += radius * 0.9; // Shift center of mass up
+            proxyMesh.rotation.copy(group.rotation);
+        
+            createStaticBody(physicsWorld, proxyMesh, shape);
+        }
+    }
 
     return group;
 }

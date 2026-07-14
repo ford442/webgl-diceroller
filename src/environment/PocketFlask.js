@@ -87,9 +87,11 @@ export function createPocketFlask(scene, physicsWorld, position = { x: 5, y: -2.
     if (Ammo && physicsWorld) {
         // We'll use a BoxShape for the body that is centered at the group origin
         // Half extents
-        const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, height / 2, depth / 2));
-
-        createStaticBody(physicsWorld, group, shape);
+        if (Ammo && physicsWorld) {
+            const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, height / 2, depth / 2));
+    
+            createStaticBody(physicsWorld, group, shape);
+        }
     }
 
     return { group };

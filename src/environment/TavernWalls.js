@@ -53,8 +53,10 @@ export function createTavernWalls(scene, physicsWorld) {
     // Physics for floor
     const Ammo = getAmmo();
     if (Ammo) {
-        const shape = new Ammo.btBoxShape(new Ammo.btVector3(width/2, 0.5, depth/2));
-        createStaticBody(physicsWorld, floorMesh, shape);
+        if (Ammo && physicsWorld) {
+            const shape = new Ammo.btBoxShape(new Ammo.btVector3(width/2, 0.5, depth/2));
+            createStaticBody(physicsWorld, floorMesh, shape);
+        }
     }
 
     // Walls
@@ -66,7 +68,9 @@ export function createTavernWalls(scene, physicsWorld) {
     backWall.receiveShadow = true;
     roomGroup.add(backWall);
     // Physics
-    if (Ammo) createStaticBody(physicsWorld, backWall, new Ammo.btBoxShape(new Ammo.btVector3(width/2, height/2, thickness/2)));
+    if (Ammo && physicsWorld) {
+        if (Ammo) createStaticBody(physicsWorld, backWall, new Ammo.btBoxShape(new Ammo.btVector3(width/2, height/2, thickness/2)));
+    }
 
     // Front Wall (Behind Camera)
     const frontWall = new THREE.Mesh(new THREE.BoxGeometry(width, height, thickness), wallMaterial);
@@ -74,14 +78,18 @@ export function createTavernWalls(scene, physicsWorld) {
     frontWall.receiveShadow = true;
     roomGroup.add(frontWall);
     // Physics
-    if (Ammo) createStaticBody(physicsWorld, frontWall, new Ammo.btBoxShape(new Ammo.btVector3(width/2, height/2, thickness/2)));
+    if (Ammo && physicsWorld) {
+        if (Ammo) createStaticBody(physicsWorld, frontWall, new Ammo.btBoxShape(new Ammo.btVector3(width/2, height/2, thickness/2)));
+    }
 
     // Right Wall (Solid)
     const rightWall = new THREE.Mesh(new THREE.BoxGeometry(thickness, height, depth + thickness*2), wallMaterial);
     rightWall.position.set(width/2 + thickness/2, wallCenterY, 0);
     rightWall.receiveShadow = true;
     roomGroup.add(rightWall);
-    if (Ammo) createStaticBody(physicsWorld, rightWall, new Ammo.btBoxShape(new Ammo.btVector3(thickness/2, height/2, depth/2 + thickness)));
+    if (Ammo && physicsWorld) {
+        if (Ammo) createStaticBody(physicsWorld, rightWall, new Ammo.btBoxShape(new Ammo.btVector3(thickness/2, height/2, depth/2 + thickness)));
+    }
 
     // Left Wall (Windowed)
     const leftWallX = -width/2 - thickness/2;
@@ -168,8 +176,10 @@ function createCeiling(group, physicsWorld, Ammo, wallMat, woodMat, width, depth
 
     // Physics
     if (Ammo) {
-        const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, thickness / 2, depth / 2));
-        createStaticBody(physicsWorld, ceilMesh, shape);
+        if (Ammo && physicsWorld) {
+            const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, thickness / 2, depth / 2));
+            createStaticBody(physicsWorld, ceilMesh, shape);
+        }
     }
 
     // 2. Rafters (Beams)
@@ -303,8 +313,10 @@ function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight,
         dummyMesh.position.set(xPos, floorY + physHeight/2, 0);
         group.add(dummyMesh);
 
-        const shape = new Ammo.btBoxShape(new Ammo.btVector3(thickness/2, physHeight/2, physDepth/2));
-        createStaticBody(physicsWorld, dummyMesh, shape);
+        if (Ammo && physicsWorld) {
+            const shape = new Ammo.btBoxShape(new Ammo.btVector3(thickness/2, physHeight/2, physDepth/2));
+            createStaticBody(physicsWorld, dummyMesh, shape);
+        }
     }
 
     return godRayUpdate;
@@ -473,12 +485,14 @@ function createFireplace(group, physicsWorld, Ammo, wallMat) {
     // Physics
     // Simple Box Shape for the whole hearth to prevent dice entering (simplifies collision)
     if (Ammo) {
-        const shape = new Ammo.btBoxShape(new Ammo.btVector3(depthX/2, heightY/2, widthZ/2));
-        const pMesh = new THREE.Mesh(new THREE.BoxGeometry(depthX, heightY, widthZ));
-        pMesh.position.set(hX, hY, 0);
-        pMesh.visible = false;
-        group.add(pMesh);
-        createStaticBody(physicsWorld, pMesh, shape);
+        if (Ammo && physicsWorld) {
+            const shape = new Ammo.btBoxShape(new Ammo.btVector3(depthX/2, heightY/2, widthZ/2));
+            const pMesh = new THREE.Mesh(new THREE.BoxGeometry(depthX, heightY, widthZ));
+            pMesh.position.set(hX, hY, 0);
+            pMesh.visible = false;
+            group.add(pMesh);
+            createStaticBody(physicsWorld, pMesh, shape);
+        }
     }
 
     // Chimney (Visual only, high up)

@@ -104,8 +104,10 @@ export function createCrystalBall(scene, physicsWorld, position = { x: 12, y: -2
         ballPhysMesh.position.set(position.x, position.y + ballMesh.position.y, position.z);
         scene.add(ballPhysMesh);
 
-        const ballShape = new ammo.btSphereShape(ballRadius);
-        createStaticBody(physicsWorld, ballPhysMesh, ballShape);
+        if (ammo && physicsWorld) {
+            const ballShape = new ammo.btSphereShape(ballRadius);
+            createStaticBody(physicsWorld, ballPhysMesh, ballShape);
+        }
 
         // Cylinder shape for the stand base
         const standPhysMesh = new THREE.Mesh(
@@ -115,10 +117,12 @@ export function createCrystalBall(scene, physicsWorld, position = { x: 12, y: -2
         standPhysMesh.position.set(position.x, position.y + baseHeight / 2, position.z);
         scene.add(standPhysMesh);
 
-        const standShape = new ammo.btCylinderShape(
-            new ammo.btVector3(standRadiusBot, baseHeight / 2, standRadiusBot)
-        );
-        createStaticBody(physicsWorld, standPhysMesh, standShape);
+        if (ammo && physicsWorld) {
+            const standShape = new ammo.btCylinderShape(
+                new ammo.btVector3(standRadiusBot, baseHeight / 2, standRadiusBot)
+            );
+            createStaticBody(physicsWorld, standPhysMesh, standShape);
+        }
     }
 
     return group;

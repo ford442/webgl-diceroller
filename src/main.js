@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { initPhysics, stepPhysics, pollAmmoCollisionEvents } from './physics.js';
+import { initPhysics, stepPhysics, pollAmmoCollisionEvents, shouldLoadAmmoPhysics } from './physics.js';
 import { loadWasmEngine, isWasmAvailable, getWasmEngine, flushWorkerCommandBatch, getWorkerPhysicsStats } from './wasm/PhysicsBridge.js';
 import {
     updateDiceVisuals,
@@ -455,13 +455,22 @@ async function init() {
 
     // Initialize Physics — awaited here but the render loop above is already running,
     // so the browser paints every frame while WASM compiles/allocates.
+    // Initialise WASM first so we can skip the ~300 KB gzipped ammo chunk when
+    // the custom engine is authoritative (default path).
+    const wasmAvailable = await loadWasmEngine();
+    if (wasmAvailable) {
+        const eng = getWasmEngine();
+        eng.init(-15.0, -2.75, 18.0, 18.0);
+        console.log('[WasmPhysics] Engine initialized and ready.');
+    }
+
+    const requireAmmo = shouldLoadAmmoPhysics(wasmAvailable);
     try {
-        physicsWorld = await initPhysics();
+        physicsWorld = await initPhysics({ requireAmmo });
     } catch (e) {
         console.error("Failed to initialize physics", e);
         const loadingText = document.getElementById('loading-text');
         if (loadingText) loadingText.textContent = "Error: Physics failed to load. Check console.";
-        // Fade out overlay after a short delay so the user isn't stuck on a blank screen
         setTimeout(() => {
             const overlay = document.getElementById('loading-overlay');
             if (overlay) {
@@ -473,16 +482,9 @@ async function init() {
         return;
     }
 
-    // Load WASM physics engine in parallel (non-blocking — falls back to a
-    // no-op stub when the binary is not yet compiled).
-    loadWasmEngine().then((available) => {
-        if (available) {
-            const eng = getWasmEngine();
-            eng.init(-15.0, -2.75, 18.0, 18.0);
-            syncAllDiceToWasm();
-            console.log('[WasmPhysics] Engine initialized and ready.');
-        }
-    });
+    if (wasmAvailable) {
+        syncAllDiceToWasm();
+    }
 
     // Camera controller (focus state + FPS movement)
     cameraController = createCameraController(camera);

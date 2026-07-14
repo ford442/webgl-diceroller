@@ -134,8 +134,10 @@ export function createShield(scene, physicsWorld, position = { x: 16, y: 10, z: 
     // This matches.
 
     const Ammo = getAmmo();
-    const shape = new Ammo.btBoxShape(new Ammo.btVector3(radius, radius, thickness/2 + 0.1)); // Extra depth for rim/boss
-    createStaticBody(physicsWorld, group, shape);
+    if (Ammo && physicsWorld) {
+        const shape = new Ammo.btBoxShape(new Ammo.btVector3(radius, radius, thickness/2 + 0.1)); // Extra depth for rim/boss
+        createStaticBody(physicsWorld, group, shape);
+    }
 }
 
 function createShieldTexture() {

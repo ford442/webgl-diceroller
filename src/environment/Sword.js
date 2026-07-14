@@ -72,14 +72,16 @@ export function createSword(scene, physicsWorld, position = { x: -8, y: -2.45, z
 
     // Physics (Static Box)
     // Create a simple box hull for collision
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const Ammo = getAmmo();
 
         // Size: Roughly 16 units long, 4.0 wide (x), 0.6 high (y)
         // Half extents
-        const shape = new Ammo.btBoxShape(new Ammo.btVector3(2.0, 0.3, 8.0));
-
-        createStaticBody(physicsWorld, group, shape);
+        if (Ammo && physicsWorld) {
+            const shape = new Ammo.btBoxShape(new Ammo.btVector3(2.0, 0.3, 8.0));
+    
+            createStaticBody(physicsWorld, group, shape);
+        }
     }
 
     return group;

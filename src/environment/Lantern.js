@@ -163,8 +163,10 @@ export function createLantern(scene, physicsWorld, position = { x: -8, y: -2.75,
     // Group Y = -2.75 + halfHeight
     group.position.set(position.x, position.y + halfHeight, position.z);
 
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(bodyRadiusTop + 0.05, halfHeight, bodyRadiusTop + 0.05));
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(bodyRadiusTop + 0.05, halfHeight, bodyRadiusTop + 0.05));
+        createStaticBody(physicsWorld, group, shape);
+    }
 
     // Flicker update function
     const update = (time) => {

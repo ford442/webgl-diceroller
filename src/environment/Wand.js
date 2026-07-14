@@ -102,11 +102,13 @@ export function createWand(scene, physicsWorld, position = { x: 8, y: -2.70, z: 
 
     // Physics
     // CylinderShape is Y-axis aligned by default. The group rotation will orient it horizontally.
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(0.05, totalLen / 2, 0.05));
-
-    // We adjust the physics body to perfectly overlap the visual meshes by centering the body.
-    // The visual center of mass is around Y=0 in the group's local space.
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(0.05, totalLen / 2, 0.05));
+    
+        // We adjust the physics body to perfectly overlap the visual meshes by centering the body.
+        // The visual center of mass is around Y=0 in the group's local space.
+        createStaticBody(physicsWorld, group, shape);
+    }
 
     return { group, toggleGlow };
 }

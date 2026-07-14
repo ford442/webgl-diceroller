@@ -91,25 +91,22 @@ export function createAleKeg(scene, physicsWorld, position, rotationY) {
 
     // Physics
     const Ammo = getAmmo();
-    // Ammo.btCylinderShape expects half-extents. We use the middle radius for bounding
-    const halfExtents = new Ammo.btVector3(radiusMiddle, height / 2, radiusMiddle);
-    const shape = new Ammo.btCylinderShape(halfExtents);
+    let body = null;
+    if (Ammo && physicsWorld) {
+        const halfExtents = new Ammo.btVector3(radiusMiddle, height / 2, radiusMiddle);
+        const shape = new Ammo.btCylinderShape(halfExtents);
 
-    // Create static body centered on the group (needs to be offset by height/2 since we shifted the mesh)
-    // Wait, the group's origin is at the bottom, so we'll offset the body internally if possible,
-    // or just set the group position to the center. Let's adjust group to be centered.
-    group.position.y += height / 2;
-    barrelMesh.position.y = 0;
-    bandOffsets.forEach((yOffset, i) => {
-        group.children[i + 1].position.y = yOffset; // band meshes
-    });
-    spigotGroup.position.y -= height / 2; // adjust relative to new center
-    spigotGroup.position.y += height * 0.2; // back to tap position
+        group.position.y += height / 2;
+        barrelMesh.position.y = 0;
+        bandOffsets.forEach((yOffset, i) => {
+            group.children[i + 1].position.y = yOffset;
+        });
+        spigotGroup.position.y -= height / 2;
+        spigotGroup.position.y += height * 0.2;
 
-    const body = createStaticBody(physicsWorld, group, shape);
-
-    // Cleanup
-    Ammo.destroy(halfExtents);
+        body = createStaticBody(physicsWorld, group, shape);
+        Ammo.destroy(halfExtents);
+    }
 
     return { group, body };
 }

@@ -90,8 +90,10 @@ function createTankard(scene, physicsWorld, ammo, basePosition, baseRotation) {
     scene.add(group);
 
     // Physics
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height/2, radius));
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height/2, radius));
+        createStaticBody(physicsWorld, group, shape);
+    }
 }
 
 function createFoodPlate(scene, physicsWorld, ammo, basePosition, baseRotation) {
@@ -150,6 +152,8 @@ function createFoodPlate(scene, physicsWorld, ammo, basePosition, baseRotation) 
     scene.add(group);
 
     // Physics
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(plateRadius, plateHeight/2, plateRadius));
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(plateRadius, plateHeight/2, plateRadius));
+        createStaticBody(physicsWorld, group, shape);
+    }
 }

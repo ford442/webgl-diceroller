@@ -6,6 +6,7 @@ import {
     createConvexHullShape,
     spawnDicePhysics,
     getAmmo,
+    isAmmoAvailable,
     registerBodyAudioMeta,
     unregisterBodyAudioMeta,
     registerBodyDragMeta,
@@ -500,6 +501,19 @@ export { diceModels };
 const getDieSides = (type) => Number.parseInt(type.replace('d', ''), 10) || 6;
 const isUsingWasmPhysics = () => isWasmInitialized() && isWasmAvailable();
 const useMassBias = () => !searchParams.has('fair-dice');
+/** Ammo rigid bodies for dice are only needed on the fallback/validation paths. */
+const needsAmmoDiceBodies = () =>
+    !isUsingWasmPhysics()
+    || searchParams.has('dual-physics')
+    || searchParams.has('ammo-drag');
+
+const ensureDicePhysicsShape = (template) => {
+    if (!template?.userData) return null;
+    if (template.userData.physicsShape) return template.userData.physicsShape;
+    if (!isAmmoAvailable()) return null;
+    template.userData.physicsShape = createConvexHullShape(template);
+    return template.userData.physicsShape;
+};
 
 export const PHYSICS_PRESETS = {
     // Per-die-type tuning. dragFactor controls velocity-squared air resistance
@@ -513,7 +527,7 @@ export const PHYSICS_PRESETS = {
     d20: { mass: 5, friction: 0.40, rollingFriction: 0.03, dragFactor: 0.0016 }
 };
 
-const findSpawnedDieByMesh = (mesh) => spawnedDice.find((die) => die.mesh === mesh) || null;
+export const findSpawnedDieByMesh = (mesh) => spawnedDice.find((die) => die.mesh === mesh) || null;
 
 function estimateInertiaScalar(geometry, mass) {
     const bbox = geometry.boundingBox ?? geometry.computeBoundingBox?.();
@@ -740,7 +754,9 @@ export const loadDiceModels = async (onProgress) => {
 
                 cleanMesh.castShadow = true;
                 cleanMesh.receiveShadow = true;
-                cleanMesh.userData.physicsShape = createConvexHullShape(cleanMesh);
+                // Convex hull for ammo.js is created lazily when a dice body is
+                // actually spawned (fallback / dual-physics / ?ammo-drag paths).
+                cleanMesh.userData.physicsShape = null;
                 cleanMesh.geometry.computeBoundingBox();
 
                 // Precompute principal face normals and value map for result reading.
@@ -818,32 +834,41 @@ export const spawnObjects = (scene, world, config = null) => {
         const centerOfMassOffset = useMassBias()
             ? template.userData.massBiasOffset?.clone() ?? null
             : null;
-        const body = spawnDicePhysics(
-            world,
-            mesh,
-            template.userData.physicsShape,
-            {x, y, z},
-            mesh.rotation,
-            {
-                ...physicsPreset,
-                centerOfMassOffset
-            }
-        );
+
+        let body = null;
+        if (needsAmmoDiceBodies() && world) {
+            const collisionShape = ensureDicePhysicsShape(template);
+            body = spawnDicePhysics(
+                world,
+                mesh,
+                collisionShape,
+                { x, y, z },
+                mesh.rotation,
+                {
+                    ...physicsPreset,
+                    centerOfMassOffset
+                }
+            );
+        }
+
         mesh.userData.body = body;
+        mesh.userData.isDie = true;
         mesh.userData.physicsAuthority = isUsingWasmPhysics() ? 'wasm' : 'ammo';
         mesh.userData.physicsPreset = physicsPreset;
         const audioBodyId = nextAudioBodyId++;
         const inertiaScalar = estimateInertiaScalar(template.geometry, physicsPreset.mass);
-        registerBodyAudioMeta(body, {
-            id: audioBodyId,
-            type,
-            mass: physicsPreset.mass,
-            inertiaScalar,
-            surface: 'die'
-        });
-        registerBodyDragMeta(body, {
-            dragFactor: physicsPreset.dragFactor ?? 0
-        });
+        if (body) {
+            registerBodyAudioMeta(body, {
+                id: audioBodyId,
+                type,
+                mass: physicsPreset.mass,
+                inertiaScalar,
+                surface: 'die'
+            });
+            registerBodyDragMeta(body, {
+                dragFactor: physicsPreset.dragFactor ?? 0
+            });
+        }
 
         let wasmId = null;
         if (isUsingWasmPhysics()) {
@@ -943,16 +968,16 @@ export const updateDiceVisuals = () => {
 };
 
 export const clearDice = (scene, world) => {
-    const Ammo = getAmmo();
+    const Ammo = isAmmoAvailable() ? getAmmo() : null;
     const engine = isUsingWasmPhysics() ? getWasmEngine() : null;
     spawnedDice.forEach(die => {
-        // Return the mesh to the pool (geometry/material are shared and kept alive)
-        // rather than disposing them.
         releaseDiceMesh(scene, die.type, die.mesh);
-        world.removeRigidBody(die.body);
-        unregisterBodyAudioMeta(die.body);
-        unregisterBodyDragMeta(die.body);
-        destroyAmmoDieBody(Ammo, die.body);
+        if (world && die.body) {
+            world.removeRigidBody(die.body);
+            unregisterBodyAudioMeta(die.body);
+            unregisterBodyDragMeta(die.body);
+            if (Ammo) destroyAmmoDieBody(Ammo, die.body);
+        }
         if (engine && die.wasmId != null) engine.removeDie(die.wasmId);
     });
     spawnedDice = [];
@@ -979,25 +1004,22 @@ export const updateDiceSet = (scene, world, targetCounts) => {
             for(let i=0; i<diff; i++) toAdd.push(type);
             spawnObjects(scene, world, toAdd);
         } else if (diff < 0) {
-            // Remove 'abs(diff)' amount of this type
-            const Ammo = getAmmo();
+            const Ammo = isAmmoAvailable() ? getAmmo() : null;
             let toRemove = Math.abs(diff);
-            // Iterate backwards to safely remove
             for (let i = spawnedDice.length - 1; i >= 0; i--) {
                 if (toRemove === 0) break;
                 if (spawnedDice[i].type === type) {
                     const die = spawnedDice[i];
-                    // Remove physics and free Ammo heap objects
-                    world.removeRigidBody(die.body);
-                    unregisterBodyAudioMeta(die.body);
-                    unregisterBodyDragMeta(die.body);
-                    destroyAmmoDieBody(Ammo, die.body);
+                    if (world && die.body) {
+                        world.removeRigidBody(die.body);
+                        unregisterBodyAudioMeta(die.body);
+                        unregisterBodyDragMeta(die.body);
+                        if (Ammo) destroyAmmoDieBody(Ammo, die.body);
+                    }
                     if (isUsingWasmPhysics() && die.wasmId != null) {
                         getWasmEngine().removeDie(die.wasmId);
                     }
-                    // Return the visual to the pool (shared geometry/material kept).
                     releaseDiceMesh(scene, die.type, die.mesh);
-                    // Remove from array
                     spawnedDice.splice(i, 1);
                     toRemove--;
                 }
@@ -1007,8 +1029,8 @@ export const updateDiceSet = (scene, world, targetCounts) => {
 };
 
 export const throwDice = (scene, world, seed = null) => {
-    const Ammo = getAmmo();
-    const transform = new Ammo.btTransform();
+    const Ammo = isAmmoAvailable() ? getAmmo() : null;
+    const transform = Ammo ? new Ammo.btTransform() : null;
     const engine = isUsingWasmPhysics() ? getWasmEngine() : null;
 
     const useDeterministic = seed !== null && isUsingWasmPhysics();
@@ -1021,11 +1043,12 @@ export const throwDice = (scene, world, seed = null) => {
         const body = die.body;
         die.mesh.userData.physicsAuthority = engine ? 'wasm' : 'ammo';
 
-        // Reset velocity — use temps destroyed immediately after
-        const zeroVec = new Ammo.btVector3(0, 0, 0);
-        body.setLinearVelocity(zeroVec);
-        body.setAngularVelocity(zeroVec);
-        Ammo.destroy(zeroVec);
+        if (body && Ammo) {
+            const zeroVec = new Ammo.btVector3(0, 0, 0);
+            body.setLinearVelocity(zeroVec);
+            body.setAngularVelocity(zeroVec);
+            Ammo.destroy(zeroVec);
+        }
 
         // Group them near the top center for the throw
         const x = (rand() - 0.5) * 4;
@@ -1040,21 +1063,6 @@ export const throwDice = (scene, world, seed = null) => {
             rand() * Math.PI * 2
         ));
 
-        const bodyPosition = getBodyPositionFromGeometry(
-            { x, y, z },
-            q,
-            getCenterOfMassOffset(die)
-        );
-
-        transform.setIdentity();
-        const origin = new Ammo.btVector3(bodyPosition.x, bodyPosition.y, bodyPosition.z);
-        transform.setOrigin(origin);
-        Ammo.destroy(origin);
-
-        const btQ = new Ammo.btQuaternion(q.x, q.y, q.z, q.w);
-        transform.setRotation(btQ);
-        Ammo.destroy(btQ);
-
         if (engine && die.wasmId != null) {
             engine.setDieTransform(
                 die.wasmId,
@@ -1064,13 +1072,49 @@ export const throwDice = (scene, world, seed = null) => {
             engine.setDieVelocity(die.wasmId, 0, 0, 0, 0, 0, 0);
         }
 
-        body.setWorldTransform(transform);
-        body.getMotionState().setWorldTransform(transform);
+        if (body && transform && Ammo) {
+            const bodyPosition = getBodyPositionFromGeometry(
+                { x, y, z },
+                q,
+                getCenterOfMassOffset(die)
+            );
 
-        // Wake up
-        body.activate();
+            transform.setIdentity();
+            const origin = new Ammo.btVector3(bodyPosition.x, bodyPosition.y, bodyPosition.z);
+            transform.setOrigin(origin);
+            Ammo.destroy(origin);
 
-        // Throw forces
+            const btQ = new Ammo.btQuaternion(q.x, q.y, q.z, q.w);
+            transform.setRotation(btQ);
+            Ammo.destroy(btQ);
+
+            body.setWorldTransform(transform);
+            body.getMotionState().setWorldTransform(transform);
+            body.activate();
+
+            const forceX = (rand() - 0.5) * 25;
+            const forceY = (rand()) * 10 - 5;
+            const forceZ = (rand() - 0.5) * 25;
+
+            const spinX = (rand() - 0.5) * 100;
+            const spinY = (rand() - 0.5) * 100;
+            const spinZ = (rand() - 0.5) * 100;
+
+            const impulse = new Ammo.btVector3(forceX, forceY, forceZ);
+            body.applyCentralImpulse(impulse);
+            Ammo.destroy(impulse);
+
+            const torque = new Ammo.btVector3(spinX, spinY, spinZ);
+            body.applyTorqueImpulse(torque);
+            Ammo.destroy(torque);
+
+            if (engine && die.wasmId != null) {
+                engine.applyImpulse(die.wasmId, forceX, forceY, forceZ);
+                engine.applyTorqueImpulse(die.wasmId, spinX, spinY, spinZ);
+            }
+            return;
+        }
+
         const forceX = (rand() - 0.5) * 25;
         const forceY = (rand()) * 10 - 5;
         const forceZ = (rand() - 0.5) * 25;
@@ -1079,21 +1123,13 @@ export const throwDice = (scene, world, seed = null) => {
         const spinY = (rand() - 0.5) * 100;
         const spinZ = (rand() - 0.5) * 100;
 
-        const impulse = new Ammo.btVector3(forceX, forceY, forceZ);
-        body.applyCentralImpulse(impulse);
-        Ammo.destroy(impulse);
-
-        const torque = new Ammo.btVector3(spinX, spinY, spinZ);
-        body.applyTorqueImpulse(torque);
-        Ammo.destroy(torque);
-
         if (engine && die.wasmId != null) {
             engine.applyImpulse(die.wasmId, forceX, forceY, forceZ);
             engine.applyTorqueImpulse(die.wasmId, spinX, spinY, spinZ);
         }
     });
 
-    Ammo.destroy(transform);
+    if (transform && Ammo) Ammo.destroy(transform);
 };
 
 export const applyDiceMassBiases = ({ deltaTime = 1 / 60, applyAmmo = true, applyWasm = true } = {}) => {
@@ -1180,6 +1216,15 @@ export const driveDieWasmTransform = (mesh, position, quaternion) => {
     const die = findSpawnedDieByMesh(mesh);
     if (!isUsingWasmPhysics() || !die || die.wasmId == null) return;
     syncWasmTransformForDie(die, { position, quaternion });
+};
+
+export const setDieWasmKinematic = (mesh, kinematic) => {
+    const die = findSpawnedDieByMesh(mesh);
+    if (!isUsingWasmPhysics() || !die || die.wasmId == null) return;
+    const engine = getWasmEngine();
+    if (typeof engine.setDieKinematic === 'function') {
+        engine.setDieKinematic(die.wasmId, kinematic);
+    }
 };
 
 export const setDieWasmVelocity = (mesh, linear = null, angular = null) => {

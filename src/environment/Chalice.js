@@ -132,6 +132,8 @@ export function createChalice(scene, physicsWorld, position = { x: 8, y: -2.75, 
     physMesh.visible = false;
     scene.add(physMesh);
 
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(maxRadius, totalHeight/2, maxRadius));
-    createStaticBody(physicsWorld, physMesh, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(maxRadius, totalHeight/2, maxRadius));
+        createStaticBody(physicsWorld, physMesh, shape);
+    }
 }

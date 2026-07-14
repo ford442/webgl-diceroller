@@ -232,18 +232,20 @@ export function createDrinkingHorn(scene, physicsWorld, position = { x: 0, y: -2
     const width = 3.0; // Along X roughly
     const height = 1.5; // Y
     const depth = 1.0; // Z
-    const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
-
-    // Because the group's center is at the base ring (Y = -0.5), we need to shift the physical shape up
-    // to match the visual mass
-    // But createStaticBody just uses the group's transform. To offset the shape, we can create a proxy mesh.
-
-    const proxyMesh = new THREE.Mesh();
-    proxyMesh.position.copy(group.position);
-    proxyMesh.position.y += height/2 - 0.5; // Shift center of mass up
-    proxyMesh.rotation.copy(group.rotation);
-
-    createStaticBody(physicsWorld, proxyMesh, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
+    
+        // Because the group's center is at the base ring (Y = -0.5), we need to shift the physical shape up
+        // to match the visual mass
+        // But createStaticBody just uses the group's transform. To offset the shape, we can create a proxy mesh.
+    
+        const proxyMesh = new THREE.Mesh();
+        proxyMesh.position.copy(group.position);
+        proxyMesh.position.y += height/2 - 0.5; // Shift center of mass up
+        proxyMesh.rotation.copy(group.rotation);
+    
+        createStaticBody(physicsWorld, proxyMesh, shape);
+    }
 
     return group;
 }

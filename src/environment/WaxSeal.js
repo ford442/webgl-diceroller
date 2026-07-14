@@ -119,23 +119,25 @@ export function createWaxSeal(scene, physicsWorld, position = { x: 10, y: -2.75,
     // We'll use a physics cylinder encompassing the handle and base.
     // Max radius is baseRadius (0.3).
     // Note: Ammo.btCylinderShape expects half-extents.
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius));
-
-    // Since createStaticBody sets the collision shape center at the group's origin,
-    // and our group's origin is at the bottom (y=0) while the shape is centered,
-    // we need to offset the shape center.
-    // It's easier to move the group's logical center and visually offset the children down.
-
-    // Move group center up by totalHeight/2:
-    group.position.y = position.y + totalHeight / 2;
-
-    // Move all children down by totalHeight/2 to keep them visually at Y=-2.75:
-    handleMesh.position.y -= totalHeight / 2;
-    baseMesh.position.y -= totalHeight / 2;
-    waxMesh.position.y -= totalHeight / 2;
-    dripMesh.position.y -= totalHeight / 2;
-
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius));
+    
+        // Since createStaticBody sets the collision shape center at the group's origin,
+        // and our group's origin is at the bottom (y=0) while the shape is centered,
+        // we need to offset the shape center.
+        // It's easier to move the group's logical center and visually offset the children down.
+    
+        // Move group center up by totalHeight/2:
+        group.position.y = position.y + totalHeight / 2;
+    
+        // Move all children down by totalHeight/2 to keep them visually at Y=-2.75:
+        handleMesh.position.y -= totalHeight / 2;
+        baseMesh.position.y -= totalHeight / 2;
+        waxMesh.position.y -= totalHeight / 2;
+        dripMesh.position.y -= totalHeight / 2;
+    
+        createStaticBody(physicsWorld, group, shape);
+    }
 
     // Puddle is flat enough not to need its own physics body unless dice really need to bump it.
     // Given height is 0.05, dice will likely just roll over it smoothly or we can ignore it to save physics.

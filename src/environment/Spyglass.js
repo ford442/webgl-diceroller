@@ -93,7 +93,7 @@ export function createSpyglass(scene, physicsWorld, position = { x: 5, y: -2.75,
     scene.add(group);
 
     // Physics
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const Ammo = getAmmo();
         const transform = new Ammo.btTransform();
         transform.setIdentity();

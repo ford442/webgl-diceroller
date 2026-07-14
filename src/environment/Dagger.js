@@ -69,21 +69,25 @@ export function createDagger(scene, physicsWorld, position = { x: 8, y: -2.45, z
 
     // Physics (Static Box)
     // Create a simple box hull for collision
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const Ammo = getAmmo();
-        const transform = new Ammo.btTransform();
-        transform.setIdentity();
-        transform.setOrigin(new Ammo.btVector3(group.position.x, group.position.y, group.position.z));
-
-        // Rotation (Quaternion)
-        const quat = group.quaternion;
-        transform.setRotation(new Ammo.btQuaternion(quat.x, quat.y, quat.z, quat.w));
-
-        // Size: Roughly 8 units long (z), 2.5 wide (x), 0.5 high (y)
-        // Half extents
-        const shape = new Ammo.btBoxShape(new Ammo.btVector3(1.25, 0.2, 4.0));
-
-        createStaticBody(physicsWorld, group, shape);
+        if (Ammo && physicsWorld) {
+            const transform = new Ammo.btTransform();
+            transform.setIdentity();
+            transform.setOrigin(new Ammo.btVector3(group.position.x, group.position.y, group.position.z));
+    
+            // Rotation (Quaternion)
+            const quat = group.quaternion;
+            transform.setRotation(new Ammo.btQuaternion(quat.x, quat.y, quat.z, quat.w));
+    
+            // Size: Roughly 8 units long (z), 2.5 wide (x), 0.5 high (y)
+            // Half extents
+            if (Ammo && physicsWorld) {
+                const shape = new Ammo.btBoxShape(new Ammo.btVector3(1.25, 0.2, 4.0));
+        
+                createStaticBody(physicsWorld, group, shape);
+            }
+        }
     }
 
     return group;
