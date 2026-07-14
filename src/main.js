@@ -14,7 +14,11 @@ import {
     getDiceValueDebugSnapshot,
     replaceDiceSet,
     updateDiceSet,
-    getSpawnedDiceCounts
+    getSpawnedDiceCounts,
+    getDiceAppearanceConfig,
+    buildDicePresencePayload,
+    applyDicePresencePayload,
+    refreshDiceAppearance
 } from './dice.js';
 import { showResults, hideResults, updateDiceHud, showNotationResults } from './results.js';
 import { updateInteraction, interactionNeedsAmmoStep } from './interaction.js';
@@ -585,13 +589,14 @@ async function init() {
     try {
     tierResult = await loadTiers(scene, camera, physicsWorld, { scheduler, cullingSystem }, {
         audio: collisionAudio,
+        qualityProfile: postConfig?.adaptiveProfile ?? window.qualityProfile ?? null,
         onRollAll: () => rollHandlerRef.roll?.(),
         rollShareHooks: {
             hasShareableRoll: () => rollHandlerRef.lastRoll?.seed != null,
             buildShareUrl: () => {
                 const last = rollHandlerRef.lastRoll;
                 if (!last?.seed) return null;
-                return buildShareableRollUrl(last.seed, last.counts);
+                return buildShareableRollUrl(last.seed, last.counts, undefined, getDiceAppearanceConfig());
             }
         },
         notationHooks: {
@@ -736,8 +741,12 @@ async function init() {
     window.getLastRollShareUrl = () => {
         const last = rollHandlerRef.lastRoll;
         if (!last?.seed) return null;
-        return buildShareableRollUrl(last.seed, last.counts);
+        return buildShareableRollUrl(last.seed, last.counts, undefined, getDiceAppearanceConfig());
     };
+    window.getDiceAppearanceConfig = getDiceAppearanceConfig;
+    window.getDicePresencePayload = () => buildDicePresencePayload(getDiceAppearanceConfig());
+    window.applyDicePresencePayload = applyDicePresencePayload;
+    window.refreshDiceAppearance = refreshDiceAppearance;
     window.REPLAY_VERSION = REPLAY_VERSION;
 
     const replayRequest = parseShareableRollParams(searchParams);

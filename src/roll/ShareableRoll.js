@@ -1,3 +1,5 @@
+import { serializeDiceAppearance, parseDiceAppearanceParam } from '../dice/DiceAppearanceConfig.js';
+
 /** URL replay format version — bump when solver/throw semantics change. */
 export const REPLAY_VERSION = 1;
 
@@ -80,13 +82,21 @@ export function parseShareableRollParams(searchParams) {
  * @param {number} seed
  * @param {Record<string, number>} counts
  * @param {string} [baseUrl]
+ * @param {Record<string, { preset: string, bodyColor: string, pipColor: string }>|null} [appearance]
  */
-export function buildShareableRollUrl(seed, counts, baseUrl) {
+export function buildShareableRollUrl(seed, counts, baseUrl, appearance = null) {
     const url = new URL(baseUrl ?? (typeof window !== 'undefined' ? window.location.href : 'http://localhost/'));
     url.searchParams.set('seed', String(seed >>> 0));
     url.searchParams.set('v', String(REPLAY_VERSION));
     const dice = serializeDiceCounts(counts);
     if (dice) url.searchParams.set('dice', dice);
     else url.searchParams.delete('dice');
+
+    const look = appearance ? serializeDiceAppearance(appearance) : null;
+    if (look) url.searchParams.set('dice-look', look);
+    else url.searchParams.delete('dice-look');
+
     return url.toString();
 }
+
+export { parseDiceAppearanceParam, serializeDiceAppearance };
