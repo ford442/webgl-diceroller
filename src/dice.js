@@ -17,7 +17,7 @@ import {
     loadHullForDie, pollCollisionEvents, seedPhysicsRNG, randomPhysicsFloat,
     seededPhysicsThrow, isUsingWorkerPhysics,
 } from './wasm/PhysicsBridge.js';
-import { computeSeededThrowParams, applyThrowParams } from './wasm/seededThrowParams.js';
+import { computeSeededThrowParams, applyThrowParams, createSeededRng } from './wasm/seededThrowParams.js';
 import { TABLE_SURFACE_Y } from './core/SceneMetrics.js';
 const searchParams = new URLSearchParams(window.location.search);
 const WASM_TRANSFORM_STRIDE = 7;
@@ -363,6 +363,15 @@ export const readDiceValue = (die) => {
     }
 
     return faceValues[bestIdx];
+};
+
+/** Count spawned dice by type (for shareable roll URLs). */
+export const getSpawnedDiceCounts = () => {
+    const counts = Object.fromEntries(diceTypes.map(({ type }) => [type, 0]));
+    spawnedDice.forEach((die) => {
+        if (counts[die.type] != null) counts[die.type]++;
+    });
+    return counts;
 };
 
 /** Read current values for every spawned die (for the live HUD). */
@@ -1056,15 +1065,17 @@ export const throwDice = (scene, world, seed = null) => {
     const transform = Ammo ? new Ammo.btTransform() : null;
     const engine = isUsingWasmPhysics() ? getWasmEngine() : null;
 
-    const useDeterministic = seed !== null && isUsingWasmPhysics();
+    const useDeterministic = seed !== null;
+    const throwDiceList = spawnedDice.map((die, index) => ({
+        id: die.wasmId ?? index,
+        index
+    }));
     const wasmDice = engine
-        ? spawnedDice
-            .map((die, index) => ({ id: die.wasmId, index }))
-            .filter((d) => d.id != null)
+        ? throwDiceList.filter((d) => spawnedDice[d.index]?.wasmId != null)
         : [];
 
     let paramsById = null;
-    const workerThrow = useDeterministic && isUsingWorkerPhysics();
+    const workerThrow = useDeterministic && isUsingWorkerPhysics() && wasmDice.length > 0;
 
     if (workerThrow) {
         seededPhysicsThrow(seed, wasmDice, TABLE_SURFACE_Y);
@@ -1077,9 +1088,16 @@ export const throwDice = (scene, world, seed = null) => {
         const params = computeSeededThrowParams(() => randomPhysicsFloat(), wasmDice, TABLE_SURFACE_Y);
         applyThrowParams(engine, params);
         paramsById = new Map(params.map((p) => [p.id, p]));
+    } else if (useDeterministic) {
+        const params = computeSeededThrowParams(createSeededRng(seed), throwDiceList, TABLE_SURFACE_Y);
+        paramsById = new Map(params.map((p) => [p.id, p]));
     }
 
-    const rand = () => (useDeterministic ? randomPhysicsFloat() : getSecureRandom());
+    const rand = () => {
+        if (!useDeterministic) return getSecureRandom();
+        if (engine) return randomPhysicsFloat();
+        return getSecureRandom();
+    };
 
     spawnedDice.forEach((die, index) => {
         const body = die.body;
@@ -1103,7 +1121,8 @@ export const throwDice = (scene, world, seed = null) => {
         let spinY;
         let spinZ;
 
-        const preset = paramsById?.get(die.wasmId);
+        const paramKey = die.wasmId ?? index;
+        const preset = paramsById?.get(paramKey);
         if (paramsById) {
             if (!preset) return;
             ({ x, y, z, forceX, forceY, forceZ, spinX, spinY, spinZ } = preset);
