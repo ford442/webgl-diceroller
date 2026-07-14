@@ -119,7 +119,18 @@ export function createRenderStats({
         lines.push(`fps ${(1000 / frameMsSmoothed).toFixed(0)}  (${frameMsSmoothed.toFixed(1)} ms)`);
 
         const backend = state?.rendererType ?? 'unknown';
-        lines.push(`renderer ${backend}${state?.fallbackReason ? ' (fallback)' : ''}`);
+        const fallbackSuffix = state?.fallbackReason ? ' (fallback)' : '';
+        const contextSuffix = state?.contextStatus === 'lost' ? ' · CONTEXT LOST' : '';
+        lines.push(`renderer ${backend}${fallbackSuffix}${contextSuffix}`);
+
+        if (state?.pixelRatio != null) {
+            const msaa = state.antialias ? 'msaa' : (state.usePostAA ? 'fxaa' : 'no-aa');
+            const forced = state.pixelRatioForced ? ' forced' : '';
+            lines.push(`pixelRatio ${state.pixelRatio.toFixed(2)} (dpr ${state.deviceDpr?.toFixed(2) ?? '?'}) ${msaa}${forced}`);
+        }
+        if (state?.isSoftwareRenderer) {
+            lines.push('software WebGL · low-post');
+        }
 
         const physicsLabel = wasm ? (wasm.active ? 'WASM' : (wasm.available ? 'WASM(idle)' : 'ammo')) : 'ammo';
         const diceLabel = dice
@@ -139,7 +150,8 @@ export function createRenderStats({
             lines.push(`shadows ${shadow.autoUpdate ? 'dynamic' : 'static'}  refresh ${shadow.staticRefreshes ?? 0}`);
         }
         if (post) {
-            lines.push(`post ${post.quality}${post.bloomEnabled ? ' +bloom' : ''}${post.chromaticAberrationEnabled ? ' +ca' : ''}`);
+            const fxaa = post.fxaaEnabled ? ' +fxaa' : '';
+            lines.push(`post ${post.quality}${post.bloomEnabled ? ' +bloom' : ''}${fxaa}${post.chromaticAberrationEnabled ? ' +ca' : ''}`);
         }
 
         const audioLabel = audio ? `  audio ${audio.played}` : '';

@@ -18,6 +18,12 @@ import { updateInteraction, interactionNeedsAmmoStep } from './interaction.js';
 import { createDiceCollisionAudio } from './audio/DiceCollisionAudio.js';
 import { updateAtmosphere } from './environment/Atmosphere.js';
 import { setupScene } from './core/SceneSetup.js';
+import {
+    applyRendererSize,
+    createPixelRatioMonitor,
+    installRendererRecoveryHandlers,
+    recoverRenderer
+} from './core/RendererFactory.js';
 import { LampMode } from './environment/Lamp.js';
 import {
     getPropsByTag,
@@ -78,6 +84,9 @@ let postConfig;
 let shadowController;
 let renderStats = null;
 let rendererState;
+let rendererBadge = null;
+let pixelRatioMonitor = null;
+let rendererRecoveryCleanup = null;
 let fairnessMonitor = null;
 let collisionAudio = null;
 let collisionTotal = 0; // running count of collision events, for the debug HUD
@@ -162,33 +171,82 @@ function createShadowController(rendererRef, sceneRef) {
 // when ?renderer-info is requested, or whenever WebGPU fell back to WebGL so the
 // user understands they're on the degraded baseline path. In the happy WebGPU
 // case (no debug) nothing is shown, keeping the UI clean.
-function createRendererBadge(state, { persistent }) {
+function createRendererBadge(state, { persistent } = {}) {
     const container = document.getElementById('canvas-container') || document.body;
     const badge = document.createElement('div');
-    const isFallback = Boolean(state?.fallbackReason);
-    const type = state?.rendererType ?? 'webgl';
-    badge.textContent = isFallback ? `renderer: ${type} (fallback)` : `renderer: ${type}`;
-    badge.title = state?.fallbackReason ?? '';
     badge.style.position = 'absolute';
     badge.style.bottom = '10px';
     badge.style.left = '10px';
-    badge.style.backgroundColor = isFallback ? 'rgba(120, 40, 0, 0.7)' : 'rgba(0, 0, 0, 0.55)';
-    badge.style.color = isFallback ? '#ffd9b0' : '#bfe8ff';
     badge.style.fontFamily = 'monospace';
     badge.style.fontSize = '11px';
     badge.style.padding = '4px 8px';
     badge.style.borderRadius = '5px';
     badge.style.zIndex = '1100';
     badge.style.pointerEvents = 'none';
-    badge.style.transition = 'opacity 0.6s ease';
+    badge.style.transition = 'opacity 0.6s ease, background-color 0.3s ease';
+    badge.style.maxWidth = 'min(90vw, 420px)';
+    badge.style.lineHeight = '1.35';
     container.appendChild(badge);
 
-    // Persistent under ?debug/?renderer-info; otherwise (fallback notice) fade out.
-    if (!persistent) {
-        setTimeout(() => { badge.style.opacity = '0'; }, 4000);
-        setTimeout(() => { badge.remove(); }, 4800);
+    const fadeTimers = [];
+
+    function applyState(nextState, { status, message } = {}) {
+        const isFallback = Boolean(nextState?.fallbackReason);
+        const type = nextState?.rendererType ?? 'webgl';
+        const contextLost = nextState?.contextStatus === 'lost' || status === 'lost';
+        const recovering = status === 'recovering';
+
+        if (contextLost) {
+            badge.textContent = `GPU context lost${message ? `: ${message}` : ''}`;
+            badge.title = message ?? nextState?.contextMessage ?? '';
+            badge.style.backgroundColor = 'rgba(140, 20, 20, 0.85)';
+            badge.style.color = '#ffd0d0';
+            badge.style.opacity = '1';
+            return;
+        }
+
+        if (recovering) {
+            badge.textContent = message ?? 'Recovering renderer…';
+            badge.title = '';
+            badge.style.backgroundColor = 'rgba(90, 70, 0, 0.8)';
+            badge.style.color = '#ffe8a8';
+            badge.style.opacity = '1';
+            return;
+        }
+
+        const prLabel = nextState?.pixelRatio != null ? ` · ${nextState.pixelRatio.toFixed(2)}x` : '';
+        badge.textContent = isFallback ? `renderer: ${type} (fallback)${prLabel}` : `renderer: ${type}${prLabel}`;
+        badge.title = nextState?.fallbackReason ?? '';
+        badge.style.backgroundColor = isFallback ? 'rgba(120, 40, 0, 0.7)' : 'rgba(0, 0, 0, 0.55)';
+        badge.style.color = isFallback ? '#ffd9b0' : '#bfe8ff';
+        badge.style.opacity = '1';
     }
-    return badge;
+
+    applyState(state);
+
+    function scheduleFadeOut() {
+        if (persistent) return;
+        fadeTimers.push(setTimeout(() => { badge.style.opacity = '0'; }, 4000));
+        fadeTimers.push(setTimeout(() => { badge.remove(); rendererBadge = null; }, 4800));
+    }
+
+    if (!persistent && !state?.fallbackReason && state?.contextStatus !== 'lost') {
+        scheduleFadeOut();
+    }
+
+    return {
+        el: badge,
+        update(nextState, options) {
+            for (const id of fadeTimers) clearTimeout(id);
+            fadeTimers.length = 0;
+            applyState(nextState, options);
+        },
+        remove() {
+            for (const id of fadeTimers) clearTimeout(id);
+            badge.remove();
+            if (rendererBadge?.el === badge) rendererBadge = null;
+        }
+    };
 }
 
 init();
@@ -241,9 +299,16 @@ async function init() {
     // Surface the active renderer in-UI: persistently under ?debug/?renderer-info,
     // or as a brief auto-fading notice whenever WebGPU fell back to WebGL.
     const rendererInfoRequested = searchParams.has('renderer-info');
-    if (debugEnabled || rendererInfoRequested || rendererState?.fallbackReason) {
-        createRendererBadge(rendererState, { persistent: debugEnabled || rendererInfoRequested });
+    const badgePersistent = debugEnabled || rendererInfoRequested;
+    if (badgePersistent || rendererState?.fallbackReason) {
+        rendererBadge = createRendererBadge(rendererState, { persistent: badgePersistent });
     }
+
+    setupRendererRecovery(container);
+    pixelRatioMonitor = createPixelRatioMonitor(rendererState, {
+        debugPerf: searchParams.has('debug-perf'),
+        onPixelRatioChange: (nextRatio) => applyLivePixelRatio(container, nextRatio)
+    });
     window.addEventListener('pointerdown', () => collisionAudio?.resume(), { passive: true });
     window.addEventListener('keydown', () => collisionAudio?.resume(), { passive: true });
     // Lean into the tavern ambience while the player sits in FPS/pointer-lock mode.
@@ -354,6 +419,8 @@ async function init() {
             motionSources: shadowController?.state.externalMotionCount ?? 0
         };
         scheduler.stats.post = postConfig;
+        scheduler.stats.pixelRatio = rendererState?.pixelRatio;
+        pixelRatioMonitor?.update({ deltaTime });
         renderStats?.update({ deltaTime });
     });
 
@@ -513,16 +580,96 @@ async function init() {
     window.getTableLayoutConfig = () => layoutManager?.getConfig();
 }
 
+function applyLivePixelRatio(container, nextRatio) {
+    if (!renderer || !container) return;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    applyRendererSize(renderer, width, height, nextRatio);
+    rendererState.pixelRatio = nextRatio;
+    rendererState.usePostAA = !rendererState.antialias && nextRatio > 1;
+    if (composer) composer.setSize(width, height);
+    rendererBadge?.update(rendererState);
+}
+
+function setupRendererRecovery(container) {
+    if (rendererRecoveryCleanup) {
+        rendererRecoveryCleanup();
+    }
+
+    rendererRecoveryCleanup = installRendererRecoveryHandlers(rendererState, {
+        onContextLost: (state, message) => {
+            if (!rendererBadge) {
+                rendererBadge = createRendererBadge(state, { persistent: true });
+            } else {
+                rendererBadge.update(state, { status: 'lost', message });
+            }
+        },
+        onContextRestored: (state) => {
+            rendererBadge?.update(state);
+            applyLivePixelRatio(container, state.pixelRatio);
+        },
+        onDeviceLost: async (state, info) => {
+            const message = info?.message ?? 'GPU device lost';
+            if (!rendererBadge) {
+                rendererBadge = createRendererBadge(state, { persistent: true });
+            } else {
+                rendererBadge.update(state, { status: 'lost', message });
+            }
+
+            if (state._recovering) return;
+            state._recovering = true;
+            rendererBadge?.update(state, { status: 'recovering', message: 'Recovering via WebGL fallback…' });
+
+            try {
+                const oldCanvas = renderer.domElement;
+                const nextState = await recoverRenderer(container, state);
+                oldCanvas?.remove();
+
+                renderer = nextState.renderer;
+                rendererState = nextState;
+                scene.userData.renderer = renderer;
+                scene.userData.rendererState = rendererState;
+                scene.userData.rendererType = rendererState.rendererType;
+                window.renderer = renderer;
+
+                container.appendChild(renderer.domElement);
+                applyLivePixelRatio(container, nextState.pixelRatio);
+
+                if (composer?.type === 'webgpu-post') {
+                    composer.dispose?.();
+                    composer = null;
+                    postConfig.quality = 'low';
+                    postConfig.fxaaEnabled = false;
+                    postConfig.chromaticAberrationEnabled = false;
+                }
+
+                setupRendererRecovery(container);
+                rendererBadge?.update(rendererState);
+                console.warn('[Renderer] Recovered from GPU loss via WebGL fallback.');
+            } catch (error) {
+                console.error('[Renderer] Recovery failed:', error);
+                rendererBadge?.update(rendererState, {
+                    status: 'lost',
+                    message: `${message} — reload page`
+                });
+            } finally {
+                state._recovering = false;
+            }
+        }
+    });
+}
+
 function onWindowResize() {
     const container = document.getElementById('canvas-container');
-    if (!container) return;
+    if (!container || !renderer) return;
 
     const width = container.clientWidth;
     const height = container.clientHeight;
+    const pixelRatio = rendererState?.pixelRatio ?? renderer.getPixelRatio();
 
     camera.aspect = 1; // Fixed 1:1 aspect ratio
     camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
+    applyRendererSize(renderer, width, height, pixelRatio);
     if (composer) composer.setSize(width, height);
 }
 
