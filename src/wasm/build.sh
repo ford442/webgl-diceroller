@@ -14,9 +14,13 @@
 #   public/wasm/dice_physics.js    — Emscripten module loader (ES module)
 #   public/wasm/dice_physics.wasm  — Compiled WASM binary
 
-source /root/emsdk/emsdk_env.sh
-
 set -euo pipefail
+
+# Local dev convenience: activate an emsdk checked out at /root/emsdk if emcc
+# isn't already on PATH (e.g. CI activates its own emsdk via setup-emsdk).
+if ! command -v emcc >/dev/null 2>&1 && [ -f /root/emsdk/emsdk_env.sh ]; then
+    source /root/emsdk/emsdk_env.sh
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"

@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EMSDK_VERSION: "3.1.61"
+
+jobs:
+  build-js:
+    name: Build (vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build:js
+
+  typecheck:
+    name: Typecheck (tsc --noEmit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  build-wasm:
+    name: Build (WASM / emcc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+          actions-cache-folder: emsdk-cache
+      - run: npm run build:wasm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-artifacts
+          path: public/wasm/
+          retention-days: 7
+
+  # These verify:* scripts each boot their own throwaway vite dev server
+  # (see scripts/verify-*.mjs), so no separate preview server is needed here.
+  verify:
+    name: Verify (${{ matrix.script }})
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        script:
+          - verify:worker-physics
+          - verify:godrays
+          - verify:wasm-primitives
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-artifacts
+          path: public/wasm/
+      - run: npx playwright install --with-deps chromium
+      - run: npm run ${{ matrix.script }}
+
+  # The tests/*.js scripts (unlike scripts/verify-*.mjs) expect an already-running
+  # server on :4173, so this job builds once and starts a shared preview server.
+  verify-tests:
+    name: Verify (${{ matrix.script }})
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        script:
+          - test:lamp
+          - test:cauldron
+          - test:flute
+          - test:playingcards
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-artifacts
+          path: public/wasm/
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build:js
+      - name: Start preview server on :4173
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:4173/ > /dev/null && exit 0
+            sleep 1
+          done
+          echo "preview server did not come up" >&2
+          exit 1
+      - run: npm run ${{ matrix.script }}
+
+  render-regression:
+    name: Render regression (?webgl vs ?webgpu, informational until a baseline exists)
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-artifacts
+          path: public/wasm/
+      - run: npx playwright install --with-deps chromium
+      # Headless WebGPU init is known to stall in constrained/CI environments
+      # (see scripts/render-regression.mjs); don't let a capture failure/timeout
+      # fail the whole job — compare-render-baseline.mjs degrades gracefully to
+      # informational when a screenshot is missing.
+      - name: Capture ?webgl / ?webgpu screenshots
+        run: node scripts/render-regression.mjs
+        continue-on-error: true
+      - name: Compare against stored baseline (tests/baselines/)
+        run: node scripts/compare-render-baseline.mjs
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-regression-screenshots
+          path: render-regression-*.png
+          if-no-files-found: ignore
+          retention-days: 7

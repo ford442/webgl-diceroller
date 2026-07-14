@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet part of the incremental checkJs rollout (issue #192); pulled in transitively via interaction.js.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
@@ -47,6 +48,18 @@ function _computeFaceNormals(geometry) {
 
     const triCount = index ? index.count / 3 : pos.count / 3;
 
+    // Some dice models (die_4/die_8/die_20) carry a handful of corrupted
+    // triangles from a bad weld/quantize pass in the asset pipeline — long
+    // "spike" edges connecting distant, unrelated vertices. Left in, these
+    // can out-rank a real face by summed area and hijack a principal-normal
+    // slot in `_selectPrincipalFaceNormals`, pointing readDiceValue at empty
+    // space instead of a face. Reject any triangle whose longest edge is a
+    // large fraction of the die's own diameter — legitimate face/engraving
+    // edges never approach that size.
+    if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+    const maxEdge = (geometry.boundingSphere?.radius ?? 1) * 0.6;
+    const maxEdgeSq = maxEdge * maxEdge;
+
     for (let t = 0; t < triCount; t++) {
         const va = getVertex(t * 3);
         const vb = getVertex(t * 3 + 1);
@@ -61,6 +74,7 @@ function _computeFaceNormals(geometry) {
         _n.crossVectors(_e1, _e2);
 
         if (_n.lengthSq() < 1e-10) continue; // skip degenerate triangles
+        if (_e1.lengthSq() > maxEdgeSq || _e2.lengthSq() > maxEdgeSq || _b.distanceToSquared(_c) > maxEdgeSq) continue;
         const area = _n.length() * 0.5;
         _n.normalize();
 
@@ -129,11 +143,15 @@ function _selectPrincipalFaceNormals(allNormals, sides) {
 }
 
 const FACE_VALUE_NORMAL_MAPS = {
+    // This model prints 3 numbers per face (each face omits the value at its
+    // own "apex" vertex). `value` here is the *omitted* number — the one
+    // that reads correctly when this face is face-down on the table, which
+    // is what readDiceValue's useBottomFace branch looks up.
     d4: [
-        { normal: [-0.627, -0.023, -0.779], value: 4 },
-        { normal: [0.606, -0.795, -0.036], value: 3 },
-        { normal: [-0.525, -0.020, 0.851], value: 2 },
-        { normal: [0.545, 0.837, -0.035], value: 1 }
+        { normal: [0, -0.335, -0.942], value: 3 },
+        { normal: [0.817, -0.334, 0.471], value: 4 },
+        { normal: [-0.816, -0.333, 0.471], value: 1 },
+        { normal: [0, 1, 0], value: 2 }
     ],
     d6: [
         { normal: [0, 1, 0], value: 1 },
@@ -142,6 +160,30 @@ const FACE_VALUE_NORMAL_MAPS = {
         { normal: [1, 0, 0], value: 4 },
         { normal: [0, 0, -1], value: 5 },
         { normal: [0, -1, 0], value: 6 }
+    ],
+    d8: [
+        { normal: [0.816, -0.333, 0.471], value: 8 },
+        { normal: [-0.816, 0.333, -0.471], value: 3 },
+        { normal: [0.816, 0.333, -0.471], value: 7 },
+        { normal: [-0.816, -0.333, 0.471], value: 2 },
+        { normal: [0, 1, 0], value: 6 },
+        { normal: [0, -1, 0], value: 1 },
+        { normal: [0, -0.333, -0.943], value: 4 },
+        { normal: [0, 0.333, 0.943], value: 5 }
+    ],
+    // Printed "0" face maps to value 10 (this app has no separate d100/d%
+    // mode, so a straight 1-10 roll is the only sensible reading).
+    d10: [
+        { normal: [0.771, -0.056, -0.634], value: 6 },
+        { normal: [-0.054, -0.056, -0.997], value: 2 },
+        { normal: [0, 1, 0], value: 10 },
+        { normal: [-0.533, 0.596, -0.601], value: 8 },
+        { normal: [0.803, 0.596, -0.014], value: 4 },
+        { normal: [0.531, -0.597, 0.602], value: 1 },
+        { normal: [0, -1, 0], value: 9 },
+        { normal: [-0.771, 0.056, 0.634], value: 3 },
+        { normal: [-0.802, -0.597, 0.015], value: 5 },
+        { normal: [0.053, 0.056, 0.997], value: 7 }
     ],
     d12: [
         { normal: [0.632, -0.447, -0.632], value: 1 },

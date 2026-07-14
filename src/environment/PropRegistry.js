@@ -31,7 +31,13 @@ export const getPropFactory = (name) => {
     return factory;
 };
 
-const factoryEntry = (name, options = {}) => ({ name, ...options });
+/**
+ * @template {object} T
+ * @param {string} name
+ * @param {T} [options]
+ * @returns {{name: string, factoryName?: string, randomPool?: boolean, position?: {x: number, y: number, z: number}} & T}
+ */
+const factoryEntry = (name, options) => ({ name, .../** @type {any} */ (options ?? {}) });
 
 const tier1Position = { x: 0, y: LAMP_HANG_Y, z: 0 };
 const isLegacyTabletopPosition = (position) => position.y > -3.25 && position.y < -1.5;
@@ -524,7 +530,9 @@ export function getRandomProps({
  * exactly the randomPool subset of DECORATIVE_TIER_ENTRIES, in the same order),
  * so output is bit-identical to the previous implementation.
  */
-export function selectDecorPoolEntries(entries, maxRandom, { seed, theme = 'default' } = {}) {
+/** @param {{seed?: number, theme?: string}} [options] */
+export function selectDecorPoolEntries(entries, maxRandom, options = {}) {
+    const { seed, theme = 'default' } = options;
     return getRandomProps({ count: Math.max(0, maxRandom), seed, theme });
 }
 
@@ -540,7 +548,9 @@ function getForcedProps() {
     }
 }
 
-export async function spawnTierWithRandomPool(entries, maxRandom, context, { seed, theme } = {}) {
+/** @param {{seed?: number, theme?: string}} [options] */
+export async function spawnTierWithRandomPool(entries, maxRandom, context, options = {}) {
+    const { seed, theme } = options;
     const always = entries.filter((entry) => !entry.randomPool);
     const selected = selectDecorPoolEntries(entries, maxRandom, { seed: seed ?? context.layoutConfig?.seed, theme: theme ?? context.layoutConfig?.theme });
 

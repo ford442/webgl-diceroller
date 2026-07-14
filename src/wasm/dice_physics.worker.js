@@ -72,6 +72,7 @@ function ensureEngine(pageSearch) {
     // val::global("window") resolves to globalThis.window; provide just enough
     // for `window.location.search` to read back the page's query string.
     if (typeof globalThis.window === 'undefined') {
+        // @ts-ignore — minimal shim; the C++ side only reads window.location.search.
         globalThis.window = { location: { search: pageSearch || '' } };
     }
     engine = new Module.DicePhysicsEngine();
@@ -102,7 +103,7 @@ function publishSAB() {
     const xf = engine.getTransforms();
     const count = Math.min(Math.floor(ids.length), MAX_DICE);
 
-    const front = Atomics.load(header, H_FRONT);
+    const front = Number(Atomics.load(header, H_FRONT));
     const back = front ^ 1;
 
     if (count > 0) {

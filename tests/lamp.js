@@ -49,14 +49,17 @@ async function staticChecks() {
     return allPass;
 }
 
-if (process.env.NODE_ENV === 'static' || process.argv.includes('--static')) {
+const isStatic = process.env.NODE_ENV === 'static' || process.argv.includes('--static');
+
+if (isStatic) {
     staticChecks().then(ok => process.exit(ok ? 0 : 1));
-    return;
+} else {
+    runLampTest();
 }
 
-console.log('=== Lamp Verification Test ===');
+async function runLampTest() {
+    console.log('=== Lamp Verification Test ===');
 
-(async () => {
     const { browser, page, errors: consoleErrors } = await launchPage({ logConsole: false });
 
     // Use the verification server started by our test harness (port 8123 serves dist/)
@@ -100,6 +103,7 @@ console.log('=== Lamp Verification Test ===');
         if (!scene) return { error: 'no scene' };
 
         // Find the lamp group
+        /** @type {import('three').Object3D | null} */
         let lamp = null;
         scene.traverse((obj) => {
             if (obj.name === 'BilliardLamp' && obj.type === 'Group') {
@@ -112,6 +116,7 @@ console.log('=== Lamp Verification Test ===');
         }
 
         // Count key children
+        /** @type {import('three').Object3D | null} */
         let wrapper = null;
         let lightCount = 0;
         let bulbCount = 0;
@@ -235,4 +240,4 @@ console.log('=== Lamp Verification Test ===');
         console.log('\n=== LAMP VERIFICATION HAD ISSUES ===');
         process.exit(1);
     }
-})();
+}

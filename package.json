@@ -17,6 +17,8 @@
     "verify:worker-physics": "node scripts/verify-worker-physics.mjs",
     "verify:godrays": "node scripts/verify-godrays.mjs",
     "verify:wasm-primitives": "node scripts/verify-wasm-primitives.mjs",
+    "verify:render-regression": "node scripts/render-regression.mjs && node scripts/compare-render-baseline.mjs",
+    "typecheck": "tsc --noEmit",
     "test:debug": "node tests/debug.js",
     "test:lamp": "node tests/lamp.js",
     "test:cauldron": "node tests/cauldron.js",
@@ -32,6 +34,7 @@
     "draco3dgltf": "^1.5.7",
     "playwright": "^1.58.2",
     "sharp": "^0.35.1",
+    "typescript": "^5.7.3",
     "vite": "^7.3.1"
   }
 }

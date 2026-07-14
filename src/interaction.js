@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet part of the incremental checkJs rollout (issue #192); pulled in transitively via PropRegistry.js.
 import * as THREE from 'three';
 import { getAmmo } from './physics.js';
 import { isWasmAvailable, isWasmInitialized } from './wasm/PhysicsBridge.js';

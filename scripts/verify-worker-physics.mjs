@@ -94,6 +94,7 @@ try {
     await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
     result = await page.evaluate(async () => {
         try {
+            // @ts-ignore — runtime-generated test module written just before this browser-side import runs.
             const m = await import('/src/__worker_phys_test.js');
             return await m.run();
         } catch (ex) { return { ok: false, reason: String(ex && ex.stack || ex) }; }

@@ -14,6 +14,7 @@ runTest(async (page, errors) => {
 
     const inScene = await page.evaluate(() => {
         if (!window.scene) return { found: 'pending' };
+        /** @type {import('three').Object3D | null} */
         let found = null;
         window.scene.traverse((c) => { if (c.name === 'PlayingCards') found = c; });
         return found ? { found: true, children: found.children.length } : { found: false };

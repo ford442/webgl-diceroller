@@ -76,6 +76,7 @@ try {
     await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
     const result = await page.evaluate(async () => {
         try {
+            // @ts-ignore — runtime-generated test module written just before this browser-side import runs.
             const m = await import('/src/__wasm_prim_test.js');
             return await m.run();
         } catch (e) { return { ok: false, reason: String(e && e.stack || e) }; }
