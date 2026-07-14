@@ -4,6 +4,7 @@ import { LAMP_HANG_Y, toCurrentTabletopY } from '../core/SceneMetrics.js';
 import { shuffleWithRng } from './clutter/ClutterPlacement.js';
 import { LAYOUT_THEMES } from '../core/TableLayoutConfig.js';
 import { disposePropSpawn } from './PropLifecycle.js';
+import { mergePropRecord } from '../core/StaticPropMerger.js';
 import './Bone.js';
 import './Cauldron.js';
 
@@ -622,8 +623,19 @@ export async function spawnProp(entry, context) {
         context.cullingSystem.register(root, { important: entry.important === true });
     }
 
+    const canStaticMerge = entry.staticMerge !== false
+        && !updateHandle
+        && !INTERACTIVE_NAMES.has(factoryName);
+    let mergeStats = null;
+    if (canStaticMerge) {
+        mergeStats = mergePropRecord({ result, updateHandle });
+        if (mergeStats.merged && context.cullingSystem && root) {
+            context.cullingSystem.refreshSphere(root);
+        }
+    }
+
     const disposers = typeof result?.dispose === 'function' ? [result.dispose] : undefined;
-    return { entry, result, updateHandle, disposers };
+    return { entry, result, updateHandle, disposers, mergeStats };
 }
 
 export function despawnProp(record, context) {

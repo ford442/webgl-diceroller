@@ -58,6 +58,11 @@ export function createLayoutManager({
         for (const root of clutterHandles) {
             cullingSystem?.register(root);
         }
+        if (result?.mergeStats?.mergedRoots) {
+            for (const root of clutterHandles) {
+                cullingSystem?.refreshSphere?.(root);
+            }
+        }
         if (result?.update) {
             clutterUpdateHandle = registerUpdate('clutter', result.update);
         }

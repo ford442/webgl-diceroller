@@ -2,6 +2,15 @@ import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../../physics.js';
 import { createFire } from '../Fire.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
+import {
+    getWaxMaterial,
+    getWickMaterial,
+    getWroughtIronMaterial,
+    getDarkLeatherMaterial,
+    getBlackAccentMaterial,
+    getBrassMaterial,
+    getPaperMaterial
+} from '../../core/MaterialPalette.js';
 import { resolvePlacement } from './ClutterPlacement.js';
 
 const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
@@ -15,13 +24,7 @@ export function createCandle(scene, physicsWorld, options = {}) {
     const height = 1.5;
     const geometry = new THREE.CylinderGeometry(radius, radius, height, 32);
 
-    const waxMaterial = new THREE.MeshStandardMaterial({
-        color: 0xf5f5e0,
-        roughness: 0.4,
-        metalness: 0.0,
-        emissive: 0x221a10,
-        emissiveIntensity: 0.1
-    });
+    const waxMaterial = getWaxMaterial();
 
     const candleMesh = new THREE.Mesh(geometry, waxMaterial);
     candleMesh.castShadow = true;
@@ -29,20 +32,25 @@ export function createCandle(scene, physicsWorld, options = {}) {
     candleGroup.add(candleMesh);
 
     const dripCount = 5;
+    const dripGeo = new THREE.CapsuleGeometry(0.06, 0.35, 4, 8);
+    const drips = new THREE.InstancedMesh(dripGeo, waxMaterial, dripCount);
+    drips.castShadow = true;
+    drips.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    const dripDummy = new THREE.Object3D();
     for (let i = 0; i < dripCount; i++) {
         const angle = (i / dripCount) * Math.PI * 2 + randomUnit(options) * 0.5;
         const dripHeight = 0.3 + randomUnit(options) * 0.4;
-        const dripGeo = new THREE.CapsuleGeometry(0.06, dripHeight, 4, 8);
-        const drip = new THREE.Mesh(dripGeo, waxMaterial);
+        dripDummy.scale.set(1, dripHeight / 0.35, 1);
 
         const dripX = Math.cos(angle) * (radius - 0.02);
         const dripZ = Math.sin(angle) * (radius - 0.02);
-        drip.position.set(dripX, height / 2 - dripHeight / 2 - 0.1, dripZ);
-        drip.rotation.x = Math.cos(angle) * 0.2;
-        drip.rotation.z = -Math.sin(angle) * 0.2;
-        drip.castShadow = true;
-        candleMesh.add(drip);
+        dripDummy.position.set(dripX, height / 2 - dripHeight / 2 - 0.1, dripZ);
+        dripDummy.rotation.set(Math.cos(angle) * 0.2, 0, -Math.sin(angle) * 0.2);
+        dripDummy.updateMatrix();
+        drips.setMatrixAt(i, dripDummy.matrix);
     }
+    drips.instanceMatrix.needsUpdate = true;
+    candleMesh.add(drips);
 
     const puddleGeo = new THREE.CylinderGeometry(radius + 0.15, radius + 0.1, 0.03, 32);
     const puddle = new THREE.Mesh(puddleGeo, waxMaterial);
@@ -52,12 +60,7 @@ export function createCandle(scene, physicsWorld, options = {}) {
 
     const wickHeight = 0.2;
     const wickGeo = new THREE.CylinderGeometry(0.04, 0.04, wickHeight, 8);
-    const wickMat = new THREE.MeshStandardMaterial({
-        color: 0x1a1a1a,
-        roughness: 1.0,
-        emissive: 0x331100,
-        emissiveIntensity: 0.3
-    });
+    const wickMat = getWickMaterial();
     const wickMesh = new THREE.Mesh(wickGeo, wickMat);
     wickMesh.position.set(0, height / 2 + wickHeight / 2, 0);
     candleMesh.add(wickMesh);
@@ -122,12 +125,7 @@ export function createKey(scene, physicsWorld, options = {}) {
     const keyGroup = new THREE.Group();
     keyGroup.name = 'IronKey';
 
-    const material = new THREE.MeshStandardMaterial({
-        color: 0x2a2a2a,
-        roughness: 0.6,
-        metalness: 0.85,
-        envMapIntensity: 0.9
-    });
+    const material = getWroughtIronMaterial();
 
     const bowRadius = 0.3;
     const bowTube = 0.06;
@@ -218,11 +216,7 @@ export function createQuill(scene, physicsWorld, options = {}) {
 
     const shaftLen = 1.2;
     const shaftGeo = new THREE.CylinderGeometry(0.02, 0.01, shaftLen, 8);
-    const shaftMat = new THREE.MeshStandardMaterial({
-        color: 0xf5f5dc,
-        roughness: 0.7,
-        metalness: 0.0
-    });
+    const shaftMat = getPaperMaterial();
     const shaftMesh = new THREE.Mesh(shaftGeo, shaftMat);
     shaftMesh.castShadow = true;
     shaftMesh.position.y = shaftLen / 2;
@@ -272,16 +266,8 @@ export function createPipe(scene, physicsWorld, options = {}) {
     const group = new THREE.Group();
     group.name = 'SmokingPipe';
 
-    const woodMat = new THREE.MeshStandardMaterial({
-        color: 0x3f1f1f,
-        roughness: 0.5,
-        metalness: 0.1
-    });
-
-    const blackMat = new THREE.MeshStandardMaterial({
-        color: 0x111111,
-        roughness: 0.8
-    });
+    const woodMat = getDarkLeatherMaterial();
+    const blackMat = getBlackAccentMaterial();
 
     const ashMat = new THREE.MeshStandardMaterial({
         color: 0x333333,
@@ -363,12 +349,7 @@ export function createSpyglass(scene, physicsWorld, options = {}) {
     const group = new THREE.Group();
     group.name = 'Spyglass';
 
-    const brassMat = new THREE.MeshStandardMaterial({
-        color: 0xb5a642,
-        metalness: 1.0,
-        roughness: 0.2,
-        envMapIntensity: 1.2
-    });
+    const brassMat = getBrassMaterial();
 
     const glassMat = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
@@ -378,11 +359,7 @@ export function createSpyglass(scene, physicsWorld, options = {}) {
         transparent: true
     });
 
-    const leatherMat = new THREE.MeshStandardMaterial({
-        color: 0x3f1f1f,
-        roughness: 0.8,
-        metalness: 0.1
-    });
+    const leatherMat = getDarkLeatherMaterial();
 
     const mainLen = 1.5;
     const mainRad = 0.15;

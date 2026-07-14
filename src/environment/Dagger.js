@@ -1,26 +1,17 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import {
+    getSteelMaterial,
+    getGoldMaterial,
+    getLeatherMaterial
+} from '../core/MaterialPalette.js';
 
 export function createDagger(scene, physicsWorld, position = { x: 8, y: -2.45, z: 8 }, rotationY = Math.PI / 4) {
     const group = new THREE.Group();
 
-    // Materials
-    const steelMaterial = new THREE.MeshStandardMaterial({
-        color: 0xcccccc,
-        metalness: 0.9,
-        roughness: 0.2
-    });
-
-    const goldMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffd700,
-        metalness: 0.8,
-        roughness: 0.3
-    });
-
-    const leatherMaterial = new THREE.MeshStandardMaterial({
-        color: 0x4a3c31,
-        roughness: 0.9
-    });
+    const steelMaterial = getSteelMaterial();
+    const goldMaterial = getGoldMaterial();
+    const leatherMaterial = getLeatherMaterial();
 
     // 1. Blade
     // Long, thin, sharp

@@ -1,72 +1,73 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { getInstancedMetalMaterial } from '../core/MaterialPalette.js';
 
 export function createCoin(scene, physicsWorld, position = { x: 8, y: -2.75, z: -2 }, rotationY = 0) {
     const ammo = getAmmo();
 
-    // Group to hold all coins
     const coinGroup = new THREE.Group();
     coinGroup.name = 'Coin';
 
-    // Gold Material
-    const goldMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffd700, // Gold color
-        metalness: 1.0,
-        roughness: 0.3,
-        envMapIntensity: 1.0
-    });
-
-    // Coin Geometry
     const radius = 0.3;
     const height = 0.05;
     const geometry = new THREE.CylinderGeometry(radius, radius, height, 16);
-    // Cylinder geometry is aligned along Y axis by default, which is perfect for coins lying flat.
 
-    // Create a scattered pile of coins
     const numCoins = 12;
-    // Central position for the pile
+    const instanceMaterial = getInstancedMetalMaterial();
+    const coins = new THREE.InstancedMesh(geometry, instanceMaterial, numCoins);
+    coins.castShadow = true;
+    coins.receiveShadow = true;
+    coins.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    const goldColor = new THREE.Color(0xffd700);
+
+    const dummy = new THREE.Object3D();
     const pileCenter = new THREE.Vector3(position.x, position.y, position.z);
 
-    for (let i = 0; i < numCoins; i++) {
-        const coinMesh = new THREE.Mesh(geometry, goldMaterial);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
+        coins.userData.physicsBodies = [];
 
-        // Randomize position slightly around the center
-        const offsetX = (Math.random() - 0.5) * 2.5;
-        const offsetZ = (Math.random() - 0.5) * 2.5;
+        for (let i = 0; i < numCoins; i++) {
+            coins.setColorAt(i, goldColor);
 
-        // We want the coins to rest on the table.
-        // If table surface is -2.75, the center of the cylinder should be -2.75 + height/2.
-        const posY = -2.75 + height / 2;
+            const offsetX = (Math.random() - 0.5) * 2.5;
+            const offsetZ = (Math.random() - 0.5) * 2.5;
+            const posY = -2.75 + height / 2;
 
-        coinMesh.position.set(pileCenter.x + offsetX, posY, pileCenter.z + offsetZ);
+            dummy.position.set(pileCenter.x + offsetX, posY, pileCenter.z + offsetZ);
+            dummy.rotation.set(
+                (Math.random() - 0.5) * 0.3,
+                rotationY + Math.random() * Math.PI * 2,
+                (Math.random() - 0.5) * 0.3
+            );
+            dummy.updateMatrix();
+            coins.setMatrixAt(i, dummy.matrix);
+            coins.userData.physicsBodies.push(createStaticBody(physicsWorld, dummy, shape));
+        }
+    } else {
+        for (let i = 0; i < numCoins; i++) {
+            coins.setColorAt(i, goldColor);
 
-        // Random rotation around Y axis
-        coinMesh.rotation.y = Math.random() * Math.PI;
+            const offsetX = (Math.random() - 0.5) * 2.5;
+            const offsetZ = (Math.random() - 0.5) * 2.5;
+            const posY = -2.75 + height / 2;
 
-        // Slightly random rotation around X and Z if they are overlapping,
-        // but for static bodies it's safer to keep them flat to prevent dice catching under them.
-        coinMesh.castShadow = true;
-        coinMesh.receiveShadow = true;
-
-        coinGroup.add(coinMesh);
-
-        // Physics
-        if (ammo) {
-            // Note: btCylinderShape expects a vector with half extents.
-            // By default Three.js cylinder is along Y. ammo.btCylinderShape assumes Y as well.
-            if (ammo && physicsWorld) {
-                const halfExtents = new ammo.btVector3(radius, height / 2, radius);
-                if (ammo && physicsWorld) {
-                    const shape = new ammo.btCylinderShape(halfExtents);
-                    createStaticBody(physicsWorld, coinMesh, shape);
-                }
-            }
+            dummy.position.set(pileCenter.x + offsetX, posY, pileCenter.z + offsetZ);
+            dummy.rotation.set(
+                (Math.random() - 0.5) * 0.3,
+                rotationY + Math.random() * Math.PI * 2,
+                (Math.random() - 0.5) * 0.3
+            );
+            dummy.updateMatrix();
+            coins.setMatrixAt(i, dummy.matrix);
         }
     }
 
+    coins.instanceMatrix.needsUpdate = true;
+    if (coins.instanceColor) coins.instanceColor.needsUpdate = true;
+
+    coinGroup.add(coins);
     scene.add(coinGroup);
 
-    return {
-        group: coinGroup
-    };
+    return { group: coinGroup };
 }

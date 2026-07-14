@@ -84,6 +84,7 @@ window.PropRegistry = {
 let postConfig;
 let shadowController;
 let renderStats = null;
+let tierRenderStats = null;
 let rendererState;
 let rendererBadge = null;
 let pixelRatioMonitor = null;
@@ -292,7 +293,8 @@ async function init() {
                 worker: getWorkerPhysicsStats()
             }),
             getAudio: () => collisionAudio?.getStats?.() ?? null,
-            getCollisionTotal: () => collisionTotal
+            getCollisionTotal: () => collisionTotal,
+            getTierRenderStats: () => tierRenderStats
         });
         // Backtick toggles the HUD during playtesting without reloading.
         window.addEventListener('keydown', (e) => {
@@ -533,6 +535,10 @@ async function init() {
 
     ui = tierResult.ui;
     crosshairUI = tierResult.crosshairUI;
+    tierRenderStats = tierResult.tierRenderStats ?? null;
+    if (tierRenderStats) {
+        window.__tierRenderStats = tierRenderStats;
+    }
     if (tierResult.fireplaceLight) fireplaceLight = tierResult.fireplaceLight;
     const layoutManager = tierResult.layoutManager;
 

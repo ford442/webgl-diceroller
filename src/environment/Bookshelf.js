@@ -1,43 +1,18 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
-import { getWoodTextures } from '../core/TexturePipeline.js';
+import {
+    getWoodTexturedMaterial,
+    getBookCoverMaterials,
+    getPaperMaterial
+} from '../core/MaterialPalette.js';
 
-// Cache materials to avoid reloading textures on multiple calls
-let sharedMaterials = null;
-
+// Re-export palette accessors for any external callers that relied on getMaterials.
 function getMaterials() {
-    if (sharedMaterials) return sharedMaterials;
-
-    const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } = getWoodTextures();
-
-    const woodMaterial = new THREE.MeshStandardMaterial({
-        map: woodDiffuse,
-        bumpMap: woodBump,
-        bumpScale: 0.1,
-        roughnessMap: woodRoughness,
-        color: 0x8B4513, // SaddleBrown
-        roughness: 0.8
-    });
-
-    // Book Materials (Palette)
-    const bookColors = [
-        0x8b0000, // Dark Red
-        0x006400, // Dark Green
-        0x00008b, // Dark Blue
-        0x2f4f4f, // Dark Slate Gray
-        0x8b4513, // Saddle Brown
-        0x000000  // Black
-    ];
-    const bookMaterials = bookColors.map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 }));
-    const paperMaterial = new THREE.MeshStandardMaterial({ color: 0xfffff0, roughness: 0.9 }); // Pages
-
-    sharedMaterials = {
-        wood: woodMaterial,
-        books: bookMaterials,
-        paper: paperMaterial
+    return {
+        wood: getWoodTexturedMaterial(),
+        books: getBookCoverMaterials(),
+        paper: getPaperMaterial()
     };
-
-    return sharedMaterials;
 }
 
 export function createBookshelf(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }, rotationY = 0) {

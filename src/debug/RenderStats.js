@@ -45,6 +45,7 @@ export function createRenderStats({
     getWasm = () => null,
     getAudio = () => null,
     getCollisionTotal = () => 0,
+    getTierRenderStats = () => null,
     debugPerf = false,
     visible = true
 } = {}) {
@@ -145,6 +146,25 @@ export function createRenderStats({
 
         lines.push(`draws ${render.calls ?? 0}  tris ${compact(render.triangles)}`);
         lines.push(`geom ${memory.geometries ?? 0}  tex ${memory.textures ?? 0}  prog ${programs}`);
+
+        const tierStats = getTierRenderStats();
+        if (tierStats) {
+            const tiers = tierStats.getAllTiers?.() ?? {};
+            const tierParts = [];
+            for (const [tierId, entry] of Object.entries(tiers)) {
+                const d = entry.delta;
+                if (!d) continue;
+                tierParts.push(`${tierId}:+${d.drawCalls}`);
+            }
+            if (tierParts.length) {
+                lines.push(`tier Δdraws ${tierParts.join('  ')}`);
+            }
+            const totals = tierStats.getTotals?.();
+            if (totals?.current) {
+                lines.push(`scene ${totals.current.drawCalls} draws  ${compact(totals.current.triangles)} tris`);
+            }
+        }
+
         lines.push(`objects ${sceneSummary.objects}  meshes ${sceneSummary.visibleMeshes}/${sceneSummary.meshes}  lights ${sceneSummary.lights}`);
 
         if (cullingSystem) {

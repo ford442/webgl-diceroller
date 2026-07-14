@@ -12,6 +12,7 @@ import {
 import { resolveTableLayoutConfig, persistTableLayoutConfig } from './TableLayoutConfig.js';
 import { createLayoutManager } from './RandomLayout.js';
 import { preloadSharedTextures } from './TexturePipeline.js';
+import { createTierRenderStats } from './TierRenderStats.js';
 
 const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -69,7 +70,8 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
             count: layoutConfig.clutterCount,
             seed: layoutConfig.seed,
             theme: layoutConfig.theme
-        }
+        },
+        tierRenderStats: createTierRenderStats(scene)
     };
 
     updateLoadingText('Initializing physics engine...');
@@ -83,7 +85,9 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
 
     updateLoadingText('Building tavern environment...');
     updateLoadingBar(20);
+    context.tierRenderStats.snapshotBefore('tier0');
     await spawnTier(TIER_PROP_DEFINITIONS.tier0, context);
+    context.tierRenderStats.snapshotAfter('tier0');
     if (context.state.clutterResult) {
         layoutManager.setInitialClutter(context.state.clutterResult);
     }
@@ -128,17 +132,21 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
     updateLoadingText('Loading furniture and props...');
     await yieldToMain();
     updateLoadingBar(55);
+    context.tierRenderStats.snapshotBefore('tier1');
     await spawnTier(TIER_PROP_DEFINITIONS.tier1, context);
+    context.tierRenderStats.snapshotAfter('tier1');
     updateLoadingBar(70);
 
     updateLoadingText('Adding tabletop items...');
     await yieldToMain();
+    context.tierRenderStats.snapshotBefore('tierDecor');
     const decorRecords = await spawnTierWithRandomPool(
         DECORATIVE_TIER_ENTRIES,
         layoutConfig.decorCount,
         context,
         { seed: layoutConfig.seed + 0xDEC0, theme: layoutConfig.theme }
     );
+    context.tierRenderStats.snapshotAfter('tierDecor');
     layoutManager.setInitialDecor(decorRecords);
     updateLoadingBar(85);
 
@@ -160,6 +168,10 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
 
     window.sceneReady = true;
 
+    const tierRenderStats = context.tierRenderStats;
+    const tierSummary = tierRenderStats.formatSummary();
+    console.info(`[RenderPerf] Per-tier scene cost:\n${tierSummary}`);
+
     return {
         ui,
         crosshairUI,
@@ -167,6 +179,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         layoutManager,
         lampData: context.state.lampData,
         gongResult: context.state.gongData,
-        fireplaceLight: context.state.fireplaceLight
+        fireplaceLight: context.state.fireplaceLight,
+        tierRenderStats
     };
 }

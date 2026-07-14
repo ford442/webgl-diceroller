@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { getIronMaterial } from '../core/MaterialPalette.js';
 
 export function createKey(scene, physicsWorld, position = { x: 6, y: -2.75, z: 8 }, rotationY = Math.PI / 4) {
     const ammo = getAmmo();
@@ -7,12 +8,7 @@ export function createKey(scene, physicsWorld, position = { x: 6, y: -2.75, z: 8
     group.position.set(position.x, position.y, position.z);
     group.rotation.y = rotationY;
 
-    // Rusty Iron Material
-    const ironMaterial = new THREE.MeshStandardMaterial({
-        color: 0x333333,
-        roughness: 0.8,
-        metalness: 0.7,
-    });
+    const ironMaterial = getIronMaterial();
 
     // 1. Shaft (Cylinder)
     const shaftLength = 2.0;
