@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { spawnedDice, readDiceValue, areDiceSettled, updateDiceVisuals } from '../dice.js';
+import { shouldDeferAutoResults } from '../roll/RollSession.js';
 import { CAMERA_EYE_Y } from './SceneMetrics.js';
 
 const DiceFocusState = {
@@ -118,12 +119,14 @@ export function createCameraController(camera) {
                 // Ensure mesh orientations match the authoritative physics state.
                 updateDiceVisuals();
 
-                // Read settled dice values and show result overlay
+                // Read settled dice values and show result overlay (skip during notation rolls)
                 const results = spawnedDice.map(d => ({
                     type: d.type,
                     value: readDiceValue(d)
                 }));
-                showResults(results);
+                if (!shouldDeferAutoResults()) {
+                    showResults(results);
+                }
                 onResultsReady?.(results);
             }
         } else if (diceFocusState === DiceFocusState.HOLDING) {

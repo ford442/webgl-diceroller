@@ -120,7 +120,8 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
                 return result;
             },
             onShareTable: () => layoutManager.getConfig()
-        }
+        },
+        callbacks.notationHooks ?? null
     );
     const crosshairUI = createCrosshair();
 
