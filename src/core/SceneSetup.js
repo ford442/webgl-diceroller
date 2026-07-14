@@ -4,6 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
 import { VignetteShader } from '../shaders/VignetteShader.js';
 import { TavernEnvironment } from '../environment/TavernEnvironment.js';
 import { createRenderer } from './RendererFactory.js';
@@ -18,12 +19,14 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
         { PostProcessing },
         { pass, uniform, float, vec2, vec3, vec4, mix, Fn, screenUV },
         { bloom },
-        { chromaticAberration }
+        { chromaticAberration },
+        { fxaa }
     ] = await Promise.all([
         import('three/webgpu'),
         import('three/tsl'),
         import('three/addons/tsl/display/BloomNode.js'),
-        import('three/addons/tsl/display/ChromaticAberrationNode.js')
+        import('three/addons/tsl/display/ChromaticAberrationNode.js'),
+        import('three/addons/tsl/display/FXAANode.js')
     ]);
 
     const postProcessing = new PostProcessing(renderer);
@@ -59,6 +62,10 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
 
     if (postConfig.quality === 'high') {
         outputNode = chromaticAberration(outputNode, 0.2, vec2(0.5, 0.5), 1.08);
+    }
+
+    if (postConfig.fxaaEnabled) {
+        outputNode = fxaa(outputNode);
     }
 
     postProcessing.outputNode = outputNode;
@@ -102,8 +109,9 @@ export async function setupScene(container) {
     camera.position.set(0, CAMERA_EYE_Y, CAMERA_START_Z);
     camera.lookAt(0, CAMERA_LOOK_AT_Y, 0);
 
-    // Renderer setup
-    const rendererState = await createRenderer(container, { antialias: false });
+    // Renderer setup — pixel ratio, MSAA vs post FXAA, and power preference
+    // are resolved inside RendererFactory from device DPR and URL flags.
+    const rendererState = await createRenderer(container);
     const renderer = rendererState.renderer;
     container.appendChild(renderer.domElement);
     scene.userData.renderer = renderer;
@@ -114,7 +122,8 @@ export async function setupScene(container) {
     const hardwareConcurrency = navigator.hardwareConcurrency || 4;
     const hasWebGpu = rendererState.usingWebGPU || Boolean(navigator.gpu);
     const maxTextureSize = renderer.capabilities?.maxTextureSize ?? 4096;
-    const isLowEndDevice = maxTextureSize < 4096 || hardwareConcurrency <= 4 || !hasWebGpu;
+    const isSoftwareRenderer = rendererState.isSoftwareRenderer;
+    const isLowEndDevice = isSoftwareRenderer || maxTextureSize < 4096 || hardwareConcurrency <= 4 || !hasWebGpu;
     const forceLowPost = params.has('low-post');
     const disablePost = params.has('no-post');
     const disableBloom = params.has('no-bloom');
@@ -124,7 +133,9 @@ export async function setupScene(container) {
         quality: postQuality,
         bloomEnabled: !disablePost && !disableBloom,
         godRaysEnabled: !disableGodRays,
+        fxaaEnabled: rendererState.usePostAA && !disablePost,
         lowEndDetected: isLowEndDevice,
+        softwareRenderer: isSoftwareRenderer,
         rendererType: rendererState.rendererType,
         requestedRenderer: rendererState.requestedRenderer,
         chromaticAberrationEnabled: rendererState.usingWebGPU && postQuality === 'high'
@@ -249,13 +260,21 @@ export async function setupScene(container) {
             composer.addPass(vignettePass);
             postPasses.vignettePass = vignettePass;
 
+            if (postConfig.fxaaEnabled) {
+                const fxaaPass = new FXAAPass();
+                fxaaPass.setSize(containerWidth, containerHeight);
+                composer.addPass(fxaaPass);
+                postPasses.fxaaPass = fxaaPass;
+            }
+
             // Output Pass
             const outputPass = new OutputPass();
             composer.addPass(outputPass);
             postPasses.outputPass = outputPass;
         }
     } else if (isLowEndDevice) {
-        console.log('Post-processing disabled: low-end GPU detected');
+        const reason = isSoftwareRenderer ? 'software WebGL rasterizer' : 'low-end GPU';
+        console.log(`Post-processing tuned for ${reason}`);
     }
 
     await preloadSharedTextures(renderer);
