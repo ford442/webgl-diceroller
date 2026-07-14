@@ -11,9 +11,10 @@ import {
     applyDiceMassBiases,
     spawnedDice,
     readAllDiceValues,
-    getDiceValueDebugSnapshot
+    getDiceValueDebugSnapshot,
+    replaceDiceSet
 } from './dice.js';
-import { showResults, hideResults, updateDiceHud } from './results.js';
+import { showResults, hideResults, updateDiceHud, showNotationResults } from './results.js';
 import { updateInteraction, interactionNeedsAmmoStep } from './interaction.js';
 import { createDiceCollisionAudio } from './audio/DiceCollisionAudio.js';
 import { updateAtmosphere } from './environment/Atmosphere.js';
@@ -48,6 +49,7 @@ import { createRollStats } from './roll/RollStats.js';
 import { createRollHistoryPanel } from './ui/RollHistoryPanel.js';
 import { createCullingSystem } from './core/CullingSystem.js';
 import { createRenderStats } from './debug/RenderStats.js';
+import { createRollSession } from './roll/RollSession.js';
 
 let camera, scene, renderer, composer;
 let physicsWorld;
@@ -529,12 +531,29 @@ async function init() {
     // Camera controller (focus state + FPS movement)
     cameraController = createCameraController(camera);
 
+    const rollSessionRef = { current: null };
+
     // Load all tiers
     let tierResult;
     try {
     tierResult = await loadTiers(scene, camera, physicsWorld, { scheduler, cullingSystem }, {
         audio: collisionAudio,
-        onDiceRoll: () => beginRoll(),
+        onDiceRoll: () => {
+            shadowController?.pulse('roll');
+            cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
+            hideResults();
+            if (lampData) lampData.setRolling(true);
+        },
+        notationHooks: {
+            onNotationRoll: async (expression) => {
+                if (!rollSessionRef.current) throw new Error('Roll session not ready');
+                shadowController?.pulse('roll');
+                hideResults();
+                cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
+                if (lampData) lampData.setRolling(true);
+                await rollSessionRef.current.roll(expression);
+            }
+        },
         setLampData: (data) => { lampData = data; },
         setGongData: (data) => { gongData = data; },
         setCandleFlamePos: (pos) => {
@@ -574,6 +593,20 @@ async function init() {
     }
     if (tierResult.fireplaceLight) fireplaceLight = tierResult.fireplaceLight;
     const layoutManager = tierResult.layoutManager;
+
+    rollSessionRef.current = createRollSession({
+        scene,
+        world: physicsWorld,
+        replaceDiceSet,
+        throwDice: (s, w, seed) => {
+            throwDice(s, w, seed);
+            cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
+            if (lampData) lampData.setRolling(true);
+        },
+        readAllDiceValues,
+        areDiceSettled,
+        onComplete: (result) => showNotationResults(result)
+    });
 
     // Input handling
     inputState = setupInput({
@@ -625,6 +658,7 @@ async function init() {
     window.readAllDiceValues = readAllDiceValues;
     window.getDiceValueDebugSnapshot = getDiceValueDebugSnapshot;
     window.areDiceSettled = areDiceSettled;
+    window.rollNotation = (expression, seed = null) => rollSessionRef.current?.roll(expression, seed);
     window.rerollTableLayout = (overrides) => layoutManager?.rerollLayout(overrides);
     window.getTableLayoutConfig = () => layoutManager?.getConfig();
 }
