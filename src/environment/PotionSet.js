@@ -62,41 +62,39 @@ export function createPotionSet(scene, physicsWorld, position = { x: 12, y: -2.7
     group.rotation.y = rotationY;
     scene.add(group);
 
-    if (!ammo || !physicsWorld) {
-        return { group };
-    }
+    if (ammo && physicsWorld) {
+        const botShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth / 2, stepHeight / 2, stepDepth));
+        const topShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth / 2, stepHeight / 2, stepDepth / 2));
 
-    const botShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth / 2, stepHeight / 2, stepDepth));
-    const topShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth / 2, stepHeight / 2, stepDepth / 2));
+        function addBodyForMesh(mesh, shape, offsetY = 0) {
+            const worldPos = new THREE.Vector3();
+            mesh.getWorldPosition(worldPos);
+            const worldQuat = new THREE.Quaternion();
+            mesh.getWorldQuaternion(worldQuat);
 
-    function addBodyForMesh(mesh, shape, offsetY = 0) {
-        const worldPos = new THREE.Vector3();
-        mesh.getWorldPosition(worldPos);
-        const worldQuat = new THREE.Quaternion();
-        mesh.getWorldQuaternion(worldQuat);
+            const dummy = new THREE.Object3D();
+            dummy.position.copy(worldPos);
+            dummy.quaternion.copy(worldQuat);
 
-        const dummy = new THREE.Object3D();
-        dummy.position.copy(worldPos);
-        dummy.quaternion.copy(worldQuat);
+            if (offsetY !== 0) {
+                dummy.translateY(offsetY);
+            }
 
-        if (offsetY !== 0) {
-            dummy.translateY(offsetY);
+            createStaticBody(physicsWorld, dummy, shape);
         }
 
-        createStaticBody(physicsWorld, dummy, shape);
+        addBodyForMesh(botStep, botShape);
+        addBodyForMesh(topStep, topShape);
+
+        const healthShape = new ammo.btSphereShape(0.4);
+        addBodyForMesh(healthPotion, healthShape, 0.4);
+
+        const manaShape = new ammo.btBoxShape(new ammo.btVector3(0.3, 0.5, 0.3));
+        addBodyForMesh(manaPotion, manaShape, 0.5);
+
+        const staminaShape = new ammo.btCylinderShape(new ammo.btVector3(0.3, 0.5, 0.3));
+        addBodyForMesh(staminaPotion, staminaShape, 0.5);
     }
-
-    addBodyForMesh(botStep, botShape);
-    addBodyForMesh(topStep, topShape);
-
-    const healthShape = new ammo.btSphereShape(0.4);
-    addBodyForMesh(healthPotion, healthShape, 0.4);
-
-    const manaShape = new ammo.btBoxShape(new ammo.btVector3(0.3, 0.5, 0.3));
-    addBodyForMesh(manaPotion, manaShape, 0.5);
-
-    const staminaShape = new ammo.btCylinderShape(new ammo.btVector3(0.3, 0.5, 0.3));
-    addBodyForMesh(staminaPotion, staminaShape, 0.5);
 
     return { group };
 }

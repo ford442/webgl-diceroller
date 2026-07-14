@@ -1,21 +1,30 @@
 import { DENSITY_PRESETS, LAYOUT_THEMES, buildShareableTableUrl } from './core/TableLayoutConfig.js';
+import { isTouchPrimaryDevice } from './core/DeviceCapabilities.js';
 
 export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHooks = null, rollShareHooks = null) => {
     const canvasContainer = document.getElementById('canvas-container') || document.body;
+    const touchUi = isTouchPrimaryDevice();
+
     const container = document.createElement('div');
     container.style.position = 'absolute';
-    container.style.top = '10px';
-    container.style.right = '10px';
+    container.style.top = touchUi ? '8px' : '10px';
+    container.style.right = touchUi ? '8px' : '10px';
+    container.style.left = touchUi ? '8px' : 'auto';
     container.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-    container.style.padding = '10px';
+    container.style.padding = touchUi ? '12px' : '10px';
     container.style.color = 'white';
     container.style.fontFamily = 'sans-serif';
     container.style.borderRadius = '5px';
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
-    container.style.gap = '5px';
+    container.style.gap = touchUi ? '8px' : '5px';
     container.style.zIndex = '1000';
-    container.style.maxWidth = '220px';
+    container.style.maxWidth = touchUi ? 'min(92vw, 320px)' : '220px';
+    if (touchUi) {
+        container.style.maxHeight = '42vh';
+        container.style.overflowY = 'auto';
+        container.style.webkitOverflowScrolling = 'touch';
+    }
 
     const diceTypes = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
     const inputs = {};
@@ -36,7 +45,9 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         input.min = '0';
         input.max = '10';
         input.value = counts[type];
-        input.style.width = '40px';
+        input.style.width = touchUi ? '56px' : '40px';
+        input.style.minHeight = touchUi ? '44px' : 'auto';
+        input.style.fontSize = touchUi ? '16px' : 'inherit';
         input.style.marginLeft = '5px';
 
         input.addEventListener('change', () => {
@@ -211,11 +222,34 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
 
     const rollBtn = document.createElement('button');
     rollBtn.textContent = 'Roll All';
-    rollBtn.style.marginTop = '10px';
     rollBtn.style.cursor = 'pointer';
     rollBtn.addEventListener('click', () => onRollAll());
     rollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-    container.appendChild(rollBtn);
+    rollBtn.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+
+    if (touchUi) {
+        const rollDock = document.createElement('div');
+        rollDock.style.position = 'absolute';
+        rollDock.style.left = '50%';
+        rollDock.style.bottom = 'max(16px, env(safe-area-inset-bottom))';
+        rollDock.style.transform = 'translateX(-50%)';
+        rollDock.style.zIndex = '1001';
+        rollBtn.style.marginTop = '0';
+        rollBtn.style.minHeight = '52px';
+        rollBtn.style.minWidth = 'min(72vw, 280px)';
+        rollBtn.style.fontSize = '18px';
+        rollBtn.style.fontWeight = 'bold';
+        rollBtn.style.borderRadius = '999px';
+        rollBtn.style.border = '1px solid rgba(255, 153, 51, 0.65)';
+        rollBtn.style.background = 'rgba(255, 153, 51, 0.92)';
+        rollBtn.style.color = '#1a1008';
+        rollBtn.style.boxShadow = '0 8px 24px rgba(0,0,0,0.35)';
+        rollDock.appendChild(rollBtn);
+        canvasContainer.appendChild(rollDock);
+    } else {
+        rollBtn.style.marginTop = '10px';
+        container.appendChild(rollBtn);
+    }
 
     if (rollShareHooks?.buildShareUrl) {
         const shareRollBtn = document.createElement('button');
@@ -419,10 +453,21 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
     helpContainer.style.padding = '10px';
     helpContainer.style.color = 'white';
     helpContainer.style.fontFamily = 'sans-serif';
-    helpContainer.style.fontSize = '12px';
+    helpContainer.style.fontSize = touchUi ? '11px' : '12px';
     helpContainer.style.borderRadius = '5px';
     helpContainer.style.zIndex = '1000';
-    helpContainer.innerHTML = `
+    if (touchUi) {
+        helpContainer.style.bottom = 'max(84px, calc(16px + env(safe-area-inset-bottom)))';
+        helpContainer.style.maxWidth = 'min(92vw, 320px)';
+    }
+    helpContainer.innerHTML = touchUi ? `
+        <div style="font-weight: bold; margin-bottom: 5px;">Touch Controls:</div>
+        <div>👆 <b>Tap table</b> - Roll all dice</div>
+        <div>👉 <b>Flick table</b> - Toss dice</div>
+        <div>👇 <b>Hold die</b> - Grab and drag</div>
+        <div>👆👆 <b>Double-tap die</b> - Levitate</div>
+        <div>✌️ <b>Two fingers</b> - Orbit / pinch zoom</div>
+    ` : `
         <div style="font-weight: bold; margin-bottom: 5px;">Controls:</div>
         <div>🖱️ <b>Left Click</b> - Grab/throw dice</div>
         <div>🖱️ <b>Right Click</b> - Enter FPS mode</div>

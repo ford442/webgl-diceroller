@@ -9,7 +9,8 @@ import { VignetteShader } from '../shaders/VignetteShader.js';
 import { TavernEnvironment } from '../environment/TavernEnvironment.js';
 import { createRenderer } from './RendererFactory.js';
 import { preloadSharedTextures } from './TexturePipeline.js';
-import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z, TABLE_SURFACE_Y } from './SceneMetrics.js';
+import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z, TABLE_SURFACE_Y, applyViewportToCamera, computeCameraAspect } from './SceneMetrics.js';
+import { guessInitialQualityProfile } from './AdaptiveQuality.js';
 
 const VIGNETTE_OFFSET = 1.0;
 const VIGNETTE_DARKNESS = 1.0;
@@ -104,10 +105,11 @@ export async function setupScene(container) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111111); // Darker for atmosphere
 
-    // Camera setup - 1:1 aspect ratio
-    const camera = new THREE.PerspectiveCamera(80, 1, 0.1, 1000);
+    // Camera setup — aspect follows the container (portrait-friendly on phones).
+    const camera = new THREE.PerspectiveCamera(80, computeCameraAspect(containerWidth, containerHeight), 0.1, 1000);
     camera.position.set(0, CAMERA_EYE_Y, CAMERA_START_Z);
     camera.lookAt(0, CAMERA_LOOK_AT_Y, 0);
+    applyViewportToCamera(camera, containerWidth, containerHeight);
 
     // Renderer setup — pixel ratio, MSAA vs post FXAA, and power preference
     // are resolved inside RendererFactory from device DPR and URL flags.
@@ -119,23 +121,21 @@ export async function setupScene(container) {
     scene.userData.rendererType = rendererState.rendererType;
 
     const params = new URLSearchParams(window.location.search);
-    const hardwareConcurrency = navigator.hardwareConcurrency || 4;
-    const hasWebGpu = rendererState.usingWebGPU || Boolean(navigator.gpu);
-    const maxTextureSize = renderer.capabilities?.maxTextureSize ?? 4096;
     const isSoftwareRenderer = rendererState.isSoftwareRenderer;
-    const isLowEndDevice = isSoftwareRenderer || maxTextureSize < 4096 || hardwareConcurrency <= 4 || !hasWebGpu;
+    const initialQuality = guessInitialQualityProfile(rendererState);
     const forceLowPost = params.has('low-post');
     const disablePost = params.has('no-post');
     const disableBloom = params.has('no-bloom');
     const disableGodRays = params.has('no-godrays');
-    const postQuality = disablePost ? 'off' : ((isLowEndDevice || forceLowPost) ? 'low' : 'high');
+    const postQuality = disablePost ? 'off' : (forceLowPost || initialQuality.postQuality === 'low' ? 'low' : 'high');
     const postConfig = {
         quality: postQuality,
-        bloomEnabled: !disablePost && !disableBloom,
-        godRaysEnabled: !disableGodRays,
+        bloomEnabled: !disablePost && !disableBloom && initialQuality.bloomEnabled,
+        godRaysEnabled: !disableGodRays && initialQuality.godRaysEnabled,
         fxaaEnabled: rendererState.usePostAA && !disablePost,
-        lowEndDetected: isLowEndDevice,
+        lowEndDetected: initialQuality.id !== 'high',
         softwareRenderer: isSoftwareRenderer,
+        adaptiveProfile: initialQuality.id,
         rendererType: rendererState.rendererType,
         requestedRenderer: rendererState.requestedRenderer,
         chromaticAberrationEnabled: rendererState.usingWebGPU && postQuality === 'high'
@@ -272,7 +272,7 @@ export async function setupScene(container) {
             composer.addPass(outputPass);
             postPasses.outputPass = outputPass;
         }
-    } else if (isLowEndDevice) {
+    } else if (postConfig.lowEndDetected) {
         const reason = isSoftwareRenderer ? 'software WebGL rasterizer' : 'low-end GPU';
         console.log(`Post-processing tuned for ${reason}`);
     }
@@ -305,5 +305,5 @@ export async function setupScene(container) {
         }
     }
 
-    return { scene, camera, renderer, composer, pointLight, spotLight, postConfig, postPasses, rendererState };
+    return { scene, camera, renderer, composer, pointLight, spotLight, postConfig, postPasses, rendererState, initialQuality };
 }

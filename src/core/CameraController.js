@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { spawnedDice, readDiceValue, areDiceSettled, updateDiceVisuals } from '../dice.js';
 import { shouldDeferAutoResults } from '../roll/RollSession.js';
-import { CAMERA_EYE_Y } from './SceneMetrics.js';
+import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z } from './SceneMetrics.js';
 
 const DiceFocusState = {
     IDLE: 'IDLE',
@@ -24,6 +24,11 @@ export function createCameraController(camera) {
     let yaw = 0;
     let pitch = 0;
     const maxPitch = Math.PI / 2 - 0.1;
+    const minOrbitDistance = 12;
+    const maxOrbitDistance = 36;
+    const orbitLookAt = new THREE.Vector3(0, CAMERA_LOOK_AT_Y, 0);
+    let orbitDistance = CAMERA_START_Z;
+    let touchOrbitActive = false;
 
     // Dice Focus Logic
     let diceFocusState = DiceFocusState.IDLE;
@@ -34,6 +39,51 @@ export function createCameraController(camera) {
     const focusStartRot = new THREE.Quaternion();
     const focusEndRot = new THREE.Quaternion();
     let focusProgress = 0;
+
+    function syncOrbitFromCamera() {
+        const offset = camera.position.clone().sub(orbitLookAt);
+        orbitDistance = Math.max(minOrbitDistance, Math.min(maxOrbitDistance, offset.length()));
+        yaw = Math.atan2(offset.x, offset.z);
+        const horiz = Math.hypot(offset.x, offset.z);
+        pitch = Math.atan2(offset.y, horiz);
+    }
+
+    function applyOrbitPose() {
+        const horiz = orbitDistance * Math.cos(pitch);
+        camera.position.set(
+            orbitLookAt.x + horiz * Math.sin(yaw),
+            orbitLookAt.y + orbitDistance * Math.sin(pitch),
+            orbitLookAt.z + horiz * Math.cos(yaw)
+        );
+        camera.lookAt(orbitLookAt);
+        pitch = camera.rotation.x;
+        yaw = camera.rotation.y;
+    }
+
+    function applyTouchOrbit(deltaYaw, deltaPitch) {
+        if (diceFocusState !== DiceFocusState.IDLE) return;
+        touchOrbitActive = true;
+        yaw += deltaYaw;
+        pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch + deltaPitch));
+        applyOrbitPose();
+    }
+
+    function applyTouchZoom(scale) {
+        if (diceFocusState !== DiceFocusState.IDLE) return;
+        touchOrbitActive = true;
+        orbitDistance = Math.max(minOrbitDistance, Math.min(maxOrbitDistance, orbitDistance * scale));
+        applyOrbitPose();
+    }
+
+    function reframeDefaultDistance(startZ) {
+        orbitDistance = startZ;
+        if (diceFocusState === DiceFocusState.IDLE && !touchOrbitActive) {
+            camera.position.set(0, CAMERA_EYE_Y, startZ);
+            camera.lookAt(orbitLookAt);
+            yaw = camera.rotation.y;
+            pitch = camera.rotation.x;
+        }
+    }
 
     function getState() {
         return diceFocusState;
@@ -63,7 +113,8 @@ export function createCameraController(camera) {
         hideResults,
         lampData,
         LampMode,
-        onResultsReady
+        onResultsReady,
+        touchPrimary = false
     }) {
         // Dice Focus State Machine
         if (diceFocusState === DiceFocusState.WAITING_FOR_STOP) {
@@ -160,8 +211,8 @@ export function createCameraController(camera) {
             }
         }
 
-        // Only allow player control if IDLE
-        if (diceFocusState === DiceFocusState.IDLE) {
+        // Only allow desktop FPS control when IDLE and not on a touch-primary device.
+        if (diceFocusState === DiceFocusState.IDLE && !touchPrimary && !touchOrbitActive) {
             // FPS Camera Logic - direct mouse-to-rotation mapping
             const turnSensitivity = 0.002; // Mouse sensitivity
 
@@ -227,6 +278,9 @@ export function createCameraController(camera) {
         getState,
         setState,
         update,
+        applyTouchOrbit,
+        applyTouchZoom,
+        reframeDefaultDistance,
         get yaw() { return yaw; },
         get pitch() { return pitch; }
     };
