@@ -24,7 +24,8 @@
     "test:lamp": "node tests/lamp.js",
     "test:cauldron": "node tests/cauldron.js",
     "test:flute": "node tests/flute.js",
-    "test:playingcards": "node tests/playingcards.js"
+    "test:playingcards": "node tests/playingcards.js",
+    "test:notation": "node tests/notation.test.mjs"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.1.0",

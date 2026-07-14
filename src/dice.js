@@ -366,7 +366,10 @@ export const readDiceValue = (die) => {
 /** Read current values for every spawned die (for the live HUD). */
 export const readAllDiceValues = () => spawnedDice.map((die) => ({
     type: die.type,
-    value: readDiceValue(die)
+    value: readDiceValue(die),
+    role: die.role ?? null,
+    groupIndex: die.groupIndex ?? 0,
+    dieIndex: die.dieIndex ?? 0
 }));
 
 export const getDiceValueDebugSnapshot = () => spawnedDice.map((die) => {
@@ -799,21 +802,24 @@ export const loadDiceModels = async (onProgress) => {
 
 export const spawnObjects = (scene, world, config = null) => {
     // If config is an object (counts), flatten it.
-    // If it's a list (array of strings), use it directly.
+    // If it's a list (array of strings or spec objects), use it directly.
     let diceToSpawn = [];
     if (config && !Array.isArray(config)) {
         Object.keys(config).forEach(type => {
             const count = config[type];
-            for (let i = 0; i < count; i++) diceToSpawn.push(type);
+            for (let i = 0; i < count; i++) diceToSpawn.push({ type });
         });
     } else if (Array.isArray(config)) {
-        diceToSpawn = config;
+        diceToSpawn = config.map((entry) => (
+            typeof entry === 'string' ? { type: entry } : entry
+        ));
     } else {
         // Default
-        diceToSpawn = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+        diceToSpawn = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'].map((type) => ({ type }));
     }
 
-    diceToSpawn.forEach((type, index) => {
+    diceToSpawn.forEach((spec, index) => {
+        const type = spec.type;
         const template = diceModels[type];
         if (!template) return;
 
@@ -895,9 +901,24 @@ export const spawnObjects = (scene, world, config = null) => {
             audioBodyId,
             inertiaScalar,
             centerOfMassOffset,
-            massBiasOffset: template.userData.massBiasOffset?.clone() ?? null
+            massBiasOffset: template.userData.massBiasOffset?.clone() ?? null,
+            role: spec.role ?? null,
+            groupIndex: spec.groupIndex ?? 0,
+            dieIndex: spec.dieIndex ?? index,
+            explode: spec.explode === true
         });
     });
+};
+
+/**
+ * Replace all dice on the table with a spec list (used by notation rolls).
+ * @param {object} scene
+ * @param {object} world
+ * @param {Array<{type: string, role?: string|null, groupIndex?: number, dieIndex?: number, explode?: boolean}>} specs
+ */
+export const replaceDiceSet = (scene, world, specs) => {
+    clearDice(scene, world);
+    spawnObjects(scene, world, specs);
 };
 
 // Reusable transform to avoid per-frame allocations

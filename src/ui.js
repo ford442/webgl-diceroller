@@ -1,6 +1,6 @@
 import { DENSITY_PRESETS, LAYOUT_THEMES, buildShareableTableUrl } from './core/TableLayoutConfig.js';
 
-export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
+export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHooks = null) => {
     const canvasContainer = document.getElementById('canvas-container') || document.body;
     const container = document.createElement('div');
     container.style.position = 'absolute';
@@ -96,6 +96,118 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
     presetRow.appendChild(presetLabel);
     presetRow.appendChild(presetSelect);
     container.appendChild(presetRow);
+
+    // --- Dice notation roll input ---
+    if (notationHooks?.onNotationRoll) {
+        const notationDivider = document.createElement('div');
+        notationDivider.style.marginTop = '8px';
+        notationDivider.style.paddingTop = '8px';
+        notationDivider.style.borderTop = '1px solid rgba(255,255,255,0.2)';
+        notationDivider.style.fontWeight = 'bold';
+        notationDivider.textContent = 'Roll Notation';
+        container.appendChild(notationDivider);
+
+        const notationHistory = [];
+        let historyIndex = -1;
+
+        const notationInput = document.createElement('input');
+        notationInput.type = 'text';
+        notationInput.placeholder = 'e.g. 3d6+2, 2d20kh1';
+        notationInput.spellcheck = false;
+        notationInput.style.width = '100%';
+        notationInput.style.boxSizing = 'border-box';
+        notationInput.style.padding = '4px 6px';
+        notationInput.style.marginTop = '4px';
+        notationInput.addEventListener('mousedown', (e) => e.stopPropagation());
+
+        const submitNotation = async () => {
+            const expr = notationInput.value.trim();
+            if (!expr) return;
+            notationInput.disabled = true;
+            try {
+                await notationHooks.onNotationRoll(expr);
+                if (!notationHistory.length || notationHistory[0] !== expr) {
+                    notationHistory.unshift(expr);
+                    if (notationHistory.length > 30) notationHistory.pop();
+                }
+                historyIndex = -1;
+            } catch (err) {
+                notationInput.style.outline = '1px solid #c44';
+                setTimeout(() => { notationInput.style.outline = ''; }, 1200);
+                console.warn('[Notation]', err?.message ?? err);
+            } finally {
+                notationInput.disabled = false;
+            }
+        };
+
+        notationInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                submitNotation();
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (!notationHistory.length) return;
+                historyIndex = Math.min(historyIndex + 1, notationHistory.length - 1);
+                notationInput.value = notationHistory[historyIndex];
+                return;
+            }
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIndex <= 0) {
+                    historyIndex = -1;
+                    notationInput.value = '';
+                    return;
+                }
+                historyIndex--;
+                notationInput.value = notationHistory[historyIndex];
+            }
+        });
+
+        container.appendChild(notationInput);
+
+        const notationBtnRow = document.createElement('div');
+        notationBtnRow.style.display = 'flex';
+        notationBtnRow.style.gap = '6px';
+        notationBtnRow.style.marginTop = '4px';
+
+        const notationRollBtn = document.createElement('button');
+        notationRollBtn.textContent = 'Roll';
+        notationRollBtn.style.flex = '1';
+        notationRollBtn.style.cursor = 'pointer';
+        notationRollBtn.addEventListener('click', submitNotation);
+        notationRollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+        notationBtnRow.appendChild(notationRollBtn);
+        container.appendChild(notationBtnRow);
+
+        const NOTATION_PRESETS = notationHooks.presets ?? [
+            '1d20',
+            '2d20kh1',
+            '3d6',
+            '4d6dl1',
+            '1d100'
+        ];
+
+        const presetChipRow = document.createElement('div');
+        presetChipRow.style.display = 'flex';
+        presetChipRow.style.flexWrap = 'wrap';
+        presetChipRow.style.gap = '4px';
+        presetChipRow.style.marginTop = '6px';
+
+        NOTATION_PRESETS.forEach((preset) => {
+            const chip = document.createElement('button');
+            chip.textContent = preset;
+            chip.style.cssText = 'font-size:10px;padding:2px 6px;cursor:pointer;border-radius:3px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:white;';
+            chip.addEventListener('mousedown', (e) => e.stopPropagation());
+            chip.addEventListener('click', () => {
+                notationInput.value = preset;
+                submitNotation();
+            });
+            presetChipRow.appendChild(chip);
+        });
+        container.appendChild(presetChipRow);
+    }
 
     const rollBtn = document.createElement('button');
     rollBtn.textContent = 'Roll All';
@@ -291,6 +403,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
         <div>⌨️ <b>WASD</b> - Move (FPS mode)</div>
         <div>⌨️ <b>ESC</b> - Exit FPS mode</div>
         <div>⌨️ <b>R</b> - Roll all dice</div>
+        <div>⌨️ <b>Enter</b> - Roll notation expression</div>
         <div>⌨️ <b>Shift+R</b> - New table layout</div>
     `;
     canvasContainer.appendChild(helpContainer);
