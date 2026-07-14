@@ -1,23 +1,4 @@
-const DIE_SIDES = {
-    d4: 4,
-    d6: 6,
-    d8: 8,
-    d10: 10,
-    d12: 12,
-    d20: 20
-};
-
-const DIE_ORDER = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
-
-// Chi-squared critical values for alpha=0.05, df = sides - 1.
-const CHI_SQUARED_CRITICAL_95 = {
-    4: 7.815,
-    6: 11.070,
-    8: 14.067,
-    10: 16.919,
-    12: 19.675,
-    20: 30.144
-};
+import { DEFAULT_MIN_SAMPLE_SIZE } from '../roll/RollStats.js';
 
 const PANEL_FONT = "'Palatino Linotype', 'Book Antiqua', Palatino, serif";
 const PANEL_BG = 'rgba(15, 9, 2, 0.92)';
@@ -28,49 +9,16 @@ const PASS = '#8fd18f';
 const FAIL = '#ff8f7a';
 const OBSERVED = '#ffd66b';
 const EXPECTED = '#6486ff';
-const MIN_SAMPLE_SIZE = 100;
 
-function createEmptyEntry(sides) {
-    const counts = new Map();
-    for (let face = 1; face <= sides; face++) {
-        counts.set(face, 0);
-    }
-    return {
-        sides,
-        totalRolls: 0,
-        counts
-    };
-}
-
-function ensureEntry(store, dieType) {
-    const sides = DIE_SIDES[dieType];
-    if (!sides) return null;
-
-    if (!store.has(dieType)) {
-        store.set(dieType, createEmptyEntry(sides));
-    }
-
-    return store.get(dieType);
-}
-
-export function computeChiSquared(observedCounts, sides) {
-    const total = observedCounts.reduce((sum, count) => sum + count, 0);
-    if (total === 0 || sides <= 0) return 0;
-
-    const expected = total / sides;
-    if (expected === 0) return 0;
-
-    return observedCounts.reduce((sum, count) => (
-        sum + ((count - expected) ** 2) / expected
-    ), 0);
-}
-
-export function createFairnessMonitor({ enabled = false, minSampleSize = MIN_SAMPLE_SIZE } = {}) {
-    const store = new Map();
+export function createFairnessMonitor({
+    enabled = false,
+    rollStats = null,
+    minSampleSize = DEFAULT_MIN_SAMPLE_SIZE
+} = {}) {
     let panel = null;
 
     function init() {
-        if (!enabled || panel) return;
+        if (!enabled || panel || !rollStats) return;
 
         const container = document.getElementById('canvas-container') || document.body;
         panel = document.createElement('div');
@@ -96,55 +44,15 @@ export function createFairnessMonitor({ enabled = false, minSampleSize = MIN_SAM
         render();
     }
 
-    function recordResults(diceResults) {
-        if (!enabled || !Array.isArray(diceResults)) return;
-
-        for (const result of diceResults) {
-            if (!result || typeof result.type !== 'string') continue;
-            if (!Number.isInteger(result.value)) continue;
-
-            const entry = ensureEntry(store, result.type);
-            if (!entry || result.value < 1 || result.value > entry.sides) continue;
-
-            entry.totalRolls += 1;
-            entry.counts.set(result.value, (entry.counts.get(result.value) ?? 0) + 1);
-        }
-
-        render();
-    }
-
     function reset() {
-        store.clear();
+        rollStats?.reset();
         render();
-    }
-
-    function getStats() {
-        return DIE_ORDER
-            .map((dieType) => {
-                const entry = store.get(dieType);
-                if (!entry) return null;
-
-                const observedCounts = Array.from({ length: entry.sides }, (_, index) => entry.counts.get(index + 1) ?? 0);
-                const chiSquared = computeChiSquared(observedCounts, entry.sides);
-                const criticalValue = CHI_SQUARED_CRITICAL_95[entry.sides] ?? null;
-                return {
-                    dieType,
-                    sides: entry.sides,
-                    totalRolls: entry.totalRolls,
-                    observedCounts,
-                    chiSquared,
-                    criticalValue,
-                    hasEnoughSamples: entry.totalRolls >= minSampleSize,
-                    passes: criticalValue == null ? null : chiSquared <= criticalValue
-                };
-            })
-            .filter(Boolean);
     }
 
     function render() {
-        if (!panel) return;
+        if (!panel || !rollStats) return;
 
-        const stats = getStats();
+        const stats = rollStats.getStats();
         if (stats.length === 0) {
             panel.innerHTML = `
                 <div style="font-size:14px;font-weight:bold;letter-spacing:0.6px;color:${OBSERVED};">Fairness Monitor</div>
@@ -235,8 +143,10 @@ export function createFairnessMonitor({ enabled = false, minSampleSize = MIN_SAM
 
     return {
         init,
-        recordResults,
         reset,
-        getStats
+        render,
+        getStats: () => rollStats?.getStats() ?? []
     };
 }
+
+export { computeChiSquared } from '../roll/RollStats.js';

@@ -1,4 +1,4 @@
-import { loadDiceModels, spawnObjects, updateDiceSet, throwDice } from '../dice.js';
+import { loadDiceModels, spawnObjects, updateDiceSet } from '../dice.js';
 import { initUI, createCrosshair } from '../ui.js';
 import { initResultsUI } from '../results.js';
 import { initInteraction } from '../interaction.js';
@@ -109,7 +109,6 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
             updateDiceSet(scene, physicsWorld, newCounts);
         },
         () => {
-            throwDice(scene, physicsWorld);
             callbacks.onDiceRoll?.();
         },
         {

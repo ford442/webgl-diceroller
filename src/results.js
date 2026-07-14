@@ -1,5 +1,5 @@
 /**
- * results.js — Dice Result Display & Roll History
+ * results.js — Dice Result Display
  *
  * Public API:
  *   initResultsUI()          — create DOM elements (call once after page loads)
@@ -17,8 +17,6 @@ let rollHistory   = [];
 let resultsOverlay = null;
 let diceHudPanel   = null;
 let diceHudRow     = null;
-let historyPanel   = null;
-let historyList    = null;
 
 // ---------------------------------------------------------------------------
 // Tavern theme tokens
@@ -38,7 +36,6 @@ const BORDER     = '2px solid #8B6914';
 export function initResultsUI() {
     _createDiceHud();
     _createResultsOverlay();
-    _createHistoryPanel();
 }
 
 /**
@@ -84,7 +81,7 @@ export function updateDiceHud(diceResults, options = {}) {
 }
 
 /**
- * Show animated result cards and record the roll in history.
+ * Show animated result cards for a completed roll.
  * @param {Array<{type: string, value: number|null}>} diceResults
  */
 export function showResults(diceResults) {
@@ -94,7 +91,6 @@ export function showResults(diceResults) {
     if (valid.length === 0) return;
 
     const total = valid.reduce((s, r) => s + r.value, 0);
-    _addToHistory(valid, total);
 
     // Build card row
     resultsOverlay.innerHTML = '';
