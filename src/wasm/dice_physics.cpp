@@ -14,7 +14,6 @@
  */
 
 #include <emscripten/bind.h>
-#include <emscripten/val.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -386,12 +385,13 @@ public:
     static constexpr int MAX_DICE = 500;
     static constexpr int MAX_VERTICES_PER_HULL = 64;
     static constexpr int MAX_EVENTS_PER_STEP = 1024;
+    static constexpr uint32_t FLAG_NO_DRAG = 1u << 0;
 
     DicePhysicsEngine()
-        : gravity_(-15.0f), tableY_(-2.75f), tableHalfW_(18.0f), tableHalfD_(18.0f), nextId_(0) {
-        val window = val::global("window");
-        std::string search = window["location"]["search"].as<std::string>();
-        noDrag_ = search.find("no-drag") != std::string::npos;
+        : gravity_(-15.0f), tableY_(-2.75f), tableHalfW_(18.0f), tableHalfD_(18.0f), nextId_(0) {}
+
+    void setFlags(uint32_t flags) {
+        noDrag_ = (flags & FLAG_NO_DRAG) != 0;
     }
 
     void init(float gravity, float tableY, float tableHalfW, float tableHalfD) {
@@ -949,6 +949,7 @@ EMSCRIPTEN_BINDINGS(stl_support) {
 EMSCRIPTEN_BINDINGS(dice_physics) {
     class_<DicePhysicsEngine>("DicePhysicsEngine")
         .constructor()
+        .function("setFlags",          &DicePhysicsEngine::setFlags)
         .function("init",              &DicePhysicsEngine::init)
         .function("reset",             &DicePhysicsEngine::reset)
         .function("addDie",            &DicePhysicsEngine::addDie)
