@@ -47,6 +47,8 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 - [x] **Phase 3:** Collision event buffer for audio/gameplay hooks.
 - [x] **Phase 3:** Hardening — max dice limits, hull vertex limits, memory caps, NaN checks.
 - [x] **Phase 3:** Experimental Web Worker bridge (`WorkerPhysicsBridge.js`).
+- [x] **Phase 5:** Native solver test harness (`npm run test:solver`) — unit tests,
+  2000-seed invariant fuzz loop, determinism checks, optional native↔WASM parity.
 
 ---
 
@@ -173,6 +175,32 @@ npm run build:wasm
 # Equivalent direct invocation:
 cd src/wasm && ./build.sh
 ```
+
+### Native solver tests (no browser, no Emscripten)
+
+The engine core lives in `dice_physics_engine.hpp` and is compiled natively with
+g++/clang for fast regression coverage:
+
+```bash
+# Unit tests (SAT, PRNG, serialize round-trip, determinism) + 2000-seed fuzz loop:
+npm run test:solver
+
+# Tune fuzz volume (default 2000 seeds, ~6 s on CI):
+FUZZ_SEEDS=500 npm run test:solver
+```
+
+When `public/wasm/dice_physics.wasm` is present (after `npm run build:wasm`), the
+same script also runs a native↔WASM `serializeState()` parity check for a fixed
+seed via `scripts/compare-solver-wasm.mjs`.
+
+Source layout:
+
+| File | Role |
+|------|------|
+| `dice_physics_engine.hpp` | Portable solver (SAT, integration, PRNG, serialize) |
+| `dice_physics.cpp` | Emscripten Embind exports for the WASM build |
+| `solver_tests.cpp` | doctest unit + fuzz harness (`--dump-serialize` for parity) |
+| `build_solver_test.sh` | Native compile + run script |
 
 ### Runtime flags
 
@@ -462,5 +490,5 @@ const t2 = window.getWasmEngine().getTransforms();
       internally instead of being overwritten each frame (retire ammo dice bodies).
 - [~] Mirror drag/levitation into WASM (retire ammo for dice). **In progress:** `?wasm-drag` drives both interactions kinematically in the WASM world via `setDieTransform`/`setDieVelocity` (`src/interaction.js`, helpers in `src/dice.js`). Default off; ammo path remains the default and fallback. Remaining: soak-test under `?wasm-drag`, then drop the ammo dice bodies in `spawnDicePhysics`. Optional C++ follow-up: a true `setDieKinematic(id, bool)` flag so held dice ignore gravity/contacts internally instead of being overwritten each frame.
 - [ ] Web Audio integration: dice clack, table thump, lamp jiggle on collision.
-- [ ] Fuzz testing harness for the C++ solver.
+- [x] Fuzz testing harness for the C++ solver (`npm run test:solver`).
 - [ ] SIMD optimisation (`-msimd128`) for SAT projections.

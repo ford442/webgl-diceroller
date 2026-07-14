@@ -53,6 +53,26 @@ jobs:
           path: public/wasm/
           retention-days: 7
 
+  test-solver:
+    name: Native solver unit + fuzz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: FUZZ_SEEDS=2000 npm run test:solver
+
+  test-solver-wasm-parity:
+    name: Native ↔ WASM serialize parity
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-artifacts
+          path: public/wasm/
+      - run: npm run test:solver
+
   # These verify:* scripts each boot their own throwaway vite dev server
   # (see scripts/verify-*.mjs), so no separate preview server is needed here.
   verify:
