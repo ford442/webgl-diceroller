@@ -61,20 +61,10 @@ async function boot() {
     } catch (e) {
         // Hulls are optional; collision quality degrades but sim still runs.
     }
-    // NOTE: the engine itself is constructed lazily in the 'init' handler, after
-    // we shim `window.location.search` — the C++ constructor reads it (for the
-    // ?no-drag flag) via emval and `window` does not exist in a module worker.
 }
 
-function ensureEngine(pageSearch) {
+function ensureEngine() {
     if (engine) return;
-    // Shim the browser global the C++ constructor expects. emval's
-    // val::global("window") resolves to globalThis.window; provide just enough
-    // for `window.location.search` to read back the page's query string.
-    if (typeof globalThis.window === 'undefined') {
-        // @ts-ignore — minimal shim; the C++ side only reads window.location.search.
-        globalThis.window = { location: { search: pageSearch || '' } };
-    }
     engine = new Module.DicePhysicsEngine();
 }
 
@@ -189,7 +179,8 @@ function handle(type, payload) {
     if (type !== 'init' && !engine) return;
     switch (type) {
         case 'init': {
-            ensureEngine(payload.search);
+            ensureEngine();
+            engine.setFlags(payload.flags >>> 0);
             engine.init(payload.gravity, payload.tableY, payload.tableHalfW, payload.tableHalfD);
             if (payload.sab) {
                 header = new Int32Array(payload.sab, 0, HEADER_INTS);

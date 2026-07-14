@@ -22,6 +22,7 @@ import {
     MAX_DICE, STRIDE, HEADER_INTS, H_FRONT, H_COUNT, H_SETTLED,
     idsOffset, xfOffset, SAB_BYTES, sabSupported,
 } from './workerLayout.js';
+import { parsePhysicsFlags } from './physicsFlags.js';
 
 // ---------------------------------------------------------------------------
 // Synchronous proxy mimicking DicePhysicsEngine
@@ -93,10 +94,11 @@ class WorkerEngineProxy {
 
     // --- lifecycle ---------------------------------------------------------
     init(gravity, tableY, tableHalfW, tableHalfD) {
-        // Forward the page query string so the worker can shim
-        // window.location.search for the C++ constructor (?no-drag detection).
-        const search = (typeof self !== 'undefined' && self.location) ? self.location.search : '';
-        this._send('init', { gravity, tableY, tableHalfW, tableHalfD, search, sab: this.sab || null });
+        this._send('init', {
+            gravity, tableY, tableHalfW, tableHalfD,
+            flags: parsePhysicsFlags(_searchParams),
+            sab: this.sab || null,
+        });
     }
 
     reset() {

@@ -5,6 +5,7 @@
 // export so they stay drop-in compatible with each other.
 
 export interface PhysicsEngine {
+    setFlags(flags: number): void;
     init(gravity: number, tableY: number, tableHalfW: number, tableHalfD: number): void;
     reset(): void;
     step(dt?: number): void;

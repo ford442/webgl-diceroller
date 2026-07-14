@@ -260,6 +260,7 @@ const engine = getWasmEngine();
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
+| `setFlags` | `(flags: u32): void` | Engine options from the main thread (`FLAG_NO_DRAG = 1` disables quadratic drag). Call after construction, before `init`. |
 | `init` | `(gravity, tableY, tableHalfW, tableHalfD): void` | Configure world parameters. |
 | `reset` | `(): void` | Remove all dice and reset the ID counter. |
 
@@ -438,10 +439,10 @@ const t2 = window.getWasmEngine().getTransforms();
   path. A request/response round-trip could restore them if needed.
 - `applyDiceMassBiases()` posts one `applyTorqueImpulse` message per mass-biased
   die per frame; batching into a single message would cut chatter at high counts.
-- The C++ constructor reads `window.location.search` via emval; `window` is
-  absent in a module worker, so the worker shims it before constructing the
-  engine. A cleaner fix is to guard that access in `dice_physics.cpp` (requires
-  an emcc rebuild) and pass the `no-drag` flag explicitly through `init()`.
+- URL-driven engine flags (`?no-drag`, etc.) are parsed on the main thread in
+  `physicsFlags.js` and forwarded into WASM via `DicePhysicsEngine.setFlags()`
+  (both the in-process bridge and the worker init payload). The C++ constructor
+  no longer touches `window`.
 
 ### Phase 5+ (Future)
 

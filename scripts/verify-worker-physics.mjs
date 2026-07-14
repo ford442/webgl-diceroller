@@ -91,7 +91,9 @@ try {
     page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text()); });
     page.on('pageerror', (ex) => errors.push('pageerror: ' + ex.message));
     page.on('worker', (w) => { w.on('console', (m) => errors.push('worker ' + m.type() + ': ' + m.text())); });
-    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    // Load a lightweight module URL (same origin) instead of `/` so main.js
+    // does not race this harness with a second engine.init() that clears dice.
+    await page.goto(`${BASE}/src/wasm/physicsFlags.js`, { waitUntil: 'domcontentloaded' });
     result = await page.evaluate(async () => {
         try {
             // @ts-ignore — runtime-generated test module written just before this browser-side import runs.

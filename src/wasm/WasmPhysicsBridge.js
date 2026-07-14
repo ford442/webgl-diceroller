@@ -17,12 +17,14 @@
  */
 
 import { publicAssetUrl } from '../core/publicAssetUrl.js';
+import { parsePhysicsFlags } from './physicsFlags.js';
 
 // ---------------------------------------------------------------------------
 // No-op stub
 // ---------------------------------------------------------------------------
 
 const STUB_ENGINE = {
+    setFlags:           () => {},
     init:               () => {},
     reset:              () => {},
     step:               () => {},
@@ -82,6 +84,7 @@ export const loadWasmEngine = async () => {
 
         _moduleClass = Module;
         _engine      = new Module.DicePhysicsEngine();
+        _engine.setFlags(parsePhysicsFlags(_searchParams));
         _available   = true;
 
         // Pre-load hulls.json for fast die registration
