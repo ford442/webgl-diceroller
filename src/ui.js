@@ -429,6 +429,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         <div>⌨️ <b>WASD</b> - Move (FPS mode)</div>
         <div>⌨️ <b>ESC</b> - Exit FPS mode</div>
         <div>⌨️ <b>R</b> - Roll all dice</div>
+        <div>⌨️ <b>H</b> - Roll history & statistics</div>
         <div>⌨️ <b>Enter</b> - Roll notation expression</div>
         <div>⌨️ <b>Shift+R</b> - New table layout</div>
     `;
