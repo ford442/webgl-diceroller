@@ -22,7 +22,8 @@ import {
     applyRendererSize,
     createPixelRatioMonitor,
     installRendererRecoveryHandlers,
-    recoverRenderer
+    recoverRenderer,
+    syncComposerPixelRatio
 } from './core/RendererFactory.js';
 import { LampMode } from './environment/Lamp.js';
 import {
@@ -587,7 +588,10 @@ function applyLivePixelRatio(container, nextRatio) {
     applyRendererSize(renderer, width, height, nextRatio);
     rendererState.pixelRatio = nextRatio;
     rendererState.usePostAA = !rendererState.antialias && nextRatio > 1;
-    if (composer) composer.setSize(width, height);
+    if (postConfig) {
+        postConfig.fxaaEnabled = rendererState.usePostAA && postConfig.quality !== 'off';
+    }
+    syncComposerPixelRatio(composer, width, height, nextRatio);
     rendererBadge?.update(rendererState);
 }
 
@@ -670,7 +674,7 @@ function onWindowResize() {
     camera.aspect = 1; // Fixed 1:1 aspect ratio
     camera.updateProjectionMatrix();
     applyRendererSize(renderer, width, height, pixelRatio);
-    if (composer) composer.setSize(width, height);
+    syncComposerPixelRatio(composer, width, height, pixelRatio);
 }
 
 function animate() {

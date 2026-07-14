@@ -18,6 +18,7 @@
     "verify:godrays": "node scripts/verify-godrays.mjs",
     "verify:wasm-primitives": "node scripts/verify-wasm-primitives.mjs",
     "verify:render-regression": "node scripts/render-regression.mjs && node scripts/compare-render-baseline.mjs",
+    "verify:renderer-factory": "node scripts/verify-renderer-factory.mjs",
     "typecheck": "tsc --noEmit",
     "test:debug": "node tests/debug.js",
     "test:lamp": "node tests/lamp.js",

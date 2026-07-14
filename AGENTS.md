@@ -95,6 +95,10 @@ npm run preview
 - Render/perf flags:
   - WebGPU is the default; `?webgpu` / `?wgpu` are redundant but still force it explicitly.
   - `?webgl` forces the stable WebGL baseline path (escape hatch / older browsers).
+  - `?pr=N` sets render pixel ratio (clamped to `[0.5, 3]`); default is `min(devicePixelRatio, 2)`. At `pr=1` MSAA is enabled; above 1.0 FXAA is used in the post chain instead.
+  - Pixel ratio auto step-down: when sustained frame times exceed ~32 ms, ratio steps down toward 1.0 (skipped when `?pr=` forces a ratio).
+  - Software WebGL rasterizers (SwiftShader, llvmpipe, etc.) auto-enable the `low-post` profile.
+  - GPU context/device loss surfaces the renderer badge and attempts WebGL fallback recovery.
   - `?no-post` disables the composer entirely (both renderers).
   - `?low-post` keeps post enabled but lowers bloom quality (both renderers).
   - `?no-bloom` disables only bloom (both renderers).
