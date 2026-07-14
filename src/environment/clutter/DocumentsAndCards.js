@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../../physics.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
+import { getWoodMaterial } from '../../core/MaterialPalette.js';
 import { resolvePlacement } from './ClutterPlacement.js';
 
 const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
@@ -304,11 +305,7 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
     const height = 3;
     const thickness = 0.2;
 
-    const woodMat = new THREE.MeshStandardMaterial({
-        color: 0x5c4033,
-        roughness: 0.6,
-        metalness: 0.1
-    });
+    const woodMat = getWoodMaterial(0x5c4033);
 
     const chartsTexture = generateDMChartsTexture();
     const chartsMat = new THREE.MeshStandardMaterial({

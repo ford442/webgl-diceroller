@@ -88,6 +88,15 @@ export class CullingSystem {
         entry.root.updateWorldMatrix(true, true);
         this._box.setFromObject(entry.root);
         if (this._box.isEmpty()) {
+            // InstancedMesh roots may need an explicit bounds pass before culling.
+            entry.root.traverse((child) => {
+                if (child.isInstancedMesh && child.geometry && !child.geometry.boundingSphere) {
+                    child.geometry.computeBoundingSphere();
+                }
+            });
+            this._box.setFromObject(entry.root);
+        }
+        if (this._box.isEmpty()) {
             entry.ready = false;
             return;
         }
@@ -96,6 +105,14 @@ export class CullingSystem {
         // spins) never clips the sphere out of view a frame early.
         entry.sphere.radius *= 1.2;
         entry.ready = true;
+    }
+
+    /** Recompute the bounding sphere after static mesh merges or instancing updates. */
+    refreshSphere(root) {
+        const entry = this.byRoot.get(root);
+        if (!entry) return;
+        entry.ready = false;
+        this._ensureSphere(entry);
     }
 
     /**

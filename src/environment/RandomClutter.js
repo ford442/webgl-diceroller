@@ -8,6 +8,7 @@ import {
 } from './clutter/ClutterPlacement.js';
 import { LAYOUT_THEMES } from '../core/TableLayoutConfig.js';
 import { disposeObject3D } from './PropLifecycle.js';
+import { mergeScatterHandles } from '../core/StaticPropMerger.js';
 
 /**
  * Registry of tabletop clutter factories consumable by the pool selector.
@@ -97,13 +98,16 @@ export function createRandomClutter(scene, physicsWorld, options = {}) {
         entry.create(scene, physicsWorld, { rng, track });
     });
 
+    const mergeStats = mergeScatterHandles(handles);
+
     return {
         flamePosition: candleData.flamePosition,
         update: candleData.update,
         seed,
         count: selected.length,
         selectedIds: selected.map((entry) => entry.id),
-        handles
+        handles,
+        mergeStats
     };
 }
 

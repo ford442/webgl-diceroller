@@ -1,5 +1,7 @@
 import { getAmmo } from '../physics.js';
 
+import { isPaletteMaterial } from '../core/MaterialPalette.js';
+
 function resolveRootObject(result) {
     if (!result) return null;
     if (result.isObject3D) return result;
@@ -40,8 +42,13 @@ export function disposeObject3D(root, physicsWorld) {
         if (obj.isInstancedMesh) obj.dispose?.();
         obj.geometry?.dispose?.();
         const material = obj.material;
-        if (Array.isArray(material)) material.forEach((mat) => mat?.dispose?.());
-        else material?.dispose?.();
+        if (Array.isArray(material)) {
+            material.forEach((mat) => {
+                if (!isPaletteMaterial(mat)) mat?.dispose?.();
+            });
+        } else if (!isPaletteMaterial(material)) {
+            material?.dispose?.();
+        }
     });
 
     for (const body of bodies) {
