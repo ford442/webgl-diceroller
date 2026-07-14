@@ -65,6 +65,8 @@ export function getWorkerPhysicsStats() {
     };
 }
 
+const REQUEST_TIMEOUT_MS = 15000;
+
 // ---------------------------------------------------------------------------
 // Synchronous proxy mimicking DicePhysicsEngine
 // ---------------------------------------------------------------------------
@@ -107,10 +109,25 @@ class WorkerEngineProxy {
         this._snapSettled = true;
         this._eventChunks = [];
 
+        // Async request/response (serializeState, etc.).
+        this._pending = new Map();
+        this._nextReqId = 1;
+
         worker.onmessage = (e) => this._onMessage(e.data);
     }
 
     _onMessage({ type, payload }) {
+        if (type === 'response' && payload?.reqId != null) {
+            const pending = this._pending.get(payload.reqId);
+            if (pending) {
+                this._pending.delete(payload.reqId);
+                clearTimeout(pending.timer);
+                if (payload.error) pending.reject(new Error(payload.error));
+                else pending.resolve(payload);
+            }
+            return;
+        }
+
         switch (type) {
             case 'snapshot':
                 this._snapIds = payload.ids;
@@ -134,10 +151,24 @@ class WorkerEngineProxy {
         }
     }
 
-    _send(type, payload = {}) {
+_send(type, payload = {}, transfer = []) {
         this.flushCommandBatch();
         _noteStructuralMsg();
-        this.worker.postMessage({ type, payload });
+        this.worker.postMessage({ type, payload }, transfer);
+    }
+
+    _request(type, payload = {}, transfer = []) {
+        const reqId = this._nextReqId++;
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                if (this._pending.has(reqId)) {
+                    this._pending.delete(reqId);
+                    reject(new Error(`[WorkerPhysics] request timeout: ${type}`));
+                }
+            }, REQUEST_TIMEOUT_MS);
+            this._pending.set(reqId, { resolve, reject, timer });
+            this._send(type, { ...payload, reqId }, transfer);
+        });
     }
 
     _ensureScratch(room) {
@@ -304,14 +335,21 @@ class WorkerEngineProxy {
         return merged;
     }
 
-    // --- determinism (limited in worker mode) -----------------------------
+    // --- determinism -------------------------------------------------------
     seedRNG(seed) { this._send('seedRNG', { seed }); }
+    seededThrow(seed, dice, tableSurfaceY) {
+        this._send('seededThrow', { seed: seed >>> 0, dice, tableSurfaceY });
+    }
+    async serializeStateAsync() {
+        const res = await this._request('serializeState');
+        return new Uint8Array(res.data, 0, res.byteLength);
+    }
     randomFloat() {
-        console.warn('[WorkerPhysics] randomFloat() is unavailable synchronously in worker mode.');
+        console.warn('[WorkerPhysics] randomFloat() is unavailable synchronously in worker mode; use seededThrow() for deterministic rolls.');
         return Math.random();
     }
     serializeState() {
-        console.warn('[WorkerPhysics] serializeState() is unavailable synchronously in worker mode.');
+        console.warn('[WorkerPhysics] serializeState() is unavailable synchronously in worker mode; use serializePhysicsState() instead.');
         return new Uint8Array(0);
     }
     deserializeState(data) { this._send('deserializeState', { data: Array.from(data) }); }
@@ -424,9 +462,14 @@ export const randomPhysicsFloat = () => {
     return _engine.randomFloat();
 };
 
-export const serializePhysicsState = () => {
+export const serializePhysicsState = async () => {
     if (!_available) return new Uint8Array(0);
-    return _engine.serializeState();
+    return _engine.serializeStateAsync();
+};
+
+export const seededPhysicsThrow = (seed, dice, tableSurfaceY) => {
+    if (!_available) return;
+    _engine.seededThrow(seed, dice, tableSurfaceY);
 };
 
 export const deserializePhysicsState = (data) => {

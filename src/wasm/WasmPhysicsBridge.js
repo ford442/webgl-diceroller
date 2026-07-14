@@ -179,13 +179,16 @@ export const randomPhysicsFloat = () => {
 /**
  * State serialisation for replay.
  */
-export const serializePhysicsState = () => {
+export const serializePhysicsState = async () => {
     if (!_available || !_moduleClass) return new Uint8Array(0);
     const vec = _engine.serializeState();
     const arr = new Uint8Array(vec.size());
     for (let i = 0; i < vec.size(); i++) arr[i] = vec.get(i);
     return arr;
 };
+
+/** No-op in the in-process bridge — throws are applied directly via the engine. */
+export const seededPhysicsThrow = () => {};
 
 export const deserializePhysicsState = (data) => {
     if (!_available || !_moduleClass) return;

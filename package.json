@@ -15,6 +15,7 @@
     "convert:dice": "node scripts/convert-dice-to-glb.mjs",
     "convert:props": "node scripts/convert-props.mjs",
     "verify:worker-physics": "node scripts/verify-worker-physics.mjs",
+    "verify:worker-replay": "node scripts/verify-worker-replay.mjs",
     "verify:godrays": "node scripts/verify-godrays.mjs",
     "verify:wasm-primitives": "node scripts/verify-wasm-primitives.mjs",
     "verify:render-regression": "node scripts/render-regression.mjs && node scripts/compare-render-baseline.mjs",
