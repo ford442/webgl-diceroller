@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 import { initPhysics, stepPhysics, pollAmmoCollisionEvents } from './physics.js';
-import { loadWasmEngine, isWasmAvailable, getWasmEngine } from './wasm/PhysicsBridge.js';
+import { loadWasmEngine, isWasmAvailable, getWasmEngine, flushWorkerCommandBatch, getWorkerPhysicsStats } from './wasm/PhysicsBridge.js';
 import {
     updateDiceVisuals,
     throwDice,
@@ -286,7 +286,11 @@ async function init() {
                 staticRefreshes: shadowController?.state.staticShadowRefreshes ?? 0
             }),
             getDice: () => ({ count: spawnedDice.length, settled: areDiceSettled() }),
-            getWasm: () => ({ available: isWasmAvailable(), active: isWasmAvailable() }),
+            getWasm: () => ({
+                available: isWasmAvailable(),
+                active: isWasmAvailable(),
+                worker: getWorkerPhysicsStats()
+            }),
             getAudio: () => collisionAudio?.getStats?.() ?? null,
             getCollisionTotal: () => collisionTotal
         });
@@ -432,6 +436,9 @@ async function init() {
             renderer.render(scene, camera);
         }
     });
+    scheduler.register('postRender', 'workerPhysicsFlush', () => {
+        flushWorkerCommandBatch();
+    }, { priority: -100 });
     scheduler.register('postRender', 'renderWarnings', () => {
         if (!debugEnabled) return;
         const drawCalls = renderer.info.render.calls;
