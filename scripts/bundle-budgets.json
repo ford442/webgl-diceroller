@@ -1,0 +1,12 @@
+{
+  "description": "Gzip byte budgets for production JS chunks (see scripts/check-bundle-size.mjs).",
+  "chunks": {
+    "index": { "pattern": "^assets/index-.*\\.js$", "gzipMax": 175000 },
+    "three": { "pattern": "^assets/three-[^.]+\\.js$", "gzipMax": 195000 },
+    "three.webgpu": { "pattern": "^assets/three\\.webgpu-.*\\.js$", "gzipMax": 180000 },
+    "physics": { "pattern": "^assets/physics-.*\\.js$", "gzipMax": 310000 }
+  },
+  "totals": {
+    "jsGzipMax": 900000
+  }
+}

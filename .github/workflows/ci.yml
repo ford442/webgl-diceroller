@@ -24,6 +24,42 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:js
+      - run: npm run check:bundle-size
+
+  bundle-loading:
+    name: Verify (lazy chunk loading)
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-artifacts
+          path: public/wasm/
+      - run: npm run build:js
+      - run: npx playwright install --with-deps chromium
+      - run: npm run verify:bundle-loading
+
+  pwa-isolation:
+    name: Verify (PWA + crossOriginIsolated)
+    needs: build-js
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build:js
+      - run: npx playwright install --with-deps chromium
+      - run: npm run verify:pwa-isolation
 
   typecheck:
     name: Typecheck (tsc --noEmit)
