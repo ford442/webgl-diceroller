@@ -93,6 +93,16 @@ export function applyRendererSize(renderer, width, height, pixelRatio) {
     renderer.setSize(width, height, false);
 }
 
+/** Keep WebGL EffectComposer render targets aligned with renderer DPR. */
+export function syncComposerPixelRatio(composer, width, height, pixelRatio) {
+    if (!composer) return;
+    if (typeof composer.setPixelRatio === 'function') {
+        composer.setPixelRatio(pixelRatio);
+        return;
+    }
+    composer.setSize?.(width, height);
+}
+
 function applySharedRendererConfig(renderer, width, height, pixelRatio) {
     applyRendererSize(renderer, width, height, pixelRatio);
     renderer.shadowMap.enabled = true;
@@ -149,10 +159,14 @@ function attachRecoveryHandlers(state, handlers = {}) {
     if (state.usingWebGPU && typeof renderer.onDeviceLost === 'function') {
         const previous = renderer.onDeviceLost.bind(renderer);
         renderer.onDeviceLost = (info) => {
-            previous(info);
             const message = info?.message ?? 'WebGPU device lost';
             notifyLost(message);
             handlers.onDeviceLost?.(state, info);
+            // Preserve Three.js internal lost-state bookkeeping without surfacing
+            // the default console error before our recovery badge runs.
+            if (typeof renderer._isDeviceLost !== 'undefined') {
+                renderer._isDeviceLost = true;
+            }
         };
         cleanups.push(() => {
             renderer.onDeviceLost = previous;
