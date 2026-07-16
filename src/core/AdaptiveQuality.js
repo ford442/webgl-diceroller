@@ -34,6 +34,9 @@ function hasExplicitQualityOverride() {
 
 export function guessInitialQualityProfile(rendererState) {
     const hints = collectDeviceQualityHints(rendererState);
+    if (hints.reducedMotion) {
+        return QUALITY_PROFILES.medium;
+    }
     if (hints.isSoftwareRenderer || hints.maxTextureSize < 4096) {
         return QUALITY_PROFILES.mobile;
     }

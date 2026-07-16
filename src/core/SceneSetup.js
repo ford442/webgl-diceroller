@@ -11,6 +11,7 @@ import { createRenderer } from './RendererFactory.js';
 import { preloadSharedTextures } from './TexturePipeline.js';
 import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z, TABLE_SURFACE_Y, applyViewportToCamera, computeCameraAspect } from './SceneMetrics.js';
 import { guessInitialQualityProfile } from './AdaptiveQuality.js';
+import { prefersReducedMotion } from './AccessibilityPrefs.js';
 
 const VIGNETTE_OFFSET = 1.0;
 const VIGNETTE_DARKNESS = 1.0;
@@ -61,7 +62,7 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
 
     let outputNode = vignetteNode;
 
-    if (postConfig.quality === 'high') {
+    if (postConfig.chromaticAberrationEnabled) {
         outputNode = chromaticAberration(outputNode, 0.2, vec2(0.5, 0.5), 1.08);
     }
 
@@ -127,18 +128,19 @@ export async function setupScene(container) {
     const disablePost = params.has('no-post');
     const disableBloom = params.has('no-bloom');
     const disableGodRays = params.has('no-godrays');
-    const postQuality = disablePost ? 'off' : (forceLowPost || initialQuality.postQuality === 'low' ? 'low' : 'high');
+    const reducedMotion = prefersReducedMotion();
+    const postQuality = disablePost ? 'off' : (forceLowPost || initialQuality.postQuality === 'low' || reducedMotion ? 'low' : 'high');
     const postConfig = {
         quality: postQuality,
-        bloomEnabled: !disablePost && !disableBloom && initialQuality.bloomEnabled,
-        godRaysEnabled: !disableGodRays && initialQuality.godRaysEnabled,
+        bloomEnabled: !disablePost && !disableBloom && initialQuality.bloomEnabled && !reducedMotion,
+        godRaysEnabled: !disableGodRays && initialQuality.godRaysEnabled && !reducedMotion,
         fxaaEnabled: rendererState.usePostAA && !disablePost,
         lowEndDetected: initialQuality.id !== 'high',
         softwareRenderer: isSoftwareRenderer,
         adaptiveProfile: initialQuality.id,
         rendererType: rendererState.rendererType,
         requestedRenderer: rendererState.requestedRenderer,
-        chromaticAberrationEnabled: rendererState.usingWebGPU && postQuality === 'high'
+        chromaticAberrationEnabled: rendererState.usingWebGPU && postQuality === 'high' && !reducedMotion
     };
     scene.userData.postConfig = postConfig;
 

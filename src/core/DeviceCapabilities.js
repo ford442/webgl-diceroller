@@ -2,6 +2,8 @@ const searchParams = typeof window !== 'undefined'
     ? new URLSearchParams(window.location.search)
     : new URLSearchParams();
 
+import { prefersReducedMotion } from './AccessibilityPrefs.js';
+
 export function isTouchPrimaryDevice() {
     if (searchParams.has('touch')) return true;
     if (searchParams.has('no-touch')) return false;
@@ -28,6 +30,7 @@ export function collectDeviceQualityHints(rendererState = null) {
     const isSoftwareRenderer = rendererState?.isSoftwareRenderer === true;
     const lowDpr = deviceDpr <= 1.25;
     const lowCores = hardwareConcurrency <= 4;
+    const reducedMotion = prefersReducedMotion();
 
     return {
         deviceDpr,
@@ -36,6 +39,7 @@ export function collectDeviceQualityHints(rendererState = null) {
         maxTextureSize,
         isSoftwareRenderer,
         lowDpr,
-        lowCores
+        lowCores,
+        reducedMotion
     };
 }

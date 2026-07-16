@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { spawnedDice, readDiceValue, areDiceSettled, updateDiceVisuals } from '../dice.js';
 import { shouldDeferAutoResults } from '../roll/RollSession.js';
+import { prefersReducedMotion } from './AccessibilityPrefs.js';
 import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z } from './SceneMetrics.js';
 
 const DiceFocusState = {
@@ -105,6 +106,18 @@ export function createCameraController(camera) {
         return allStable;
     }
 
+    function finishRollResults(showResults, onResultsReady) {
+        updateDiceVisuals();
+        const results = spawnedDice.map(d => ({
+            type: d.type,
+            value: readDiceValue(d)
+        }));
+        if (!shouldDeferAutoResults()) {
+            showResults(results);
+        }
+        onResultsReady?.(results);
+    }
+
     function update(deltaTime, time, {
         keys,
         cursorPos,
@@ -119,6 +132,13 @@ export function createCameraController(camera) {
         // Dice Focus State Machine
         if (diceFocusState === DiceFocusState.WAITING_FOR_STOP) {
             if (checkDiceStability(lampData, LampMode)) {
+                if (prefersReducedMotion()) {
+                    // Skip camera fly-to / hold / return; announce results immediately.
+                    finishRollResults(showResults, onResultsReady);
+                    diceFocusState = DiceFocusState.IDLE;
+                    return;
+                }
+
                 diceFocusState = DiceFocusState.FOCUSING;
 
                 // Save current state
@@ -166,19 +186,7 @@ export function createCameraController(camera) {
             if (focusProgress === 1) {
                 diceFocusState = DiceFocusState.HOLDING;
                 focusTimer = 2.0; // Hold for 2s
-
-                // Ensure mesh orientations match the authoritative physics state.
-                updateDiceVisuals();
-
-                // Read settled dice values and show result overlay (skip during notation rolls)
-                const results = spawnedDice.map(d => ({
-                    type: d.type,
-                    value: readDiceValue(d)
-                }));
-                if (!shouldDeferAutoResults()) {
-                    showResults(results);
-                }
-                onResultsReady?.(results);
+                finishRollResults(showResults, onResultsReady);
             }
         } else if (diceFocusState === DiceFocusState.HOLDING) {
             focusTimer -= deltaTime;
