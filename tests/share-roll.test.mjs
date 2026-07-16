@@ -8,8 +8,10 @@ import {
     serializeDiceCounts,
     parseDiceParam,
     parseShareableRollParams,
-    buildShareableRollUrl
+    buildShareableRollUrl,
+    serializeDiceAppearance
 } from '../src/roll/ShareableRoll.js';
+import { createDefaultAppearanceConfig } from '../src/dice/DiceAppearanceConfig.js';
 import { computeSeededThrowParams, createSeededRng } from '../src/wasm/seededThrowParams.js';
 
 let passed = 0;
@@ -59,6 +61,19 @@ test('buildShareableRollUrl includes seed, dice, and version', () => {
     assert.equal(parsed.searchParams.get('seed'), '42');
     assert.equal(parsed.searchParams.get('dice'), 'd20:1');
     assert.equal(parsed.searchParams.get('v'), String(REPLAY_VERSION));
+});
+
+test('buildShareableRollUrl includes dice appearance when customized', () => {
+    const appearance = createDefaultAppearanceConfig();
+    appearance.d20 = { preset: 'metal', bodyColor: '#112233', pipColor: '#aabbcc' };
+    const url = buildShareableRollUrl(7, { d20: 1 }, 'http://example.test/roller', appearance);
+    const parsed = new URL(url);
+    assert.ok(parsed.searchParams.get('dice-look')?.includes('d20:m:112233:aabbcc'));
+});
+
+test('serializeDiceAppearance omits default-only types', () => {
+    const appearance = createDefaultAppearanceConfig();
+    assert.equal(serializeDiceAppearance(appearance), '');
 });
 
 test('seeded throw params are identical for the same seed', () => {

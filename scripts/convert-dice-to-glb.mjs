@@ -129,13 +129,58 @@ window.convertDie = async (daeUrl) => {
     geometry.applyMatrix4(srcMesh.matrixWorld);
     geometry.deleteAttribute('uv2');
 
-    // Preserve the diffuse colour so the runtime material upgrade has something
-    // to read. (Dice .dae files carry only solid colours, no PBR texture maps.)
-    const srcMat = Array.isArray(srcMesh.material) ? srcMesh.material[0] : srcMesh.material;
-    const color = srcMat?.color ? srcMat.color.clone() : new THREE.Color(0xeeeeee);
-    const material = new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.0 });
+    // Tag body vs pip/engraving triangles so runtime can tint them independently.
+    // Small-area triangles are pip geometry; the rest is die body.
+    geometry.computeBoundingSphere();
+    const pos = geometry.attributes.position;
+    const index = geometry.index;
+    const triCount = index ? index.count / 3 : pos.count / 3;
+    const maxEdge = (geometry.boundingSphere?.radius ?? 1) * 0.6;
+    const maxEdgeSq = maxEdge * maxEdge;
+    const areas = new Float32Array(triCount);
+    const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
+    const _e1 = new THREE.Vector3(), _e2 = new THREE.Vector3(), _n = new THREE.Vector3();
+    const getVertex = (i) => {
+        const vi = index ? index.getX(i) : i;
+        return { x: pos.getX(vi), y: pos.getY(vi), z: pos.getZ(vi) };
+    };
+    for (let t = 0; t < triCount; t++) {
+        const va = getVertex(t * 3), vb = getVertex(t * 3 + 1), vc = getVertex(t * 3 + 2);
+        _a.set(va.x, va.y, va.z); _b.set(vb.x, vb.y, vb.z); _c.set(vc.x, vc.y, vc.z);
+        _e1.subVectors(_b, _a); _e2.subVectors(_c, _a); _n.crossVectors(_e1, _e2);
+        if (_n.lengthSq() < 1e-10) continue;
+        if (_e1.lengthSq() > maxEdgeSq || _e2.lengthSq() > maxEdgeSq || _b.distanceToSquared(_c) > maxEdgeSq) continue;
+        areas[t] = _n.length() * 0.5;
+    }
+    const sorted = Array.from(areas).filter((a) => a > 0).sort((x, y) => x - y);
+    const percentile = sorted[Math.max(0, Math.floor(sorted.length * 0.22) - 1)] ?? 0;
+    const areaThreshold = Math.max(percentile, sorted[0] ?? 0) * 1.15;
+    const bodyTris = [], pipTris = [];
+    for (let t = 0; t < triCount; t++) {
+        const tri = index
+            ? [index.getX(t * 3), index.getX(t * 3 + 1), index.getX(t * 3 + 2)]
+            : [t * 3, t * 3 + 1, t * 3 + 2];
+        if (areas[t] > 0 && areas[t] <= areaThreshold) pipTris.push(...tri);
+        else bodyTris.push(...tri);
+    }
+    if (bodyTris.length && pipTris.length) {
+        const merged = new Uint32Array(bodyTris.length + pipTris.length);
+        merged.set(bodyTris, 0);
+        merged.set(pipTris, bodyTris.length);
+        geometry.setIndex(new THREE.BufferAttribute(merged, 1));
+        geometry.clearGroups();
+        geometry.addGroup(0, bodyTris.length, 0);
+        geometry.addGroup(bodyTris.length, pipTris.length, 1);
+    }
 
-    const mesh = new THREE.Mesh(geometry, material);
+    const srcMat = Array.isArray(srcMesh.material) ? srcMesh.material[0] : srcMesh.material;
+    const bodyColor = srcMat?.color ? srcMat.color.clone() : new THREE.Color(0xeeeeee);
+    const pipColor = bodyColor.clone().offsetHSL(0, 0, -0.35);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.4, metalness: 0.0, name: 'DieBody' });
+    const pipMaterial = new THREE.MeshStandardMaterial({ color: pipColor, roughness: 0.45, metalness: 0.0, name: 'DiePips' });
+    const materials = geometry.groups?.length >= 2 ? [bodyMaterial, pipMaterial] : bodyMaterial;
+
+    const mesh = new THREE.Mesh(geometry, materials);
     const scene = new THREE.Scene();
     scene.add(mesh);
 
