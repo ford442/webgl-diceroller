@@ -33,7 +33,7 @@
     "test:notation": "node tests/notation.test.mjs",
     "test:share-roll": "node tests/share-roll.test.mjs",
     "test:share-roll-replay": "node tests/share-roll-replay.js",
-    "test:a11y": "node tests/a11y.js"
+    "test:a11y": "node tests/a11y.js",
     "test:solver": "bash src/wasm/build_solver_test.sh"
   },
   "devDependencies": {
