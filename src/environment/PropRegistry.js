@@ -7,6 +7,7 @@ import { disposePropSpawn } from './PropLifecycle.js';
 import { mergePropRecord } from '../core/StaticPropMerger.js';
 import './Bone.js';
 import './Cauldron.js';
+import './BreadLoaf.js';
 
 const environmentModules = import.meta.glob('./*.js', { eager: true });
 
@@ -55,7 +56,7 @@ export const SHADOW_DISABLED_PROP_NAMES = new Set([
     'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus',
     'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope',
     'Candelabra', 'Waterskin', 'Astrolabe', 'Sundial', 'Flute', 'Apple', 'WoodenSpoon',
-    'Warhammer'
+    'Warhammer', 'BreadLoaf'
 ]);
 
 export function resolveRootObject(result) {
@@ -220,6 +221,7 @@ export const TIER_PROP_DEFINITIONS = {
         factoryEntry('CharacterSheet', { randomPool: true, position: { x: 14, y: -2.75, z: 8 }, rotation: -Math.PI / 6 }),
         factoryEntry('BountyPoster', { randomPool: true, position: { x: -20, y: 4, z: -20 }, rotation: Math.PI / 4 }),
         factoryEntry('Pencil', { randomPool: true, position: { x: -8, y: -2.75, z: 14 }, rotation: Math.PI / 5 }),
+        factoryEntry('BreadLoaf', { randomPool: true, position: { x: 8, y: -2.75, z: 4 }, rotation: Math.PI / 6 }),
         factoryEntry('Bone', { randomPool: true, position: { x: 5, y: -2.75, z: 5 }, rotation: Math.PI / 3 }),
         factoryEntry('CoinPouch', { randomPool: true, position: { x: 9, y: -2.75, z: 13 }, rotation: -Math.PI / 8 }),
         factoryEntry('Lute', { randomPool: true, position: { x: -14, y: -1.85, z: -10 }, rotation: Math.PI / 4 }),

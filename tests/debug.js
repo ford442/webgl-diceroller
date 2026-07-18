@@ -5,7 +5,7 @@ const { launchPage } = require('./helpers/browser');
 
     page.on('console', msg => console.log(`[${msg.type()}] ${msg.text()}`));
 
-    await page.goto('http://localhost:4173/?no-post', { waitUntil: 'networkidle', timeout: 60000 });
+    await page.goto('http://localhost:4173/?webgl&no-post&fair-dice', { waitUntil: 'networkidle', timeout: 60000 });
 
     await page.waitForFunction(() => window.scene !== undefined, { timeout: 60000 });
     console.log('window.scene is defined');
