@@ -1,0 +1,26 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "checkJs": true,
+        "allowJs": true,
+        "strict": false,
+        "noEmit": true,
+        "skipLibCheck": true,
+        "lib": ["ES2022", "DOM", "WebWorker"]
+    },
+    "include": [
+        "src/global.d.ts",
+        "src/wasm/**/*.js",
+        "src/environment/PropRegistry.js",
+        "src/core/FrameScheduler.js",
+        "scripts/render-regression.mjs",
+        "scripts/compare-render-baseline.mjs",
+        "scripts/verify-worker-physics.mjs",
+        "scripts/verify-godrays.mjs",
+        "scripts/verify-wasm-primitives.mjs",
+        "tests/**/*.js"
+    ],
+    "exclude": ["node_modules", "dist", "public"]
+}

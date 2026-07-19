@@ -37,9 +37,11 @@ export function createDragonScale(scene, physicsWorld, position = { x: 10, y: -2
 
     // Physics
     const ammo = getAmmo();
-    const shape = new ammo.btBoxShape(new ammo.btVector3(radius, height / 2, radius * 1.5));
-
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btBoxShape(new ammo.btVector3(radius, height / 2, radius * 1.5));
+    
+        createStaticBody(physicsWorld, group, shape);
+    }
 
     return { group };
 }

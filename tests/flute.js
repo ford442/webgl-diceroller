@@ -1,29 +1,15 @@
-const { chromium } = require('playwright');
+const { runTest } = require('./helpers/browser');
 
 // E2E: the Flute is present AND interactive (clicking plays a melody).
 // `forceProps=Flute` guarantees the randomPool prop spawns regardless of seed.
-(async () => {
-    console.log("Starting browser...");
-    const browser = await chromium.launch({
-        args: [
-            '--use-gl=swiftshader',
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu-shader-disk-cache',
-            '--autoplay-policy=no-user-gesture-required'
-        ]
-    });
-    const page = await browser.newPage();
-    const errors = [];
-    page.on('pageerror', err => errors.push(err.message));
+// ?webgl forces the stable baseline renderer (headless WebGPU init can stall).
+const url = 'http://localhost:4173/?webgl&no-post&forceProps=Flute';
 
-    // ?webgl forces the stable baseline renderer (headless WebGPU init can stall).
-    const url = 'http://localhost:4173/?webgl&no-post&forceProps=Flute';
+runTest(async (page, errors) => {
     console.log(`Navigating to ${url} ...`);
     await page.goto(url, { waitUntil: 'load', timeout: 60000 });
 
-    console.log("Waiting for the flute interactable to register...");
+    console.log('Waiting for the flute interactable to register...');
     // The interactable registers as the prop spawns (mid-load), which is a more
     // reliable signal than window.scene (only exposed after the full load).
     await page.waitForFunction(() => !!(window.__interactables && window.__interactables.flute), null, { timeout: 150000 });
@@ -60,7 +46,6 @@ const { chromium } = require('playwright');
     if (errors.length) { console.error('FAILURE: page errors:', errors.slice(0, 5)); pass = false; }
     else console.log('✓ No page errors');
 
-    await browser.close();
     console.log(pass ? '\n=== FLUTE TEST PASSED ===' : '\n=== FLUTE TEST FAILED ===');
-    process.exit(pass ? 0 : 1);
-})();
+    return pass;
+}, { args: ['--use-gl=swiftshader', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu-shader-disk-cache', '--autoplay-policy=no-user-gesture-required'], logConsole: false });

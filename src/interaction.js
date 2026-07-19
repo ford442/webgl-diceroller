@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet part of the incremental checkJs rollout (issue #192); pulled in transitively via PropRegistry.js.
 import * as THREE from 'three';
 import { getAmmo } from './physics.js';
 import { isWasmAvailable, isWasmInitialized } from './wasm/PhysicsBridge.js';
@@ -8,7 +9,8 @@ import {
     syncDieBodyStateToWasm,
     syncDieMeshStateToWasm,
     applyWasmImpulseForDie,
-    driveDieWasmTransform
+    driveDieWasmTransform,
+    setDieWasmKinematic
 } from './dice.js';
 
 let raycaster;
@@ -130,12 +132,12 @@ function onPointerDown(x, y, camera, scene, physicsWorld, hooks = {}) {
         let object = intersect.object;
         const point = intersect.point;
 
-        // Traverse up to find the object with physics body (in case we hit a child mesh)
-        while (object && !object.userData.body && object.parent) {
+        // Traverse up to find the die root (ammo body or WASM-only marker).
+        while (object && !object.userData.isDie && !object.userData.body && object.parent) {
             object = object.parent;
         }
 
-        if (object && object.userData.body) {
+        if (object && (object.userData.isDie || object.userData.body)) {
             const wasmMode = isWasmInteractionMode();
             // In WASM mode the die stays WASM-authoritative; in ammo mode we hand
             // it to ammo for constraint-based dragging.
@@ -188,7 +190,7 @@ function onPointerMove(x, y, camera) {
         _wasmDragHasTarget = true;
     } else if (dragConstraint) {
         const Ammo = getAmmo();
-        // Update constraint pivot B (which is in world space for p2p)
+        if (!Ammo) return;
         dragConstraint.setPivotB(new Ammo.btVector3(target.x, target.y, target.z));
     }
 }
@@ -206,6 +208,7 @@ function projectCursorToDiePlane(camera) {
 
 function onPointerUp(physicsWorld, hooks = {}) {
     if (wasmDragActive) {
+        if (draggedItem) setDieWasmKinematic(draggedItem, false);
         // Release: impart the tracked cursor velocity as an impulse (applyImpulse
         // wakes the body) so a flick tosses the die; otherwise it just drops. The
         // WASM solver takes over from here. Authority is already 'wasm'.
@@ -224,10 +227,12 @@ function onPointerUp(physicsWorld, hooks = {}) {
 
     if (dragConstraint) {
         const Ammo = getAmmo();
-        syncDieBodyStateToWasm(draggedItem);
-        setDiePhysicsAuthority(draggedItem, 'wasm');
-        physicsWorld.removeConstraint(dragConstraint);
-        Ammo.destroy(dragConstraint);
+        if (Ammo) {
+            syncDieBodyStateToWasm(draggedItem);
+            setDiePhysicsAuthority(draggedItem, 'wasm');
+            physicsWorld.removeConstraint(dragConstraint);
+            Ammo.destroy(dragConstraint);
+        }
         dragConstraint = null;
         draggedItem = null;
         hooks.onMotionActivityChange?.(false, 'drag');
@@ -243,6 +248,7 @@ function updateMouse(x, y) {
 
 function startDrag(body, point, physicsWorld) {
     const Ammo = getAmmo();
+    if (!Ammo || !body || !physicsWorld) return;
     const localPointThree = draggedItem.worldToLocal(point.clone());
     const localPivotAmmo = new Ammo.btVector3(localPointThree.x, localPointThree.y, localPointThree.z);
 
@@ -267,8 +273,8 @@ function startDrag(body, point, physicsWorld) {
 }
 
 function startWasmDrag(object, point) {
-    // Keep the die WASM-authoritative; hold it kinematically toward the cursor.
     setDiePhysicsAuthority(object, 'wasm');
+    setDieWasmKinematic(object, true);
     wasmDragActive = true;
     _wasmDragHasTarget = true;
     _wasmDragTarget.copy(point);
@@ -339,10 +345,10 @@ export const getHoveredDie = (camera, normX, normY) => {
     if (intersects.length > 0) {
         let object = intersects[0].object;
         // Traverse up to find the die group
-        while (object && !object.userData.body && object.parent) {
+        while (object && !object.userData.isDie && !object.userData.body && object.parent) {
             object = object.parent;
         }
-        return object;
+        return object?.userData?.isDie || object?.userData?.body ? object : null;
     }
     return null;
 };
@@ -356,9 +362,8 @@ function triggerLevitation(object, scene, physicsWorld, hooks = {}) {
     const body = object.userData.body;
 
     if (wasmMode) {
-        // WASM-authoritative: drive position/orientation via setDieTransform each
-        // frame; no ammo kinematic flags involved. Keep authority 'wasm'.
         setDiePhysicsAuthority(object, 'wasm');
+        setDieWasmKinematic(object, true);
     } else {
         prepareDieForAmmoInteraction(object);
         // Switch to Kinematic so we can control position manually
@@ -429,10 +434,6 @@ function updateLevitation() {
             }
 
             if (item.wasm) {
-                // Advance tracked spin and drive the WASM transform kinematically.
-                // setDieTransform wakes the body and zeroes its velocity each frame,
-                // holding it in place without relying on setDieVelocity (which does
-                // not wake a settled die against the shipped binary).
                 _levitationSpinStep.setFromAxisAngle(_UP, 0.15);
                 item.spinQuat.multiply(_levitationSpinStep);
                 driveDieWasmTransform(
@@ -440,10 +441,9 @@ function updateLevitation() {
                     { x: item.startX, y: currentY, z: item.startZ },
                     item.spinQuat
                 );
-                // Mirror onto the mesh so the light/visuals track immediately.
                 item.object.position.set(item.startX, currentY, item.startZ);
                 item.object.quaternion.copy(item.spinQuat);
-            } else {
+            } else if (item.body && _levitationTransform) {
                 // Update Mesh Position
                 item.object.position.y = currentY;
                 // Spin Mesh
@@ -477,18 +477,15 @@ function updateLevitation() {
             const spinZ = (Math.random() - 0.5) * spinVal;
 
             if (item.wasm) {
-                // Hand authority back to the WASM solver with a release throw.
-                // applyImpulse/applyTorqueImpulse wake the body and impart motion
-                // reliably (unlike setDieVelocity on the shipped binary).
+                setDieWasmKinematic(item.object, false);
                 applyWasmImpulseForDie(
                     item.object,
                     { x: forceX, y: forceY, z: forceZ },
                     { x: spinX, y: spinY, z: spinZ }
                 );
                 setDiePhysicsAuthority(item.object, 'wasm');
-            } else {
-                // Reset ammo physics from kinematic back to dynamic.
-                item.body.setCollisionFlags(item.body.getCollisionFlags() & ~2); // Remove Kinematic
+            } else if (item.body && Ammo) {
+                item.body.setCollisionFlags(item.body.getCollisionFlags() & ~2);
                 item.body.setActivationState(1); // ACTIVE_TAG
 
                 syncDieMeshStateToWasm(item.object);

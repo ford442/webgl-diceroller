@@ -217,26 +217,32 @@ export function createSmokingPipe(scene, physicsWorld, position = { x: -6, y: -2
 
     // --- Physics ---
     // Pipe bowl physics (approximated as small box)
-    const bowlShape = new ammo.btBoxShape(new ammo.btVector3(0.35, 0.5, 0.35));
-    const bowlDummy = new THREE.Object3D();
-    bowlDummy.position.copy(group.position).add(new THREE.Vector3(-0.8, 0.5, 0).applyEuler(group.rotation));
-    bowlDummy.quaternion.copy(group.quaternion);
-    createStaticBody(physicsWorld, bowlDummy, bowlShape);
+    if (ammo && physicsWorld) {
+        const bowlShape = new ammo.btBoxShape(new ammo.btVector3(0.35, 0.5, 0.35));
+        const bowlDummy = new THREE.Object3D();
+        bowlDummy.position.copy(group.position).add(new THREE.Vector3(-0.8, 0.5, 0).applyEuler(group.rotation));
+        bowlDummy.quaternion.copy(group.quaternion);
+        createStaticBody(physicsWorld, bowlDummy, bowlShape);
+    }
 
     // Pipe stem physics (approximated as small box)
-    const stemShape = new ammo.btBoxShape(new ammo.btVector3(0.6, 0.1, 0.1));
-    const stemDummy = new THREE.Object3D();
-    stemDummy.position.copy(group.position).add(new THREE.Vector3(0.2, 0.3, 0).applyEuler(group.rotation));
-    stemDummy.quaternion.copy(group.quaternion);
-    stemDummy.rotation.y = rotation - Math.PI / 6;
-    createStaticBody(physicsWorld, stemDummy, stemShape);
+    if (ammo && physicsWorld) {
+        const stemShape = new ammo.btBoxShape(new ammo.btVector3(0.6, 0.1, 0.1));
+        const stemDummy = new THREE.Object3D();
+        stemDummy.position.copy(group.position).add(new THREE.Vector3(0.2, 0.3, 0).applyEuler(group.rotation));
+        stemDummy.quaternion.copy(group.quaternion);
+        stemDummy.rotation.y = rotation - Math.PI / 6;
+        createStaticBody(physicsWorld, stemDummy, stemShape);
+    }
 
     // Pouch physics
-    const pouchShape = new ammo.btBoxShape(new ammo.btVector3(0.5, 0.3, 0.35));
-    const pouchDummy = new THREE.Object3D();
-    pouchDummy.position.copy(group.position).add(new THREE.Vector3(0.6, 0.15, 0.3).applyEuler(group.rotation));
-    pouchDummy.quaternion.copy(group.quaternion);
-    createStaticBody(physicsWorld, pouchDummy, pouchShape);
+    if (ammo && physicsWorld) {
+        const pouchShape = new ammo.btBoxShape(new ammo.btVector3(0.5, 0.3, 0.35));
+        const pouchDummy = new THREE.Object3D();
+        pouchDummy.position.copy(group.position).add(new THREE.Vector3(0.6, 0.15, 0.3).applyEuler(group.rotation));
+        pouchDummy.quaternion.copy(group.quaternion);
+        createStaticBody(physicsWorld, pouchDummy, pouchShape);
+    }
 
     return { group, update: group.userData.updateSmoke };
 }

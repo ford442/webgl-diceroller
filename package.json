@@ -7,15 +7,37 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run build:wasm && vite build",
+    "build:js": "node scripts/generate-pwa-icons.mjs && vite build",
+    "check:bundle-size": "node scripts/check-bundle-size.mjs",
+    "verify:bundle-loading": "node scripts/verify-bundle-loading.mjs",
+    "verify:pwa-isolation": "node scripts/verify-pwa-isolation.mjs",
     "build_colab": "npm run build:wasm_colab && vite build",
     "preview": "vite preview",
     "build:wasm": "bash src/wasm/build.sh",
     "build:wasm_colab": "bash src/wasm/build_colab.sh",
     "convert:dice": "node scripts/convert-dice-to-glb.mjs",
     "convert:props": "node scripts/convert-props.mjs",
-    "verify:worker-physics": "node scripts/verify-worker-physics.mjs"
+    "verify:worker-physics": "node scripts/verify-worker-physics.mjs",
+    "verify:worker-replay": "node scripts/verify-worker-replay.mjs",
+    "verify:godrays": "node scripts/verify-godrays.mjs",
+    "verify:wasm-primitives": "node scripts/verify-wasm-primitives.mjs",
+    "verify:render-regression": "node scripts/render-regression.mjs && node scripts/compare-render-baseline.mjs",
+    "verify:renderer-factory": "node scripts/verify-renderer-factory.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:debug": "node tests/debug.js",
+    "test:lamp": "node tests/lamp.js",
+    "test:cauldron": "node tests/cauldron.js",
+    "test:flute": "node tests/flute.js",
+    "test:playingcards": "node tests/playingcards.js",
+    "test:mobile-touch": "node tests/mobile-touch.js",
+    "test:notation": "node tests/notation.test.mjs",
+    "test:share-roll": "node tests/share-roll.test.mjs",
+    "test:share-roll-replay": "node tests/share-roll-replay.js",
+    "test:a11y": "node tests/a11y.js",
+    "test:solver": "bash src/wasm/build_solver_test.sh"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@gltf-transform/core": "^4.1.0",
     "@gltf-transform/extensions": "^4.1.0",
     "@gltf-transform/functions": "^4.1.0",
@@ -24,6 +46,9 @@
     "draco3dgltf": "^1.5.7",
     "playwright": "^1.58.2",
     "sharp": "^0.35.1",
-    "vite": "^7.3.1"
+    "typescript": "^5.7.3",
+    "vite": "^7.3.1",
+    "vite-plugin-pwa": "^1.3.0",
+    "workbox-window": "^7.4.1"
   }
 }

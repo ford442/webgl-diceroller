@@ -29,6 +29,10 @@ const _forceMain =
 
 // `active` is swapped to the chosen backend during loadWasmEngine(). Until then
 // it points at the main bridge so any early accidental call is harmless.
+// Typed as the shared contract (not `typeof workerBridge | typeof mainBridge`)
+// so a signature drift between the two concrete bridges fails typecheck here
+// instead of only showing up as a runtime mismatch.
+/** @type {import('./physicsTypes').PhysicsBridgeModule} */
 let active = mainBridge;
 
 export const loadWasmEngine = async () => {
@@ -54,14 +58,25 @@ export const loadWasmEngine = async () => {
 export const isWasmAvailable = () => active.isWasmAvailable();
 export const isWasmInitialized = () => active.isWasmInitialized();
 export const getWasmEngine = () => active.getWasmEngine();
-export const loadHullForDie = (...a) => active.loadHullForDie(...a);
-export const pollCollisionEvents = (...a) => active.pollCollisionEvents(...a);
-export const seedPhysicsRNG = (...a) => active.seedPhysicsRNG(...a);
-export const randomPhysicsFloat = (...a) => active.randomPhysicsFloat(...a);
-export const serializePhysicsState = (...a) => active.serializePhysicsState(...a);
-export const deserializePhysicsState = (...a) => active.deserializePhysicsState(...a);
+export const loadHullForDie = (wasmId, sides) => active.loadHullForDie(wasmId, sides);
+export const pollCollisionEvents = () => active.pollCollisionEvents();
+export const seedPhysicsRNG = (seed) => active.seedPhysicsRNG(seed);
+export const randomPhysicsFloat = () => active.randomPhysicsFloat();
+export const serializePhysicsState = () => active.serializePhysicsState();
+export const seededPhysicsThrow = (seed, dice, tableSurfaceY) =>
+    active.seededPhysicsThrow(seed, dice, tableSurfaceY);
+export const deserializePhysicsState = (data) => active.deserializePhysicsState(data);
 
 /** True when the worker backend is live and using SharedArrayBuffer transport. */
 export const isUsingWorkerPhysics = () => active === workerBridge;
 export const isUsingSharedArrayBuffer = () =>
     active === workerBridge && workerBridge.isUsingSharedArrayBuffer();
+
+/** Flush batched per-frame worker commands (no-op on the main-thread bridge). */
+export const flushWorkerCommandBatch = () => {
+    if (active === workerBridge) workerBridge.flushWorkerCommandBatch();
+};
+
+/** Worker transport stats for ?debug-perf (null when not on the worker bridge). */
+export const getWorkerPhysicsStats = () =>
+    active === workerBridge ? workerBridge.getWorkerPhysicsStats() : null;

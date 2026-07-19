@@ -101,8 +101,10 @@ export function createSpellbook(scene, physicsWorld, position = { x: -10, y: -2.
 
     // --- Physics ---
     // Simple box shape for the book
-    const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, height/2, depth/2));
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, height/2, depth/2));
+        createStaticBody(physicsWorld, group, shape);
+    }
 
     return { group };
 }

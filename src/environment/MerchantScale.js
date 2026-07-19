@@ -107,7 +107,7 @@ export function createMerchantScale(scene, physicsWorld, position = { x: -14, y:
     scene.add(group);
 
     // --- Physics ---
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const ammo = getAmmo();
 
         // Helper to create body at world position

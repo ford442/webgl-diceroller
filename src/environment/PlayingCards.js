@@ -86,8 +86,10 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
         cards.push({ mesh, baseRotX: mesh.rotation.x, flipped: false, isBack: !!card.isBack });
 
         // Physics for each card
-        const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, thickness/2, height/2));
-        createStaticBody(physicsWorld, mesh, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, thickness/2, height/2));
+            createStaticBody(physicsWorld, mesh, shape);
+        }
     });
 
     // Add a small deck
@@ -128,8 +130,10 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
     deckMesh.rotation.y = -0.3;
 
     group.add(deckMesh);
-    const deckShape = new ammo.btBoxShape(new ammo.btVector3(width/2, deckHeight/2, height/2));
-    createStaticBody(physicsWorld, deckMesh, deckShape);
+    if (ammo && physicsWorld) {
+        const deckShape = new ammo.btBoxShape(new ammo.btVector3(width/2, deckHeight/2, height/2));
+        createStaticBody(physicsWorld, deckMesh, deckShape);
+    }
 
     scene.add(group);
 

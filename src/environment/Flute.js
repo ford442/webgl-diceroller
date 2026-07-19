@@ -79,21 +79,23 @@ export function createFlute(scene, physicsWorld, position = { x: 0, y: -2.75, z:
 
     // Physics
     const totalLength = length + 0.3; // Including mouthpiece
-    const shape = new ammo.btCylinderShape(new ammo.btVector3(totalLength / 2, radius, radius));
-    
-    const physicsDummy = new THREE.Object3D();
-    physicsDummy.position.copy(group.position);
-    physicsDummy.quaternion.copy(group.quaternion);
-    physicsDummy.rotateY(Math.PI / 2); // btCylinderShape aligns with Y axis by default. We want it along local X.
-    
-    // Wait, btCylinderShape takes half extents (rx, ry, rz). The cylinder runs along the Y axis.
-    // Our flute runs along the X axis. So we need to rotate the dummy by 90 degrees on Z.
-    const dummyGroup = new THREE.Object3D();
-    dummyGroup.position.copy(group.position);
-    dummyGroup.rotation.y = group.rotation.y;
-    dummyGroup.rotateZ(Math.PI / 2);
-    
-    createStaticBody(physicsWorld, dummyGroup, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(totalLength / 2, radius, radius));
+        
+        const physicsDummy = new THREE.Object3D();
+        physicsDummy.position.copy(group.position);
+        physicsDummy.quaternion.copy(group.quaternion);
+        physicsDummy.rotateY(Math.PI / 2); // btCylinderShape aligns with Y axis by default. We want it along local X.
+        
+        // Wait, btCylinderShape takes half extents (rx, ry, rz). The cylinder runs along the Y axis.
+        // Our flute runs along the X axis. So we need to rotate the dummy by 90 degrees on Z.
+        const dummyGroup = new THREE.Object3D();
+        dummyGroup.position.copy(group.position);
+        dummyGroup.rotation.y = group.rotation.y;
+        dummyGroup.rotateZ(Math.PI / 2);
+        
+        createStaticBody(physicsWorld, dummyGroup, shape);
+    }
 
     // --- Interaction: click to play a short melody, with a gentle lift/wobble ---
     let playCount = 0;

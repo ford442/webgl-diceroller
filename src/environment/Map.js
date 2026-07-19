@@ -63,8 +63,10 @@ export function createMap(scene, physicsWorld, position = { x: -8, y: -2.75, z: 
 
     // --- Physics ---
     // Map Body
-    const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, thickness/2, depth/2));
-    createStaticBody(physicsWorld, group, shape);
+    if (ammo && physicsWorld) {
+        const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, thickness/2, depth/2));
+        createStaticBody(physicsWorld, group, shape);
+    }
 
     // Weights Physics (Approximation: integrated into static map body? Or separate?)
     // Since it's static, we can just let dice collide with the map surface.
@@ -75,25 +77,27 @@ export function createMap(scene, physicsWorld, position = { x: -8, y: -2.75, z: 
     // Let's create separate static bodies for weights to be safe.
 
     weightPositions.forEach(pos => {
-        const wShape = new ammo.btCylinderShape(new ammo.btVector3(0.3, 0.2, 0.3)); // Height 0.4 / 2 = 0.2
-        // We need to transform the local position to world position for createStaticBody if we pass a mesh.
-        // But createStaticBody uses mesh.position/quaternion.
-        // The weights are children of 'group'.
-        // So their world position depends on group.
-
-        // Option: Make weights separate objects in scene? No, keep hierarchy clean.
-        // Option: Add child shapes to compound shape? Yes, that's better.
-        // But createStaticBody is simple.
-
-        // Let's just create individual invisible physics bodies for weights at world coords.
-        // We can use a dummy object for position calculation.
-
-        const dummy = new THREE.Object3D();
-        dummy.position.copy(group.position).add(new THREE.Vector3(pos.x, thickness/2 + 0.2, pos.z).applyEuler(group.rotation));
-        dummy.quaternion.copy(group.quaternion);
-
-        // Since createStaticBody expects a mesh (with .position and .quaternion), dummy works.
-        createStaticBody(physicsWorld, dummy, wShape);
+        if (ammo && physicsWorld) {
+            const wShape = new ammo.btCylinderShape(new ammo.btVector3(0.3, 0.2, 0.3)); // Height 0.4 / 2 = 0.2
+            // We need to transform the local position to world position for createStaticBody if we pass a mesh.
+            // But createStaticBody uses mesh.position/quaternion.
+            // The weights are children of 'group'.
+            // So their world position depends on group.
+    
+            // Option: Make weights separate objects in scene? No, keep hierarchy clean.
+            // Option: Add child shapes to compound shape? Yes, that's better.
+            // But createStaticBody is simple.
+    
+            // Let's just create individual invisible physics bodies for weights at world coords.
+            // We can use a dummy object for position calculation.
+    
+            const dummy = new THREE.Object3D();
+            dummy.position.copy(group.position).add(new THREE.Vector3(pos.x, thickness/2 + 0.2, pos.z).applyEuler(group.rotation));
+            dummy.quaternion.copy(group.quaternion);
+    
+            // Since createStaticBody expects a mesh (with .position and .quaternion), dummy works.
+            createStaticBody(physicsWorld, dummy, wShape);
+        }
     });
 }
 

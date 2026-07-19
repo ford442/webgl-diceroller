@@ -128,11 +128,13 @@ export function createSkull(scene, physicsWorld, position = { x: -10, y: -2.4, z
     scene.add(group);
 
     // --- Physics ---
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const ammo = getAmmo();
         // Sphere shape covers cranium well enough for rolling/static collision
-        const shape = new ammo.btSphereShape(0.4);
-        createStaticBody(physicsWorld, group, shape);
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btSphereShape(0.4);
+            createStaticBody(physicsWorld, group, shape);
+        }
     }
 
     return {

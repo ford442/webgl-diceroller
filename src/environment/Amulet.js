@@ -96,7 +96,7 @@ export function createAmulet(scene, physicsWorld, position = { x: -6, y: -2.74, 
     scene.add(group);
 
     // Physics
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const AmmoInstance = getAmmo();
 
         // Use a simple flat cylinder shape for the main amulet body

@@ -67,22 +67,24 @@ export function createTarotDeck(scene, physicsWorld, position = { x: -6, y: -2.7
     group.add(deckMesh);
 
     // Physics for Deck
-    if (physicsWorld) {
-        const deckShape = new ammo.btBoxShape(new ammo.btVector3(cardWidth / 2, deckThickness / 2, cardHeight / 2));
-
-        // createStaticBody expects the object to have the world transform.
-        // We'll create a dummy mesh with the world transform of the deckMesh
-        const deckDummy = new THREE.Mesh();
-
-        // Calculate world position
-        const deckWorldPos = new THREE.Vector3(0, deckThickness / 2, 0);
-        deckWorldPos.applyMatrix4(new THREE.Matrix4().makeRotationY(rotationY));
-        deckWorldPos.add(new THREE.Vector3(position.x, position.y, position.z));
-
-        deckDummy.position.copy(deckWorldPos);
-        deckDummy.quaternion.copy(group.quaternion);
-
-        createStaticBody(physicsWorld, deckDummy, deckShape);
+    if (physicsWorld && getAmmo()) {
+        if (ammo && physicsWorld) {
+            const deckShape = new ammo.btBoxShape(new ammo.btVector3(cardWidth / 2, deckThickness / 2, cardHeight / 2));
+    
+            // createStaticBody expects the object to have the world transform.
+            // We'll create a dummy mesh with the world transform of the deckMesh
+            const deckDummy = new THREE.Mesh();
+    
+            // Calculate world position
+            const deckWorldPos = new THREE.Vector3(0, deckThickness / 2, 0);
+            deckWorldPos.applyMatrix4(new THREE.Matrix4().makeRotationY(rotationY));
+            deckWorldPos.add(new THREE.Vector3(position.x, position.y, position.z));
+    
+            deckDummy.position.copy(deckWorldPos);
+            deckDummy.quaternion.copy(group.quaternion);
+    
+            createStaticBody(physicsWorld, deckDummy, deckShape);
+        }
     }
 
     // 2. A scattered card face up (The Fool)
@@ -106,23 +108,25 @@ export function createTarotDeck(scene, physicsWorld, position = { x: -6, y: -2.7
     group.add(card1);
 
     // Physics for Card 1
-    if (physicsWorld) {
-        const cardShape = new ammo.btBoxShape(new ammo.btVector3(cardWidth / 2, cardThickness / 2, cardHeight / 2));
-
-        const cardDummy = new THREE.Mesh();
-        const cardWorldPos = new THREE.Vector3(2.0, cardThickness / 2, 0.5);
-
-        // Apply group rotation
-        cardWorldPos.applyMatrix4(new THREE.Matrix4().makeRotationY(rotationY));
-        cardWorldPos.add(new THREE.Vector3(position.x, position.y, position.z));
-
-        cardDummy.position.copy(cardWorldPos);
-
-        // Combine group rotation and local card rotation
-        const euler = new THREE.Euler(0, rotationY - Math.PI / 8, 0, 'YXZ');
-        cardDummy.quaternion.setFromEuler(euler);
-
-        createStaticBody(physicsWorld, cardDummy, cardShape);
+    if (physicsWorld && getAmmo()) {
+        if (ammo && physicsWorld) {
+            const cardShape = new ammo.btBoxShape(new ammo.btVector3(cardWidth / 2, cardThickness / 2, cardHeight / 2));
+    
+            const cardDummy = new THREE.Mesh();
+            const cardWorldPos = new THREE.Vector3(2.0, cardThickness / 2, 0.5);
+    
+            // Apply group rotation
+            cardWorldPos.applyMatrix4(new THREE.Matrix4().makeRotationY(rotationY));
+            cardWorldPos.add(new THREE.Vector3(position.x, position.y, position.z));
+    
+            cardDummy.position.copy(cardWorldPos);
+    
+            // Combine group rotation and local card rotation
+            const euler = new THREE.Euler(0, rotationY - Math.PI / 8, 0, 'YXZ');
+            cardDummy.quaternion.setFromEuler(euler);
+    
+            createStaticBody(physicsWorld, cardDummy, cardShape);
+        }
     }
 
     // 3. A scattered card face down
@@ -144,22 +148,24 @@ export function createTarotDeck(scene, physicsWorld, position = { x: -6, y: -2.7
     group.add(card2);
 
     // Physics for Card 2
-    if (physicsWorld) {
-        const cardShape = new ammo.btBoxShape(new ammo.btVector3(cardWidth / 2, cardThickness / 2, cardHeight / 2));
-
-        const cardDummy = new THREE.Mesh();
-        const cardWorldPos = new THREE.Vector3(1.0, cardThickness / 2, -1.5);
-
-        // Apply group rotation
-        cardWorldPos.applyMatrix4(new THREE.Matrix4().makeRotationY(rotationY));
-        cardWorldPos.add(new THREE.Vector3(position.x, position.y, position.z));
-
-        cardDummy.position.copy(cardWorldPos);
-
-        const euler = new THREE.Euler(0, rotationY + Math.PI / 12, 0, 'YXZ');
-        cardDummy.quaternion.setFromEuler(euler);
-
-        createStaticBody(physicsWorld, cardDummy, cardShape);
+    if (physicsWorld && getAmmo()) {
+        if (ammo && physicsWorld) {
+            const cardShape = new ammo.btBoxShape(new ammo.btVector3(cardWidth / 2, cardThickness / 2, cardHeight / 2));
+    
+            const cardDummy = new THREE.Mesh();
+            const cardWorldPos = new THREE.Vector3(1.0, cardThickness / 2, -1.5);
+    
+            // Apply group rotation
+            cardWorldPos.applyMatrix4(new THREE.Matrix4().makeRotationY(rotationY));
+            cardWorldPos.add(new THREE.Vector3(position.x, position.y, position.z));
+    
+            cardDummy.position.copy(cardWorldPos);
+    
+            const euler = new THREE.Euler(0, rotationY + Math.PI / 12, 0, 'YXZ');
+            cardDummy.quaternion.setFromEuler(euler);
+    
+            createStaticBody(physicsWorld, cardDummy, cardShape);
+        }
     }
 
     scene.add(group);

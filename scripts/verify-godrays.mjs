@@ -43,7 +43,7 @@ async function probe(browser, query, file) {
 
     const info = await page.evaluate(() => ({
         backend: window.__renderStats?.post?.rendererType
-            ?? scene?.userData?.rendererState?.rendererType ?? 'unknown',
+            ?? window.scene?.userData?.rendererState?.rendererType ?? 'unknown',
         godRays: window.postConfig?.godRaysEnabled ?? null,
         hasFactory: Boolean(window.scene?.userData?.godRayMaterialFactory),
     })).catch(() => ({ backend: 'unknown', godRays: null }));

@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet part of the incremental checkJs rollout (issue #192); pulled in transitively via interaction.js.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
@@ -5,6 +6,7 @@ import {
     createConvexHullShape,
     spawnDicePhysics,
     getAmmo,
+    isAmmoAvailable,
     registerBodyAudioMeta,
     unregisterBodyAudioMeta,
     registerBodyDragMeta,
@@ -12,9 +14,24 @@ import {
 } from './physics.js';
 import {
     getWasmEngine, isWasmAvailable, isWasmInitialized,
-    loadHullForDie, pollCollisionEvents, seedPhysicsRNG, randomPhysicsFloat
+    loadHullForDie, pollCollisionEvents, seedPhysicsRNG, randomPhysicsFloat,
+    seededPhysicsThrow, isUsingWorkerPhysics,
 } from './wasm/PhysicsBridge.js';
+import { computeSeededThrowParams, applyThrowParams, createSeededRng } from './wasm/seededThrowParams.js';
 import { TABLE_SURFACE_Y } from './core/SceneMetrics.js';
+import { ensureBodyPipGroups } from './dice/DiceGeometryGroups.js';
+import {
+    createDiceMaterials,
+    applyMaterialsToDieMesh,
+    disposeDiceMaterials
+} from './dice/DiceMaterials.js';
+import {
+    resolveDiceAppearanceConfig,
+    persistDiceAppearanceConfig,
+    DICE_TYPES as APPEARANCE_DICE_TYPES,
+    buildDicePresencePayload,
+    mergeDicePresencePayload
+} from './dice/DiceAppearanceConfig.js';
 const searchParams = new URLSearchParams(window.location.search);
 const WASM_TRANSFORM_STRIDE = 7;
 
@@ -28,7 +45,7 @@ const WASM_TRANSFORM_STRIDE = 7;
  */
 function _computeFaceNormals(geometry) {
     const CLUSTER_THRESHOLD = 0.98; // ~11.5° tolerance — tight enough for all die types
-    const faceNormals = [];
+    const faceClusters = [];
 
     const pos = geometry.attributes.position;
     const index = geometry.index;
@@ -47,6 +64,18 @@ function _computeFaceNormals(geometry) {
 
     const triCount = index ? index.count / 3 : pos.count / 3;
 
+    // Some dice models (die_4/die_8/die_20) carry a handful of corrupted
+    // triangles from a bad weld/quantize pass in the asset pipeline — long
+    // "spike" edges connecting distant, unrelated vertices. Left in, these
+    // can out-rank a real face by summed area and hijack a principal-normal
+    // slot in `_selectPrincipalFaceNormals`, pointing readDiceValue at empty
+    // space instead of a face. Reject any triangle whose longest edge is a
+    // large fraction of the die's own diameter — legitimate face/engraving
+    // edges never approach that size.
+    if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+    const maxEdge = (geometry.boundingSphere?.radius ?? 1) * 0.6;
+    const maxEdgeSq = maxEdge * maxEdge;
+
     for (let t = 0; t < triCount; t++) {
         const va = getVertex(t * 3);
         const vb = getVertex(t * 3 + 1);
@@ -61,86 +90,186 @@ function _computeFaceNormals(geometry) {
         _n.crossVectors(_e1, _e2);
 
         if (_n.lengthSq() < 1e-10) continue; // skip degenerate triangles
+        if (_e1.lengthSq() > maxEdgeSq || _e2.lengthSq() > maxEdgeSq || _b.distanceToSquared(_c) > maxEdgeSq) continue;
+        const area = _n.length() * 0.5;
         _n.normalize();
 
-        // Check against existing clusters
-        let found = false;
-        for (const fn of faceNormals) {
-            if (fn.dot(_n) > CLUSTER_THRESHOLD) {
-                found = true;
+        // Check against existing clusters. Accumulate by area so broad die
+        // faces dominate bevels and engraved-number side walls.
+        let cluster = null;
+        for (const existing of faceClusters) {
+            if (existing.normal.dot(_n) > CLUSTER_THRESHOLD) {
+                cluster = existing;
                 break;
             }
         }
-        if (!found) faceNormals.push(_n.clone());
+        if (!cluster) {
+            cluster = {
+                normal: _n.clone(),
+                sum: new THREE.Vector3(),
+                area: 0
+            };
+            faceClusters.push(cluster);
+        }
+        cluster.sum.addScaledVector(_n, area);
+        cluster.area += area;
     }
 
-    return faceNormals;
+    return faceClusters.map((cluster) => {
+        const normal = cluster.sum.lengthSq() > 1e-10
+            ? cluster.sum.clone().normalize()
+            : cluster.normal.clone();
+        normal.userData = { area: cluster.area };
+        return normal;
+    });
 }
 
 /**
  * Reduce many clustered normals (bevels/rounds on the mesh) down to the
- * `sides` principal face directions by greedy farthest-point selection.
+ * `sides` principal face directions.
  */
 function _selectPrincipalFaceNormals(allNormals, sides) {
     if (!allNormals.length) return [];
     if (allNormals.length <= sides) return allNormals.map((n) => n.clone());
 
     const selected = [];
-    const used = new Set();
 
-    // Seed with the normal that best aligns with ±Y — a real die face, not a bevel.
-    let seed = 0;
-    let seedScore = Math.abs(allNormals[0].y);
-    for (let i = 1; i < allNormals.length; i++) {
-        const score = Math.abs(allNormals[i].y);
-        if (score > seedScore) {
-            seedScore = score;
-            seed = i;
+    // Prefer high-area planes. The old farthest-point pass used abs(dot),
+    // which treated opposite faces as duplicates and could choose bevels.
+    const byArea = allNormals
+        .slice()
+        .sort((a, b) => (b.userData?.area ?? 0) - (a.userData?.area ?? 0));
+
+    for (const normal of byArea) {
+        if (selected.length >= sides) break;
+        if (selected.every((existing) => existing.dot(normal) < 0.92)) {
+            selected.push(normal.clone());
         }
     }
-    selected.push(allNormals[seed].clone());
-    used.add(seed);
 
-    while (selected.length < sides) {
-        let bestIdx = -1;
-        let bestSeparation = -1;
-
-        for (let i = 0; i < allNormals.length; i++) {
-            if (used.has(i)) continue;
-            let minAlignment = Infinity;
-            for (const s of selected) {
-                minAlignment = Math.min(minAlignment, Math.abs(allNormals[i].dot(s)));
-            }
-            const separation = 1 - minAlignment;
-            if (separation > bestSeparation) {
-                bestSeparation = separation;
-                bestIdx = i;
-            }
+    // Fallback for odd meshes: keep filling with unique directions.
+    for (const normal of byArea) {
+        if (selected.length >= sides) break;
+        if (!selected.some((existing) => existing.dot(normal) > 0.98)) {
+            selected.push(normal.clone());
         }
-
-        if (bestIdx < 0) break;
-        selected.push(allNormals[bestIdx].clone());
-        used.add(bestIdx);
     }
 
     return selected;
 }
 
+const FACE_VALUE_NORMAL_MAPS = {
+    // This model prints 3 numbers per face (each face omits the value at its
+    // own "apex" vertex). `value` here is the *omitted* number — the one
+    // that reads correctly when this face is face-down on the table, which
+    // is what readDiceValue's useBottomFace branch looks up.
+    d4: [
+        { normal: [0, -0.335, -0.942], value: 3 },
+        { normal: [0.817, -0.334, 0.471], value: 4 },
+        { normal: [-0.816, -0.333, 0.471], value: 1 },
+        { normal: [0, 1, 0], value: 2 }
+    ],
+    d6: [
+        { normal: [0, 1, 0], value: 1 },
+        { normal: [0, 0, 1], value: 2 },
+        { normal: [-1, 0, 0], value: 3 },
+        { normal: [1, 0, 0], value: 4 },
+        { normal: [0, 0, -1], value: 5 },
+        { normal: [0, -1, 0], value: 6 }
+    ],
+    d8: [
+        { normal: [0.816, -0.333, 0.471], value: 8 },
+        { normal: [-0.816, 0.333, -0.471], value: 3 },
+        { normal: [0.816, 0.333, -0.471], value: 7 },
+        { normal: [-0.816, -0.333, 0.471], value: 2 },
+        { normal: [0, 1, 0], value: 6 },
+        { normal: [0, -1, 0], value: 1 },
+        { normal: [0, -0.333, -0.943], value: 4 },
+        { normal: [0, 0.333, 0.943], value: 5 }
+    ],
+    // Printed "0" face maps to value 10 (this app has no separate d100/d%
+    // mode, so a straight 1-10 roll is the only sensible reading).
+    d10: [
+        { normal: [0.771, -0.056, -0.634], value: 6 },
+        { normal: [-0.054, -0.056, -0.997], value: 2 },
+        { normal: [0, 1, 0], value: 10 },
+        { normal: [-0.533, 0.596, -0.601], value: 8 },
+        { normal: [0.803, 0.596, -0.014], value: 4 },
+        { normal: [0.531, -0.597, 0.602], value: 1 },
+        { normal: [0, -1, 0], value: 9 },
+        { normal: [-0.771, 0.056, 0.634], value: 3 },
+        { normal: [-0.802, -0.597, 0.015], value: 5 },
+        { normal: [0.053, 0.056, 0.997], value: 7 }
+    ],
+    d12: [
+        { normal: [0.632, -0.447, -0.632], value: 1 },
+        { normal: [0.883, 0.447, -0.140], value: 2 },
+        { normal: [0.140, 0.447, -0.883], value: 3 },
+        { normal: [-0.406, -0.447, -0.797], value: 4 },
+        { normal: [0, -1, 0], value: 5 },
+        { normal: [-0.140, -0.447, 0.883], value: 6 },
+        { normal: [-0.632, 0.447, 0.632], value: 7 },
+        { normal: [0.406, 0.447, 0.797], value: 8 },
+        { normal: [0.797, -0.447, 0.406], value: 9 },
+        { normal: [-0.883, -0.447, 0.140], value: 10 },
+        { normal: [-0.797, 0.447, -0.406], value: 11 },
+        { normal: [0, 1, 0], value: 12 }
+    ],
+    d20: [
+        { normal: [0.111, 0.745, 0.658], value: 1 },
+        { normal: [-0.512, -0.746, 0.426], value: 2 },
+        { normal: [-0.942, -0.334, 0.030], value: 3 },
+        { normal: [0.497, -0.334, 0.801], value: 4 },
+        { normal: [0.624, -0.746, 0.232], value: 5 },
+        { normal: [-0.900, 0.333, 0.282], value: 6 },
+        { normal: [0, -1, 0], value: 7 },
+        { normal: [-0.206, -0.333, 0.920], value: 8 },
+        { normal: [-0.444, 0.331, 0.832], value: 9 },
+        { normal: [0.694, 0.333, 0.638], value: 10 },
+        { normal: [-0.693, -0.333, -0.639], value: 11 },
+        { normal: [0.513, 0.745, -0.425], value: 12 },
+        { normal: [0, 1, 0], value: 13 },
+        { normal: [0.445, -0.333, -0.831], value: 14 },
+        { normal: [0.900, -0.333, -0.282], value: 15 },
+        { normal: [-0.498, 0.333, -0.801], value: 16 },
+        { normal: [0.942, 0.333, -0.031], value: 17 },
+        { normal: [0.206, 0.334, -0.920], value: 18 },
+        { normal: [-0.625, 0.745, -0.232], value: 19 },
+        { normal: [-0.111, -0.746, -0.656], value: 20 }
+    ]
+};
+
 /**
  * Assign integer values 1..N to face normals.
  *
- * Assumes the Blender source models are exported with the +Y axis pointing up,
- * i.e. after the `rotateX(-Math.PI / 2)` applied in loadDiceModels the face
- * that was originally "up" in Blender (the highest-value face) ends up with
- * the most positive Y normal component.  Sorting ascending therefore maps
- * lowest-Y normal → value 1 (face resting on the table) and highest-Y normal
- * → value N (face visible to the player).
- *
- * If values appear reversed for a particular model, flip the sort order here.
+ * Prefer source-model maps where the model numbering has been verified. Fall
+ * back to the old Y-sort convention for dice without an explicit map.
  */
-function _assignFaceValues(faceNormals) {
+function _assignFaceValues(faceNormals, type = null) {
     const n = faceNormals.length;
     if (n === 0) return [];
+
+    const mappedNormals = FACE_VALUE_NORMAL_MAPS[type];
+    if (mappedNormals?.length === n) {
+        const assigned = faceNormals.map((faceNormal) => {
+            let best = null;
+            let bestDot = -Infinity;
+            for (const entry of mappedNormals) {
+                const normal = new THREE.Vector3(...entry.normal).normalize();
+                const dot = faceNormal.dot(normal);
+                if (dot > bestDot) {
+                    bestDot = dot;
+                    best = entry;
+                }
+            }
+            return bestDot > 0.92 ? best.value : null;
+        });
+
+        if (assigned.every((value) => value !== null) && new Set(assigned).size === n) {
+            return assigned;
+        }
+        console.warn(`[DiceReader] Explicit face map did not match ${type}; using Y-sort fallback`, assigned);
+    }
 
     // Sort ascending by Y: lowest Y → value 1, highest Y → value N
     const sorted = faceNormals
@@ -230,8 +359,9 @@ export const readDiceValue = (die) => {
     _invQ.copy(dieQuaternion).invert();
     _localUp.set(0, 1, 0).applyQuaternion(_invQ);
 
-    // d4: the result is the face resting on the table (normal points down).
-    // All other dice: the face pointing up is the result.
+    // d4 values are printed around the top vertex; selecting the bottom face
+    // and using the source-model map yields that visible vertex value.
+    // All other dice use the face pointing up.
     const useBottomFace = die.type === 'd4';
     let bestDot = useBottomFace ? Infinity : -Infinity;
     let bestIdx = 0;
@@ -248,11 +378,59 @@ export const readDiceValue = (die) => {
     return faceValues[bestIdx];
 };
 
+/** Count spawned dice by type (for shareable roll URLs). */
+export const getSpawnedDiceCounts = () => {
+    const counts = Object.fromEntries(diceTypes.map(({ type }) => [type, 0]));
+    spawnedDice.forEach((die) => {
+        if (counts[die.type] != null) counts[die.type]++;
+    });
+    return counts;
+};
+
 /** Read current values for every spawned die (for the live HUD). */
 export const readAllDiceValues = () => spawnedDice.map((die) => ({
     type: die.type,
-    value: readDiceValue(die)
+    value: readDiceValue(die),
+    role: die.role ?? null,
+    groupIndex: die.groupIndex ?? 0,
+    dieIndex: die.dieIndex ?? 0
 }));
+
+export const getDiceValueDebugSnapshot = () => spawnedDice.map((die) => {
+    const model = diceModels[die.type];
+    const faceNormals = model?.userData?.faceNormals ?? [];
+    const faceValues = model?.userData?.faceValues ?? [];
+    const value = readDiceValue(die);
+    const dieQuaternion = getDieQuaternion(die);
+
+    _invQ.copy(dieQuaternion).invert();
+    _localUp.set(0, 1, 0).applyQuaternion(_invQ);
+
+    const useBottomFace = die.type === 'd4';
+    let bestDot = useBottomFace ? Infinity : -Infinity;
+    let bestIdx = -1;
+    for (let i = 0; i < faceNormals.length; i++) {
+        const dot = faceNormals[i].dot(_localUp);
+        if ((useBottomFace && dot < bestDot) || (!useBottomFace && dot > bestDot)) {
+            bestDot = dot;
+            bestIdx = i;
+        }
+    }
+
+    return {
+        type: die.type,
+        value,
+        selectedFaceIndex: bestIdx,
+        selectedFaceValue: bestIdx >= 0 ? faceValues[bestIdx] : null,
+        selectedDot: bestDot,
+        localUp: { x: _localUp.x, y: _localUp.y, z: _localUp.z },
+        faceMap: faceNormals.map((normal, index) => ({
+            index,
+            value: faceValues[index],
+            normal: { x: normal.x, y: normal.y, z: normal.z }
+        }))
+    };
+});
 
 export const areDiceSettled = () => {
     if (spawnedDice.length === 0) return true;
@@ -289,6 +467,90 @@ loader.setDRACOLoader(dracoLoader);
 let diceModels = {};
 export let spawnedDice = [];
 let nextAudioBodyId = 1;
+
+let diceAppearanceConfig = null;
+let diceAppearanceScene = null;
+let diceAppearanceEnvMap = null;
+let diceAppearanceQualityProfile = null;
+
+function getAppearanceOptions() {
+    return {
+        envMap: diceAppearanceEnvMap ?? diceAppearanceScene?.environment ?? null,
+        qualityProfile: diceAppearanceQualityProfile ?? (typeof window !== 'undefined' ? window.qualityProfile : null)
+    };
+}
+
+function applyAppearanceToMesh(mesh, type, { disposePrevious = true } = {}) {
+    if (!diceAppearanceConfig || !mesh) return;
+    const appearance = diceAppearanceConfig[type];
+    if (!appearance) return;
+
+    const previous = mesh.material;
+    const materials = createDiceMaterials(appearance.preset, appearance, getAppearanceOptions());
+    applyMaterialsToDieMesh(mesh, materials);
+    mesh.userData.diceAppearance = { ...appearance };
+
+    if (disposePrevious) disposeDiceMaterials(previous);
+}
+
+function applyAppearanceToTemplate(type) {
+    applyAppearanceToMesh(diceModels[type], type);
+}
+
+export function initDiceAppearance(scene, options = {}) {
+    diceAppearanceScene = scene;
+    diceAppearanceEnvMap = options.envMap ?? scene?.environment ?? null;
+    diceAppearanceQualityProfile = options.qualityProfile ?? options.adaptiveProfile ?? null;
+    diceAppearanceConfig = resolveDiceAppearanceConfig();
+    APPEARANCE_DICE_TYPES.forEach((type) => applyAppearanceToTemplate(type));
+}
+
+export function getDiceAppearanceConfig() {
+    if (!diceAppearanceConfig) diceAppearanceConfig = resolveDiceAppearanceConfig();
+    return diceAppearanceConfig;
+}
+
+export function setDieTypeAppearance(type, partial) {
+    if (!diceAppearanceConfig) diceAppearanceConfig = resolveDiceAppearanceConfig();
+    diceAppearanceConfig[type] = { ...diceAppearanceConfig[type], ...partial };
+    refreshDiceAppearance(type);
+    persistDiceAppearanceConfig(diceAppearanceConfig);
+    return diceAppearanceConfig[type];
+}
+
+export function refreshDiceAppearance(type = null) {
+    const types = type ? [type] : APPEARANCE_DICE_TYPES;
+    const toDispose = new Set();
+
+    types.forEach((dieType) => {
+        const targets = [];
+        if (diceModels[dieType]) targets.push(diceModels[dieType]);
+        spawnedDice.forEach((die) => {
+            if (die.type === dieType) targets.push(die.mesh);
+        });
+        (diceMeshPool[dieType] ?? []).forEach((mesh) => targets.push(mesh));
+
+        targets.forEach((mesh) => {
+            if (!mesh) return;
+            const previous = mesh.material;
+            applyAppearanceToMesh(mesh, dieType, { disposePrevious: false });
+            const track = (mat) => { if (mat) toDispose.add(mat); };
+            if (Array.isArray(previous)) previous.forEach(track);
+            else track(previous);
+        });
+    });
+
+    toDispose.forEach((mat) => mat?.dispose?.());
+}
+
+export function applyDicePresencePayload(presence) {
+    diceAppearanceConfig = mergeDicePresencePayload(getDiceAppearanceConfig(), presence);
+    refreshDiceAppearance();
+    persistDiceAppearanceConfig(diceAppearanceConfig);
+    return diceAppearanceConfig;
+}
+
+export { buildDicePresencePayload };
 
 // Object pool of Three.js dice meshes, keyed by type. Spawning a die reuses a
 // pooled mesh instead of cloning a fresh one, and removing a die returns its
@@ -350,6 +612,19 @@ export { diceModels };
 const getDieSides = (type) => Number.parseInt(type.replace('d', ''), 10) || 6;
 const isUsingWasmPhysics = () => isWasmInitialized() && isWasmAvailable();
 const useMassBias = () => !searchParams.has('fair-dice');
+/** Ammo rigid bodies for dice are only needed on the fallback/validation paths. */
+const needsAmmoDiceBodies = () =>
+    !isUsingWasmPhysics()
+    || searchParams.has('dual-physics')
+    || searchParams.has('ammo-drag');
+
+const ensureDicePhysicsShape = (template) => {
+    if (!template?.userData) return null;
+    if (template.userData.physicsShape) return template.userData.physicsShape;
+    if (!isAmmoAvailable()) return null;
+    template.userData.physicsShape = createConvexHullShape(template);
+    return template.userData.physicsShape;
+};
 
 export const PHYSICS_PRESETS = {
     // Per-die-type tuning. dragFactor controls velocity-squared air resistance
@@ -363,7 +638,20 @@ export const PHYSICS_PRESETS = {
     d20: { mass: 5, friction: 0.40, rollingFriction: 0.03, dragFactor: 0.0016 }
 };
 
-const findSpawnedDieByMesh = (mesh) => spawnedDice.find((die) => die.mesh === mesh) || null;
+export const findSpawnedDieByMesh = (mesh) => spawnedDice.find((die) => die.mesh === mesh) || null;
+
+/** Map a physics collision id (WASM die id or ammo audioBodyId) back to a spawned die. */
+export const findSpawnedDieByPhysicsId = (id) => {
+    if (id < 0) return null;
+    const useWasmIds = isUsingWasmPhysics();
+    for (const die of spawnedDice) {
+        if (useWasmIds && die.wasmId === id) return die;
+        if (!useWasmIds && die.audioBodyId === id) return die;
+        // Dual-physics / mixed authority: accept either id.
+        if (die.wasmId === id || die.audioBodyId === id) return die;
+    }
+    return null;
+};
 
 function estimateInertiaScalar(geometry, mass) {
     const bbox = geometry.boundingBox ?? geometry.computeBoundingBox?.();
@@ -557,40 +845,21 @@ export const loadDiceModels = async (onProgress) => {
                 geometry.applyMatrix4(mesh.matrixWorld);
                 geometry.rotateX(-Math.PI / 2);
                 geometry.center();
+                ensureBodyPipGroups(geometry);
 
-                let material = mesh.material;
-                const upgradeMaterial = (mat) => new THREE.MeshStandardMaterial({
-                    color: mat.color || 0xeeeeee,
-                    map: mat.map || null,
-                    roughnessMap: mat.roughnessMap || null,
-                    normalMap: mat.normalMap || null,
-                    aoMap: mat.aoMap || null,
-                    roughness: mat.roughnessMap ? 1.0 : 0.2,
-                    metalness: 0.0,
-                    envMapIntensity: 1.0
-                });
-
-                // Ensure colour maps decode in sRGB (glTF base-colour textures).
-                if (mesh.material) {
-                    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-                    mats.forEach((m) => { if (m.map) m.map.colorSpace = THREE.SRGBColorSpace; });
-                }
-
-                if (material) {
-                    material = Array.isArray(material) ? material.map(upgradeMaterial) : upgradeMaterial(material);
-                } else {
-                    console.warn(`No material found for ${d.file}, using default material`);
-                    material = new THREE.MeshStandardMaterial({ color: 0xff00ff, roughness: 0.2, metalness: 0.0 });
-                }
-
-                const cleanMesh = new THREE.Mesh(geometry, material);
+                const cleanMesh = new THREE.Mesh(
+                    geometry,
+                    new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.3, metalness: 0.0 })
+                );
                 cleanMesh.position.set(0, 0, 0);
                 cleanMesh.rotation.set(0, 0, 0);
                 cleanMesh.scale.set(1, 1, 1);
 
                 cleanMesh.castShadow = true;
                 cleanMesh.receiveShadow = true;
-                cleanMesh.userData.physicsShape = createConvexHullShape(cleanMesh);
+                // Convex hull for ammo.js is created lazily when a dice body is
+                // actually spawned (fallback / dual-physics / ?ammo-drag paths).
+                cleanMesh.userData.physicsShape = null;
                 cleanMesh.geometry.computeBoundingBox();
 
                 // Precompute principal face normals and value map for result reading.
@@ -600,7 +869,7 @@ export const loadDiceModels = async (onProgress) => {
                 const allNormals = _computeFaceNormals(cleanMesh.geometry);
                 const faceNormals = _selectPrincipalFaceNormals(allNormals, sides);
                 cleanMesh.userData.faceNormals = faceNormals;
-                cleanMesh.userData.faceValues  = _assignFaceValues(faceNormals);
+                cleanMesh.userData.faceValues  = _assignFaceValues(faceNormals, d.type);
                 const oneFaceNormal = _getFaceNormalForValue(cleanMesh.userData.faceNormals, cleanMesh.userData.faceValues, 1);
                 if (oneFaceNormal && cleanMesh.geometry.boundingBox) {
                     const bboxSize = new THREE.Vector3();
@@ -633,21 +902,24 @@ export const loadDiceModels = async (onProgress) => {
 
 export const spawnObjects = (scene, world, config = null) => {
     // If config is an object (counts), flatten it.
-    // If it's a list (array of strings), use it directly.
+    // If it's a list (array of strings or spec objects), use it directly.
     let diceToSpawn = [];
     if (config && !Array.isArray(config)) {
         Object.keys(config).forEach(type => {
             const count = config[type];
-            for (let i = 0; i < count; i++) diceToSpawn.push(type);
+            for (let i = 0; i < count; i++) diceToSpawn.push({ type });
         });
     } else if (Array.isArray(config)) {
-        diceToSpawn = config;
+        diceToSpawn = config.map((entry) => (
+            typeof entry === 'string' ? { type: entry } : entry
+        ));
     } else {
         // Default
-        diceToSpawn = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+        diceToSpawn = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'].map((type) => ({ type }));
     }
 
-    diceToSpawn.forEach((type, index) => {
+    diceToSpawn.forEach((spec, index) => {
+        const type = spec.type;
         const template = diceModels[type];
         if (!template) return;
 
@@ -668,32 +940,41 @@ export const spawnObjects = (scene, world, config = null) => {
         const centerOfMassOffset = useMassBias()
             ? template.userData.massBiasOffset?.clone() ?? null
             : null;
-        const body = spawnDicePhysics(
-            world,
-            mesh,
-            template.userData.physicsShape,
-            {x, y, z},
-            mesh.rotation,
-            {
-                ...physicsPreset,
-                centerOfMassOffset
-            }
-        );
+
+        let body = null;
+        if (needsAmmoDiceBodies() && world) {
+            const collisionShape = ensureDicePhysicsShape(template);
+            body = spawnDicePhysics(
+                world,
+                mesh,
+                collisionShape,
+                { x, y, z },
+                mesh.rotation,
+                {
+                    ...physicsPreset,
+                    centerOfMassOffset
+                }
+            );
+        }
+
         mesh.userData.body = body;
+        mesh.userData.isDie = true;
         mesh.userData.physicsAuthority = isUsingWasmPhysics() ? 'wasm' : 'ammo';
         mesh.userData.physicsPreset = physicsPreset;
         const audioBodyId = nextAudioBodyId++;
         const inertiaScalar = estimateInertiaScalar(template.geometry, physicsPreset.mass);
-        registerBodyAudioMeta(body, {
-            id: audioBodyId,
-            type,
-            mass: physicsPreset.mass,
-            inertiaScalar,
-            surface: 'die'
-        });
-        registerBodyDragMeta(body, {
-            dragFactor: physicsPreset.dragFactor ?? 0
-        });
+        if (body) {
+            registerBodyAudioMeta(body, {
+                id: audioBodyId,
+                type,
+                mass: physicsPreset.mass,
+                inertiaScalar,
+                surface: 'die'
+            });
+            registerBodyDragMeta(body, {
+                dragFactor: physicsPreset.dragFactor ?? 0
+            });
+        }
 
         let wasmId = null;
         if (isUsingWasmPhysics()) {
@@ -720,9 +1001,24 @@ export const spawnObjects = (scene, world, config = null) => {
             audioBodyId,
             inertiaScalar,
             centerOfMassOffset,
-            massBiasOffset: template.userData.massBiasOffset?.clone() ?? null
+            massBiasOffset: template.userData.massBiasOffset?.clone() ?? null,
+            role: spec.role ?? null,
+            groupIndex: spec.groupIndex ?? 0,
+            dieIndex: spec.dieIndex ?? index,
+            explode: spec.explode === true
         });
     });
+};
+
+/**
+ * Replace all dice on the table with a spec list (used by notation rolls).
+ * @param {object} scene
+ * @param {object} world
+ * @param {Array<{type: string, role?: string|null, groupIndex?: number, dieIndex?: number, explode?: boolean}>} specs
+ */
+export const replaceDiceSet = (scene, world, specs) => {
+    clearDice(scene, world);
+    spawnObjects(scene, world, specs);
 };
 
 // Reusable transform to avoid per-frame allocations
@@ -793,16 +1089,16 @@ export const updateDiceVisuals = () => {
 };
 
 export const clearDice = (scene, world) => {
-    const Ammo = getAmmo();
+    const Ammo = isAmmoAvailable() ? getAmmo() : null;
     const engine = isUsingWasmPhysics() ? getWasmEngine() : null;
     spawnedDice.forEach(die => {
-        // Return the mesh to the pool (geometry/material are shared and kept alive)
-        // rather than disposing them.
         releaseDiceMesh(scene, die.type, die.mesh);
-        world.removeRigidBody(die.body);
-        unregisterBodyAudioMeta(die.body);
-        unregisterBodyDragMeta(die.body);
-        destroyAmmoDieBody(Ammo, die.body);
+        if (world && die.body) {
+            world.removeRigidBody(die.body);
+            unregisterBodyAudioMeta(die.body);
+            unregisterBodyDragMeta(die.body);
+            if (Ammo) destroyAmmoDieBody(Ammo, die.body);
+        }
         if (engine && die.wasmId != null) engine.removeDie(die.wasmId);
     });
     spawnedDice = [];
@@ -829,25 +1125,22 @@ export const updateDiceSet = (scene, world, targetCounts) => {
             for(let i=0; i<diff; i++) toAdd.push(type);
             spawnObjects(scene, world, toAdd);
         } else if (diff < 0) {
-            // Remove 'abs(diff)' amount of this type
-            const Ammo = getAmmo();
+            const Ammo = isAmmoAvailable() ? getAmmo() : null;
             let toRemove = Math.abs(diff);
-            // Iterate backwards to safely remove
             for (let i = spawnedDice.length - 1; i >= 0; i--) {
                 if (toRemove === 0) break;
                 if (spawnedDice[i].type === type) {
                     const die = spawnedDice[i];
-                    // Remove physics and free Ammo heap objects
-                    world.removeRigidBody(die.body);
-                    unregisterBodyAudioMeta(die.body);
-                    unregisterBodyDragMeta(die.body);
-                    destroyAmmoDieBody(Ammo, die.body);
+                    if (world && die.body) {
+                        world.removeRigidBody(die.body);
+                        unregisterBodyAudioMeta(die.body);
+                        unregisterBodyDragMeta(die.body);
+                        if (Ammo) destroyAmmoDieBody(Ammo, die.body);
+                    }
                     if (isUsingWasmPhysics() && die.wasmId != null) {
                         getWasmEngine().removeDie(die.wasmId);
                     }
-                    // Return the visual to the pool (shared geometry/material kept).
                     releaseDiceMesh(scene, die.type, die.mesh);
-                    // Remove from array
                     spawnedDice.splice(i, 1);
                     toRemove--;
                 }
@@ -857,93 +1150,128 @@ export const updateDiceSet = (scene, world, targetCounts) => {
 };
 
 export const throwDice = (scene, world, seed = null) => {
-    const Ammo = getAmmo();
-    const transform = new Ammo.btTransform();
+    const Ammo = isAmmoAvailable() ? getAmmo() : null;
+    const transform = Ammo ? new Ammo.btTransform() : null;
     const engine = isUsingWasmPhysics() ? getWasmEngine() : null;
 
-    const useDeterministic = seed !== null && isUsingWasmPhysics();
-    if (useDeterministic) {
+    const useDeterministic = seed !== null;
+    const throwDiceList = spawnedDice.map((die, index) => ({
+        id: die.wasmId ?? index,
+        index
+    }));
+    const wasmDice = engine
+        ? throwDiceList.filter((d) => spawnedDice[d.index]?.wasmId != null)
+        : [];
+
+    let paramsById = null;
+    const workerThrow = useDeterministic && isUsingWorkerPhysics() && wasmDice.length > 0;
+
+    if (workerThrow) {
+        seededPhysicsThrow(seed, wasmDice, TABLE_SURFACE_Y);
+        paramsById = new Map(
+            computeSeededThrowParams(createSeededRng(seed), wasmDice, TABLE_SURFACE_Y)
+                .map((p) => [p.id, p])
+        );
+    } else if (useDeterministic && engine) {
         seedPhysicsRNG(seed);
+        const params = computeSeededThrowParams(() => randomPhysicsFloat(), wasmDice, TABLE_SURFACE_Y);
+        applyThrowParams(engine, params);
+        paramsById = new Map(params.map((p) => [p.id, p]));
+    } else if (useDeterministic) {
+        const params = computeSeededThrowParams(createSeededRng(seed), throwDiceList, TABLE_SURFACE_Y);
+        paramsById = new Map(params.map((p) => [p.id, p]));
     }
-    const rand = () => useDeterministic ? randomPhysicsFloat() : getSecureRandom();
+
+    const rand = () => {
+        if (!useDeterministic) return getSecureRandom();
+        if (engine) return randomPhysicsFloat();
+        return getSecureRandom();
+    };
 
     spawnedDice.forEach((die, index) => {
         const body = die.body;
         die.mesh.userData.physicsAuthority = engine ? 'wasm' : 'ammo';
 
-        // Reset velocity — use temps destroyed immediately after
-        const zeroVec = new Ammo.btVector3(0, 0, 0);
-        body.setLinearVelocity(zeroVec);
-        body.setAngularVelocity(zeroVec);
-        Ammo.destroy(zeroVec);
-
-        // Group them near the top center for the throw
-        const x = (rand() - 0.5) * 4;
-        const y = TABLE_SURFACE_Y + 6.75 + (index * 0.5);
-        const z = (rand() - 0.5) * 4;
-
-        // Random starting orientation
-        const q = new THREE.Quaternion();
-        q.setFromEuler(new THREE.Euler(
-            rand() * Math.PI * 2,
-            rand() * Math.PI * 2,
-            rand() * Math.PI * 2
-        ));
-
-        const bodyPosition = getBodyPositionFromGeometry(
-            { x, y, z },
-            q,
-            getCenterOfMassOffset(die)
-        );
-
-        transform.setIdentity();
-        const origin = new Ammo.btVector3(bodyPosition.x, bodyPosition.y, bodyPosition.z);
-        transform.setOrigin(origin);
-        Ammo.destroy(origin);
-
-        const btQ = new Ammo.btQuaternion(q.x, q.y, q.z, q.w);
-        transform.setRotation(btQ);
-        Ammo.destroy(btQ);
-
-        if (engine && die.wasmId != null) {
-            engine.setDieTransform(
-                die.wasmId,
-                x, y, z,
-                q.x, q.y, q.z, q.w
-            );
-            engine.setDieVelocity(die.wasmId, 0, 0, 0, 0, 0, 0);
+        if (body && Ammo) {
+            const zeroVec = new Ammo.btVector3(0, 0, 0);
+            body.setLinearVelocity(zeroVec);
+            body.setAngularVelocity(zeroVec);
+            Ammo.destroy(zeroVec);
         }
 
-        body.setWorldTransform(transform);
-        body.getMotionState().setWorldTransform(transform);
+        let x;
+        let y;
+        let z;
+        let q;
+        let forceX;
+        let forceY;
+        let forceZ;
+        let spinX;
+        let spinY;
+        let spinZ;
 
-        // Wake up
-        body.activate();
+        const paramKey = die.wasmId ?? index;
+        const preset = paramsById?.get(paramKey);
+        if (paramsById) {
+            if (!preset) return;
+            ({ x, y, z, forceX, forceY, forceZ, spinX, spinY, spinZ } = preset);
+            q = new THREE.Quaternion(preset.qx, preset.qy, preset.qz, preset.qw);
+        } else {
+            x = (rand() - 0.5) * 4;
+            y = TABLE_SURFACE_Y + 6.75 + (index * 0.5);
+            z = (rand() - 0.5) * 4;
+            q = new THREE.Quaternion();
+            q.setFromEuler(new THREE.Euler(
+                rand() * Math.PI * 2,
+                rand() * Math.PI * 2,
+                rand() * Math.PI * 2
+            ));
+            forceX = (rand() - 0.5) * 25;
+            forceY = rand() * 10 - 5;
+            forceZ = (rand() - 0.5) * 25;
+            spinX = (rand() - 0.5) * 100;
+            spinY = (rand() - 0.5) * 100;
+            spinZ = (rand() - 0.5) * 100;
 
-        // Throw forces
-        const forceX = (rand() - 0.5) * 25;
-        const forceY = (rand()) * 10 - 5;
-        const forceZ = (rand() - 0.5) * 25;
+            if (engine && die.wasmId != null) {
+                engine.setDieTransform(die.wasmId, x, y, z, q.x, q.y, q.z, q.w);
+                engine.setDieVelocity(die.wasmId, 0, 0, 0, 0, 0, 0);
+                engine.applyImpulse(die.wasmId, forceX, forceY, forceZ);
+                engine.applyTorqueImpulse(die.wasmId, spinX, spinY, spinZ);
+            }
+        }
 
-        const spinX = (rand() - 0.5) * 100;
-        const spinY = (rand() - 0.5) * 100;
-        const spinZ = (rand() - 0.5) * 100;
+        if (body && transform && Ammo) {
+            const bodyPosition = getBodyPositionFromGeometry(
+                { x, y, z },
+                q,
+                getCenterOfMassOffset(die)
+            );
 
-        const impulse = new Ammo.btVector3(forceX, forceY, forceZ);
-        body.applyCentralImpulse(impulse);
-        Ammo.destroy(impulse);
+            transform.setIdentity();
+            const origin = new Ammo.btVector3(bodyPosition.x, bodyPosition.y, bodyPosition.z);
+            transform.setOrigin(origin);
+            Ammo.destroy(origin);
 
-        const torque = new Ammo.btVector3(spinX, spinY, spinZ);
-        body.applyTorqueImpulse(torque);
-        Ammo.destroy(torque);
+            const btQ = new Ammo.btQuaternion(q.x, q.y, q.z, q.w);
+            transform.setRotation(btQ);
+            Ammo.destroy(btQ);
 
-        if (engine && die.wasmId != null) {
-            engine.applyImpulse(die.wasmId, forceX, forceY, forceZ);
-            engine.applyTorqueImpulse(die.wasmId, spinX, spinY, spinZ);
+            body.setWorldTransform(transform);
+            body.getMotionState().setWorldTransform(transform);
+            body.activate();
+
+            const impulse = new Ammo.btVector3(forceX, forceY, forceZ);
+            body.applyCentralImpulse(impulse);
+            Ammo.destroy(impulse);
+
+            const torque = new Ammo.btVector3(spinX, spinY, spinZ);
+            body.applyTorqueImpulse(torque);
+            Ammo.destroy(torque);
         }
     });
 
-    Ammo.destroy(transform);
+    if (transform && Ammo) Ammo.destroy(transform);
 };
 
 export const applyDiceMassBiases = ({ deltaTime = 1 / 60, applyAmmo = true, applyWasm = true } = {}) => {
@@ -1021,6 +1349,57 @@ export const applyWasmImpulseForDie = (mesh, impulse, torque) => {
     }
 };
 
+const _flickForward = new THREE.Vector3();
+const _flickRight = new THREE.Vector3();
+const _flickImpulse = new THREE.Vector3();
+const _flickTorque = new THREE.Vector3();
+const MAX_FLICK_IMPULSE = 28;
+
+/**
+ * Apply a screen-space flick as horizontal table impulses to every spawned die.
+ */
+export function applyFlickImpulseToDice(camera, velX, velY, { normOriginX = 0, normOriginY = 0 } = {}) {
+    if (!spawnedDice.length) return;
+
+    camera.getWorldDirection(_flickForward);
+    _flickForward.y = 0;
+    if (_flickForward.lengthSq() < 1e-6) _flickForward.set(0, 0, -1);
+    _flickForward.normalize();
+
+    _flickRight.crossVectors(_flickForward, new THREE.Vector3(0, 1, 0)).normalize();
+    _flickImpulse
+        .copy(_flickRight).multiplyScalar(velX * 0.04)
+        .add(_flickForward.clone().multiplyScalar(-velY * 0.04));
+
+    const speed = Math.hypot(velX, velY);
+    const strength = Math.min(MAX_FLICK_IMPULSE, 8 + speed * 0.06);
+    if (_flickImpulse.lengthSq() < 1e-4) return;
+    _flickImpulse.setLength(strength);
+
+    _flickTorque.set(
+        (normOriginY + 0.2) * strength * 0.08,
+        strength * 0.04,
+        (-normOriginX) * strength * 0.08
+    );
+
+    const Ammo = isAmmoAvailable() ? getAmmo() : null;
+    spawnedDice.forEach((die) => {
+        if (isUsingWasmPhysics() && die.wasmId != null) {
+            applyWasmImpulseForDie(die.mesh, _flickImpulse, _flickTorque);
+            return;
+        }
+        if (die.body && Ammo) {
+            const impulse = new Ammo.btVector3(_flickImpulse.x, _flickImpulse.y, _flickImpulse.z);
+            die.body.applyCentralImpulse(impulse);
+            Ammo.destroy(impulse);
+            const torque = new Ammo.btVector3(_flickTorque.x, _flickTorque.y, _flickTorque.z);
+            die.body.applyTorqueImpulse(torque);
+            Ammo.destroy(torque);
+            die.body.activate();
+        }
+    });
+}
+
 /**
  * Kinematic / user-driven control primitives for WASM-authoritative
  * interactions (drag & levitation). These let interaction.js hold and move a
@@ -1030,6 +1409,15 @@ export const driveDieWasmTransform = (mesh, position, quaternion) => {
     const die = findSpawnedDieByMesh(mesh);
     if (!isUsingWasmPhysics() || !die || die.wasmId == null) return;
     syncWasmTransformForDie(die, { position, quaternion });
+};
+
+export const setDieWasmKinematic = (mesh, kinematic) => {
+    const die = findSpawnedDieByMesh(mesh);
+    if (!isUsingWasmPhysics() || !die || die.wasmId == null) return;
+    const engine = getWasmEngine();
+    if (typeof engine.setDieKinematic === 'function') {
+        engine.setDieKinematic(die.wasmId, kinematic);
+    }
 };
 
 export const setDieWasmVelocity = (mesh, linear = null, angular = null) => {

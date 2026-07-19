@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="description" content="3D tavern dice roller with realistic physics — roll offline in your browser." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="/pwa-192x192.png" />
     <title>WebGPU Dice Roller</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -12,22 +18,53 @@
         height: 100%;
         background: #0a0a0a;
         overflow: hidden;
+      }
+      body {
+        margin: 0;
+      }
+      #canvas-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        max-width: 100vw;
+        max-height: 100vh;
+      }
+      /* Optional centered square layout on large desktop pointers (?square forces this). */
+      body.layout-square {
         display: flex;
         align-items: center;
         justify-content: center;
       }
-      #canvas-container {
-        position: relative;
-        width: 1024px;
-        height: 1024px;
-        max-width: 100vmin;
-        max-height: 100vmin;
+      body.layout-square #canvas-container {
+        width: min(100vw, 100vh, 1024px);
+        height: min(100vw, 100vh, 1024px);
         aspect-ratio: 1 / 1;
       }
       #canvas-container canvas {
         display: block;
         width: 100% !important;
         height: 100% !important;
+      }
+      /* Screen-reader-only text (aria-live region, etc.) */
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      /* Visible keyboard focus for DOM controls over the 3D canvas */
+      #canvas-container button:focus-visible,
+      #canvas-container input:focus-visible,
+      #canvas-container select:focus-visible,
+      #canvas-container textarea:focus-visible,
+      #roll-history-toggle:focus-visible {
+        outline: 2px solid #ffd700;
+        outline-offset: 2px;
       }
     </style>
   </head>
@@ -39,6 +76,16 @@
       </div>
     </div>
     <div id="canvas-container"></div>
+    <script>
+      (function () {
+        var params = new URLSearchParams(location.search);
+        var square = params.has('square') || (
+          !params.has('fill')
+          && window.matchMedia('(min-width: 1024px) and (hover: hover) and (pointer: fine)').matches
+        );
+        if (square) document.body.classList.add('layout-square');
+      })();
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

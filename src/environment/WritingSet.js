@@ -251,25 +251,31 @@ export function createWritingSet(scene, physicsWorld, position = { x: 4, y: -2.7
 
     // --- Physics ---
     // Inkwell physics
-    const inkwellShape = new ammo.btCylinderShape(new ammo.btVector3(0.4, 0.5, 0.4));
-    const inkwellDummy = new THREE.Object3D();
-    inkwellDummy.position.copy(group.position);
-    inkwellDummy.quaternion.copy(group.quaternion);
-    createStaticBody(physicsWorld, inkwellDummy, inkwellShape);
+    if (ammo && physicsWorld) {
+        const inkwellShape = new ammo.btCylinderShape(new ammo.btVector3(0.4, 0.5, 0.4));
+        const inkwellDummy = new THREE.Object3D();
+        inkwellDummy.position.copy(group.position);
+        inkwellDummy.quaternion.copy(group.quaternion);
+        createStaticBody(physicsWorld, inkwellDummy, inkwellShape);
+    }
 
     // Parchment papers physics (approximated as flat boxes)
-    const paperShape = new ammo.btBoxShape(new ammo.btVector3(1.0, 0.01, 0.75));
-    const paperDummy = new THREE.Object3D();
-    paperDummy.position.copy(group.position).add(new THREE.Vector3(-0.3, 0, -0.8).applyEuler(group.rotation));
-    paperDummy.rotation.y = rotation + 0.1;
-    createStaticBody(physicsWorld, paperDummy, paperShape);
+    if (ammo && physicsWorld) {
+        const paperShape = new ammo.btBoxShape(new ammo.btVector3(1.0, 0.01, 0.75));
+        const paperDummy = new THREE.Object3D();
+        paperDummy.position.copy(group.position).add(new THREE.Vector3(-0.3, 0, -0.8).applyEuler(group.rotation));
+        paperDummy.rotation.y = rotation + 0.1;
+        createStaticBody(physicsWorld, paperDummy, paperShape);
+    }
 
     // Stamp physics
-    const stampShape = new ammo.btBoxShape(new ammo.btVector3(0.2, 0.1, 0.4));
-    const stampDummy = new THREE.Object3D();
-    stampDummy.position.copy(group.position).add(new THREE.Vector3(1.0, 0.1, 0.8).applyEuler(group.rotation));
-    stampDummy.rotation.set(Math.PI / 2, 0, rotation + Math.PI / 4);
-    createStaticBody(physicsWorld, stampDummy, stampShape);
+    if (ammo && physicsWorld) {
+        const stampShape = new ammo.btBoxShape(new ammo.btVector3(0.2, 0.1, 0.4));
+        const stampDummy = new THREE.Object3D();
+        stampDummy.position.copy(group.position).add(new THREE.Vector3(1.0, 0.1, 0.8).applyEuler(group.rotation));
+        stampDummy.rotation.set(Math.PI / 2, 0, rotation + Math.PI / 4);
+        createStaticBody(physicsWorld, stampDummy, stampShape);
+    }
 
     return { group, update: updateInk };
 }

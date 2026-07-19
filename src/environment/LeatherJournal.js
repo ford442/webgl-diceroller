@@ -105,11 +105,13 @@ export function createLeatherJournal(
     scene.add(group);
 
     // --- Physics (conditional + simple box from main branch) ---
-    if (physicsWorld) {
-        const shape = new ammo.btBoxShape(
-            new ammo.btVector3(width / 2, height / 2, depth / 2)
-        );
-        createStaticBody(physicsWorld, group, shape);
+    if (physicsWorld && getAmmo()) {
+        if (ammo && physicsWorld) {
+            const shape = new ammo.btBoxShape(
+                new ammo.btVector3(width / 2, height / 2, depth / 2)
+            );
+            createStaticBody(physicsWorld, group, shape);
+        }
     }
 
     return { group };

@@ -79,8 +79,10 @@ export function createRunestones(scene, physicsWorld, position = { x: 10, y: -2.
         // Physics for each runestone
         // btCylinderShape expects a vector of (radius, height/2, radius)
         if (ammo) {
-            const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
-            createStaticBody(physicsWorld, mesh, shape);
+            if (ammo && physicsWorld) {
+                const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
+                createStaticBody(physicsWorld, mesh, shape);
+            }
         }
     }
 

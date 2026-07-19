@@ -4,37 +4,43 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
 import { VignetteShader } from '../shaders/VignetteShader.js';
 import { TavernEnvironment } from '../environment/TavernEnvironment.js';
 import { createRenderer } from './RendererFactory.js';
 import { preloadSharedTextures } from './TexturePipeline.js';
-import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z, TABLE_SURFACE_Y, LAMP_HANG_Y } from './SceneMetrics.js';
+import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z, TABLE_SURFACE_Y, LAMP_HANG_Y, applyViewportToCamera, computeCameraAspect } from './SceneMetrics.js';
+import { guessInitialQualityProfile } from './AdaptiveQuality.js';
+import { prefersReducedMotion } from './AccessibilityPrefs.js';
+
+const VIGNETTE_OFFSET = 1.0;
+const VIGNETTE_DARKNESS = 1.0;
 
 async function createWebGpuPostPipeline(renderer, scene, camera, { width, height, postConfig }) {
     const [
         { PostProcessing },
         { pass, uniform, float, vec2, vec3, vec4, mix, Fn, screenUV, clamp },
         { bloom },
-        { chromaticAberration }
+        { chromaticAberration },
+        { fxaa }
     ] = await Promise.all([
         import('three/webgpu'),
         import('three/tsl'),
         import('three/addons/tsl/display/BloomNode.js'),
-        import('three/addons/tsl/display/ChromaticAberrationNode.js')
+        import('three/addons/tsl/display/ChromaticAberrationNode.js'),
+        import('three/addons/tsl/display/FXAANode.js')
     ]);
 
     const postProcessing = new PostProcessing(renderer);
     const scenePass = pass(scene, camera);
     scenePass.setSize(width, height);
 
-    // Keep the scene-color node separate from the composed output. Passing the
-    // same node into bloom() and then reassigning outputNode = outputNode.add(bloom)
-    // creates a circular TSL graph and blows the WebGPU node builder stack.
     const sceneColorNode = scenePass.getTextureNode('output');
     let colorNode = sceneColorNode;
+    let bloomNode = null;
 
     if (postConfig.bloomEnabled) {
-        const bloomNode = bloom(
+        bloomNode = bloom(
             sceneColorNode,
             postConfig.quality === 'low' ? 0.35 : 0.6,
             postConfig.quality === 'low' ? 0.25 : 0.4,
@@ -43,8 +49,9 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
         colorNode = sceneColorNode.add(bloomNode);
     }
 
-    const vignetteOffset = uniform(1.2);
     const vignetteStrength = uniform(0.85);
+    const vignetteOffset = uniform(VIGNETTE_OFFSET);
+    const vignetteDarkness = uniform(VIGNETTE_DARKNESS);
     const vignetteNode = Fn(() => {
         const vignetteUv = screenUV.sub(vec2(0.5, 0.5)).mul(vignetteOffset);
         const vignetteMix = clamp(vignetteUv.dot(vignetteUv).mul(vignetteStrength), 0, 1);
@@ -56,8 +63,12 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
 
     let outputNode = vignetteNode;
 
-    if (postConfig.quality === 'high') {
+    if (postConfig.chromaticAberrationEnabled) {
         outputNode = chromaticAberration(outputNode, 0.2, vec2(0.5, 0.5), 1.08);
+    }
+
+    if (postConfig.fxaaEnabled) {
+        outputNode = fxaa(outputNode);
     }
 
     postProcessing.outputNode = outputNode;
@@ -96,13 +107,15 @@ export async function setupScene(container) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111111); // Darker for atmosphere
 
-    // Camera setup - 1:1 aspect ratio
-    const camera = new THREE.PerspectiveCamera(80, 1, 0.1, 1000);
+    // Camera setup — aspect follows the container (portrait-friendly on phones).
+    const camera = new THREE.PerspectiveCamera(80, computeCameraAspect(containerWidth, containerHeight), 0.1, 1000);
     camera.position.set(0, CAMERA_EYE_Y, CAMERA_START_Z);
     camera.lookAt(0, CAMERA_LOOK_AT_Y, 0);
+    applyViewportToCamera(camera, containerWidth, containerHeight);
 
-    // Renderer setup
-    const rendererState = await createRenderer(container, { antialias: false });
+    // Renderer setup — pixel ratio, MSAA vs post FXAA, and power preference
+    // are resolved inside RendererFactory from device DPR and URL flags.
+    const rendererState = await createRenderer(container);
     const renderer = rendererState.renderer;
     container.appendChild(renderer.domElement);
     scene.userData.renderer = renderer;
@@ -110,23 +123,25 @@ export async function setupScene(container) {
     scene.userData.rendererType = rendererState.rendererType;
 
     const params = new URLSearchParams(window.location.search);
-    const hardwareConcurrency = navigator.hardwareConcurrency || 4;
-    const hasWebGpu = rendererState.usingWebGPU || Boolean(navigator.gpu);
-    const maxTextureSize = renderer.capabilities?.maxTextureSize ?? 4096;
-    const isLowEndDevice = maxTextureSize < 4096 || hardwareConcurrency <= 4 || !hasWebGpu;
+    const isSoftwareRenderer = rendererState.isSoftwareRenderer;
+    const initialQuality = guessInitialQualityProfile(rendererState);
     const forceLowPost = params.has('low-post');
     const disablePost = params.has('no-post');
     const disableBloom = params.has('no-bloom');
     const disableGodRays = params.has('no-godrays');
-    const postQuality = disablePost ? 'off' : ((isLowEndDevice || forceLowPost) ? 'low' : 'high');
+    const reducedMotion = prefersReducedMotion();
+    const postQuality = disablePost ? 'off' : (forceLowPost || initialQuality.postQuality === 'low' || reducedMotion ? 'low' : 'high');
     const postConfig = {
         quality: postQuality,
-        bloomEnabled: !disablePost && !disableBloom,
-        godRaysEnabled: !disableGodRays,
-        lowEndDetected: isLowEndDevice,
+        bloomEnabled: !disablePost && !disableBloom && initialQuality.bloomEnabled && !reducedMotion,
+        godRaysEnabled: !disableGodRays && initialQuality.godRaysEnabled && !reducedMotion,
+        fxaaEnabled: rendererState.usePostAA && !disablePost,
+        lowEndDetected: initialQuality.id !== 'high',
+        softwareRenderer: isSoftwareRenderer,
+        adaptiveProfile: initialQuality.id,
         rendererType: rendererState.rendererType,
         requestedRenderer: rendererState.requestedRenderer,
-        chromaticAberrationEnabled: rendererState.usingWebGPU && postQuality === 'high'
+        chromaticAberrationEnabled: rendererState.usingWebGPU && postQuality === 'high' && !reducedMotion
     };
     scene.userData.postConfig = postConfig;
 
@@ -144,8 +159,7 @@ export async function setupScene(container) {
     }
 
     // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
-    scene.add(ambientLight);
+
 
     // Warm overhead pool on the velvet dice zone (no shadows — fill only).
     const diceZoneLight = new THREE.SpotLight(0xfff2d6, 2.8, 40, Math.PI / 4, 0.65, 1.2);
@@ -153,17 +167,32 @@ export async function setupScene(container) {
     diceZoneLight.target.position.set(0, TABLE_SURFACE_Y, 0);
     scene.add(diceZoneLight);
     scene.add(diceZoneLight.target);
+    // Lights — bias toward readable dice faces on the velvet zone.
+    const ambientIntensity = rendererState.usingWebGPU ? 0.16 : 0.09;
+    const ambientLight = new THREE.AmbientLight(0xfff8f0, ambientIntensity);
+    scene.add(ambientLight);
+
+    const hemisphereLight = new THREE.HemisphereLight(0xc8d4ff, 0x3a2418, rendererState.usingWebGPU ? 0.38 : 0.24);
+    scene.add(hemisphereLight);
+
+    const diceFillLight = new THREE.DirectionalLight(0xfff0dd, 0.32);
+    diceFillLight.position.set(2, 16, 10);
+    diceFillLight.target.position.set(0, TABLE_SURFACE_Y, 0);
+    diceFillLight.castShadow = false;
+    scene.add(diceFillLight);
+    scene.add(diceFillLight.target);
 
     // Warm PointLight (Candle) - Key Light
     // Initial setup, position will be updated by clutter
     // Deeper orange/red for a warmer, cozier feel (0xff9933)
-    const pointLight = new THREE.PointLight(0xff9933, 2.5, 20);
+    const pointLight = new THREE.PointLight(0xff9933, 2.2, 22);
     pointLight.position.set(3, 6, 3); // Default if no candle
     pointLight.castShadow = true;
-    pointLight.shadow.bias = -0.001; // Adjusted bias to prevent acne
+    pointLight.shadow.bias = -0.001;
+    pointLight.shadow.normalBias = 0.02;
     pointLight.shadow.mapSize.width = 512;
     pointLight.shadow.mapSize.height = 512;
-    pointLight.shadow.radius = 5; // Softer shadows
+    pointLight.shadow.radius = 6;
     pointLight.shadow.camera.near = 0.1;
     pointLight.shadow.camera.far = 25;
     pointLight.shadow.autoUpdate = false;
@@ -186,8 +215,8 @@ export async function setupScene(container) {
     scene.add(spotLight);
     scene.add(spotLight.target);
 
-    // Fog for depth — linear so the table stays crisp; background fades from 15–45 units
-    scene.fog = new THREE.Fog(0x111111, 15, 45);
+    // Fog for depth
+    scene.fog = new THREE.FogExp2(0x111111, 0.015);
 
     // Post-Processing
     // Auto-detect low-end GPUs: disable post-processing if texture size is limited.
@@ -242,13 +271,21 @@ export async function setupScene(container) {
             composer.addPass(vignettePass);
             postPasses.vignettePass = vignettePass;
 
+            if (postConfig.fxaaEnabled) {
+                const fxaaPass = new FXAAPass();
+                fxaaPass.setSize(containerWidth, containerHeight);
+                composer.addPass(fxaaPass);
+                postPasses.fxaaPass = fxaaPass;
+            }
+
             // Output Pass
             const outputPass = new OutputPass();
             composer.addPass(outputPass);
             postPasses.outputPass = outputPass;
         }
-    } else if (isLowEndDevice) {
-        console.log('Post-processing disabled: low-end GPU detected');
+    } else if (postConfig.lowEndDetected) {
+        const reason = isSoftwareRenderer ? 'software WebGL rasterizer' : 'low-end GPU';
+        console.log(`Post-processing tuned for ${reason}`);
     }
 
     await preloadSharedTextures(renderer);
@@ -279,5 +316,5 @@ export async function setupScene(container) {
         }
     }
 
-    return { scene, camera, renderer, composer, pointLight, spotLight, postConfig, postPasses, rendererState };
+    return { scene, camera, renderer, composer, pointLight, spotLight, postConfig, postPasses, rendererState, initialQuality };
 }

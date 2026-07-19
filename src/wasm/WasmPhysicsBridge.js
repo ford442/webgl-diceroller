@@ -17,12 +17,14 @@
  */
 
 import { publicAssetUrl } from '../core/publicAssetUrl.js';
+import { parsePhysicsFlags } from './physicsFlags.js';
 
 // ---------------------------------------------------------------------------
 // No-op stub
 // ---------------------------------------------------------------------------
 
 const STUB_ENGINE = {
+    setFlags:           () => {},
     init:               () => {},
     reset:              () => {},
     step:               () => {},
@@ -36,6 +38,7 @@ const STUB_ENGINE = {
     applyTorqueImpulse: () => {},
     setDieTransform:    () => {},
     setDieVelocity:     () => {},
+    setDieKinematic:    () => {},
     getTransforms:      () => new Float32Array(0),
     getDieIds:          () => new Float32Array(0),
     getDieCount:        () => 0,
@@ -82,6 +85,7 @@ export const loadWasmEngine = async () => {
 
         _moduleClass = Module;
         _engine      = new Module.DicePhysicsEngine();
+        _engine.setFlags(parsePhysicsFlags(_searchParams));
         _available   = true;
 
         // Pre-load hulls.json for fast die registration
@@ -175,13 +179,16 @@ export const randomPhysicsFloat = () => {
 /**
  * State serialisation for replay.
  */
-export const serializePhysicsState = () => {
+export const serializePhysicsState = async () => {
     if (!_available || !_moduleClass) return new Uint8Array(0);
     const vec = _engine.serializeState();
     const arr = new Uint8Array(vec.size());
     for (let i = 0; i < vec.size(); i++) arr[i] = vec.get(i);
     return arr;
 };
+
+/** No-op in the in-process bridge — throws are applied directly via the engine. */
+export const seededPhysicsThrow = () => {};
 
 export const deserializePhysicsState = (data) => {
     if (!_available || !_moduleClass) return;

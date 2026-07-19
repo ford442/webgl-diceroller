@@ -1,9 +1,12 @@
 // Verifies the Phase 4 worker-physics path end to end in a real browser:
-//   • PhysicsBridge selects the worker backend by default
-//   • the page is cross-origin isolated and uses the SharedArrayBuffer transport
-//   • addDie() returns ids synchronously (mirrored monotonic counter)
-//   • the worker self-paces its own loop: transforms advance under gravity
-//     WITHOUT the main thread ever calling step()
+// • PhysicsBridge selects the worker backend by default
+// • the page is cross-origin isolated and uses the SharedArrayBuffer transport
+// • addDie() returns ids synchronously (mirrored monotonic counter)
+// • the worker self-paces its own loop: transforms advance under gravity
+//   WITHOUT the main thread ever calling step()
+// • high-frequency commands batch into one flush per frame (SAB ring or a
+//   single postMessage) and torque impulses still affect the simulation
+// • kinematic hold + release impulse path works through the worker command queue
 //
 // Mirrors scripts/verify-wasm-primitives.mjs.
 import { chromium } from 'playwright';
@@ -19,6 +22,7 @@ const TEST_SRC = `
 import {
     loadWasmEngine, isWasmAvailable, getWasmEngine,
     isUsingWorkerPhysics, isUsingSharedArrayBuffer,
+    flushWorkerCommandBatch, getWorkerPhysicsStats,
 } from './wasm/PhysicsBridge.js';
 
 const yForId = (e, wantId) => {
@@ -28,6 +32,23 @@ const yForId = (e, wantId) => {
         if (Math.round(ids[i]) === wantId) return xf[i * 7 + 1];
     }
     return null;
+};
+
+const quatForId = (e, wantId) => {
+    const ids = e.getDieIds();
+    const xf = e.getTransforms();
+    for (let i = 0; i < ids.length; i++) {
+        if (Math.round(ids[i]) === wantId) {
+            const b = i * 7;
+            return [xf[b + 3], xf[b + 4], xf[b + 5], xf[b + 6]];
+        }
+    }
+    return null;
+};
+
+const quatDelta = (a, b) => {
+    if (!a || !b) return 0;
+    return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) + Math.abs(a[3] - b[3]);
 };
 
 export async function run() {
@@ -40,22 +61,62 @@ export async function run() {
 
     const e = getWasmEngine();
     e.init(-15.0, -2.75, 18.0, 18.0);
+    flushWorkerCommandBatch();
 
-    // Synchronous, mirrored ids.
     const id0 = e.addDie(6, 0, 8, 0);
     const id1 = e.addDie(6, 1, 9, 0);
+    flushWorkerCommandBatch();
     const idsSync = (id0 === 0 && id1 === 1);
 
-    // The main thread never calls step(); only the worker's self-paced loop
-    // does. Wait and confirm the die fell under gravity.
+    // Gravity test (worker self-paced loop)
     let y0 = null;
-    for (let i = 0; i < 40 && y0 === null; i++) { await new Promise(r => setTimeout(r, 25)); y0 = yForId(e, id0); }
+    for (let i = 0; i < 40 && y0 === null; i++) {
+        await new Promise(r => setTimeout(r, 25));
+        y0 = yForId(e, id0);
+    }
     const yStart = y0;
     await new Promise(r => setTimeout(r, 400));
     const yLater = yForId(e, id0);
     const countVisible = e.getDieCount();
-
     const fellUnderGravity = (yStart != null && yLater != null && yLater < yStart - 0.1);
+
+    // --- batched torque + message-rate check --------------------------------
+    getWorkerPhysicsStats(); // clear / snapshot baseline
+    const qBefore = quatForId(e, id1);
+    for (let frame = 0; frame < 24; frame++) {
+        for (let d = 0; d < 8; d++) {
+            e.applyTorqueImpulse(id1, 0.04, 0, 0.06);
+        }
+        flushWorkerCommandBatch();
+        await new Promise(r => setTimeout(r, 20));
+    }
+    const qAfter = quatForId(e, id1);
+    const torqueApplied = quatDelta(qBefore, qAfter) > 0.02;
+    const stats = getWorkerPhysicsStats();
+    // SAB path: zero batch postMessages in steady state; fallback: one batch/frame.
+    const batchedTransport = usingSAB
+        ? stats.batchMsgs === 0
+        : stats.batchMsgs <= 2;
+
+    // --- Drag scenario: kinematic hold + release impulse --------------------
+    const dragId = e.addDie(6, 0, 6, 0);
+    const hasKinematic = typeof e.setDieKinematic === 'function';
+    let dragHeld = false;
+    let dragMovedOnRelease = false;
+    if (hasKinematic) {
+        e.setDieKinematic(dragId, true);
+        for (let i = 0; i < 20; i++) {
+            e.setDieTransform(dragId, 2, 4, 1, 0, 0, 0, 1);
+            await new Promise(r => setTimeout(r, 25));
+        }
+        const holdY = yForId(e, dragId);
+        dragHeld = holdY != null && Math.abs(holdY - 4) < 0.35;
+        e.setDieKinematic(dragId, false);
+        e.applyImpulse(dragId, 0, -8, 0);
+        await new Promise(r => setTimeout(r, 400));
+        const afterY = yForId(e, dragId);
+        dragMovedOnRelease = holdY != null && afterY != null && afterY < holdY - 0.15;
+    }
 
     return {
         ok: true,
@@ -63,6 +124,10 @@ export async function run() {
         idsSync, id0, id1,
         countVisible,
         yStart, yLater, fellUnderGravity,
+        torqueApplied, batchedTransport,
+        workerMsgsPerSecond: stats.msgsPerSecond,
+        batchRecords: stats.batchRecords,
+        hasKinematic, dragHeld, dragMovedOnRelease,
     };
 }
 `;
@@ -91,9 +156,10 @@ try {
     page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text()); });
     page.on('pageerror', (ex) => errors.push('pageerror: ' + ex.message));
     page.on('worker', (w) => { w.on('console', (m) => errors.push('worker ' + m.type() + ': ' + m.text())); });
-    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${BASE}/src/wasm/physicsFlags.js`, { waitUntil: 'domcontentloaded' });
     result = await page.evaluate(async () => {
         try {
+            // @ts-ignore — runtime-generated test module written just before this browser-side import runs.
             const m = await import('/src/__worker_phys_test.js');
             return await m.run();
         } catch (ex) { return { ok: false, reason: String(ex && ex.stack || ex) }; }
@@ -107,7 +173,11 @@ try {
 }
 
 // Non-zero exit on logical failure so CI can gate on it.
-const pass = result && result.ok && result.usingWorker && result.idsSync && result.fellUnderGravity;
+const pass = result && result.ok && result.usingWorker && result.idsSync
+    && result.fellUnderGravity
+    && result.torqueApplied && result.batchedTransport
+    && (!result.hasKinematic || (result.dragHeld && result.dragMovedOnRelease));
+
 if (!pass) {
     console.error('[verify] FAILED');
     process.exit(1);

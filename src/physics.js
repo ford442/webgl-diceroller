@@ -1,9 +1,8 @@
-import Ammo from 'ammo.js';
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-// Ensure Ammo is loaded
 let AmmoInstance = null;
+let _ammoLoadPromise = null;
 const ammoBodyAudioMeta = new Map();
 const ammoCollisionCooldowns = new Map();
 const ammoBodyDragMeta = new Map();
@@ -13,39 +12,69 @@ function getBodyPtr(body) {
     return body?.ptr ?? body?.a ?? null;
 }
 
-export const initPhysics = async () => {
-    // Ammo.js (v0.0.10) export is the Module object, not a factory function.
-    // However, we handle both cases for robustness.
-    if (typeof Ammo === 'function') {
-        try {
-            AmmoInstance = await Ammo();
-        } catch (e) {
-            // Fallback if it's not a promise
-            AmmoInstance = Ammo();
-        }
-    } else {
-        AmmoInstance = Ammo;
-    }
+/**
+ * True once ammo.js has been dynamically imported and the dynamics world is
+ * ready.  WASM-only sessions never load the ammo chunk.
+ */
+export const isAmmoAvailable = () => AmmoInstance != null;
 
-    // Check for initialization
-    if (!AmmoInstance.btVector3) {
-        console.error("Ammo.btVector3 is missing. Ammo object:", AmmoInstance);
+async function loadAmmoModule() {
+    if (AmmoInstance) return AmmoInstance;
+    if (!_ammoLoadPromise) {
+        _ammoLoadPromise = (async () => {
+            const Ammo = (await import('ammo.js')).default;
+            if (typeof Ammo === 'function') {
+                try {
+                    AmmoInstance = await Ammo();
+                } catch {
+                    AmmoInstance = Ammo();
+                }
+            } else {
+                AmmoInstance = Ammo;
+            }
+            if (!AmmoInstance?.btVector3) {
+                console.error('Ammo.btVector3 is missing. Ammo object:', AmmoInstance);
+            }
+            return AmmoInstance;
+        })();
     }
+    return _ammoLoadPromise;
+}
+
+/**
+ * Whether this session needs the ammo.js fallback/validation path.
+ * Call after `loadWasmEngine()` has resolved.
+ */
+export function shouldLoadAmmoPhysics(wasmAvailable) {
+    if (physicsSearchParams.has('no-wasm')) return true;
+    if (!wasmAvailable) return true;
+    if (physicsSearchParams.has('dual-physics')) return true;
+    if (physicsSearchParams.has('ammo-drag')) return true;
+    return false;
+}
+
+/**
+ * Initialise ammo.js and return a btDiscreteDynamicsWorld, or `null` when the
+ * WASM engine is authoritative and no ammo escape hatch is active.
+ */
+export const initPhysics = async ({ requireAmmo = true } = {}) => {
+    if (!requireAmmo) return null;
+
+    await loadAmmoModule();
 
     const collisionConfiguration = new AmmoInstance.btDefaultCollisionConfiguration();
     const dispatcher = new AmmoInstance.btCollisionDispatcher(collisionConfiguration);
     const overlappingPairCache = new AmmoInstance.btDbvtBroadphase();
     const solver = new AmmoInstance.btSequentialImpulseConstraintSolver();
-    const dynamicsWorld = new AmmoInstance.btDiscreteDynamicsWorld(dispatcher, overlappingPairCache, solver, collisionConfiguration);
-    dynamicsWorld.setGravity(new AmmoInstance.btVector3(0, -15, 0)); // Reduced from -20
+    const dynamicsWorld = new AmmoInstance.btDiscreteDynamicsWorld(
+        dispatcher, overlappingPairCache, solver, collisionConfiguration
+    );
+    dynamicsWorld.setGravity(new AmmoInstance.btVector3(0, -15, 0));
 
     return dynamicsWorld;
 };
 
 export const getAmmo = () => {
-    if (!AmmoInstance) {
-        throw new Error("Ammo not initialized. Call initPhysics first.");
-    }
     return AmmoInstance;
 };
 
@@ -74,19 +103,15 @@ export const unregisterBodyDragMeta = (body) => {
 };
 
 export const stepPhysics = (world, deltaTime) => {
+    if (!world || !AmmoInstance) return;
     if (!physicsSearchParams.has('no-drag')) {
         applyAmmoQuadraticDrag(deltaTime);
     }
-    // Higher sub-steps for better accuracy with fast moving dice
-    world.stepSimulation(deltaTime, 4, 1/60);
+    world.stepSimulation(deltaTime, 4, 1 / 60);
 };
 
 /**
  * Apply velocity-squared air resistance to each registered die.
- *
- * The drag impulse is proportional to F_drag ~ -Cd * |v|^2 * v_hat,
- * which makes high-energy throws dissipate energy faster than gentle
- * rolls and prevents "super dice" behaviour.
  */
 function applyAmmoQuadraticDrag(deltaTime) {
     if (!AmmoInstance?.wrapPointer) return;
@@ -177,8 +202,6 @@ export const pollAmmoCollisionEvents = (world) => {
             inertiaScalar: sourceMeta?.inertiaScalar ?? 0,
             linearSpeedSq,
             angularSpeedSq,
-            // Material hints for the audio voice selector. A body with no audio
-            // meta (the table, or a prop that didn't register one) reads as wood.
             surface: sourceMeta?.surface ?? 'die',
             otherSurface: otherMeta?.surface ?? (otherMeta ? 'die' : 'table')
         });
@@ -188,8 +211,10 @@ export const pollAmmoCollisionEvents = (world) => {
 };
 
 export const createFloorAndWalls = (scene, world, tableConfig = null) => {
+    if (!AmmoInstance || !world) return;
+
     if (tableConfig && tableConfig.physicsBodies) {
-        console.log("Physics: Creating floor and walls from explicit physicsBodies config", tableConfig.physicsBodies);
+        console.log('Physics: Creating floor and walls from explicit physicsBodies config', tableConfig.physicsBodies);
         tableConfig.physicsBodies.forEach(bodyDef => {
             if (bodyDef.type === 'box') {
                 createPhysicsBox(
@@ -207,79 +232,45 @@ export const createFloorAndWalls = (scene, world, tableConfig = null) => {
         return;
     }
 
-    // Floor
     let floorY = -5;
     let width = 25;
     let depth = 25;
     let thickness = 1;
 
     if (tableConfig) {
-        // Use table config for floor physics
-        // Ensure we handle the config from Table.js correctly
         floorY = tableConfig.position.y;
         width = tableConfig.width;
         depth = tableConfig.depth;
         thickness = tableConfig.height;
 
-        console.log("Physics: Creating floor from config", { floorY, width, depth, thickness });
+        console.log('Physics: Creating floor from config', { floorY, width, depth, thickness });
 
-        // Visuals are already created by Table.js, so we only need physics for the floor
-        // Note: floorY matches the visual mesh position. The box shape is centered at floorY,
-        // so the top surface is at floorY + thickness/2.
-        // The visual velvet mesh is raised by 0.1 locally, so we raise the physics floor by 0.1 to align exactly.
         const velvetVisualOffset = 0.1;
         console.log(`Creating physics floor at Y=${floorY + velvetVisualOffset} with thickness=${thickness}`);
         createPhysicsBox(world, width, thickness, depth, tableConfig.position.x, floorY + velvetVisualOffset, tableConfig.position.z, 0);
     } else {
-        // Fallback or legacy floor
         createBox(scene, world, 25, 1, 25, 0, -5, 0, 0, 0xffffff, 'images/wood.jpg');
     }
 
-    // Walls - Adjusted based on floor size
-    // We want walls around the floor area.
-    let wallHeight = 100; // Default invisible high wall
+    let wallHeight = 100;
     let wallThickness = 1;
-    let wallOffsetY = 0; // Relative to floorY if we want to shift it up/down
+    let wallOffsetY = 0;
 
-    // Adjust walls based on config if provided (to match visual rims)
     if (tableConfig && tableConfig.walls) {
         wallHeight = tableConfig.walls.height;
-        // Overwrite thickness for physics stability (prevent tunneling).
-        // Visual thickness is ~1. We use 20 to extend outwards.
-        // The positioning logic (halfWidth + wallThickness/2) ensures the inner face
-        // stays at (halfWidth), so the extra thickness extends outwards away from play area.
         wallThickness = 20;
         wallOffsetY = tableConfig.walls.offsetY;
     }
 
     const halfWidth = width / 2;
     const halfDepth = depth / 2;
-
-    // Calculate wall center Y
-    // If using config: floorY + wallOffsetY
-    // If not using config: floorY + wallHeight/2
     const wallY = (tableConfig && tableConfig.walls) ? (floorY + wallOffsetY) : (floorY + wallHeight / 2);
 
     console.log(`Creating physics walls at Y=${wallY} with Height=${wallHeight} Thickness=${wallThickness}`);
 
-    // Create walls matching the rim positions
-    // Left/Right Walls
-    // Position X: +/- (halfWidth + wallThickness/2)
-    // Dimension: wallThickness x wallHeight x depth
-    // Note: In Table.js, Top/Bottom rims span full width (width + 2*rimWidth).
-    // Here we use overlapping boxes?
-    // createBox creates physics box.
-    // If we want exact match:
-    // Side walls: 1 x 2 x 20. Position +/- 10.5.
-    // Top/Bottom walls: 22 x 2 x 1. Position +/- 10.5.
-
-    // Side Walls
     createBox(scene, world, wallThickness, wallHeight, depth, halfWidth + wallThickness/2, wallY, 0, 0, 0x000000, null, true);
     createBox(scene, world, wallThickness, wallHeight, depth, -halfWidth - wallThickness/2, wallY, 0, 0, 0x000000, null, true);
 
-    // Top/Bottom Walls
-    // Width for these should cover the corners if we want to match visual "TopBotWidth" from Table.js
-    // width + 2*wallThickness
     const topBotWidth = width + 2 * wallThickness;
     createBox(scene, world, topBotWidth, wallHeight, wallThickness, 0, wallY, halfDepth + wallThickness/2, 0, 0x000000, null, true);
     createBox(scene, world, topBotWidth, wallHeight, wallThickness, 0, wallY, -halfDepth - wallThickness/2, 0, 0x000000, null, true);
@@ -301,12 +292,11 @@ const createPhysicsBox = (world, sx, sy, sz, px, py, pz, mass, options = {}) => 
     const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
     const body = new AmmoInstance.btRigidBody(rbInfo);
 
-    // Floor properties
     const friction = options.friction !== undefined ? options.friction : 0.6;
-    const restitution = options.restitution !== undefined ? options.restitution : 0.3; // Was 0.5
+    const restitution = options.restitution !== undefined ? options.restitution : 0.3;
 
     body.setFriction(friction);
-    body.setRestitution(restitution); // Bouncy floor
+    body.setRestitution(restitution);
 
     world.addRigidBody(body);
 };
@@ -345,8 +335,9 @@ const DEFAULT_DICE_PHYSICS = {
     angularDamping: 0.1
 };
 
-// Spawn Dice with tuned physics
 export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation, options = {}) => {
+    if (!AmmoInstance || !world || !collisionShape) return null;
+
     const {
         mass = DEFAULT_DICE_PHYSICS.mass,
         friction = DEFAULT_DICE_PHYSICS.friction,
@@ -354,13 +345,9 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
         restitution = DEFAULT_DICE_PHYSICS.restitution,
         linearDamping = DEFAULT_DICE_PHYSICS.linearDamping,
         angularDamping = DEFAULT_DICE_PHYSICS.angularDamping,
-        // Local offset toward the heavy (low-number) face. When set, the rigid
-        // body's centre of mass is shifted away from the visual mesh centroid,
-        // modelling the mass removed by recessed pips/numbers.
         centerOfMassOffset = null
     } = options;
 
-    // TIGHTEN MARGINS: This prevents "floating" and balancing on edges
     collisionShape.setMargin(0.01);
 
     const threeQuat = new THREE.Quaternion();
@@ -381,7 +368,6 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
 
         ownedCollisionShape = new AmmoInstance.btCompoundShape();
         ownedCollisionShape.addChildShape(childTransform, collisionShape);
-        // npm ammo.js (v0.0.10) omits recalculateLocalAabb; addChildShape updates the AABB.
         if (typeof ownedCollisionShape.recalculateLocalAabb === 'function') {
             ownedCollisionShape.recalculateLocalAabb();
         }
@@ -418,21 +404,14 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
         mesh.userData.centerOfMassOffset = null;
     }
 
-    // PHYSICS TUNING
     body.setFriction(friction);
     body.setRollingFriction(rollingFriction);
     body.setRestitution(restitution);
-
-    // Damping simulates air resistance/heavy feel
-    // Linear 0.05, Angular 0.1 helps them stop spinning eventually
     body.setDamping(linearDamping, angularDamping);
-
-    // Prevent sleeping too early (so they don't freeze in mid-air/roll)
-    body.setActivationState(4); // 4 = DISABLE_DEACTIVATION initialy, we can let them sleep later if needed
+    body.setActivationState(4);
 
     world.addRigidBody(body);
 
-    // Free temporary Ammo.js heap objects (body copies the data it needs)
     AmmoInstance.destroy(rbInfo);
     AmmoInstance.destroy(localInertia);
     AmmoInstance.destroy(origin);
@@ -443,12 +422,16 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
 };
 
 export const createStaticBody = (world, mesh, shape) => {
-    const mass = 0; // Static
+    if (!AmmoInstance || !world || !shape) {
+        if (mesh) mesh.userData.physicsBody = null;
+        return null;
+    }
+
+    const mass = 0;
     const transform = new AmmoInstance.btTransform();
     transform.setIdentity();
     transform.setOrigin(new AmmoInstance.btVector3(mesh.position.x, mesh.position.y, mesh.position.z));
 
-    // Quaternion
     const q = new AmmoInstance.btQuaternion(mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w);
     transform.setRotation(q);
 
@@ -461,34 +444,28 @@ export const createStaticBody = (world, mesh, shape) => {
     world.addRigidBody(body);
     mesh.userData.physicsBody = body;
 
-    // Free temporary Ammo.js heap objects (body copies the data it needs)
     AmmoInstance.destroy(rbInfo);
     AmmoInstance.destroy(localInertia);
 
     return body;
 };
 
-// Helper to create convex hull shape from mesh
 export const createConvexHullShape = (mesh) => {
+    if (!AmmoInstance) return null;
+
     const shape = new AmmoInstance.btConvexHullShape();
 
     const srcPos = mesh.geometry.attributes.position;
     const originalCount = srcPos.count;
 
-    // Copy position into a plain (non-interleaved) BufferAttribute using getX/getY/getZ.
-    // This is necessary for Draco-compressed GLBs which produce InterleavedBufferAttribute;
-    // mergeVertices cannot operate on interleaved data.
     const posArr = new Float32Array(originalCount * 3);
     for (let i = 0; i < originalCount; i++) {
         posArr[i * 3]     = srcPos.getX(i);
         posArr[i * 3 + 1] = srcPos.getY(i);
         posArr[i * 3 + 2] = srcPos.getZ(i);
     }
-    // Clone geometry to avoid modifying the visual mesh
     let geometry = mesh.geometry.clone();
     BufferGeometryUtils.deinterleaveGeometry(geometry);
-
-    // Merge vertices to remove duplicates and reduce point count
     geometry = BufferGeometryUtils.mergeVertices(geometry);
 
     const positionAttribute = geometry.attributes.position;

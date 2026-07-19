@@ -72,6 +72,9 @@ npm run dev
 # Build the custom WASM physics module (requires Emscripten)
 npm run build:wasm
 
+# Native C++ solver unit + fuzz tests (g++/clang only, no browser)
+npm run test:solver
+
 # Convert dice Collada sources to Draco GLB (requires Playwright)
 npm run convert:dice
 
@@ -95,6 +98,10 @@ npm run preview
 - Render/perf flags:
   - WebGPU is the default; `?webgpu` / `?wgpu` are redundant but still force it explicitly.
   - `?webgl` forces the stable WebGL baseline path (escape hatch / older browsers).
+  - `?pr=N` sets render pixel ratio (clamped to `[0.5, 3]`); default is `min(devicePixelRatio, 2)`. At `pr=1` MSAA is enabled; above 1.0 FXAA is used in the post chain instead.
+  - Pixel ratio auto step-down: when sustained frame times exceed ~32 ms, ratio steps down toward 1.0 (skipped when `?pr=` forces a ratio).
+  - Software WebGL rasterizers (SwiftShader, llvmpipe, etc.) auto-enable the `low-post` profile.
+  - GPU context/device loss surfaces the renderer badge and attempts WebGL fallback recovery.
   - `?no-post` disables the composer entirely (both renderers).
   - `?low-post` keeps post enabled but lowers bloom quality (both renderers).
   - `?no-bloom` disables only bloom (both renderers).
@@ -305,6 +312,7 @@ node test_playingcards.js   # Verifies PlayingCards object exists in scene graph
 node test_flute.js          # Verifies Flute object exists in scene graph
 node test_debug.js          # Polls window.sceneReady and logs scene child counts
 node test_wasm_direct.js    # Smoke-tests WASM SAT collision, determinism, and stress (requires preview server)
+npm run test:solver         # Native C++ unit + fuzz tests (no browser; see docs/WASM_ENGINE.md)
 ```
 
 **Automation hooks:**
@@ -345,7 +353,7 @@ python deploy.py
 
 ## Cursor Cloud specific instructions
 
-Setup is just `npm install` (the startup update script). No lint or unit/test suite exists; see "Testing Instructions" above for the ad-hoc Playwright smoke scripts (they target the preview server on `:4173`).
+Setup is just `npm install` (the startup update script). Run `npm run test:solver` for native C++ physics tests (no browser). Playwright smoke scripts target the preview server on `:4173` — see "Testing Instructions" above.
 
 Running/verifying the app in this headless, software-rendered, WASM-absent environment has a few non-obvious gotchas:
 

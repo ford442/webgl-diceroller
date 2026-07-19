@@ -1,5 +1,6 @@
-import { loadDiceModels, spawnObjects, updateDiceSet, throwDice } from '../dice.js';
+import { loadDiceModels, spawnObjects, updateDiceSet, initDiceAppearance, getDiceAppearanceConfig, setDieTypeAppearance, diceModels } from '../dice.js';
 import { initUI, createCrosshair } from '../ui.js';
+import { createDiceCasePanel } from '../ui/DiceCasePanel.js';
 import { initResultsUI } from '../results.js';
 import { initInteraction } from '../interaction.js';
 import { createFloorAndWalls } from '../physics.js';
@@ -12,6 +13,7 @@ import {
 import { resolveTableLayoutConfig, persistTableLayoutConfig } from './TableLayoutConfig.js';
 import { createLayoutManager } from './RandomLayout.js';
 import { preloadSharedTextures } from './TexturePipeline.js';
+import { createTierRenderStats } from './TierRenderStats.js';
 
 const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -69,7 +71,8 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
             count: layoutConfig.clutterCount,
             seed: layoutConfig.seed,
             theme: layoutConfig.theme
-        }
+        },
+        tierRenderStats: createTierRenderStats(scene)
     };
 
     updateLoadingText('Initializing physics engine...');
@@ -83,7 +86,9 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
 
     updateLoadingText('Building tavern environment...');
     updateLoadingBar(20);
+    context.tierRenderStats.snapshotBefore('tier0');
     await spawnTier(TIER_PROP_DEFINITIONS.tier0, context);
+    context.tierRenderStats.snapshotAfter('tier0');
     if (context.state.clutterResult) {
         layoutManager.setInitialClutter(context.state.clutterResult);
     }
@@ -95,6 +100,10 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         updateLoadingBar(percent);
         if (label) updateLoadingText(`Loading dice models... (${label})`);
     });
+    initDiceAppearance(scene, {
+        envMap: scene.environment ?? null,
+        qualityProfile: callbacks.qualityProfile ?? null
+    });
     spawnObjects(scene, physicsWorld);
 
     updateLoadingText('Setting up game...');
@@ -105,8 +114,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
             updateDiceSet(scene, physicsWorld, newCounts);
         },
         () => {
-            throwDice(scene, physicsWorld);
-            callbacks.onDiceRoll?.();
+            callbacks.onRollAll?.();
         },
         {
             layoutConfig,
@@ -116,7 +124,9 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
                 return result;
             },
             onShareTable: () => layoutManager.getConfig()
-        }
+        },
+        callbacks.notationHooks ?? null,
+        callbacks.rollShareHooks ?? null
     );
     const crosshairUI = createCrosshair();
 
@@ -125,20 +135,35 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
     const interaction = initInteraction(camera, scene, physicsWorld, callbacks.interactionHooks || {});
     callbacks.setInteraction?.(interaction);
 
+    const diceCasePanel = createDiceCasePanel({
+        getConfig: getDiceAppearanceConfig,
+        onTypeChange: (type, partial) => setDieTypeAppearance(type, partial),
+        getTemplateMesh: (type) => diceModels[type] ?? null,
+        getEnvMap: () => scene.environment ?? null,
+        getQualityProfile: () => callbacks.qualityProfile ?? window.qualityProfile ?? null
+    });
+    orchestrator.scheduler.register('updates', 'diceCasePreview', ({ deltaTime }) => {
+        diceCasePanel.updatePreview(deltaTime);
+    }, { priority: -20 });
+
     updateLoadingText('Loading furniture and props...');
     await yieldToMain();
     updateLoadingBar(55);
+    context.tierRenderStats.snapshotBefore('tier1');
     await spawnTier(TIER_PROP_DEFINITIONS.tier1, context);
+    context.tierRenderStats.snapshotAfter('tier1');
     updateLoadingBar(70);
 
     updateLoadingText('Adding tabletop items...');
     await yieldToMain();
+    context.tierRenderStats.snapshotBefore('tierDecor');
     const decorRecords = await spawnTierWithRandomPool(
         DECORATIVE_TIER_ENTRIES,
         layoutConfig.decorCount,
         context,
         { seed: layoutConfig.seed + 0xDEC0, theme: layoutConfig.theme }
     );
+    context.tierRenderStats.snapshotAfter('tierDecor');
     layoutManager.setInitialDecor(decorRecords);
     updateLoadingBar(85);
 
@@ -160,6 +185,10 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
 
     window.sceneReady = true;
 
+    const tierRenderStats = context.tierRenderStats;
+    const tierSummary = tierRenderStats.formatSummary();
+    console.info(`[RenderPerf] Per-tier scene cost:\n${tierSummary}`);
+
     return {
         ui,
         crosshairUI,
@@ -167,6 +196,8 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         layoutManager,
         lampData: context.state.lampData,
         gongResult: context.state.gongData,
-        fireplaceLight: context.state.fireplaceLight
+        fireplaceLight: context.state.fireplaceLight,
+        tierRenderStats,
+        diceCasePanel
     };
 }

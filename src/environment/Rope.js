@@ -150,20 +150,24 @@ export function createRope(scene, physicsWorld, position = {x: 0, y: -2.75, z: 0
 
     scene.add(group);
 
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         const Ammo = getAmmo();
 
         // Bounding box for the coil
-        const halfExtents = new Ammo.btVector3(coilRadius + ropeThickness, totalHeight / 2, coilRadius + ropeThickness);
-        const shape = new Ammo.btBoxShape(halfExtents);
-
-        // Center the physics body on the visual bounds
-        const physTransform = new THREE.Group();
-        physTransform.position.copy(group.position);
-        physTransform.position.y += totalHeight / 2; // Offset to center of mass
-        physTransform.rotation.copy(group.rotation);
-
-        createStaticBody(physicsWorld, physTransform, shape);
+        if (Ammo && physicsWorld) {
+            const halfExtents = new Ammo.btVector3(coilRadius + ropeThickness, totalHeight / 2, coilRadius + ropeThickness);
+            if (Ammo && physicsWorld) {
+                const shape = new Ammo.btBoxShape(halfExtents);
+        
+                // Center the physics body on the visual bounds
+                const physTransform = new THREE.Group();
+                physTransform.position.copy(group.position);
+                physTransform.position.y += totalHeight / 2; // Offset to center of mass
+                physTransform.rotation.copy(group.rotation);
+        
+                createStaticBody(physicsWorld, physTransform, shape);
+            }
+        }
     }
 
     return group;

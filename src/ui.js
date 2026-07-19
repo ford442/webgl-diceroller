@@ -1,21 +1,33 @@
 import { DENSITY_PRESETS, LAYOUT_THEMES, buildShareableTableUrl } from './core/TableLayoutConfig.js';
+import { isTouchPrimaryDevice } from './core/DeviceCapabilities.js';
 
-export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
+export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHooks = null, rollShareHooks = null) => {
     const canvasContainer = document.getElementById('canvas-container') || document.body;
+    const touchUi = isTouchPrimaryDevice();
+
     const container = document.createElement('div');
+    container.id = 'dice-controls-panel';
+    container.setAttribute('role', 'region');
+    container.setAttribute('aria-label', 'Dice controls');
     container.style.position = 'absolute';
-    container.style.top = '10px';
-    container.style.right = '10px';
+    container.style.top = touchUi ? '8px' : '10px';
+    container.style.right = touchUi ? '8px' : '10px';
+    container.style.left = touchUi ? '8px' : 'auto';
     container.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-    container.style.padding = '10px';
+    container.style.padding = touchUi ? '12px' : '10px';
     container.style.color = 'white';
     container.style.fontFamily = 'sans-serif';
     container.style.borderRadius = '5px';
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
-    container.style.gap = '5px';
+    container.style.gap = touchUi ? '8px' : '5px';
     container.style.zIndex = '1000';
-    container.style.maxWidth = '220px';
+    container.style.maxWidth = touchUi ? 'min(92vw, 320px)' : '220px';
+    if (touchUi) {
+        container.style.maxHeight = '42vh';
+        container.style.overflowY = 'auto';
+        container.style.webkitOverflowScrolling = 'touch';
+    }
 
     const diceTypes = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
     const inputs = {};
@@ -28,15 +40,20 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
         row.style.alignItems = 'center';
 
         const label = document.createElement('label');
+        label.htmlFor = `dice-count-${type}`;
         label.textContent = type.toUpperCase() + ': ';
         label.style.marginRight = '10px';
 
         const input = document.createElement('input');
+        input.id = `dice-count-${type}`;
         input.type = 'number';
         input.min = '0';
         input.max = '10';
         input.value = counts[type];
-        input.style.width = '40px';
+        input.setAttribute('aria-label', `${type} count`);
+        input.style.width = touchUi ? '56px' : '40px';
+        input.style.minHeight = touchUi ? '44px' : 'auto';
+        input.style.fontSize = touchUi ? '16px' : 'inherit';
         input.style.marginLeft = '5px';
 
         input.addEventListener('change', () => {
@@ -74,8 +91,11 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
     presetRow.style.gap = '6px';
     presetRow.style.marginTop = '6px';
     const presetLabel = document.createElement('label');
+    presetLabel.htmlFor = 'dice-preset-select';
     presetLabel.textContent = 'Set:';
     const presetSelect = document.createElement('select');
+    presetSelect.id = 'dice-preset-select';
+    presetSelect.setAttribute('aria-label', 'Dice set preset');
     presetSelect.style.flex = '1';
     const placeholder = document.createElement('option');
     placeholder.textContent = 'Presets…';
@@ -97,13 +117,182 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
     presetRow.appendChild(presetSelect);
     container.appendChild(presetRow);
 
+    // --- Dice notation roll input ---
+    if (notationHooks?.onNotationRoll) {
+        const notationDivider = document.createElement('div');
+        notationDivider.style.marginTop = '8px';
+        notationDivider.style.paddingTop = '8px';
+        notationDivider.style.borderTop = '1px solid rgba(255,255,255,0.2)';
+        notationDivider.style.fontWeight = 'bold';
+        notationDivider.textContent = 'Roll Notation';
+        container.appendChild(notationDivider);
+
+        const notationHistory = [];
+        let historyIndex = -1;
+
+        const notationInput = document.createElement('input');
+        notationInput.id = 'notation-roll-input';
+        notationInput.type = 'text';
+        notationInput.placeholder = 'e.g. 3d6+2, 2d20kh1';
+        notationInput.spellcheck = false;
+        notationInput.setAttribute('aria-label', 'Dice notation expression');
+        notationInput.style.width = '100%';
+        notationInput.style.boxSizing = 'border-box';
+        notationInput.style.padding = '4px 6px';
+        notationInput.style.marginTop = '4px';
+        notationInput.addEventListener('mousedown', (e) => e.stopPropagation());
+
+        const submitNotation = async () => {
+            const expr = notationInput.value.trim();
+            if (!expr) return;
+            notationInput.disabled = true;
+            try {
+                await notationHooks.onNotationRoll(expr);
+                if (!notationHistory.length || notationHistory[0] !== expr) {
+                    notationHistory.unshift(expr);
+                    if (notationHistory.length > 30) notationHistory.pop();
+                }
+                historyIndex = -1;
+            } catch (err) {
+                notationInput.style.outline = '1px solid #c44';
+                setTimeout(() => { notationInput.style.outline = ''; }, 1200);
+                console.warn('[Notation]', err?.message ?? err);
+            } finally {
+                notationInput.disabled = false;
+            }
+        };
+
+        notationInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                submitNotation();
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (!notationHistory.length) return;
+                historyIndex = Math.min(historyIndex + 1, notationHistory.length - 1);
+                notationInput.value = notationHistory[historyIndex];
+                return;
+            }
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIndex <= 0) {
+                    historyIndex = -1;
+                    notationInput.value = '';
+                    return;
+                }
+                historyIndex--;
+                notationInput.value = notationHistory[historyIndex];
+            }
+        });
+
+        container.appendChild(notationInput);
+
+        const notationBtnRow = document.createElement('div');
+        notationBtnRow.style.display = 'flex';
+        notationBtnRow.style.gap = '6px';
+        notationBtnRow.style.marginTop = '4px';
+
+        const notationRollBtn = document.createElement('button');
+        notationRollBtn.type = 'button';
+        notationRollBtn.textContent = 'Roll';
+        notationRollBtn.style.flex = '1';
+        notationRollBtn.style.cursor = 'pointer';
+        notationRollBtn.addEventListener('click', submitNotation);
+        notationRollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+        notationBtnRow.appendChild(notationRollBtn);
+        container.appendChild(notationBtnRow);
+
+        const NOTATION_PRESETS = notationHooks.presets ?? [
+            '1d20',
+            '2d20kh1',
+            '3d6',
+            '4d6dl1',
+            '1d100'
+        ];
+
+        const presetChipRow = document.createElement('div');
+        presetChipRow.style.display = 'flex';
+        presetChipRow.style.flexWrap = 'wrap';
+        presetChipRow.style.gap = '4px';
+        presetChipRow.style.marginTop = '6px';
+
+        NOTATION_PRESETS.forEach((preset) => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.textContent = preset;
+            chip.style.cssText = 'font-size:10px;padding:2px 6px;cursor:pointer;border-radius:3px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:white;';
+            chip.addEventListener('mousedown', (e) => e.stopPropagation());
+            chip.addEventListener('click', () => {
+                notationInput.value = preset;
+                submitNotation();
+            });
+            presetChipRow.appendChild(chip);
+        });
+        container.appendChild(presetChipRow);
+    }
+
     const rollBtn = document.createElement('button');
+    rollBtn.type = 'button';
+    rollBtn.id = 'roll-all-btn';
     rollBtn.textContent = 'Roll All';
-    rollBtn.style.marginTop = '10px';
+    rollBtn.setAttribute('aria-keyshortcuts', 'R');
     rollBtn.style.cursor = 'pointer';
     rollBtn.addEventListener('click', () => onRollAll());
     rollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-    container.appendChild(rollBtn);
+    rollBtn.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+
+    if (touchUi) {
+        const rollDock = document.createElement('div');
+        rollDock.style.position = 'absolute';
+        rollDock.style.left = '50%';
+        rollDock.style.bottom = 'max(16px, env(safe-area-inset-bottom))';
+        rollDock.style.transform = 'translateX(-50%)';
+        rollDock.style.zIndex = '1001';
+        rollBtn.style.marginTop = '0';
+        rollBtn.style.minHeight = '52px';
+        rollBtn.style.minWidth = 'min(72vw, 280px)';
+        rollBtn.style.fontSize = '18px';
+        rollBtn.style.fontWeight = 'bold';
+        rollBtn.style.borderRadius = '999px';
+        rollBtn.style.border = '1px solid rgba(255, 153, 51, 0.65)';
+        rollBtn.style.background = 'rgba(255, 153, 51, 0.92)';
+        rollBtn.style.color = '#1a1008';
+        rollBtn.style.boxShadow = '0 8px 24px rgba(0,0,0,0.35)';
+        rollDock.appendChild(rollBtn);
+        canvasContainer.appendChild(rollDock);
+    } else {
+        rollBtn.style.marginTop = '10px';
+        container.appendChild(rollBtn);
+    }
+
+    if (rollShareHooks?.buildShareUrl) {
+        const shareRollBtn = document.createElement('button');
+        shareRollBtn.type = 'button';
+        shareRollBtn.textContent = 'Share Roll';
+        shareRollBtn.style.cursor = 'pointer';
+        shareRollBtn.style.marginTop = '4px';
+        shareRollBtn.title = 'Copy a link that replays this exact roll';
+        shareRollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+        shareRollBtn.addEventListener('click', async () => {
+            if (rollShareHooks.hasShareableRoll && !rollShareHooks.hasShareableRoll()) {
+                shareRollBtn.textContent = 'Roll first';
+                setTimeout(() => { shareRollBtn.textContent = 'Share Roll'; }, 1500);
+                return;
+            }
+            const url = rollShareHooks.buildShareUrl();
+            if (!url) return;
+            try {
+                await navigator.clipboard.writeText(url);
+                shareRollBtn.textContent = 'Copied!';
+                setTimeout(() => { shareRollBtn.textContent = 'Share Roll'; }, 1500);
+            } catch {
+                window.prompt('Share this roll:', url);
+            }
+        });
+        container.appendChild(shareRollBtn);
+    }
 
     // --- Audio volume / mute (persisted in localStorage by the audio module) ---
     const audio = layoutHooks?.audio;
@@ -116,6 +305,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
         audioRow.addEventListener('mousedown', (e) => e.stopPropagation());
 
         const muteBtn = document.createElement('button');
+        muteBtn.type = 'button';
         muteBtn.style.cursor = 'pointer';
         muteBtn.style.minWidth = '34px';
         muteBtn.title = 'Mute / unmute';
@@ -127,7 +317,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
         slider.step = '0.01';
         slider.value = String(audio.getMasterVolume?.() ?? 0.6);
         slider.style.flex = '1';
-        slider.title = 'Volume';
+        slider.setAttribute('aria-label', 'Volume');
 
         const syncMuteIcon = () => {
             const isMuted = audio.isMuted?.() || parseFloat(slider.value) <= 0;
@@ -178,10 +368,13 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
         densityRow.style.gap = '8px';
 
         const densityLabel = document.createElement('label');
+        densityLabel.htmlFor = 'layout-density-select';
         densityLabel.textContent = 'Density';
         densityLabel.style.fontSize = '12px';
 
         densitySelect = document.createElement('select');
+        densitySelect.id = 'layout-density-select';
+        densitySelect.setAttribute('aria-label', 'Table clutter density');
         densitySelect.style.flex = '1';
         Object.keys(DENSITY_PRESETS).forEach((key) => {
             const option = document.createElement('option');
@@ -202,10 +395,13 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
         themeRow.style.gap = '8px';
 
         const themeLabel = document.createElement('label');
+        themeLabel.htmlFor = 'layout-theme-select';
         themeLabel.textContent = 'Theme';
         themeLabel.style.fontSize = '12px';
 
         themeSelect = document.createElement('select');
+        themeSelect.id = 'layout-theme-select';
+        themeSelect.setAttribute('aria-label', 'Table layout theme');
         themeSelect.style.flex = '1';
         Object.values(LAYOUT_THEMES).forEach((theme) => {
             const option = document.createElement('option');
@@ -220,7 +416,10 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
         container.appendChild(themeRow);
 
         rerollBtn = document.createElement('button');
+        rerollBtn.type = 'button';
+        rerollBtn.id = 'reroll-layout-btn';
         rerollBtn.textContent = 'New Table';
+        rerollBtn.setAttribute('aria-keyshortcuts', 'Shift+R');
         rerollBtn.style.cursor = 'pointer';
         rerollBtn.style.marginTop = '4px';
         rerollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -242,6 +441,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
         container.appendChild(rerollBtn);
 
         shareBtn = document.createElement('button');
+        shareBtn.type = 'button';
         shareBtn.textContent = 'Copy Table Link';
         shareBtn.style.cursor = 'pointer';
         shareBtn.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -281,16 +481,30 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null) => {
     helpContainer.style.padding = '10px';
     helpContainer.style.color = 'white';
     helpContainer.style.fontFamily = 'sans-serif';
-    helpContainer.style.fontSize = '12px';
+    helpContainer.style.fontSize = touchUi ? '11px' : '12px';
     helpContainer.style.borderRadius = '5px';
     helpContainer.style.zIndex = '1000';
-    helpContainer.innerHTML = `
+    if (touchUi) {
+        helpContainer.style.bottom = 'max(84px, calc(16px + env(safe-area-inset-bottom)))';
+        helpContainer.style.maxWidth = 'min(92vw, 320px)';
+    }
+    helpContainer.innerHTML = touchUi ? `
+        <div style="font-weight: bold; margin-bottom: 5px;">Touch Controls:</div>
+        <div>👆 <b>Tap table</b> - Roll all dice</div>
+        <div>👉 <b>Flick table</b> - Toss dice</div>
+        <div>👇 <b>Hold die</b> - Grab and drag</div>
+        <div>👆👆 <b>Double-tap die</b> - Levitate</div>
+        <div>✌️ <b>Two fingers</b> - Orbit / pinch zoom</div>
+    ` : `
         <div style="font-weight: bold; margin-bottom: 5px;">Controls:</div>
         <div>🖱️ <b>Left Click</b> - Grab/throw dice</div>
         <div>🖱️ <b>Right Click</b> - Enter FPS mode</div>
+        <div>⌨️ <b>Tab</b> - Focus dice controls, layout, and history</div>
         <div>⌨️ <b>WASD</b> - Move (FPS mode)</div>
         <div>⌨️ <b>ESC</b> - Exit FPS mode</div>
         <div>⌨️ <b>R</b> - Roll all dice</div>
+        <div>⌨️ <b>H</b> - Roll history &amp; statistics</div>
+        <div>⌨️ <b>Enter</b> - Roll notation expression</div>
         <div>⌨️ <b>Shift+R</b> - New table layout</div>
     `;
     canvasContainer.appendChild(helpContainer);

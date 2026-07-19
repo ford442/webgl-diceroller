@@ -102,13 +102,8 @@ export function createMug(scene, physicsWorld, position = { x: 4, y: -2.75, z: 2
 
     const Ammo = getAmmo();
     if (Ammo && physicsWorld) {
-        // We'll use a simple cylinder shape for the collision bounds
         const shape = new Ammo.btCylinderShape(new Ammo.btVector3(radius, height / 2, radius));
-
-        // Use the mugGroup for transformation
         const body = createStaticBody(physicsWorld, mugGroup, shape);
-
-        // Store body reference
         mugGroup.userData.body = body;
     }
 

@@ -4,7 +4,10 @@ import { LAMP_HANG_Y, toCurrentTabletopY } from '../core/SceneMetrics.js';
 import { shuffleWithRng } from './clutter/ClutterPlacement.js';
 import { LAYOUT_THEMES } from '../core/TableLayoutConfig.js';
 import { disposePropSpawn } from './PropLifecycle.js';
+import { mergePropRecord } from '../core/StaticPropMerger.js';
 import './Bone.js';
+import './Cauldron.js';
+import './BreadLoaf.js';
 
 const environmentModules = import.meta.glob('./*.js', { eager: true });
 
@@ -30,7 +33,13 @@ export const getPropFactory = (name) => {
     return factory;
 };
 
-const factoryEntry = (name, options = {}) => ({ name, ...options });
+/**
+ * @template {object} T
+ * @param {string} name
+ * @param {T} [options]
+ * @returns {{name: string, factoryName?: string, randomPool?: boolean, position?: {x: number, y: number, z: number}} & T}
+ */
+const factoryEntry = (name, options) => ({ name, .../** @type {any} */ (options ?? {}) });
 
 const tier1Position = { x: 0, y: LAMP_HANG_Y, z: 0 };
 const isLegacyTabletopPosition = (position) => position.y > -3.25 && position.y < -1.5;
@@ -47,7 +56,7 @@ export const SHADOW_DISABLED_PROP_NAMES = new Set([
     'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus',
     'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope',
     'Candelabra', 'Waterskin', 'Astrolabe', 'Sundial', 'Flute', 'Apple', 'WoodenSpoon',
-    'Warhammer'
+    'Warhammer', 'BreadLoaf'
 ]);
 
 export function resolveRootObject(result) {
@@ -212,6 +221,7 @@ export const TIER_PROP_DEFINITIONS = {
         factoryEntry('CharacterSheet', { randomPool: true, position: { x: 14, y: -2.75, z: 8 }, rotation: -Math.PI / 6 }),
         factoryEntry('BountyPoster', { randomPool: true, position: { x: -20, y: 4, z: -20 }, rotation: Math.PI / 4 }),
         factoryEntry('Pencil', { randomPool: true, position: { x: -8, y: -2.75, z: 14 }, rotation: Math.PI / 5 }),
+        factoryEntry('BreadLoaf', { randomPool: true, position: { x: 8, y: -2.75, z: 4 }, rotation: Math.PI / 6 }),
         factoryEntry('Bone', { randomPool: true, position: { x: 5, y: -2.75, z: 5 }, rotation: Math.PI / 3 }),
         factoryEntry('CoinPouch', { randomPool: true, position: { x: 9, y: -2.75, z: 13 }, rotation: -Math.PI / 8 }),
         factoryEntry('Lute', { randomPool: true, position: { x: -14, y: -1.85, z: -10 }, rotation: Math.PI / 4 }),
@@ -313,7 +323,8 @@ export const TIER_PROP_DEFINITIONS = {
         factoryEntry('Flute', { randomPool: true, name: 'FluteFront', factoryName: 'Flute', position: { x: 2, y: -2.75, z: 14 }, rotation: -Math.PI / 8, afterCreate: (result) => result?.interact && registerInteractiveObject(result.group, result.interact) }),
         factoryEntry('Apple', { randomPool: true, position: { x: 13, y: -2.75, z: 7 }, rotation: Math.PI / 6 }),
         factoryEntry('PocketFlask', { randomPool: true, position: { x: -4, y: -2.75, z: 2 }, rotation: Math.PI / 4 }),
-        factoryEntry('WoodenSpoon', { randomPool: true, position: { x: 10, y: -2.75, z: 12 }, rotation: Math.PI / 3 })
+        factoryEntry('WoodenSpoon', { randomPool: true, position: { x: 10, y: -2.75, z: 12 }, rotation: Math.PI / 3 }),
+        factoryEntry('Cauldron', { randomPool: true, position: { x: 12, y: -2.75, z: -4 }, rotation: 0 })
     ]
 };
 
@@ -522,7 +533,9 @@ export function getRandomProps({
  * exactly the randomPool subset of DECORATIVE_TIER_ENTRIES, in the same order),
  * so output is bit-identical to the previous implementation.
  */
-export function selectDecorPoolEntries(entries, maxRandom, { seed, theme = 'default' } = {}) {
+/** @param {{seed?: number, theme?: string}} [options] */
+export function selectDecorPoolEntries(entries, maxRandom, options = {}) {
+    const { seed, theme = 'default' } = options;
     return getRandomProps({ count: Math.max(0, maxRandom), seed, theme });
 }
 
@@ -538,7 +551,9 @@ function getForcedProps() {
     }
 }
 
-export async function spawnTierWithRandomPool(entries, maxRandom, context, { seed, theme } = {}) {
+/** @param {{seed?: number, theme?: string}} [options] */
+export async function spawnTierWithRandomPool(entries, maxRandom, context, options = {}) {
+    const { seed, theme } = options;
     const always = entries.filter((entry) => !entry.randomPool);
     const selected = selectDecorPoolEntries(entries, maxRandom, { seed: seed ?? context.layoutConfig?.seed, theme: theme ?? context.layoutConfig?.theme });
 
@@ -610,8 +625,19 @@ export async function spawnProp(entry, context) {
         context.cullingSystem.register(root, { important: entry.important === true });
     }
 
+    const canStaticMerge = entry.staticMerge !== false
+        && !updateHandle
+        && !INTERACTIVE_NAMES.has(factoryName);
+    let mergeStats = null;
+    if (canStaticMerge) {
+        mergeStats = mergePropRecord({ result, updateHandle });
+        if (mergeStats.merged && context.cullingSystem && root) {
+            context.cullingSystem.refreshSphere(root);
+        }
+    }
+
     const disposers = typeof result?.dispose === 'function' ? [result.dispose] : undefined;
-    return { entry, result, updateHandle, disposers };
+    return { entry, result, updateHandle, disposers, mergeStats };
 }
 
 export function despawnProp(record, context) {

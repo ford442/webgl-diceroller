@@ -1,5 +1,5 @@
-const { chromium } = require('playwright');
 const fs = require('fs');
+const { launchPage } = require('./helpers/browser');
 
 /**
  * Verification script for the fixed billiard lamp.
@@ -9,8 +9,8 @@ const fs = require('fs');
 async function staticChecks() {
     console.log('=== Lamp Static Verification (no browser) ===');
     const lampSrc = fs.readFileSync('src/environment/Lamp.js', 'utf8');
-    const tiersSrc = fs.readFileSync('src/core/LoadingTiers.js', 'utf8');
-    const mainSrc = fs.readFileSync('src/main.js', 'utf8');
+    const metricsSrc = fs.readFileSync('src/core/SceneMetrics.js', 'utf8');
+    const registrySrc = fs.readFileSync('src/environment/PropRegistry.js', 'utf8');
 
     const checks = [
         { name: 'visualWrapper Group present', pass: lampSrc.includes('visualWrapper') && lampSrc.includes('LampVisualWrapper') },
@@ -21,9 +21,10 @@ async function staticChecks() {
         { name: 'shade-based light placement (glass or fallback)', pass: lampSrc.includes('glassShades') || lampSrc.includes('lightPositions') },
         { name: 'no scene.add(lampGroup) inside createLamp', pass: !lampSrc.includes('scene.add(lampGroup)') },
         { name: 'returns toggle', pass: lampSrc.includes('toggle,') || lampSrc.includes('toggle:') },
-        { name: 'y:30 in LoadingTiers (with comment)', pass: tiersSrc.includes('position.set(0, 30, 0)') && tiersSrc.includes('y=30') },
-        { name: 'scene.add for lamp in caller', pass: tiersSrc.includes('scene.add(lampResult.group)') },
-        { name: 'Group wrapper comment in main.js', pass: mainSrc.includes('Group-wrapper scaling') }
+        { name: 'lamp hang metric near ceiling', pass: metricsSrc.includes('LAMP_HANG_Y = ROOM_CEILING_Y - 0.35') },
+        { name: 'lamp tier uses shared hang metric', pass: registrySrc.includes('y: LAMP_HANG_Y') },
+        { name: 'scene.add for lamp in caller', pass: registrySrc.includes('ctx.scene.add(result.group)') },
+        { name: 'lamp interaction registered by prop registry', pass: registrySrc.includes("registerInteractable('lamp'") }
     ];
 
     let allPass = true;
@@ -48,41 +49,24 @@ async function staticChecks() {
     return allPass;
 }
 
-if (process.env.NODE_ENV === 'static' || process.argv.includes('--static')) {
+const isStatic = process.env.NODE_ENV === 'static' || process.argv.includes('--static');
+
+if (isStatic) {
     staticChecks().then(ok => process.exit(ok ? 0 : 1));
-    return;
+} else {
+    runLampTest();
 }
 
-console.log('=== Lamp Verification Test ===');
+async function runLampTest() {
+    console.log('=== Lamp Verification Test ===');
 
-(async () => {
-    const browser = await chromium.launch({
-        headless: true,
-        args: ['--disable-gpu', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
-    const page = await browser.newPage();
-
-    const consoleErrors = [];
-    const consoleWarnings = [];
-    page.on('console', msg => {
-        const text = msg.text();
-        if (msg.type() === 'error') {
-            consoleErrors.push(text);
-            console.log(`[BROWSER ERROR] ${text}`);
-        } else if (msg.type() === 'warning' && text.toLowerCase().includes('lamp')) {
-            consoleWarnings.push(text);
-        }
-    });
-    page.on('pageerror', err => {
-        consoleErrors.push(err.message);
-        console.log(`[PAGE ERROR] ${err.message}`);
-    });
+    const { browser, page, errors: consoleErrors } = await launchPage({ logConsole: false });
 
     // Use the verification server started by our test harness (port 8123 serves dist/)
     const urls = [
-        'http://localhost:8123/?no-post',
-        'http://localhost:4173/?no-post',
-        'http://localhost:5173/?no-post'
+        'http://127.0.0.1:4173/?webgl&no-post&fair-dice',
+        'http://127.0.0.1:5173/?webgl&no-post&fair-dice',
+        'http://127.0.0.1:8123/?webgl&no-post&fair-dice'
     ];
     let loaded = false;
     for (const url of urls) {
@@ -92,7 +76,7 @@ console.log('=== Lamp Verification Test ===');
             console.log(`Loaded: ${url}`);
             break;
         } catch (e) {
-            console.log(`Could not reach ${url}, trying next...`);
+            console.log(`Could not reach ${url}, trying next... (${e.message})`);
         }
     }
     if (!loaded) {
@@ -119,6 +103,7 @@ console.log('=== Lamp Verification Test ===');
         if (!scene) return { error: 'no scene' };
 
         // Find the lamp group
+        /** @type {import('three').Object3D | null} */
         let lamp = null;
         scene.traverse((obj) => {
             if (obj.name === 'BilliardLamp' && obj.type === 'Group') {
@@ -131,6 +116,7 @@ console.log('=== Lamp Verification Test ===');
         }
 
         // Count key children
+        /** @type {import('three').Object3D | null} */
         let wrapper = null;
         let lightCount = 0;
         let bulbCount = 0;
@@ -177,10 +163,11 @@ console.log('=== Lamp Verification Test ===');
         console.error('FAIL:', result.error);
         pass = false;
     } else {
-        if (Math.abs(result.lampY - 30) > 0.1) {
-            console.warn(`WARN: lamp.group.position.y = ${result.lampY} (expected ~30)`);
+        // LAMP_HANG_Y = ROOM_CEILING_Y(20) - 0.35 (src/core/SceneMetrics.js)
+        if (Math.abs(result.lampY - 19.65) > 0.1) {
+            console.warn(`WARN: lamp.group.position.y = ${result.lampY} (expected ~19.65)`);
         } else {
-            console.log('✓ Lamp positioned at y≈30');
+            console.log('✓ Lamp positioned at y≈19.65');
         }
         if (!result.hasWrapper) {
             console.error('FAIL: No LampVisualWrapper Group found (geometry mutation risk)');
@@ -253,4 +240,4 @@ console.log('=== Lamp Verification Test ===');
         console.log('\n=== LAMP VERIFICATION HAD ISSUES ===');
         process.exit(1);
     }
-})();
+}

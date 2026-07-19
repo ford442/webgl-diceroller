@@ -47,6 +47,8 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 - [x] **Phase 3:** Collision event buffer for audio/gameplay hooks.
 - [x] **Phase 3:** Hardening — max dice limits, hull vertex limits, memory caps, NaN checks.
 - [x] **Phase 3:** Experimental Web Worker bridge (`WorkerPhysicsBridge.js`).
+- [x] **Phase 5:** Native solver test harness (`npm run test:solver`) — unit tests,
+  2000-seed invariant fuzz loop, determinism checks, optional native↔WASM parity.
 
 ---
 
@@ -174,6 +176,32 @@ npm run build:wasm
 cd src/wasm && ./build.sh
 ```
 
+### Native solver tests (no browser, no Emscripten)
+
+The engine core lives in `dice_physics_engine.hpp` and is compiled natively with
+g++/clang for fast regression coverage:
+
+```bash
+# Unit tests (SAT, PRNG, serialize round-trip, determinism) + 2000-seed fuzz loop:
+npm run test:solver
+
+# Tune fuzz volume (default 2000 seeds, ~6 s on CI):
+FUZZ_SEEDS=500 npm run test:solver
+```
+
+When `public/wasm/dice_physics.wasm` is present (after `npm run build:wasm`), the
+same script also runs a native↔WASM `serializeState()` parity check for a fixed
+seed via `scripts/compare-solver-wasm.mjs`.
+
+Source layout:
+
+| File | Role |
+|------|------|
+| `dice_physics_engine.hpp` | Portable solver (SAT, integration, PRNG, serialize) |
+| `dice_physics.cpp` | Emscripten Embind exports for the WASM build |
+| `solver_tests.cpp` | doctest unit + fuzz harness (`--dump-serialize` for parity) |
+| `build_solver_test.sh` | Native compile + run script |
+
 ### Runtime flags
 
 - (default) the WASM engine runs in a **Web Worker** with SharedArrayBuffer
@@ -260,6 +288,7 @@ const engine = getWasmEngine();
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
+| `setFlags` | `(flags: u32): void` | Engine options from the main thread (`FLAG_NO_DRAG = 1` disables quadratic drag). Call after construction, before `init`. |
 | `init` | `(gravity, tableY, tableHalfW, tableHalfD): void` | Configure world parameters. |
 | `reset` | `(): void` | Remove all dice and reset the ID counter. |
 
@@ -428,20 +457,32 @@ const t2 = window.getWasmEngine().getTransforms();
 - [x] COOP/COEP on dev **and** preview servers.
 - [x] `scripts/verify-worker-physics.mjs` (Playwright) — asserts worker default,
       SAB transport, synchronous ids, and worker-driven gravity stepping.
+- [x] `scripts/verify-worker-replay.mjs` (Playwright) — asserts `seededPhysicsThrow`
+      replay determinism on the worker path and async `serializePhysicsState()`.
 - [x] Fixed a latent bug in the experimental worker that transferred the WASM
       heap buffer (`getTransforms().buffer`), which would detach module memory.
+- [x] Batched per-frame command transport for high-frequency ops
+      (`applyTorqueImpulse`, `setDieTransform`, `setDieVelocity`, `applyImpulse`):
+      accumulated on the main thread and flushed once per frame into a
+      SharedArrayBuffer command ring (zero postMessages in steady state) or a
+      single `batch` postMessage when SAB is unavailable. Structural commands
+      (`init`, `addDie`, …) remain on plain postMessage.
 
 #### Known limitations / follow-ups
 
+- `randomFloat()` is not available synchronously across the worker boundary;
+  deterministic rolls use the `seededThrow` worker command (via `seededPhysicsThrow`)
+  so RNG draws and impulses stay ordered in the worker. `serializePhysicsState()`
+  is async on the worker path (request/response with a transferred `ArrayBuffer`).
+- `applyDiceMassBiases()` posts one `applyTorqueImpulse` message per mass-biased
+  die per frame; batching into a single message would cut chatter at high counts.
 - `serializeState()` / `randomFloat()` are not available synchronously across the
   worker boundary, so deterministic `replayRoll()` falls back to the in-process
   path. A request/response round-trip could restore them if needed.
-- `applyDiceMassBiases()` posts one `applyTorqueImpulse` message per mass-biased
-  die per frame; batching into a single message would cut chatter at high counts.
-- The C++ constructor reads `window.location.search` via emval; `window` is
-  absent in a module worker, so the worker shims it before constructing the
-  engine. A cleaner fix is to guard that access in `dice_physics.cpp` (requires
-  an emcc rebuild) and pass the `no-drag` flag explicitly through `init()`.
+- URL-driven engine flags (`?no-drag`, etc.) are parsed on the main thread in
+  `physicsFlags.js` and forwarded into WASM via `DicePhysicsEngine.setFlags()`
+  (both the in-process bridge and the worker init payload). The C++ constructor
+  no longer touches `window`.
 
 ### Phase 5+ (Future)
 
@@ -449,5 +490,5 @@ const t2 = window.getWasmEngine().getTransforms();
       internally instead of being overwritten each frame (retire ammo dice bodies).
 - [~] Mirror drag/levitation into WASM (retire ammo for dice). **In progress:** `?wasm-drag` drives both interactions kinematically in the WASM world via `setDieTransform`/`setDieVelocity` (`src/interaction.js`, helpers in `src/dice.js`). Default off; ammo path remains the default and fallback. Remaining: soak-test under `?wasm-drag`, then drop the ammo dice bodies in `spawnDicePhysics`. Optional C++ follow-up: a true `setDieKinematic(id, bool)` flag so held dice ignore gravity/contacts internally instead of being overwritten each frame.
 - [ ] Web Audio integration: dice clack, table thump, lamp jiggle on collision.
-- [ ] Fuzz testing harness for the C++ solver.
+- [x] Fuzz testing harness for the C++ solver (`npm run test:solver`).
 - [ ] SIMD optimisation (`-msimd128`) for SAT projections.

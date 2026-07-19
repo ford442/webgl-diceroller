@@ -25,8 +25,11 @@
 import { publicAssetUrl } from '../core/publicAssetUrl.js';
 import {
     MAX_DICE, STRIDE, HEADER_INTS, H_SEQNO, H_FRONT, H_COUNT, H_SETTLED,
-    idsOffset, xfOffset,
+    H_CMD_HEAD, H_CMD_TAIL,
+    idsOffset, xfOffset, CMD_RING_FLOATS, CMD_RING_OFFSET,
 } from './workerLayout.js';
+import { computeSeededThrowParams, applyThrowParams } from './seededThrowParams.js';
+import { dispatchLinear, drainRing } from './workerCommands.js';
 
 const FIXED_DT = 1 / 120;          // worker simulates at 120 Hz
 const STEP_MS = 1000 * FIXED_DT;
@@ -39,6 +42,7 @@ let hulls = null;
 let header = null;                 // Int32Array view over the header
 const idsView = [null, null];      // Float32Array per buffer
 const xfView = [null, null];
+let cmdRing = null;                // Float32Array command ring (SAB path)
 
 let running = false;               // true once init() has configured the world
 let stepTimer = null;
@@ -61,19 +65,10 @@ async function boot() {
     } catch (e) {
         // Hulls are optional; collision quality degrades but sim still runs.
     }
-    // NOTE: the engine itself is constructed lazily in the 'init' handler, after
-    // we shim `window.location.search` — the C++ constructor reads it (for the
-    // ?no-drag flag) via emval and `window` does not exist in a module worker.
 }
 
-function ensureEngine(pageSearch) {
+function ensureEngine() {
     if (engine) return;
-    // Shim the browser global the C++ constructor expects. emval's
-    // val::global("window") resolves to globalThis.window; provide just enough
-    // for `window.location.search` to read back the page's query string.
-    if (typeof globalThis.window === 'undefined') {
-        globalThis.window = { location: { search: pageSearch || '' } };
-    }
     engine = new Module.DicePhysicsEngine();
 }
 
@@ -102,7 +97,7 @@ function publishSAB() {
     const xf = engine.getTransforms();
     const count = Math.min(Math.floor(ids.length), MAX_DICE);
 
-    const front = Atomics.load(header, H_FRONT);
+    const front = Number(Atomics.load(header, H_FRONT));
     const back = front ^ 1;
 
     if (count > 0) {
@@ -149,6 +144,17 @@ function drainEvents() {
     self.postMessage({ type: 'events', payload: { events: copy } }, [copy.buffer]);
 }
 
+function drainCommandQueue() {
+    if (cmdRing && header) {
+        const head = Number(Atomics.load(header, H_CMD_HEAD));
+        let tail = Number(Atomics.load(header, H_CMD_TAIL));
+        if (tail !== head) {
+            tail = drainRing(engine, cmdRing, head, tail, CMD_RING_FLOATS);
+            Atomics.store(header, H_CMD_TAIL, tail);
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Self-paced simulation loop
 // ---------------------------------------------------------------------------
@@ -156,6 +162,7 @@ function drainEvents() {
 function tick() {
     if (!running || !engine) return;
     try {
+        drainCommandQueue();
         if (engine.getDieCount() > 0) {
             engine.step(FIXED_DT);
         }
@@ -187,8 +194,15 @@ function handle(type, payload) {
     // init. Ignore stray pre-init commands rather than throwing.
     if (type !== 'init' && !engine) return;
     switch (type) {
+        case 'batch':
+            drainCommandQueue();
+            if (payload?.commands?.length) {
+                dispatchLinear(engine, payload.commands);
+            }
+            break;
         case 'init': {
-            ensureEngine(payload.search);
+            ensureEngine();
+            engine.setFlags(payload.flags >>> 0);
             engine.init(payload.gravity, payload.tableY, payload.tableHalfW, payload.tableHalfD);
             if (payload.sab) {
                 header = new Int32Array(payload.sab, 0, HEADER_INTS);
@@ -196,6 +210,9 @@ function handle(type, payload) {
                     idsView[b] = new Float32Array(payload.sab, idsOffset(b), MAX_DICE);
                     xfView[b] = new Float32Array(payload.sab, xfOffset(b), MAX_DICE * STRIDE);
                 }
+                cmdRing = new Float32Array(payload.sab, CMD_RING_OFFSET, CMD_RING_FLOATS);
+                Atomics.store(header, H_CMD_HEAD, 0);
+                Atomics.store(header, H_CMD_TAIL, 0);
             }
             running = true;
             publish();
@@ -203,10 +220,16 @@ function handle(type, payload) {
             break;
         }
         case 'reset':
+            drainCommandQueue();
             engine.reset();
+            if (header) {
+                Atomics.store(header, H_CMD_HEAD, 0);
+                Atomics.store(header, H_CMD_TAIL, 0);
+            }
             publish();
             break;
         case 'addDie': {
+            drainCommandQueue();
             const id = engine.addDie(payload.sides, payload.x, payload.y, payload.z);
             attachHull(id, payload.sides);
             // Report the actual id so the proxy can assert its mirrored counter
@@ -216,38 +239,74 @@ function handle(type, payload) {
             break;
         }
         case 'removeDie':
+            drainCommandQueue();
             engine.removeDie(payload.id);
             publish();
             break;
         case 'clearAllDice':
+            drainCommandQueue();
             engine.clearAllDice();
             publish();
             break;
         case 'setDieHull':
+            drainCommandQueue();
             attachHull(payload.id, payload.sides);
             break;
         case 'setDieMaterial':
+            drainCommandQueue();
             engine.setDieMaterial(payload.id, payload.friction, payload.rollingFriction);
             break;
         case 'setDieDrag':
+            drainCommandQueue();
             engine.setDieDrag(payload.id, payload.drag);
             break;
         case 'setDieTransform':
+            drainCommandQueue();
             engine.setDieTransform(payload.id, payload.px, payload.py, payload.pz, payload.qx, payload.qy, payload.qz, payload.qw);
             break;
         case 'setDieVelocity':
+            drainCommandQueue();
             engine.setDieVelocity(payload.id, payload.lvx, payload.lvy, payload.lvz, payload.avx, payload.avy, payload.avz);
             break;
+        case 'setDieKinematic':
+            engine.setDieKinematic(payload.id, payload.kinematic);
+            break;
         case 'applyImpulse':
+            drainCommandQueue();
             engine.applyImpulse(payload.id, payload.fx, payload.fy, payload.fz);
             break;
         case 'applyTorqueImpulse':
+            drainCommandQueue();
             engine.applyTorqueImpulse(payload.id, payload.tx, payload.ty, payload.tz);
             break;
         case 'seedRNG':
+            drainCommandQueue();
             engine.seedRNG(payload.seed);
             break;
+        case 'serializeState': {
+            const vec = engine.serializeState();
+            const arr = new Uint8Array(vec.size());
+            for (let i = 0; i < vec.size(); i++) arr[i] = vec.get(i);
+            if (typeof vec.delete === 'function') vec.delete();
+            self.postMessage(
+                { type: 'response', payload: { reqId: payload.reqId, byteLength: arr.byteLength, data: arr.buffer } },
+                [arr.buffer]
+            );
+            break;
+        }
+        case 'seededThrow': {
+            engine.seedRNG(payload.seed >>> 0);
+            const params = computeSeededThrowParams(
+                () => engine.randomFloat(),
+                payload.dice,
+                payload.tableSurfaceY
+            );
+            applyThrowParams(engine, params);
+            publish();
+            break;
+        }
         case 'deserializeState': {
+            drainCommandQueue();
             const vec = new Module.VectorU8();
             for (const b of payload.data) vec.push_back(b);
             engine.deserializeState(vec);

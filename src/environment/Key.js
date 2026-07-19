@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
+import { getIronMaterial } from '../core/MaterialPalette.js';
 
 export function createKey(scene, physicsWorld, position = { x: 6, y: -2.75, z: 8 }, rotationY = Math.PI / 4) {
     const ammo = getAmmo();
@@ -7,12 +8,7 @@ export function createKey(scene, physicsWorld, position = { x: 6, y: -2.75, z: 8
     group.position.set(position.x, position.y, position.z);
     group.rotation.y = rotationY;
 
-    // Rusty Iron Material
-    const ironMaterial = new THREE.MeshStandardMaterial({
-        color: 0x333333,
-        roughness: 0.8,
-        metalness: 0.7,
-    });
+    const ironMaterial = getIronMaterial();
 
     // 1. Shaft (Cylinder)
     const shaftLength = 2.0;
@@ -67,28 +63,32 @@ export function createKey(scene, physicsWorld, position = { x: 6, y: -2.75, z: 8
     scene.add(group);
 
     // --- Physics ---
-    if (physicsWorld) {
+    if (physicsWorld && getAmmo()) {
         // Calculate bounding box for physics shape
         const box3 = new THREE.Box3().setFromObject(group);
         const size = new THREE.Vector3();
         box3.getSize(size);
 
         // Ammo Box Shape uses half extents
-        const halfExtents = new ammo.btVector3(size.x * 0.5, size.y * 0.5, size.z * 0.5);
-        const shape = new ammo.btBoxShape(halfExtents);
-
-        // Center physics body at the center of the bounding box
-        const center = new THREE.Vector3();
-        box3.getCenter(center);
-
-        // Since the mesh is created around the origin but offset components,
-        // we'll center the physics body using the visual center.
-        // `createStaticBody` expects a mesh object with position and quaternion.
-        const dummyMesh = new THREE.Mesh();
-        dummyMesh.position.copy(center);
-        dummyMesh.quaternion.copy(group.quaternion); // Actually we should use group quaternion
-
-        createStaticBody(physicsWorld, dummyMesh, shape);
+        if (ammo && physicsWorld) {
+            const halfExtents = new ammo.btVector3(size.x * 0.5, size.y * 0.5, size.z * 0.5);
+            if (ammo && physicsWorld) {
+                const shape = new ammo.btBoxShape(halfExtents);
+        
+                // Center physics body at the center of the bounding box
+                const center = new THREE.Vector3();
+                box3.getCenter(center);
+        
+                // Since the mesh is created around the origin but offset components,
+                // we'll center the physics body using the visual center.
+                // `createStaticBody` expects a mesh object with position and quaternion.
+                const dummyMesh = new THREE.Mesh();
+                dummyMesh.position.copy(center);
+                dummyMesh.quaternion.copy(group.quaternion); // Actually we should use group quaternion
+        
+                createStaticBody(physicsWorld, dummyMesh, shape);
+            }
+        }
     }
 
     return {

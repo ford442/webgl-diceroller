@@ -45,6 +45,7 @@ export function createRenderStats({
     getWasm = () => null,
     getAudio = () => null,
     getCollisionTotal = () => 0,
+    getTierRenderStats = () => null,
     debugPerf = false,
     visible = true
 } = {}) {
@@ -119,16 +120,51 @@ export function createRenderStats({
         lines.push(`fps ${(1000 / frameMsSmoothed).toFixed(0)}  (${frameMsSmoothed.toFixed(1)} ms)`);
 
         const backend = state?.rendererType ?? 'unknown';
-        lines.push(`renderer ${backend}${state?.fallbackReason ? ' (fallback)' : ''}`);
+        const fallbackSuffix = state?.fallbackReason ? ' (fallback)' : '';
+        const contextSuffix = state?.contextStatus === 'lost' ? ' · CONTEXT LOST' : '';
+        lines.push(`renderer ${backend}${fallbackSuffix}${contextSuffix}`);
+
+        if (state?.pixelRatio != null) {
+            const msaa = state.antialias ? 'msaa' : (state.usePostAA ? 'fxaa' : 'no-aa');
+            const forced = state.pixelRatioForced ? ' forced' : '';
+            lines.push(`pixelRatio ${state.pixelRatio.toFixed(2)} (dpr ${state.deviceDpr?.toFixed(2) ?? '?'}) ${msaa}${forced}`);
+        }
+        if (state?.isSoftwareRenderer) {
+            lines.push('software WebGL · low-post');
+        }
 
         const physicsLabel = wasm ? (wasm.active ? 'WASM' : (wasm.available ? 'WASM(idle)' : 'ammo')) : 'ammo';
         const diceLabel = dice
             ? `${dice.count} dice${dice.count ? (dice.settled ? ' · settled' : ' · moving') : ''}`
             : '';
         lines.push(`physics ${physicsLabel}  ${diceLabel}`.trimEnd());
+        if (debugPerf && wasm?.worker) {
+            const w = wasm.worker;
+            const sab = w.usingSAB ? 'sab-cmd' : 'batch-cmd';
+            lines.push(`worker ${sab}  ${w.msgsPerSecond.toFixed(0)} msg/s`);
+        }
 
         lines.push(`draws ${render.calls ?? 0}  tris ${compact(render.triangles)}`);
         lines.push(`geom ${memory.geometries ?? 0}  tex ${memory.textures ?? 0}  prog ${programs}`);
+
+        const tierStats = getTierRenderStats();
+        if (tierStats) {
+            const tiers = tierStats.getAllTiers?.() ?? {};
+            const tierParts = [];
+            for (const [tierId, entry] of Object.entries(tiers)) {
+                const d = entry.delta;
+                if (!d) continue;
+                tierParts.push(`${tierId}:+${d.drawCalls}`);
+            }
+            if (tierParts.length) {
+                lines.push(`tier Δdraws ${tierParts.join('  ')}`);
+            }
+            const totals = tierStats.getTotals?.();
+            if (totals?.current) {
+                lines.push(`scene ${totals.current.drawCalls} draws  ${compact(totals.current.triangles)} tris`);
+            }
+        }
+
         lines.push(`objects ${sceneSummary.objects}  meshes ${sceneSummary.visibleMeshes}/${sceneSummary.meshes}  lights ${sceneSummary.lights}`);
 
         if (cullingSystem) {
@@ -139,11 +175,17 @@ export function createRenderStats({
             lines.push(`shadows ${shadow.autoUpdate ? 'dynamic' : 'static'}  refresh ${shadow.staticRefreshes ?? 0}`);
         }
         if (post) {
-            lines.push(`post ${post.quality}${post.bloomEnabled ? ' +bloom' : ''}${post.chromaticAberrationEnabled ? ' +ca' : ''}`);
+            const fxaa = post.fxaaEnabled ? ' +fxaa' : '';
+            lines.push(`post ${post.quality}${post.bloomEnabled ? ' +bloom' : ''}${fxaa}${post.chromaticAberrationEnabled ? ' +ca' : ''}`);
         }
 
         const audioLabel = audio ? `  audio ${audio.played}` : '';
         lines.push(`collisions ${collisionRate.toFixed(0)}/s${audioLabel}`);
+
+        const gameFeel = scheduler?.stats?.gameFeel;
+        if (gameFeel) {
+            lines.push(`feel px ${gameFeel.activeParticles}  blur ${gameFeel.motionBlurDice}  crit ${gameFeel.critCount}`);
+        }
 
         if (debugPerf && scheduler?.stats?.phaseTimes) {
             const pt = scheduler.stats.phaseTimes;
