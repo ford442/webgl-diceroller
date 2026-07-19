@@ -9,7 +9,7 @@ import { VignetteShader } from '../shaders/VignetteShader.js';
 import { TavernEnvironment } from '../environment/TavernEnvironment.js';
 import { createRenderer } from './RendererFactory.js';
 import { preloadSharedTextures } from './TexturePipeline.js';
-import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z, TABLE_SURFACE_Y, applyViewportToCamera, computeCameraAspect } from './SceneMetrics.js';
+import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z, TABLE_SURFACE_Y, LAMP_HANG_Y, applyViewportToCamera, computeCameraAspect } from './SceneMetrics.js';
 import { guessInitialQualityProfile } from './AdaptiveQuality.js';
 import { prefersReducedMotion } from './AccessibilityPrefs.js';
 
@@ -19,7 +19,7 @@ const VIGNETTE_DARKNESS = 1.0;
 async function createWebGpuPostPipeline(renderer, scene, camera, { width, height, postConfig }) {
     const [
         { PostProcessing },
-        { pass, uniform, float, vec2, vec3, vec4, mix, Fn, screenUV },
+        { pass, uniform, float, vec2, vec3, vec4, mix, Fn, screenUV, clamp },
         { bloom },
         { chromaticAberration },
         { fxaa }
@@ -49,13 +49,14 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
         colorNode = sceneColorNode.add(bloomNode);
     }
 
+    const vignetteStrength = uniform(0.85);
     const vignetteOffset = uniform(VIGNETTE_OFFSET);
     const vignetteDarkness = uniform(VIGNETTE_DARKNESS);
     const vignetteNode = Fn(() => {
         const vignetteUv = screenUV.sub(vec2(0.5, 0.5)).mul(vignetteOffset);
-        const vignetteColor = vec3(float(1.0).sub(vignetteDarkness));
+        const vignetteMix = clamp(vignetteUv.dot(vignetteUv).mul(vignetteStrength), 0, 1);
         return vec4(
-            mix(colorNode.rgb, vignetteColor, vignetteUv.dot(vignetteUv)),
+            mix(colorNode.rgb, vec3(0, 0, 0), vignetteMix),
             colorNode.a
         );
     })();
@@ -157,6 +158,15 @@ export async function setupScene(container) {
         }
     }
 
+    // Lights
+
+
+    // Warm overhead pool on the velvet dice zone (no shadows — fill only).
+    const diceZoneLight = new THREE.SpotLight(0xfff2d6, 2.8, 40, Math.PI / 4, 0.65, 1.2);
+    diceZoneLight.position.set(0, LAMP_HANG_Y - 6, 0);
+    diceZoneLight.target.position.set(0, TABLE_SURFACE_Y, 0);
+    scene.add(diceZoneLight);
+    scene.add(diceZoneLight.target);
     // Lights — bias toward readable dice faces on the velvet zone.
     const ambientIntensity = rendererState.usingWebGPU ? 0.16 : 0.09;
     const ambientLight = new THREE.AmbientLight(0xfff8f0, ambientIntensity);
@@ -190,8 +200,7 @@ export async function setupScene(container) {
     scene.add(pointLight);
 
     // Cool SpotLight (Moonlight) - Shining through the window
-    // More blue, lower intensity for contrast (0x4444dd)
-    const spotLight = new THREE.SpotLight(0x4444dd, 3.5);
+    const spotLight = new THREE.SpotLight(0x5566bb, 2.2);
     spotLight.position.set(-45, 15, -5); // Outside the window
     spotLight.target.position.set(0, TABLE_SURFACE_Y, 0); // Aim at table center
     spotLight.angle = Math.PI / 10;
@@ -257,8 +266,8 @@ export async function setupScene(container) {
 
             // Vignette
             const vignettePass = new ShaderPass(VignetteShader);
-            vignettePass.uniforms['offset'].value = VIGNETTE_OFFSET;
-            vignettePass.uniforms['darkness'].value = VIGNETTE_DARKNESS;
+            vignettePass.uniforms['offset'].value = 1.2;
+            vignettePass.uniforms['darkness'].value = 0.85;
             composer.addPass(vignettePass);
             postPasses.vignettePass = vignettePass;
 

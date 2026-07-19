@@ -37,7 +37,8 @@ export const VignetteShader = {
 
 			vec4 texel = texture2D( tDiffuse, vUv );
 			vec2 uv = ( vUv - vec2( 0.5 ) ) * vec2( offset );
-			gl_FragColor = vec4( mix( texel.rgb, vec4( 1.0 - darkness ).rgb, dot( uv, uv ) ), texel.a );
+			float vignette = clamp( dot( uv, uv ) * darkness, 0.0, 1.0 );
+			gl_FragColor = vec4( mix( texel.rgb, vec3( 0.0 ), vignette ), texel.a );
 
 		}`
 
