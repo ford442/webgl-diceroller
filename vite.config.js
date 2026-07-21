@@ -44,7 +44,7 @@ function injectCriticalPreloads() {
 export default defineConfig({
     base: './',
     server: {
-        open: true,
+        open: process.env.BROWSER === 'none' ? false : true,
         allowedHosts: ['code.noahcohn.com', 'localhost', '127.0.0.1'],
         headers: COOP_COEP_HEADERS,
     },

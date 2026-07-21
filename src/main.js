@@ -332,6 +332,7 @@ async function init() {
         + (rendererState?.fallbackReason ? ` (${rendererState.fallbackReason})` : '')
     );
     window.__renderStats = scheduler.stats;
+    window.__frameScheduler = scheduler;
     collisionAudio = createDiceCollisionAudio();
     diceGameFeel = createDiceGameFeelSystem(scene, { postConfig, rendererState });
     rollHistory = createRollHistory();
