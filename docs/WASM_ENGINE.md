@@ -230,6 +230,40 @@ headers** — otherwise `crossOriginIsolated` is false, `SharedArrayBuffer` is
 unavailable, and the worker bridge transparently downgrades to copy-out
 `postMessage` snapshots (correct, just a little more per-frame overhead).
 
+> **Meta tags are not enough.** `<meta http-equiv="Cross-Origin-Opener-Policy">`
+> (or COEP) does **not** enable `crossOriginIsolated`. The values must arrive as
+> real HTTP response headers from nginx, Caddy, Cloudflare, or equivalent.
+> Optional companion header for static assets: `Cross-Origin-Resource-Policy: same-origin`.
+
+Example host configs (also in the README deploy section):
+
+```nginx
+# nginx
+add_header Cross-Origin-Opener-Policy "same-origin" always;
+add_header Cross-Origin-Embedder-Policy "require-corp" always;
+add_header Cross-Origin-Resource-Policy "same-origin" always;
+```
+
+```caddy
+# Caddy
+header {
+	Cross-Origin-Opener-Policy "same-origin"
+	Cross-Origin-Embedder-Policy "require-corp"
+	Cross-Origin-Resource-Policy "same-origin"
+}
+```
+
+**Post-deploy check** (fetches the live host, asserts headers, then opens the
+page in Playwright and checks `crossOriginIsolated` + `SharedArrayBuffer`):
+
+```bash
+npm run verify:production-isolation
+PROD_URL=https://go.1ink.us/dice-roller/ npm run verify:production-isolation
+```
+
+Local SAB path (Vite already sends COOP/COEP): `npm run verify:worker-physics`
+and `npm run verify:pwa-isolation`.
+
 Output files land in `public/wasm/`:
 - `dice_physics.js`   — Emscripten ES module loader
 - `dice_physics.wasm` — Compiled binary (~16 KB gzipped)
@@ -455,6 +489,8 @@ const t2 = window.getWasmEngine().getTransforms();
 - [x] `PhysicsBridge` facade selects worker → main-thread → stub with fallback.
 - [x] Worker-driven drag/levitation by default (`?ammo-drag` opts out).
 - [x] COOP/COEP on dev **and** preview servers.
+- [x] Post-deploy isolation verifier (`npm run verify:production-isolation`).
+- [x] Render-regression baselines enforced for `?webgl` / `?webgl&no-post`.
 - [x] `scripts/verify-worker-physics.mjs` (Playwright) — asserts worker default,
       SAB transport, synchronous ids, and worker-driven gravity stepping.
 - [x] `scripts/verify-worker-replay.mjs` (Playwright) — asserts `seededPhysicsThrow`

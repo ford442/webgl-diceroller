@@ -11,6 +11,8 @@
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
     "verify:bundle-loading": "node scripts/verify-bundle-loading.mjs",
     "verify:pwa-isolation": "node scripts/verify-pwa-isolation.mjs",
+    "verify:production-isolation": "node scripts/verify-production-isolation.mjs",
+    "baselines:update": "UPDATE_BASELINES=1 node scripts/render-regression.mjs --update-baselines",
     "build_colab": "npm run build:wasm_colab && vite build",
     "preview": "vite preview",
     "build:wasm": "bash src/wasm/build.sh",

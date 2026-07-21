@@ -178,7 +178,7 @@ jobs:
       - run: npm run ${{ matrix.script }}
 
   render-regression:
-    name: Render regression (?webgl vs ?webgpu, informational until a baseline exists)
+    name: Render regression (webgl baselines enforced; webgpu soft-fail)
     needs: build-wasm
     runs-on: ubuntu-latest
     steps:
@@ -194,14 +194,11 @@ jobs:
           name: wasm-artifacts
           path: public/wasm/
       - run: npx playwright install --with-deps chromium
-      # Headless WebGPU init is known to stall in constrained/CI environments
-      # (see scripts/render-regression.mjs); don't let a capture failure/timeout
-      # fail the whole job — compare-render-baseline.mjs degrades gracefully to
-      # informational when a screenshot is missing.
-      - name: Capture ?webgl / ?webgpu screenshots
+      # Required profiles (?webgl&no-post, ?webgl) must capture and match
+      # tests/baselines/. Optional ?webgpu capture is best-effort on CPU CI.
+      - name: Capture golden frames
         run: node scripts/render-regression.mjs
-        continue-on-error: true
-      - name: Compare against stored baseline (tests/baselines/)
+      - name: Compare against stored baselines (tests/baselines/)
         run: node scripts/compare-render-baseline.mjs
       - name: Upload screenshots
         if: always()

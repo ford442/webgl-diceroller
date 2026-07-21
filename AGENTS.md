@@ -322,23 +322,43 @@ npm run test:solver         # Native C++ unit + fuzz tests (no browser; see docs
 
 ## Deployment
 
-The `deploy.py` script uploads the `dist/` directory via SFTP:
+The `deploy.py` script uploads the `dist/` directory via Contabo/SFTP:
 
 ```bash
 # 1. Build first
 npm run build
 
-# 2. Deploy (requires paramiko)
+# 2. Deploy
 python deploy.py
+
+# 3. Verify production COOP/COEP + crossOriginIsolated (SharedArrayBuffer path)
+npm run verify:production-isolation
 ```
 
 - **Host**: `1ink.us`
 - **Remote Directory**: `test.1ink.us/dice-roller`
 - **Local Directory**: `dist/`
 
+**Production must send COOP/COEP as HTTP headers** (Vite only covers
+dev/preview). Meta tags do not enable isolation. See README deploy section for
+nginx / Caddy / Cloudflare snippets and `docs/WASM_ENGINE.md`.
+
+### Render regression baselines
+
+CI enforces `tests/baselines/render-regression-webgl-nopost.png` and
+`tests/baselines/render-regression-webgl.png`. Regenerate after intentional
+visual changes:
+
+```bash
+npm run baselines:update
+# or: UPDATE_BASELINES=1 npm run verify:render-regression
+```
+
+WebGPU capture stays soft-fail. Details: `tests/baselines/README.md`.
+
 ## Security Considerations
 
-- `deploy.py` contains a hardcoded password (`GoogleBez12!`). This is a known risk and should be moved to environment variables or a secrets manager.
+- Prefer `DEPLOY_TOKEN` from the environment over embedding tokens in `deploy.py`.
 - No server-side user input processing (pure client-side application).
 - Physics simulation runs locally only.
 
