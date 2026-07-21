@@ -268,6 +268,23 @@ export function showNotationResults(evaluated) {
         totalLine += ` ${sign}${evaluated.modifier}`;
     }
     totalLine += ` = ${evaluated.total}`;
+
+    if (evaluated.opposed) {
+        const m = evaluated.opposed.margin;
+        const mSign = m > 0 ? '+' : '';
+        totalLine += `  vs ${evaluated.opposed.expression} = ${evaluated.opposed.total}  (margin ${mSign}${m})`;
+    }
+
+    const flagBits = [];
+    if (evaluated.flags?.crit) flagBits.push('CRIT');
+    if (evaluated.flags?.fumble) flagBits.push('FUMBLE');
+    if (evaluated.flags?.advantage) flagBits.push('ADV');
+    if (evaluated.flags?.disadvantage) flagBits.push('DIS');
+    if (evaluated.flags?.strongHit) flagBits.push('STRONG');
+    if (evaluated.flags?.weakHit) flagBits.push('WEAK');
+    if (evaluated.flags?.miss) flagBits.push('MISS');
+    if (flagBits.length) totalLine += `  ·  ${flagBits.join(' ')}`;
+
     breakdown.innerHTML = totalLine.replace(String(evaluated.total), `<span style="color:${GOLD};font-size:18px;font-weight:bold;">${evaluated.total}</span>`);
     scrim.appendChild(breakdown);
 
@@ -279,7 +296,13 @@ export function showNotationResults(evaluated) {
     }
 
     const diceList = displayDice.map((d) => `${formatDieLabel(d.type, d.role)} = ${d.displayValue ?? d.value}`).join(', ');
-    _announceIfChanged(`Rolled ${evaluated.expression}: ${diceList}. Total ${evaluated.total}.`, { force: true });
+    let announce = `Rolled ${evaluated.expression}: ${diceList}. Total ${evaluated.total}.`;
+    if (evaluated.opposed) {
+        announce += ` Opposed ${evaluated.opposed.expression} total ${evaluated.opposed.total}, margin ${evaluated.opposed.margin}.`;
+    }
+    if (evaluated.flags?.crit) announce += ' Critical!';
+    if (evaluated.flags?.fumble) announce += ' Fumble!';
+    _announceIfChanged(announce, { force: true });
 
     resultsOverlay.style.opacity = '1';
     resultsOverlay.style.pointerEvents = 'none';
@@ -556,7 +579,12 @@ function _addNotationToHistory(evaluated) {
             kept: d.kept,
             dropped: d.dropped
         })),
-        expression: evaluated.expression
+        expression: evaluated.expression,
+        seed: evaluated.seed ?? null,
+        flags: evaluated.flags ?? null,
+        opposed: evaluated.opposed
+            ? { total: evaluated.opposed.total, margin: evaluated.opposed.margin }
+            : null
     });
     if (rollHistory.length > MAX_HISTORY) rollHistory.pop();
 

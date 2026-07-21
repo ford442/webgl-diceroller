@@ -51,7 +51,13 @@ export function parseDiceParam(raw) {
 
 /**
  * @param {URLSearchParams} searchParams
- * @returns {{ seed: number, diceCounts: Record<string, number>|null, version: number }|{ error: 'unsupported_version', version: number|null, seed: number }|null}
+ * @returns {{
+ *   seed: number,
+ *   diceCounts: Record<string, number>|null,
+ *   expression: string|null,
+ *   system: string|null,
+ *   version: number
+ * }|{ error: 'unsupported_version', version: number|null, seed: number }|null}
  */
 export function parseShareableRollParams(searchParams) {
     const seedRaw = searchParams.get('seed');
@@ -70,10 +76,16 @@ export function parseShareableRollParams(searchParams) {
     }
 
     const diceCounts = parseDiceParam(searchParams.get('dice') ?? '');
+    const expressionRaw = searchParams.get('expr') ?? searchParams.get('expression');
+    const expression = expressionRaw?.trim() ? expressionRaw.trim() : null;
+    const systemRaw = searchParams.get('sys') ?? searchParams.get('system');
+    const system = systemRaw?.trim() ? systemRaw.trim() : null;
 
     return {
         seed: seed >>> 0,
         diceCounts,
+        expression,
+        system,
         version: REPLAY_VERSION
     };
 }
@@ -83,18 +95,27 @@ export function parseShareableRollParams(searchParams) {
  * @param {Record<string, number>} counts
  * @param {string} [baseUrl]
  * @param {Record<string, { preset: string, bodyColor: string, pipColor: string }>|null} [appearance]
+ * @param {{ expression?: string|null, system?: string|null }} [extras]
  */
-export function buildShareableRollUrl(seed, counts, baseUrl, appearance = null) {
+export function buildShareableRollUrl(seed, counts, baseUrl, appearance = null, extras = {}) {
     const url = new URL(baseUrl ?? (typeof window !== 'undefined' ? window.location.href : 'http://localhost/'));
     url.searchParams.set('seed', String(seed >>> 0));
     url.searchParams.set('v', String(REPLAY_VERSION));
-    const dice = serializeDiceCounts(counts);
+    const dice = serializeDiceCounts(counts ?? {});
     if (dice) url.searchParams.set('dice', dice);
     else url.searchParams.delete('dice');
 
     const look = appearance ? serializeDiceAppearance(appearance) : null;
     if (look) url.searchParams.set('dice-look', look);
     else url.searchParams.delete('dice-look');
+
+    const expression = extras.expression?.trim();
+    if (expression) url.searchParams.set('expr', expression);
+    else url.searchParams.delete('expr');
+
+    const system = extras.system?.trim();
+    if (system) url.searchParams.set('sys', system);
+    else url.searchParams.delete('sys');
 
     return url.toString();
 }

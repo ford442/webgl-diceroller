@@ -129,17 +129,19 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
 
         const notationHistory = [];
         let historyIndex = -1;
+        let activeSystem = notationHooks.getSystem?.() ?? 'dnd5e';
 
         const notationInput = document.createElement('input');
         notationInput.id = 'notation-roll-input';
         notationInput.type = 'text';
-        notationInput.placeholder = 'e.g. 3d6+2, 2d20kh1';
+        notationInput.placeholder = 'e.g. 3d6+2, 2d20kh1, 1d20 vs 1d20';
         notationInput.spellcheck = false;
         notationInput.setAttribute('aria-label', 'Dice notation expression');
         notationInput.style.width = '100%';
         notationInput.style.boxSizing = 'border-box';
         notationInput.style.padding = '4px 6px';
         notationInput.style.marginTop = '4px';
+        notationInput.style.minHeight = touchUi ? '40px' : undefined;
         notationInput.addEventListener('mousedown', (e) => e.stopPropagation());
 
         const submitNotation = async () => {
@@ -147,7 +149,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
             if (!expr) return;
             notationInput.disabled = true;
             try {
-                await notationHooks.onNotationRoll(expr);
+                await notationHooks.onNotationRoll(expr, { system: activeSystem });
                 if (!notationHistory.length || notationHistory[0] !== expr) {
                     notationHistory.unshift(expr);
                     if (notationHistory.length > 30) notationHistory.pop();
@@ -189,6 +191,85 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
 
         container.appendChild(notationInput);
 
+        // System preset (defaults only — not a rules engine)
+        const systemRow = document.createElement('div');
+        systemRow.style.display = 'flex';
+        systemRow.style.alignItems = 'center';
+        systemRow.style.gap = '6px';
+        systemRow.style.marginTop = '4px';
+        const systemLabel = document.createElement('label');
+        systemLabel.textContent = 'System';
+        systemLabel.style.fontSize = '11px';
+        systemLabel.htmlFor = 'notation-system-select';
+        const systemSelect = document.createElement('select');
+        systemSelect.id = 'notation-system-select';
+        systemSelect.style.flex = '1';
+        systemSelect.setAttribute('aria-label', 'Roll system preset');
+        const systems = notationHooks.systems ?? [
+            { id: 'dnd5e', label: 'D&D 5e' },
+            { id: 'pbta', label: 'PbtA' },
+            { id: 'savage', label: 'Savage Worlds' },
+            { id: 'coc', label: 'Call of Cthulhu' }
+        ];
+        systems.forEach((sys) => {
+            const opt = document.createElement('option');
+            opt.value = sys.id;
+            opt.textContent = sys.label;
+            if (sys.id === activeSystem) opt.selected = true;
+            systemSelect.appendChild(opt);
+        });
+        systemSelect.addEventListener('mousedown', (e) => e.stopPropagation());
+        systemSelect.addEventListener('change', () => {
+            activeSystem = systemSelect.value;
+            notationHooks.setSystem?.(activeSystem);
+            if (notationHooks.defaultExpressionForSystem) {
+                notationInput.value = notationHooks.defaultExpressionForSystem(activeSystem);
+            }
+        });
+        systemRow.appendChild(systemLabel);
+        systemRow.appendChild(systemSelect);
+        container.appendChild(systemRow);
+
+        // Mechanic chips — rewrite the expression without typing raw notation
+        const chipDefs = notationHooks.mechanicChips ?? [
+            { id: 'advantage', label: 'Adv' },
+            { id: 'disadvantage', label: 'Dis' },
+            { id: 'explode', label: 'Explode !' },
+            { id: 'compound', label: 'Compound !!' },
+            { id: 'reroll1', label: 'Reroll 1s' },
+            { id: 'percentile', label: 'd100' },
+            { id: 'opposed', label: 'Opposed' }
+        ];
+
+        const mechanicRow = document.createElement('div');
+        mechanicRow.style.display = 'flex';
+        mechanicRow.style.flexWrap = 'wrap';
+        mechanicRow.style.gap = '4px';
+        mechanicRow.style.marginTop = '6px';
+        mechanicRow.setAttribute('role', 'group');
+        mechanicRow.setAttribute('aria-label', 'Notation modifiers');
+
+        chipDefs.forEach((chip) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = chip.label;
+            btn.style.cssText = 'font-size:10px;padding:4px 8px;min-height:28px;cursor:pointer;border-radius:3px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:white;';
+            btn.addEventListener('mousedown', (e) => e.stopPropagation());
+            btn.addEventListener('click', () => {
+                if (chip.id === 'opposed') {
+                    const base = notationInput.value.trim() || '1d20';
+                    if (/\s+vs\.?\s+/i.test(base)) return;
+                    notationInput.value = `${base} vs 1d20`;
+                    return;
+                }
+                if (notationHooks.applyChip) {
+                    notationInput.value = notationHooks.applyChip(notationInput.value, chip.id, activeSystem);
+                }
+            });
+            mechanicRow.appendChild(btn);
+        });
+        container.appendChild(mechanicRow);
+
         const notationBtnRow = document.createElement('div');
         notationBtnRow.style.display = 'flex';
         notationBtnRow.style.gap = '6px';
@@ -199,6 +280,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         notationRollBtn.textContent = 'Roll';
         notationRollBtn.style.flex = '1';
         notationRollBtn.style.cursor = 'pointer';
+        notationRollBtn.style.minHeight = touchUi ? '40px' : undefined;
         notationRollBtn.addEventListener('click', submitNotation);
         notationRollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
         notationBtnRow.appendChild(notationRollBtn);
@@ -209,7 +291,10 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
             '2d20kh1',
             '3d6',
             '4d6dl1',
-            '1d100'
+            '4d6r1',
+            '2d6!',
+            '1d100',
+            '1d20 vs 1d20'
         ];
 
         const presetChipRow = document.createElement('div');
@@ -222,7 +307,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
             const chip = document.createElement('button');
             chip.type = 'button';
             chip.textContent = preset;
-            chip.style.cssText = 'font-size:10px;padding:2px 6px;cursor:pointer;border-radius:3px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:white;';
+            chip.style.cssText = 'font-size:10px;padding:4px 6px;min-height:28px;cursor:pointer;border-radius:3px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:white;';
             chip.addEventListener('mousedown', (e) => e.stopPropagation());
             chip.addEventListener('click', () => {
                 notationInput.value = preset;

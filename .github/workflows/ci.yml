@@ -25,6 +25,8 @@ jobs:
       - run: npm ci
       - run: npm run build:js
       - run: npm run check:bundle-size
+      - run: npm run test:notation
+      - run: npm run test:share-roll
 
   bundle-loading:
     name: Verify (lazy chunk loading)

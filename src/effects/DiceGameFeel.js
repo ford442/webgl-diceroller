@@ -248,6 +248,26 @@ export function createDiceGameFeelSystem(scene, {
         });
     }
 
+    /**
+     * Notation rolls carry explicit crit/fumble flags (and optional system bands).
+     * @param {import('../roll/Notation.js').EvaluatedRoll} evaluated
+     */
+    function onNotationResult(evaluated) {
+        if (disabled || !evaluated?.flags) return;
+        const wantCrit = evaluated.flags.crit === true;
+        const wantFumble = evaluated.flags.fumble === true;
+        if (!wantCrit && !wantFumble) return;
+
+        // Prefer kept d20s that match the flag; fall back to any visible die.
+        const candidates = spawnedDice.filter((d) => d?.mesh);
+        const d20s = candidates.filter((d) => d.type === 'd20');
+        const targets = d20s.length ? d20s : candidates.slice(0, 1);
+        for (const die of targets) {
+            if (wantCrit) startCritEffect(die, 'crit');
+            else if (wantFumble) startCritEffect(die, 'fumble');
+        }
+    }
+
     function onDieSettled(die) {
         settlePulses.push({ die, elapsed: 0, duration: SETTLE_PULSE_DURATION });
         stats.settlePulses += 1;
@@ -386,6 +406,7 @@ export function createDiceGameFeelSystem(scene, {
     return {
         handleCollisionEvent,
         onResultsReady,
+        onNotationResult,
         update,
         clearRollState,
         dispose,
