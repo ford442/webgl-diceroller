@@ -56,6 +56,12 @@ import { createRollHistoryPanel } from './ui/RollHistoryPanel.js';
 import { createCullingSystem } from './core/CullingSystem.js';
 import { createRenderStats } from './debug/RenderStats.js';
 import { createRollSession } from './roll/RollSession.js';
+import {
+    ROLL_SYSTEMS,
+    DEFAULT_ROLL_SYSTEM,
+    applyExpressionChip,
+    defaultExpressionForSystem
+} from './roll/Notation.js';
 import { applyViewportToCamera } from './core/SceneMetrics.js';
 import { bootstrapAdaptiveQuality, updateAdaptiveQualityProbe } from './core/AdaptiveQuality.js';
 import { isTouchPrimaryDevice } from './core/DeviceCapabilities.js';
@@ -595,6 +601,7 @@ async function init() {
     const rollSessionRef = { current: null };
 
     const rollHandlerRef = { roll: null, lastRoll: null };
+    let activeRollSystem = DEFAULT_ROLL_SYSTEM;
 
     // Load all tiers
     let tierResult;
@@ -608,18 +615,40 @@ async function init() {
             buildShareUrl: () => {
                 const last = rollHandlerRef.lastRoll;
                 if (!last?.seed) return null;
-                return buildShareableRollUrl(last.seed, last.counts, undefined, getDiceAppearanceConfig());
+                return buildShareableRollUrl(
+                    last.seed,
+                    last.counts ?? {},
+                    undefined,
+                    getDiceAppearanceConfig(),
+                    { expression: last.expression ?? null, system: last.system ?? null }
+                );
             }
         },
         notationHooks: {
-            onNotationRoll: async (expression) => {
+            systems: Object.values(ROLL_SYSTEMS).map((s) => ({ id: s.id, label: s.label })),
+            getSystem: () => activeRollSystem,
+            setSystem: (id) => {
+                if (ROLL_SYSTEMS[id]) activeRollSystem = id;
+            },
+            applyChip: (expr, chip, system) => applyExpressionChip(expr, chip, system),
+            defaultExpressionForSystem,
+            onNotationRoll: async (expression, opts = {}) => {
                 if (!rollSessionRef.current) throw new Error('Roll session not ready');
+                const system = opts.system ?? activeRollSystem;
+                activeRollSystem = system;
+                const seed = generateRollSeed();
+                rollHandlerRef.lastRoll = {
+                    seed: seed >>> 0,
+                    counts: {},
+                    expression,
+                    system
+                };
                 shadowController?.pulse('roll');
                 diceGameFeel?.clearRollState();
                 hideResults();
                 cameraController.setState(DiceFocusState.WAITING_FOR_STOP);
                 if (lampData) lampData.setRolling(true);
-                await rollSessionRef.current.roll(expression);
+                return rollSessionRef.current.roll(expression, seed, { system });
             }
         },
         setLampData: (data) => { lampData = data; },
@@ -669,6 +698,7 @@ async function init() {
         throwDice: (s, w, seed) => {
             if (seed != null) {
                 rollHandlerRef.lastRoll = {
+                    ...(rollHandlerRef.lastRoll ?? {}),
                     seed: seed >>> 0,
                     counts: getSpawnedDiceCounts()
                 };
@@ -680,14 +710,47 @@ async function init() {
         },
         readAllDiceValues,
         areDiceSettled,
-        onComplete: (result) => showNotationResults(result)
+        getSystem: () => activeRollSystem,
+        onComplete: (result) => {
+            if (result?.seed != null) {
+                rollHandlerRef.lastRoll = {
+                    seed: result.seed >>> 0,
+                    counts: getSpawnedDiceCounts(),
+                    expression: result.expression,
+                    system: activeRollSystem
+                };
+            }
+            showNotationResults(result);
+            diceGameFeel?.onNotationResult?.(result);
+            if (result) {
+                pendingRollMeta = {
+                    seed: result.seed ?? null,
+                    expression: result.expression,
+                    diceSet: getSpawnedDiceCounts()
+                };
+                rollHistory?.appendRoll(
+                    (result.rolls ?? []).map((r) => ({
+                        type: r.die,
+                        value: Number.isInteger(r.value) ? r.value : null
+                    })).filter((r) => r.value != null),
+                    {
+                        seed: result.seed ?? null,
+                        expression: result.expression,
+                        diceSet: getSpawnedDiceCounts()
+                    }
+                );
+                rollHistoryPanel?.refresh();
+            }
+        }
     });
 
     rollHandlerRef.roll = (explicitSeed = null) => {
         const seed = explicitSeed ?? generateRollSeed();
         rollHandlerRef.lastRoll = {
             seed: seed >>> 0,
-            counts: getSpawnedDiceCounts()
+            counts: getSpawnedDiceCounts(),
+            expression: null,
+            system: null
         };
         shadowController?.pulse('roll');
         diceGameFeel?.clearRollState();
@@ -750,13 +813,21 @@ async function init() {
     window.readAllDiceValues = readAllDiceValues;
     window.getDiceValueDebugSnapshot = getDiceValueDebugSnapshot;
     window.areDiceSettled = areDiceSettled;
-    window.rollNotation = (expression, seed = null) => rollSessionRef.current?.roll(expression, seed);
+    window.rollNotation = (expression, seed = null, options = {}) => (
+        rollSessionRef.current?.roll(expression, seed, options)
+    );
     window.rerollTableLayout = (overrides) => layoutManager?.rerollLayout(overrides);
     window.getTableLayoutConfig = () => layoutManager?.getConfig();
     window.getLastRollShareUrl = () => {
         const last = rollHandlerRef.lastRoll;
         if (!last?.seed) return null;
-        return buildShareableRollUrl(last.seed, last.counts, undefined, getDiceAppearanceConfig());
+        return buildShareableRollUrl(
+            last.seed,
+            last.counts ?? {},
+            undefined,
+            getDiceAppearanceConfig(),
+            { expression: last.expression ?? null, system: last.system ?? null }
+        );
     };
     window.getDiceAppearanceConfig = getDiceAppearanceConfig;
     window.getDicePresencePayload = () => buildDicePresencePayload(getDiceAppearanceConfig());
@@ -776,11 +847,28 @@ async function init() {
                     '[ShareableRoll] WASM physics is not available; replay uses ammo fallback and may not match the original roll. Run `npm run build:wasm` for bit-identical replay.'
                 );
             }
-            if (replayRequest.diceCounts) {
-                updateDiceSet(scene, physicsWorld, replayRequest.diceCounts);
-                ui?.updateCounts?.(replayRequest.diceCounts);
+            if (replayRequest.system && ROLL_SYSTEMS[replayRequest.system]) {
+                activeRollSystem = replayRequest.system;
             }
-            rollHandlerRef.roll(replayRequest.seed);
+            if (replayRequest.expression) {
+                rollHandlerRef.lastRoll = {
+                    seed: replayRequest.seed >>> 0,
+                    counts: {},
+                    expression: replayRequest.expression,
+                    system: activeRollSystem
+                };
+                rollSessionRef.current?.roll(
+                    replayRequest.expression,
+                    replayRequest.seed,
+                    { system: activeRollSystem }
+                );
+            } else {
+                if (replayRequest.diceCounts) {
+                    updateDiceSet(scene, physicsWorld, replayRequest.diceCounts);
+                    ui?.updateCounts?.(replayRequest.diceCounts);
+                }
+                rollHandlerRef.roll(replayRequest.seed);
+            }
         }
     }
 }

@@ -63,6 +63,23 @@ test('buildShareableRollUrl includes seed, dice, and version', () => {
     assert.equal(parsed.searchParams.get('v'), String(REPLAY_VERSION));
 });
 
+test('buildShareableRollUrl round-trips notation expression + system', () => {
+    const url = buildShareableRollUrl(
+        99,
+        {},
+        'http://example.test/roller',
+        null,
+        { expression: '2d20kh1+3 vs 1d20', system: 'dnd5e' }
+    );
+    const parsed = new URL(url);
+    assert.equal(parsed.searchParams.get('expr'), '2d20kh1+3 vs 1d20');
+    assert.equal(parsed.searchParams.get('sys'), 'dnd5e');
+    const replay = parseShareableRollParams(parsed.searchParams);
+    assert.equal(replay.expression, '2d20kh1+3 vs 1d20');
+    assert.equal(replay.system, 'dnd5e');
+    assert.equal(replay.seed, 99);
+});
+
 test('buildShareableRollUrl includes dice appearance when customized', () => {
     const appearance = createDefaultAppearanceConfig();
     appearance.d20 = { preset: 'metal', bodyColor: '#112233', pipColor: '#aabbcc' };
