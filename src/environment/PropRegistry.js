@@ -8,6 +8,7 @@ import { mergePropRecord } from '../core/StaticPropMerger.js';
 import './Bone.js';
 import './Cauldron.js';
 import './BreadLoaf.js';
+import './Rulebook.js';
 
 const environmentModules = import.meta.glob('./*.js', { eager: true });
 
@@ -291,6 +292,7 @@ export const TIER_PROP_DEFINITIONS = {
         factoryEntry('Spectacles', { randomPool: true, position: { x: 3, y: -2.75, z: 14 }, rotation: 0 }),
         factoryEntry('Warhammer', { randomPool: true, position: { x: 5, y: -2.75, z: 2 }, rotation: Math.PI / 3 }),
         factoryEntry('LeatherJournal', { randomPool: true, position: { x: 12, y: -2.5, z: -13 }, rotation: Math.PI / 5 }),
+        factoryEntry('Rulebook', { randomPool: true, position: { x: -8, y: -2.75, z: -8 }, rotation: Math.PI / 5 }),
         factoryEntry('DrinkingHorn', { randomPool: true, position: { x: 14, y: -2.75, z: 2 }, rotation: -Math.PI / 4 }),
         factoryEntry('Wand', { randomPool: true, position: { x: -14, y: -2.70, z: 9 }, rotation: Math.PI / 3 }),
         factoryEntry('Coin', { randomPool: true, position: { x: 11, y: -2.75, z: 11 }, rotation: 0 }),
@@ -351,7 +353,7 @@ const WALL_DECOR_NAMES = new Set(['Shield', 'BountyPoster', 'DecorativeWalls']);
 const SEMANTIC_TAGS = {
     weapon: ['Dagger', 'Sword', 'Shield', 'BattleAxe', 'Warhammer', 'Crossbow', 'Helmet', 'Dart'],
     drinkware: ['Mug', 'Tankard', 'Goblet', 'Chalice', 'DrinkingHorn', 'AleKeg', 'Waterskin', 'PocketFlask'],
-    paper: ['Scroll', 'Map', 'PlayingCards', 'CharacterSheet', 'BountyPoster', 'ScrollCase', 'LeatherJournal', 'WritingSet', 'DMScreen', 'Spellbook'],
+    paper: ['Scroll', 'Map', 'PlayingCards', 'CharacterSheet', 'BountyPoster', 'ScrollCase', 'LeatherJournal', 'WritingSet', 'DMScreen', 'Spellbook', 'Rulebook'],
     light: ['Lantern', 'Candelabra', 'FloatingCandles'],
     magic: ['CrystalBall', 'MysticOrb', 'Wand', 'Runestones', 'Spellbook', 'Amulet', 'DragonScale', 'PotionSet'],
     treasure: ['Coin', 'CoinPouch', 'Gemstones', 'Crown', 'Chalice', 'Amulet', 'Bone'],
