@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createGemstones(scene, physicsWorld, position = { x: 6, y: -2.75, z: -5 }, rotation = 0) {
+export function createGemstones(
+    scene,
+    physicsWorld,
+    position = { x: 6, y: -2.75, z: -5 },
+    rotation = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Gemstones';
@@ -15,40 +20,42 @@ export function createGemstones(scene, physicsWorld, position = { x: 6, y: -2.75
         { type: 'diamond', color: 0xffffff, size: 0.18, x: -0.2, z: -0.4 },
         { type: 'amethyst', color: 0x9932cc, size: 0.24, x: 0.1, z: 0.1 },
         { type: 'topaz', color: 0xffcc00, size: 0.2, x: -0.5, z: -0.1 },
-        { type: 'opal', color: 0xe6f7ff, size: 0.19, x: 0.2, z: -0.5, isOpal: true }
+        { type: 'opal', color: 0xe6f7ff, size: 0.19, x: 0.2, z: -0.5, isOpal: true },
     ];
 
     const gems = [];
 
     gemConfigs.forEach((config, index) => {
         const gem = createGem(config);
-        
+
         // Random scatter position
         const scatterX = config.x + (Math.random() - 0.5) * 0.3;
         const scatterZ = config.z + (Math.random() - 0.5) * 0.3;
         const rotY = Math.random() * Math.PI * 2;
         const rotX = Math.random() * 0.5;
         const rotZ = Math.random() * 0.5;
-        
+
         gem.position.set(scatterX, config.size * 0.6, scatterZ);
         gem.rotation.set(rotX, rotY, rotZ);
-        
+
         gem.castShadow = true;
         gem.receiveShadow = true;
-        
+
         // Store animation data
         gem.userData = {
             baseY: gem.position.y,
             offset: index * 0.5,
-            rotationSpeed: 0.2 + Math.random() * 0.3
+            rotationSpeed: 0.2 + Math.random() * 0.3,
         };
-        
+
         group.add(gem);
         gems.push(gem);
 
         // Physics for each gem
         if (ammo && physicsWorld) {
-            const shape = new ammo.btBoxShape(new ammo.btVector3(config.size * 0.5, config.size * 0.4, config.size * 0.5));
+            const shape = new ammo.btBoxShape(
+                new ammo.btVector3(config.size * 0.5, config.size * 0.4, config.size * 0.5)
+            );
             const dummy = new THREE.Object3D();
             dummy.position.copy(gem.position).applyEuler(group.rotation).add(group.position);
             dummy.rotation.copy(gem.rotation);
@@ -62,7 +69,7 @@ export function createGemstones(scene, physicsWorld, position = { x: 6, y: -2.75
     const clothMat = new THREE.MeshStandardMaterial({
         color: 0x4a0e0e,
         roughness: 0.9,
-        metalness: 0.1
+        metalness: 0.1,
     });
     const cloth = new THREE.Mesh(clothGeo, clothMat);
     cloth.position.y = 0.01;
@@ -76,14 +83,14 @@ export function createGemstones(scene, physicsWorld, position = { x: 6, y: -2.75
 
     // Animation update function
     const updateGems = (time) => {
-        gems.forEach(gem => {
+        gems.forEach((gem) => {
             // Subtle shimmer - rotate slightly
             gem.rotation.y += gem.userData.rotationSpeed * 0.01;
-            
+
             // Very subtle floating effect
             const floatY = Math.sin(time * 2 + gem.userData.offset) * 0.005;
             gem.position.y = gem.userData.baseY + floatY;
-            
+
             // Sparkle effect - subtle emissive pulse
             if (gem.material.emissive) {
                 const sparkle = 0.1 + Math.sin(time * 3 + gem.userData.offset) * 0.05;
@@ -97,9 +104,9 @@ export function createGemstones(scene, physicsWorld, position = { x: 6, y: -2.75
 
 function createGem(config) {
     let geometry;
-    
+
     // Different shapes for different gem types
-    switch(config.type) {
+    switch (config.type) {
         case 'ruby':
             // Diamond/Cut shape
             geometry = createDiamondGeometry(config.size);
@@ -122,7 +129,12 @@ function createGem(config) {
             break;
         case 'topaz':
             // Cylinder cut
-            geometry = new THREE.CylinderGeometry(config.size * 0.6, config.size * 0.8, config.size, 8);
+            geometry = new THREE.CylinderGeometry(
+                config.size * 0.6,
+                config.size * 0.8,
+                config.size,
+                8
+            );
             break;
         case 'opal':
             // Smooth sphere with special material
@@ -142,7 +154,7 @@ function createGem(config) {
         envMapIntensity: 1.5,
         clearcoat: 1.0,
         clearcoatRoughness: 0.1,
-        ior: 1.5
+        ior: 1.5,
     });
 
     // Special handling for opal's shimmer effect
@@ -165,18 +177,18 @@ function createGem(config) {
 function createDiamondGeometry(size) {
     // Create a diamond-shaped geometry (two pyramids base to base)
     const geometry = new THREE.ConeGeometry(size * 0.7, size, 4);
-    const positions = geometry.attributes.position;
-    
+    const _positions = geometry.attributes.position;
+
     // Mirror to create bottom half
     const bottomGeo = new THREE.ConeGeometry(size * 0.7, size * 0.6, 4);
     bottomGeo.rotateX(Math.PI);
     bottomGeo.translate(0, -size * 0.3, 0);
-    
+
     // Merge geometries
-    const merged = BufferGeometryUtils ? 
-        BufferGeometryUtils.mergeGeometries([geometry, bottomGeo]) :
-        mergeGeometriesManual(geometry, bottomGeo);
-    
+    const merged = BufferGeometryUtils
+        ? BufferGeometryUtils.mergeGeometries([geometry, bottomGeo])
+        : mergeGeometriesManual(geometry, bottomGeo);
+
     return merged;
 }
 
@@ -186,11 +198,11 @@ function createBrilliantCut(size) {
     const bottomGeo = new THREE.ConeGeometry(size * 0.4, size * 0.4, 8);
     bottomGeo.rotateX(Math.PI);
     bottomGeo.translate(0, -size * 0.2, 0);
-    
-    const merged = BufferGeometryUtils ? 
-        BufferGeometryUtils.mergeGeometries([topGeo, bottomGeo]) :
-        mergeGeometriesManual(topGeo, bottomGeo);
-    
+
+    const merged = BufferGeometryUtils
+        ? BufferGeometryUtils.mergeGeometries([topGeo, bottomGeo])
+        : mergeGeometriesManual(topGeo, bottomGeo);
+
     return merged;
 }
 
@@ -198,22 +210,22 @@ function mergeGeometriesManual(geo1, geo2) {
     // Simple merge without BufferGeometryUtils
     const count1 = geo1.attributes.position.count;
     const count2 = geo2.attributes.position.count;
-    
+
     const positions = new Float32Array((count1 + count2) * 3);
     const normals = new Float32Array((count1 + count2) * 3);
-    
+
     positions.set(geo1.attributes.position.array, 0);
     positions.set(geo2.attributes.position.array, count1 * 3);
-    
+
     if (geo1.attributes.normal && geo2.attributes.normal) {
         normals.set(geo1.attributes.normal.array, 0);
         normals.set(geo2.attributes.normal.array, count1 * 3);
     }
-    
+
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
     geometry.computeVertexNormals();
-    
+
     return geometry;
 }

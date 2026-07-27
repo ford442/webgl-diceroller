@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createMerchantScale(scene, physicsWorld, position = { x: -14, y: -2.75, z: 2 }, rotationY = -Math.PI / 4) {
+export function createMerchantScale(
+    scene,
+    physicsWorld,
+    position = { x: -14, y: -2.75, z: 2 },
+    rotationY = -Math.PI / 4
+) {
     const group = new THREE.Group();
     group.name = 'MerchantScale';
 
@@ -9,12 +14,12 @@ export function createMerchantScale(scene, physicsWorld, position = { x: -14, y:
     const brassMat = new THREE.MeshStandardMaterial({
         color: 0xb5a642,
         metalness: 0.8,
-        roughness: 0.3
+        roughness: 0.3,
     });
 
     const woodMat = new THREE.MeshStandardMaterial({
         color: 0x5c4033,
-        roughness: 0.7
+        roughness: 0.7,
     });
 
     // 1. Base
@@ -112,7 +117,7 @@ export function createMerchantScale(scene, physicsWorld, position = { x: -14, y:
 
         // Helper to create body at world position
         const createBody = (mesh, shape) => {
-             // Ensure matrices are updated
+            // Ensure matrices are updated
             mesh.updateWorldMatrix(true, false);
             const worldPos = new THREE.Vector3();
             const worldQuat = new THREE.Quaternion();
@@ -127,10 +132,16 @@ export function createMerchantScale(scene, physicsWorld, position = { x: -14, y:
         };
 
         // Base Body
-        createBody(base, new ammo.btCylinderShape(new ammo.btVector3(baseRadius, baseHeight/2, baseRadius)));
+        createBody(
+            base,
+            new ammo.btCylinderShape(new ammo.btVector3(baseRadius, baseHeight / 2, baseRadius))
+        );
 
         // Column Body
-        createBody(column, new ammo.btCylinderShape(new ammo.btVector3(colRadius, colHeight/2, colRadius)));
+        createBody(
+            column,
+            new ammo.btCylinderShape(new ammo.btVector3(colRadius, colHeight / 2, colRadius))
+        );
     }
 
     // --- Animation ---
@@ -146,6 +157,6 @@ export function createMerchantScale(scene, physicsWorld, position = { x: -14, y:
 
     return {
         group,
-        update
+        update,
     };
 }

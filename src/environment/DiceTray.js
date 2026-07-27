@@ -6,7 +6,12 @@ import { getWoodTextures } from '../core/TexturePipeline.js';
  * Creates a Wooden Dice Tray with a velvet interior and physics colliders
  * so dice can be rolled into it without escaping.
  */
-export function createDiceTray(scene, physicsWorld, position = { x: -4, y: -2.75, z: -2 }, rotationY = 0) {
+export function createDiceTray(
+    scene,
+    physicsWorld,
+    position = { x: -4, y: -2.75, z: -2 },
+    rotationY = 0
+) {
     const group = new THREE.Group();
     group.name = 'DiceTray';
 
@@ -28,7 +33,7 @@ export function createDiceTray(scene, physicsWorld, position = { x: -4, y: -2.75
         bumpMap: woodBump,
         bumpScale: 0.05,
         color: 0x8b5a2b, // Darker rich wood color
-        roughness: 0.8
+        roughness: 0.8,
     });
 
     // Velvet Texture (Interior surface)
@@ -36,9 +41,9 @@ export function createDiceTray(scene, physicsWorld, position = { x: -4, y: -2.75
     const velvetTexture = generateVelvetTexture();
     const velvetMaterial = new THREE.MeshStandardMaterial({
         map: velvetTexture,
-        color: 0x8B0000, // Deep crimson red
+        color: 0x8b0000, // Deep crimson red
         roughness: 0.9,
-        metalness: 0.1 // Slight sheen for velvet
+        metalness: 0.1, // Slight sheen for velvet
     });
 
     // --- Geometries ---
@@ -47,10 +52,12 @@ export function createDiceTray(scene, physicsWorld, position = { x: -4, y: -2.75
     const floorGeo = new THREE.BoxGeometry(width, floorThickness, depth);
     // BoxGeometry materials: [Right, Left, Top, Bottom, Front, Back]
     const floorMaterials = [
-        woodMaterial, woodMaterial,
+        woodMaterial,
+        woodMaterial,
         velvetMaterial, // Top is velvet
         woodMaterial,
-        woodMaterial, woodMaterial
+        woodMaterial,
+        woodMaterial,
     ];
 
     const floorMesh = new THREE.Mesh(floorGeo, floorMaterials);
@@ -128,7 +135,9 @@ export function createDiceTray(scene, physicsWorld, position = { x: -4, y: -2.75
         floorProxy.quaternion.copy(wQuat);
 
         if (Ammo && physicsWorld) {
-            const floorShape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, floorThickness / 2, depth / 2));
+            const floorShape = new Ammo.btBoxShape(
+                new Ammo.btVector3(width / 2, floorThickness / 2, depth / 2)
+            );
             createStaticBody(physicsWorld, floorProxy, floorShape);
         }
 
@@ -207,7 +216,12 @@ function generateVelvetTexture() {
         ctx.beginPath();
         ctx.moveTo(0, y);
         // Wavy line
-        ctx.quadraticCurveTo(size / 2, y + (Math.random() - 0.5) * 50, size, y + (Math.random() - 0.5) * 20);
+        ctx.quadraticCurveTo(
+            size / 2,
+            y + (Math.random() - 0.5) * 50,
+            size,
+            y + (Math.random() - 0.5) * 20
+        );
         ctx.strokeStyle = '#FFFFFF';
         ctx.stroke();
     }

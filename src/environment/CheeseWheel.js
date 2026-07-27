@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createCheeseWheel(scene, physicsWorld, position = { x: 12, y: -2.75, z: 8 }, rotationY = 0) {
+export function createCheeseWheel(
+    scene,
+    physicsWorld,
+    position = { x: 12, y: -2.75, z: 8 },
+    rotationY = 0
+) {
     const group = new THREE.Group();
     group.name = 'CheeseWheel';
 
@@ -22,7 +27,7 @@ export function createCheeseWheel(scene, physicsWorld, position = { x: 12, y: -2
         bevelSegments: 2,
         steps: 1,
         bevelSize: 0.05,
-        bevelThickness: 0.05
+        bevelThickness: 0.05,
     };
 
     const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
@@ -38,7 +43,7 @@ export function createCheeseWheel(scene, physicsWorld, position = { x: 12, y: -2
         color: 0xfada5e, // Cheese yellow
         roughness: 0.6,
         metalness: 0.0,
-        bumpScale: 0.02
+        bumpScale: 0.02,
     });
 
     const mesh = new THREE.Mesh(geometry, material);

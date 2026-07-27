@@ -5,13 +5,13 @@ const STORAGE_KEY = 'dice-roller-layout';
 export const DENSITY_PRESETS = {
     low: { clutter: [4, 6], decor: [4, 6] },
     med: { clutter: [6, 8], decor: [8, 10] },
-    high: { clutter: [8, 10], decor: [12, 15] }
+    high: { clutter: [8, 10], decor: [12, 15] },
 };
 
 export const LAYOUT_THEMES = {
     default: {
         id: 'default',
-        label: 'Classic Table'
+        label: 'Classic Table',
     },
     tidy: {
         id: 'tidy',
@@ -19,30 +19,56 @@ export const LAYOUT_THEMES = {
         favorClutter: ['book', 'pencil', 'quill', 'parchment'],
         favorDecor: ['Spellbook', 'CharacterSheet', 'Pencil', 'WritingSet', 'LeatherJournal'],
         reduceClutter: ['coins', 'tarotCards', 'pipe', 'dmScreen'],
-        reduceDecor: ['Sword', 'BattleAxe', 'Warhammer', 'Crossbow', 'Shield']
+        reduceDecor: ['Sword', 'BattleAxe', 'Warhammer', 'Crossbow', 'Shield'],
     },
     wizard: {
         id: 'wizard',
         label: 'Messy Wizard',
         favorClutter: ['potionBottle', 'gemstone', 'tarotCards', 'dmScreen', 'quill', 'parchment'],
-        favorDecor: ['CrystalBall', 'Spellbook', 'PotionSet', 'Wand', 'Runestones', 'Astrolabe', 'MysticOrb'],
-        reduceDecor: ['Sword', 'BattleAxe', 'Warhammer', 'Crossbow']
+        favorDecor: [
+            'CrystalBall',
+            'Spellbook',
+            'PotionSet',
+            'Wand',
+            'Runestones',
+            'Astrolabe',
+            'MysticOrb',
+        ],
+        reduceDecor: ['Sword', 'BattleAxe', 'Warhammer', 'Crossbow'],
     },
     battle: {
         id: 'battle',
         label: 'Battle Aftermath',
         favorClutter: ['wantedPoster', 'miniature', 'pipe', 'key'],
-        favorDecor: ['Sword', 'Shield', 'BattleAxe', 'Warhammer', 'Crossbow', 'Helmet', 'Dart', 'Rope'],
+        favorDecor: [
+            'Sword',
+            'Shield',
+            'BattleAxe',
+            'Warhammer',
+            'Crossbow',
+            'Helmet',
+            'Dart',
+            'Rope',
+        ],
         reduceClutter: ['tarotCards', 'quill', 'parchment'],
-        reduceDecor: ['PlayingCards', 'CoinPouch', 'Tankard', 'AleKeg']
+        reduceDecor: ['PlayingCards', 'CoinPouch', 'Tankard', 'AleKeg'],
     },
     gambling: {
         id: 'gambling',
         label: 'Gambling Night',
         favorClutter: ['coins', 'tarotCards', 'pipe', 'mug', 'wantedPoster'],
-        favorDecor: ['PlayingCards', 'CoinPouch', 'Coin', 'Tankard', 'Mug', 'Goblet', 'DrinkingHorn', 'PocketFlask'],
-        reduceDecor: ['Sword', 'BattleAxe', 'Warhammer', 'Shield', 'Helmet']
-    }
+        favorDecor: [
+            'PlayingCards',
+            'CoinPouch',
+            'Coin',
+            'Tankard',
+            'Mug',
+            'Goblet',
+            'DrinkingHorn',
+            'PocketFlask',
+        ],
+        reduceDecor: ['Sword', 'BattleAxe', 'Warhammer', 'Shield', 'Helmet'],
+    },
 };
 
 function randomInRange([min, max], rng) {
@@ -64,17 +90,17 @@ function randomSeed(rng = Math.random) {
         window.crypto.getRandomValues(buf);
         return buf[0] >>> 0;
     }
-    return Math.floor(rng() * 0xFFFFFFFF) >>> 0;
+    return Math.floor(rng() * 0xffffffff) >>> 0;
 }
 
 export function resolveTableLayoutConfig(searchParams = null, rng = Math.random) {
-    const params = searchParams ?? new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const params =
+        searchParams ??
+        new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
     const stored = typeof window !== 'undefined' ? readStoredConfig() : null;
 
-    const density = params.get('density')
-        ?? params.get('clutter-level')
-        ?? stored?.density
-        ?? 'med';
+    const density =
+        params.get('density') ?? params.get('clutter-level') ?? stored?.density ?? 'med';
 
     const theme = params.get('theme') ?? stored?.theme ?? 'default';
 
@@ -96,7 +122,7 @@ export function resolveTableLayoutConfig(searchParams = null, rng = Math.random)
         theme: LAYOUT_THEMES[theme] ? theme : 'default',
         seed: seed >>> 0,
         clutterCount: Math.max(4, Math.min(10, clutterCount)),
-        decorCount: Math.max(4, Math.min(15, decorCount))
+        decorCount: Math.max(4, Math.min(15, decorCount)),
     };
 }
 
@@ -108,7 +134,7 @@ export function persistTableLayoutConfig(config) {
         theme: config.theme,
         seed: config.seed >>> 0,
         clutterCount: config.clutterCount,
-        decorCount: config.decorCount
+        decorCount: config.decorCount,
     };
 
     try {

@@ -137,27 +137,23 @@ async function dracoCompress(io, inputBuffer) {
         dedup(),
         weld(),
         prune(),
-        quantize({ quantizePosition: 14, quantizeNormal: 10, quantizeTexcoord: 12 }),
+        quantize({ quantizePosition: 14, quantizeNormal: 10, quantizeTexcoord: 12 })
     );
 
-    doc.createExtension(KHRDracoMeshCompression)
-        .setRequired(true)
-        .setEncoderOptions({
-            method: KHRDracoMeshCompression.EncoderMethod.EDGEBREAKER,
-            encodeSpeed: 5,
-            decodeSpeed: 5,
-        });
+    doc.createExtension(KHRDracoMeshCompression).setRequired(true).setEncoderOptions({
+        method: KHRDracoMeshCompression.EncoderMethod.EDGEBREAKER,
+        encodeSpeed: 5,
+        decodeSpeed: 5,
+    });
 
     return io.writeBinary(doc);
 }
 
 export async function convertPropsToGlb({ quiet = false } = {}) {
-    const io = new NodeIO()
-        .registerExtensions([KHRDracoMeshCompression])
-        .registerDependencies({
-            'draco3d.encoder': await draco3d.createEncoderModule(),
-            'draco3d.decoder': await draco3d.createDecoderModule(),
-        });
+    const io = new NodeIO().registerExtensions([KHRDracoMeshCompression]).registerDependencies({
+        'draco3d.encoder': await draco3d.createEncoderModule(),
+        'draco3d.decoder': await draco3d.createDecoderModule(),
+    });
 
     const server = await startServer(PAGE_HTML);
     const { port } = server.address();
@@ -165,8 +161,12 @@ export async function convertPropsToGlb({ quiet = false } = {}) {
 
     const browser = await chromium.launch();
     const page = await browser.newPage();
-    page.on('console', (m) => { if (m.type() === 'error' && !quiet) console.error('  [page]', m.text()); });
-    page.on('pageerror', (e) => { if (!quiet) console.error('  [page error]', e.message); });
+    page.on('console', (m) => {
+        if (m.type() === 'error' && !quiet) console.error('  [page]', m.text());
+    });
+    page.on('pageerror', (e) => {
+        if (!quiet) console.error('  [page error]', e.message);
+    });
     await page.goto(`${base}/__convert.html`, { waitUntil: 'load' });
     await page.waitForFunction('window.__ready === true');
 
@@ -208,9 +208,9 @@ export async function convertPropsToGlb({ quiet = false } = {}) {
 
         if (!quiet) {
             console.log(
-                `${(srcStat.size / 1024).toFixed(0)} KB OBJ -> `
-                + `${(dracoGlb.length / 1024).toFixed(0)} KB GLB `
-                + `(gzip ${(gz / 1024).toFixed(0)} KB)`
+                `${(srcStat.size / 1024).toFixed(0)} KB OBJ -> ` +
+                    `${(dracoGlb.length / 1024).toFixed(0)} KB GLB ` +
+                    `(gzip ${(gz / 1024).toFixed(0)} KB)`
             );
         }
     }
@@ -231,15 +231,15 @@ async function main() {
     console.log('\n--- Mesh summary ---');
     for (const r of results) {
         console.log(
-            `  ${r.id.padEnd(16)} ${(r.srcBytes / 1024).toFixed(0).padStart(6)} KB -> `
-            + `${(r.glbBytes / 1024).toFixed(0).padStart(6)} KB GLB`
+            `  ${r.id.padEnd(16)} ${(r.srcBytes / 1024).toFixed(0).padStart(6)} KB -> ` +
+                `${(r.glbBytes / 1024).toFixed(0).padStart(6)} KB GLB`
         );
     }
     const meshRatio = totalSrc > 0 ? ((1 - totalGlb / totalSrc) * 100).toFixed(1) : '0.0';
     console.log(
-        `  ${'TOTAL'.padEnd(16)} ${(totalSrc / 1024).toFixed(0).padStart(6)} KB -> `
-        + `${(totalGlb / 1024).toFixed(0).padStart(6)} KB GLB (${meshRatio}% smaller)`
-        + `, gzip ${(totalGz / 1024).toFixed(0)} KB`
+        `  ${'TOTAL'.padEnd(16)} ${(totalSrc / 1024).toFixed(0).padStart(6)} KB -> ` +
+            `${(totalGlb / 1024).toFixed(0).padStart(6)} KB GLB (${meshRatio}% smaller)` +
+            `, gzip ${(totalGz / 1024).toFixed(0)} KB`
     );
 }
 

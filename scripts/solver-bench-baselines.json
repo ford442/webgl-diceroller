@@ -1,0 +1,16 @@
+{
+    "profiles": {
+        "native-scalar": {
+            "10": { "us_per_step_warn": 200 },
+            "50": { "us_per_step_warn": 400 },
+            "100": { "us_per_step_warn": 800 },
+            "200": { "us_per_step_warn": 1600 }
+        },
+        "wasm-release": {
+            "10": { "us_per_step_warn": 150 },
+            "50": { "us_per_step_warn": 300 },
+            "100": { "us_per_step_warn": 500 },
+            "200": { "us_per_step_warn": 800 }
+        }
+    }
+}

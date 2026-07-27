@@ -20,8 +20,11 @@ for (const size of sizes) {
     const padded = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
   <rect width="${size}" height="${size}" fill="#0a0a0a"/>
-  <g transform="translate(${size * 0.18}, ${size * 0.18}) scale(${size * 0.64 / 32})">
-    ${svg.replace(/<\?xml[^>]*\?>/, '').replace(/<svg[^>]*>/, '').replace(/<\/svg>/, '')}
+  <g transform="translate(${size * 0.18}, ${size * 0.18}) scale(${(size * 0.64) / 32})">
+    ${svg
+        .replace(/<\?xml[^>]*\?>/, '')
+        .replace(/<svg[^>]*>/, '')
+        .replace(/<\/svg>/, '')}
   </g>
 </svg>`;
 

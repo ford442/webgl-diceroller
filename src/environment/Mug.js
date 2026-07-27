@@ -7,7 +7,12 @@ import { createStaticBody, getAmmo } from '../physics.js';
  * - Emissive warm interior for "warm drink" feel
  * - Subtle steam particle animation
  */
-export function createMug(scene, physicsWorld, position = { x: 4, y: -2.75, z: 2 }, rotationY = Math.PI / 4) {
+export function createMug(
+    scene,
+    physicsWorld,
+    position = { x: 4, y: -2.75, z: 2 },
+    rotationY = Math.PI / 4
+) {
     const mugGroup = new THREE.Group();
     mugGroup.name = 'EnhancedMug';
 
@@ -23,30 +28,30 @@ export function createMug(scene, physicsWorld, position = { x: 4, y: -2.75, z: 2
 
     // Outer ceramic material - warm brown clay
     const clayMaterial = new THREE.MeshStandardMaterial({
-        color: 0x8b5a2b,         // Dark brown clay/ceramic
+        color: 0x8b5a2b, // Dark brown clay/ceramic
         map: diffuseMap,
         roughnessMap: roughnessMap,
         bumpMap: bumpMap,
         bumpScale: 0.02,
-        roughness: 0.6,          // Base roughness (modulated by map)
-        metalness: 0.05,         // Slight metalness for ceramic glaze
-        envMapIntensity: 0.7
+        roughness: 0.6, // Base roughness (modulated by map)
+        metalness: 0.05, // Slight metalness for ceramic glaze
+        envMapIntensity: 0.7,
     });
 
     // Inner material - darker with warm emissive for "hot drink" feel
     const innerMaterial = new THREE.MeshStandardMaterial({
-        color: 0x3d2314,         // Darker inside
+        color: 0x3d2314, // Darker inside
         roughness: 0.85,
         metalness: 0.0,
-        emissive: 0x2a1508,      // Subtle warm glow
-        emissiveIntensity: 0.15
+        emissive: 0x2a1508, // Subtle warm glow
+        emissiveIntensity: 0.15,
     });
 
     // Handle wood material
-    const woodMaterial = new THREE.MeshStandardMaterial({
+    const _woodMaterial = new THREE.MeshStandardMaterial({
         color: 0x4a3728,
         roughness: 0.7,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // ========== GEOMETRY ==========
@@ -60,7 +65,12 @@ export function createMug(scene, physicsWorld, position = { x: 4, y: -2.75, z: 2
     // 2. Mug Inner (to make it look hollow)
     const innerRadius = radius - thickness;
     const innerDepth = height - thickness;
-    const innerGeometry = new THREE.CylinderGeometry(innerRadius, innerRadius * 0.88, innerDepth, 32);
+    const innerGeometry = new THREE.CylinderGeometry(
+        innerRadius,
+        innerRadius * 0.88,
+        innerDepth,
+        32
+    );
     const innerMesh = new THREE.Mesh(innerGeometry, innerMaterial);
     innerMesh.position.y = thickness / 2 + 0.01; // slightly up to prevent z-fighting at bottom
     bodyMesh.add(innerMesh);
@@ -83,7 +93,7 @@ export function createMug(scene, physicsWorld, position = { x: 4, y: -2.75, z: 2
     mugGroup.add(handleMesh);
 
     // ========== STEAM PARTICLES ==========
-    
+
     const steamGroup = createSteamParticles();
     steamGroup.position.y = height / 2 + 0.05;
     mugGroup.add(steamGroup);
@@ -108,29 +118,32 @@ export function createMug(scene, physicsWorld, position = { x: 4, y: -2.75, z: 2
     }
 
     // ========== ANIMATION UPDATE ==========
-    
+
     function update(time) {
         // Animate steam particles
-        steamGroup.children.forEach((particle, i) => {
+        steamGroup.children.forEach((particle, _i) => {
             const userData = particle.userData;
-            
+
             // Move up
             particle.position.y += userData.speed * 0.01;
-            
+
             // Wiggle
             particle.position.x += Math.sin(time * userData.wiggleSpeed + userData.phase) * 0.002;
             particle.position.z += Math.cos(time * userData.wiggleSpeed + userData.phase) * 0.002;
-            
+
             // Fade out as it goes up
             const lifeRatio = (particle.position.y - (height / 2 + 0.05)) / userData.maxHeight;
             particle.material.opacity = Math.max(0, 0.4 - lifeRatio * 0.4);
-            
+
             // Scale down slightly
             const scale = 1 - lifeRatio * 0.5;
             particle.scale.setScalar(scale);
-            
+
             // Reset if too high or invisible
-            if (particle.position.y > height / 2 + 0.05 + userData.maxHeight || particle.material.opacity <= 0.01) {
+            if (
+                particle.position.y > height / 2 + 0.05 + userData.maxHeight ||
+                particle.material.opacity <= 0.01
+            ) {
                 particle.position.y = height / 2 + 0.05;
                 particle.position.x = (Math.random() - 0.5) * 0.3;
                 particle.position.z = (Math.random() - 0.5) * 0.3;
@@ -138,15 +151,15 @@ export function createMug(scene, physicsWorld, position = { x: 4, y: -2.75, z: 2
                 particle.scale.setScalar(1);
             }
         });
-        
+
         // Subtle emissive pulse for warmth
         const pulse = 0.15 + Math.sin(time * 0.5) * 0.03;
         innerMaterial.emissiveIntensity = pulse;
     }
 
-    return { 
+    return {
         group: mugGroup,
-        update
+        update,
     };
 }
 
@@ -163,7 +176,7 @@ function generateCeramicTextures() {
     // Diffuse map - base color with slight variation
     ctx.fillStyle = '#8b5a2b';
     ctx.fillRect(0, 0, size, size);
-    
+
     // Add subtle color variation
     for (let i = 0; i < 100; i++) {
         const x = Math.random() * size;
@@ -175,15 +188,15 @@ function generateCeramicTextures() {
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
     }
-    
+
     const diffuseMap = new THREE.CanvasTexture(canvas);
     diffuseMap.colorSpace = THREE.SRGBColorSpace;
-    
+
     // Roughness map - ceramic is smoother in glaze areas
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#888888'; // Mid-gray roughness
     ctx.fillRect(0, 0, size, size);
-    
+
     // Add darker (smoother) areas for glaze effect
     for (let i = 0; i < 20; i++) {
         const x = Math.random() * size;
@@ -197,14 +210,14 @@ function generateCeramicTextures() {
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
     }
-    
+
     const roughnessMap = new THREE.CanvasTexture(canvas);
     roughnessMap.colorSpace = THREE.NoColorSpace;
 
     // Bump map - subtle surface variation
     ctx.fillStyle = '#808080'; // Mid-gray = no displacement
     ctx.fillRect(0, 0, size, size);
-    
+
     // Add noise for surface imperfections
     for (let i = 0; i < 500; i++) {
         const x = Math.random() * size;
@@ -214,7 +227,7 @@ function generateCeramicTextures() {
         ctx.globalAlpha = 0.2;
         ctx.fillRect(x, y, 2, 2);
     }
-    
+
     const bumpMap = new THREE.CanvasTexture(canvas);
     bumpMap.colorSpace = THREE.NoColorSpace;
 
@@ -227,7 +240,7 @@ function generateCeramicTextures() {
 function createSteamParticles() {
     const group = new THREE.Group();
     const particleCount = 8;
-    
+
     // Steam material - soft, semi-transparent white
     const steamMaterial = new THREE.MeshStandardMaterial({
         color: 0xffffff,
@@ -236,36 +249,32 @@ function createSteamParticles() {
         roughness: 1.0,
         metalness: 0.0,
         depthWrite: false,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
     });
 
     for (let i = 0; i < particleCount; i++) {
         // Soft circular particle
         const geometry = new THREE.PlaneGeometry(0.15, 0.15);
         const particle = new THREE.Mesh(geometry, steamMaterial.clone());
-        
+
         // Random starting position within mug
         const angle = Math.random() * Math.PI * 2;
         const r = Math.random() * 0.25;
-        particle.position.set(
-            Math.cos(angle) * r,
-            Math.random() * 0.5,
-            Math.sin(angle) * r
-        );
-        
+        particle.position.set(Math.cos(angle) * r, Math.random() * 0.5, Math.sin(angle) * r);
+
         // Random rotation for variety
         particle.rotation.z = Math.random() * Math.PI;
-        
+
         // Store animation data
         particle.userData = {
             speed: 0.5 + Math.random() * 0.5,
             wiggleSpeed: 1 + Math.random() * 2,
             phase: Math.random() * Math.PI * 2,
-            maxHeight: 0.8 + Math.random() * 0.4
+            maxHeight: 0.8 + Math.random() * 0.4,
         };
-        
+
         group.add(particle);
     }
-    
+
     return group;
 }

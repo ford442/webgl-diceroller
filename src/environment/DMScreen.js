@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import { getAmmo } from '../physics.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
 
-export function createDMScreen(scene, physicsWorld, position = { x: 0, y: -2.75, z: -7 }, rotationY = 0) {
+export function createDMScreen(
+    scene,
+    physicsWorld,
+    position = { x: 0, y: -2.75, z: -7 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
 
     // Group to hold the screen
@@ -25,7 +30,7 @@ export function createDMScreen(scene, physicsWorld, position = { x: 0, y: -2.75,
         bumpScale: 0.05,
         roughnessMap: woodRoughness,
         roughness: 0.8,
-        color: 0x8B5A2B // slightly darker wood tint
+        color: 0x8b5a2b, // slightly darker wood tint
     });
 
     // Panel Dimensions
@@ -97,11 +102,27 @@ export function createDMScreen(scene, physicsWorld, position = { x: 0, y: -2.75,
 
         const leftCenter = new THREE.Vector3(-sidePanelWidth / 2, 0, 0);
         leftCenter.applyAxisAngle(new THREE.Vector3(0, 1, 0), sidePanelAngle);
-        addShape(sidePanelWidth, panelHeight, panelThickness, leftPivotX + leftCenter.x, panelHeight / 2, leftPivotZ + leftCenter.z, sidePanelAngle);
+        addShape(
+            sidePanelWidth,
+            panelHeight,
+            panelThickness,
+            leftPivotX + leftCenter.x,
+            panelHeight / 2,
+            leftPivotZ + leftCenter.z,
+            sidePanelAngle
+        );
 
         const rightCenter = new THREE.Vector3(sidePanelWidth / 2, 0, 0);
         rightCenter.applyAxisAngle(new THREE.Vector3(0, 1, 0), -sidePanelAngle);
-        addShape(sidePanelWidth, panelHeight, panelThickness, rightPivotX + rightCenter.x, panelHeight / 2, rightPivotZ + rightCenter.z, -sidePanelAngle);
+        addShape(
+            sidePanelWidth,
+            panelHeight,
+            panelThickness,
+            rightPivotX + rightCenter.x,
+            panelHeight / 2,
+            rightPivotZ + rightCenter.z,
+            -sidePanelAngle
+        );
 
         const mass = 0;
         const localInertia = new ammo.btVector3(0, 0, 0);
@@ -109,12 +130,25 @@ export function createDMScreen(scene, physicsWorld, position = { x: 0, y: -2.75,
         transform.setIdentity();
         transform.setOrigin(new ammo.btVector3(position.x, position.y, position.z));
 
-        const groupQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
-        const btGroupQuat = new ammo.btQuaternion(groupQuat.x, groupQuat.y, groupQuat.z, groupQuat.w);
+        const groupQuat = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(0, 1, 0),
+            rotationY
+        );
+        const btGroupQuat = new ammo.btQuaternion(
+            groupQuat.x,
+            groupQuat.y,
+            groupQuat.z,
+            groupQuat.w
+        );
         transform.setRotation(btGroupQuat);
 
         const motionState = new ammo.btDefaultMotionState(transform);
-        const rbInfo = new ammo.btRigidBodyConstructionInfo(mass, motionState, compoundShape, localInertia);
+        const rbInfo = new ammo.btRigidBodyConstructionInfo(
+            mass,
+            motionState,
+            compoundShape,
+            localInertia
+        );
         body = new ammo.btRigidBody(rbInfo);
         body.setFriction(0.8);
         body.setRestitution(0.1);

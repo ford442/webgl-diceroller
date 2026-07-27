@@ -11,13 +11,13 @@ const DICE_SPAWN_MARGIN = 3;
 
 const RESERVED_ZONES = [
     { x: -2, z: -6, radius: 1.6 }, // candle (always)
-    { x: -6, z: -3, radius: 2.2 }  // TarotDeck (tier0, spawned after clutter)
+    { x: -6, z: -3, radius: 2.2 }, // TarotDeck (tier0, spawned after clutter)
 ];
 
 export function createSeededRng(seed) {
-    let state = (seed >>> 0) || 1;
+    let state = seed >>> 0 || 1;
     return () => {
-        state = (state + 0x6D2B79F5) >>> 0;
+        state = (state + 0x6d2b79f5) >>> 0;
         let t = Math.imul(state ^ (state >>> 15), 1 | state);
         t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -36,7 +36,7 @@ function isReserved(x, z) {
     return RESERVED_ZONES.some((zone) => {
         const dx = x - zone.x;
         const dz = z - zone.z;
-        return (dx * dx + dz * dz) < (zone.radius * zone.radius);
+        return dx * dx + dz * dz < zone.radius * zone.radius;
     });
 }
 
@@ -64,7 +64,7 @@ export function generateClutterSlots(count, rng) {
             candidates.push({
                 x: x + jitterX,
                 z: z + jitterZ,
-                rotationY: rng() * Math.PI * 2
+                rotationY: rng() * Math.PI * 2,
             });
         }
     }
@@ -80,7 +80,7 @@ export function resolvePlacement(options, defaults) {
     return {
         x: placement?.x ?? defaults.x,
         z: placement?.z ?? defaults.z,
-        rotationY: placement?.rotationY ?? (rng() * Math.PI * 2)
+        rotationY: placement?.rotationY ?? rng() * Math.PI * 2,
     };
 }
 
@@ -89,6 +89,6 @@ export function resolveClutterOptions(searchParams = null, rng = Math.random) {
     return {
         count: config.clutterCount,
         seed: config.seed,
-        theme: config.theme
+        theme: config.theme,
     };
 }

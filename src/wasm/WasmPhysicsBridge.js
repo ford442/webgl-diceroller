@@ -18,47 +18,62 @@
 
 import { publicAssetUrl } from '../core/publicAssetUrl.js';
 import { parsePhysicsFlags } from './physicsFlags.js';
+import { parseCollisionEventBuffer } from './collisionEvents.js';
 
 // ---------------------------------------------------------------------------
 // No-op stub
 // ---------------------------------------------------------------------------
 
 const STUB_ENGINE = {
-    setFlags:           () => {},
-    init:               () => {},
-    reset:              () => {},
-    step:               () => {},
-    addDie:             () => -1,
-    removeDie:          () => {},
-    clearAllDice:       () => {},
-    setDieMaterial:     () => {},
-    setDieDrag:         () => {},
-    setDieHull:         () => {},
-    applyImpulse:       () => {},
+    setFlags: () => {},
+    init: () => {},
+    reset: () => {},
+    step: () => {},
+    addDie: () => -1,
+    removeDie: () => {},
+    clearAllDice: () => {},
+    setDieMaterial: () => {},
+    setDieDrag: () => {},
+    setDieHull: () => {},
+    applyImpulse: () => {},
     applyTorqueImpulse: () => {},
-    setDieTransform:    () => {},
-    setDieVelocity:     () => {},
-    setDieKinematic:    () => {},
-    getTransforms:      () => new Float32Array(0),
-    getDieIds:          () => new Float32Array(0),
-    getDieCount:        () => 0,
-    areAllSettled:      () => true,
-    seedRNG:            () => {},
-    randomFloat:        () => 0.5,
+    setDieTransform: () => {},
+    setDieVelocity: () => {},
+    setDieKinematic: () => {},
+    setContainerActive: () => {},
+    setContainerPlanes: () => {},
+    clearStatics: () => {},
+    removeStatic: () => false,
+    addStaticBox: () => -1,
+    addStaticPlane: () => -1,
+    addStaticConvexHull: () => -1,
+    addStaticOpenCylinder: () => -1,
+    getTransforms: () => new Float32Array(0),
+    getDieIds: () => new Float32Array(0),
+    getDieCount: () => 0,
+    areAllSettled: () => true,
+    getLastStepStats: () => ({
+        pairCandidates: 0,
+        sphereTests: 0,
+        satTests: 0,
+        contacts: 0,
+    }),
+    seedRNG: () => {},
+    randomFloat: () => 0.5,
     getCollisionEvents: () => new Float32Array(0),
-    serializeState:     () => new Uint8Array(0),
-    deserializeState:   () => {},
+    serializeState: () => new Uint8Array(0),
+    deserializeState: () => {},
 };
 
 // ---------------------------------------------------------------------------
 // Module state
 // ---------------------------------------------------------------------------
 
-let _engine      = null;
+let _engine = null;
 let _moduleClass = null;
-let _available   = false;
+let _available = false;
 let _initialized = false;
-let _hulls       = null;
+let _hulls = null;
 const _searchParams = new URLSearchParams(window.location.search);
 
 // ---------------------------------------------------------------------------
@@ -84,9 +99,9 @@ export const loadWasmEngine = async () => {
         const Module = await ModuleFactory();
 
         _moduleClass = Module;
-        _engine      = new Module.DicePhysicsEngine();
+        _engine = new Module.DicePhysicsEngine();
         _engine.setFlags(parsePhysicsFlags(_searchParams));
-        _available   = true;
+        _available = true;
 
         // Pre-load hulls.json for fast die registration
         try {
@@ -98,13 +113,13 @@ export const loadWasmEngine = async () => {
 
         console.log('[WasmPhysics] WASM dice physics engine loaded successfully.');
         console.log('[WasmPhysics] Run `npm run build:wasm` to rebuild after C++ changes.');
-
     } catch (err) {
-        const hint = err.message && err.message.includes('fetch')
-            ? 'WASM binary not found. Run `npm run build:wasm` to compile the C++ module.'
-            : err.message;
+        const hint =
+            err.message && err.message.includes('fetch')
+                ? 'WASM binary not found. Run `npm run build:wasm` to compile the C++ module.'
+                : err.message;
         console.warn(`[WasmPhysics] WASM module unavailable — using JS stub. (${hint})`);
-        _engine    = STUB_ENGINE;
+        _engine = STUB_ENGINE;
         _available = false;
     }
 
@@ -148,19 +163,7 @@ export const loadHullForDie = (wasmId, sides) => {
 export const pollCollisionEvents = () => {
     if (!_available) return [];
     const buf = _engine.getCollisionEvents();
-    const out = [];
-    for (let i = 0; i < buf.length; i += 7) {
-        out.push({
-            idA: Math.round(buf[i]),
-            idB: Math.round(buf[i + 1]),
-            impactSpeed: buf[i + 2],
-            mass: buf[i + 3],
-            inertiaScalar: buf[i + 4],
-            linearSpeedSq: buf[i + 5],
-            angularSpeedSq: buf[i + 6],
-        });
-    }
-    return out;
+    return parseCollisionEventBuffer(buf);
 };
 
 /**
@@ -195,4 +198,29 @@ export const deserializePhysicsState = (data) => {
     const vec = new _moduleClass.VectorU8();
     for (let i = 0; i < data.length; i++) vec.push_back(data[i]);
     _engine.deserializeState(vec);
+};
+
+/** Enable/disable dice-cup interior collision planes. */
+export const setContainerActive = (active) => {
+    if (!_available) return;
+    _engine.setContainerActive(!!active);
+};
+
+/**
+ * Upload world-space container planes (4 floats each: nx, ny, nz, d).
+ * @param {Float32Array|number[]} planes
+ */
+export const setContainerPlanes = (planes) => {
+    if (!_available || !_moduleClass) return;
+    const flat = planes instanceof Float32Array ? planes : Float32Array.from(planes);
+    const vec = new _moduleClass.VectorFloat();
+    for (let i = 0; i < flat.length; i++) vec.push_back(flat[i]);
+    _engine.setContainerPlanes(vec);
+    if (typeof vec.delete === 'function') vec.delete();
+};
+
+/** Last-step broadphase / collision counters (main-thread WASM engine). */
+export const getPhysicsStepStats = () => {
+    if (!_available || typeof _engine.getLastStepStats !== 'function') return null;
+    return _engine.getLastStepStats();
 };

@@ -9,7 +9,7 @@ import {
     parseDiceParam,
     parseShareableRollParams,
     buildShareableRollUrl,
-    serializeDiceAppearance
+    serializeDiceAppearance,
 } from '../src/roll/ShareableRoll.js';
 import { createDefaultAppearanceConfig } from '../src/dice/DiceAppearanceConfig.js';
 import { computeSeededThrowParams, createSeededRng } from '../src/wasm/seededThrowParams.js';
@@ -64,13 +64,10 @@ test('buildShareableRollUrl includes seed, dice, and version', () => {
 });
 
 test('buildShareableRollUrl round-trips notation expression + system', () => {
-    const url = buildShareableRollUrl(
-        99,
-        {},
-        'http://example.test/roller',
-        null,
-        { expression: '2d20kh1+3 vs 1d20', system: 'dnd5e' }
-    );
+    const url = buildShareableRollUrl(99, {}, 'http://example.test/roller', null, {
+        expression: '2d20kh1+3 vs 1d20',
+        system: 'dnd5e',
+    });
     const parsed = new URL(url);
     assert.equal(parsed.searchParams.get('expr'), '2d20kh1+3 vs 1d20');
     assert.equal(parsed.searchParams.get('sys'), 'dnd5e');
@@ -94,7 +91,10 @@ test('serializeDiceAppearance omits default-only types', () => {
 });
 
 test('seeded throw params are identical for the same seed', () => {
-    const dice = [{ id: 0, index: 0 }, { id: 1, index: 1 }];
+    const dice = [
+        { id: 0, index: 0 },
+        { id: 1, index: 1 },
+    ];
     const a = computeSeededThrowParams(createSeededRng(42424242), dice, 1.0);
     const b = computeSeededThrowParams(createSeededRng(42424242), dice, 1.0);
     assert.deepEqual(a, b);

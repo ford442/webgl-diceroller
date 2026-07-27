@@ -4,8 +4,7 @@ const DICE_TYPE_ORDER = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
 
 function formatDiceSet(diceSet) {
     if (!diceSet || typeof diceSet !== 'object') return '';
-    return DICE_TYPE_ORDER
-        .filter((type) => (diceSet[type] ?? 0) > 0)
+    return DICE_TYPE_ORDER.filter((type) => (diceSet[type] ?? 0) > 0)
         .map((type) => `${diceSet[type]}${type}`)
         .join(' + ');
 }
@@ -18,8 +17,7 @@ function formatResultsSummary(diceResults) {
         grouped[result.type].push(result.value);
     }
 
-    return DICE_TYPE_ORDER
-        .filter((type) => grouped[type])
+    return DICE_TYPE_ORDER.filter((type) => grouped[type])
         .map((type) => `${grouped[type].length}${type}: ${grouped[type].join(', ')}`)
         .join('  •  ');
 }
@@ -35,7 +33,7 @@ function escapeCsv(value) {
 export function createRollHistory({
     maxEntries = DEFAULT_MAX_ENTRIES,
     storageKey = STORAGE_KEY,
-    persist = true
+    persist = true,
 } = {}) {
     let entries = [];
     let nextId = 1;
@@ -57,7 +55,7 @@ export function createRollHistory({
                     diceResults: entry.diceResults,
                     total: entry.total ?? 0,
                     seed: entry.seed ?? null,
-                    expression: entry.expression ?? null
+                    expression: entry.expression ?? null,
                 }));
 
             const maxId = entries.reduce((max, entry) => {
@@ -94,7 +92,7 @@ export function createRollHistory({
             diceResults: valid.map((result) => ({ type: result.type, value: result.value })),
             total,
             seed: meta.seed ?? null,
-            expression: meta.expression ?? null
+            expression: meta.expression ?? null,
         };
 
         entries.unshift(entry);
@@ -118,15 +116,17 @@ export function createRollHistory({
     function exportAsText() {
         if (entries.length === 0) return 'No rolls recorded.';
 
-        return entries.map((entry) => {
-            const time = new Date(entry.timestamp).toLocaleString();
-            const set = formatDiceSet(entry.diceSet);
-            const summary = formatResultsSummary(entry.diceResults);
-            const seedPart = entry.seed != null ? ` | seed=${entry.seed}` : '';
-            const expressionPart = entry.expression ? ` | expr=${entry.expression}` : '';
-            const setPart = set ? `${set} → ` : '';
-            return `[${time}] ${setPart}${summary} | Total: ${entry.total}${seedPart}${expressionPart}`;
-        }).join('\n');
+        return entries
+            .map((entry) => {
+                const time = new Date(entry.timestamp).toLocaleString();
+                const set = formatDiceSet(entry.diceSet);
+                const summary = formatResultsSummary(entry.diceResults);
+                const seedPart = entry.seed != null ? ` | seed=${entry.seed}` : '';
+                const expressionPart = entry.expression ? ` | expr=${entry.expression}` : '';
+                const setPart = set ? `${set} → ` : '';
+                return `[${time}] ${setPart}${summary} | Total: ${entry.total}${seedPart}${expressionPart}`;
+            })
+            .join('\n');
     }
 
     function exportAsCsv() {
@@ -141,7 +141,7 @@ export function createRollHistory({
                 escapeCsv(summary),
                 escapeCsv(entry.total),
                 escapeCsv(entry.seed ?? ''),
-                escapeCsv(entry.expression ?? '')
+                escapeCsv(entry.expression ?? ''),
             ].join(',');
         });
 
@@ -156,13 +156,8 @@ export function createRollHistory({
         clear,
         exportAsText,
         exportAsCsv,
-        maxEntries
+        maxEntries,
     };
 }
 
-export {
-    DICE_TYPE_ORDER,
-    formatDiceSet,
-    formatResultsSummary,
-    DEFAULT_MAX_ENTRIES
-};
+export { DICE_TYPE_ORDER, formatDiceSet, formatResultsSummary, DEFAULT_MAX_ENTRIES };

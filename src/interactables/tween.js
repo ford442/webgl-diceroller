@@ -3,6 +3,16 @@
  * pulses). Deliberately standalone so interactables don't need to register a
  * per-frame system in the FrameScheduler for one-off animations.
  */
+
+/**
+ * @typedef {Object} TweenOptions
+ * @property {number} [duration]
+ * @property {(t: number) => number} [easing]
+ * @property {(eased: number, t: number) => void} [onUpdate]
+ * @property {() => void} [onComplete]
+ */
+
+/** @param {TweenOptions} [options] */
 export function tween({ duration = 300, onUpdate, onComplete, easing = easeInOutQuad } = {}) {
     const start = performance.now();
     function frame(now) {

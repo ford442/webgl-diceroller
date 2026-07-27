@@ -151,18 +151,19 @@ export default defineConfig({
                 // Never modulepreload lazy renderer / physics chunks.
                 return deps.filter(
                     (dep) =>
-                        !dep.includes('three.webgpu')
-                        && !dep.includes('three.tsl')
-                        && !dep.includes('/physics-')
-                        && !dep.includes('/ammo-')
+                        !dep.includes('three.webgpu') &&
+                        !dep.includes('three.tsl') &&
+                        !dep.includes('/physics-') &&
+                        !dep.includes('/ammo-')
                 );
             },
         },
         rollupOptions: {
             output: {
-                manualChunks: {
-                    three: ['three'],
-                    physics: ['ammo.js'],
+                manualChunks(id) {
+                    if (id.includes('node_modules/three')) return 'three';
+                    // ammo.js only — do not include AmmoDiceBackend here (it would pull dice modules in).
+                    if (id.includes('node_modules/ammo.js')) return 'physics';
                 },
             },
         },

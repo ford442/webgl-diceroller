@@ -17,12 +17,84 @@ export interface PhysicsEngine {
     setDieHull(id: number, sidesOrHull: number | unknown): void;
     applyImpulse(id: number, fx: number, fy: number, fz: number): void;
     applyTorqueImpulse(id: number, tx: number, ty: number, tz: number): void;
-    setDieTransform(id: number, px: number, py: number, pz: number, qx: number, qy: number, qz: number, qw: number): void;
-    setDieVelocity(id: number, lvx: number, lvy: number, lvz: number, avx: number, avy: number, avz: number): void;
+    setDieTransform(
+        id: number,
+        px: number,
+        py: number,
+        pz: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number
+    ): void;
+    setDieVelocity(
+        id: number,
+        lvx: number,
+        lvy: number,
+        lvz: number,
+        avx: number,
+        avy: number,
+        avz: number
+    ): void;
     setDieKinematic(id: number, kinematic: boolean): void;
+    setContainerActive(active: boolean): void;
+    setContainerPlanes(planes: Float32Array | number[]): void;
+    clearStatics(): void;
+    removeStatic(userId: number): boolean;
+    addStaticBox(
+        userId: number,
+        cx: number,
+        cy: number,
+        cz: number,
+        hx: number,
+        hy: number,
+        hz: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number,
+        materialTag: number
+    ): number;
+    addStaticPlane(
+        userId: number,
+        nx: number,
+        ny: number,
+        nz: number,
+        dist: number,
+        materialTag: number
+    ): number;
+    addStaticConvexHull(
+        userId: number,
+        cx: number,
+        cy: number,
+        cz: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number,
+        flatVerts: number[] | Float32Array,
+        materialTag: number
+    ): number;
+    addStaticOpenCylinder(
+        userId: number,
+        cx: number,
+        cy: number,
+        cz: number,
+        radius: number,
+        halfHeight: number,
+        segments: number,
+        closedBottom: boolean,
+        materialTag: number
+    ): number;
     getTransforms(): Float32Array;
     getDieIds(): Float32Array;
     getDieCount(): number;
+    getLastStepStats(): {
+        pairCandidates: number;
+        sphereTests: number;
+        satTests: number;
+        contacts: number;
+    };
     areAllSettled(): boolean;
     seedRNG(seed: number): void;
     randomFloat(): number;
@@ -39,6 +111,8 @@ export interface CollisionEvent {
     inertiaScalar: number;
     linearSpeedSq: number;
     angularSpeedSq: number;
+    staticColliderId?: number;
+    materialTag?: number;
 }
 
 export interface PhysicsBridgeModule {
@@ -51,13 +125,31 @@ export interface PhysicsBridgeModule {
     seedPhysicsRNG(seed: number): void;
     randomPhysicsFloat(): number;
     serializePhysicsState(): Promise<Uint8Array>;
-    seededPhysicsThrow(seed: number, dice: { id: number; index: number }[], tableSurfaceY: number): void;
+    seededPhysicsThrow(
+        seed: number,
+        dice: { id: number; index: number }[],
+        tableSurfaceY: number
+    ): void;
     deserializePhysicsState(data: Uint8Array): void;
+    setContainerActive(isActive: boolean): void;
+    setContainerPlanes(planes: Float32Array | number[]): void;
     flushWorkerCommandBatch?(): void;
+    getPhysicsStepStats?(): {
+        pairCandidates: number;
+        sphereTests: number;
+        satTests: number;
+        contacts: number;
+    } | null;
     getWorkerPhysicsStats?(): {
         usingCommandBatch: boolean;
         usingSAB: boolean;
         msgsPerSecond: number;
         batchRecords: number;
+        stepStats?: {
+            pairCandidates: number;
+            sphereTests: number;
+            satTests: number;
+            contacts: number;
+        } | null;
     } | null;
 }

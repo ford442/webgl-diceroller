@@ -4,9 +4,8 @@
  * A small, central place where interactive props publish a named, programmatic
  * handle to their behaviour. This is what makes the "click the flute / draw a
  * card" interactions discoverable and — importantly — deterministically
- * testable: each handle is mirrored onto `window.__interactables[name]` so
- * Playwright (or the console) can trigger an action without simulating a 3D
- * raycast click through software-GL.
+ * testable via `app.interactables` (mirrored to `window.__interactables` under
+ * `?test` / `?debug` by AppTestHooks).
  *
  * Handlers shape (all optional except `trigger`):
  *   {
@@ -17,23 +16,31 @@
  */
 const registry = new Map();
 
-function ensureWindowMap() {
-    if (typeof window === 'undefined') return null;
-    if (!window.__interactables) window.__interactables = {};
-    return window.__interactables;
+/** @type {Record<string, unknown> | null} */
+let mirrorTarget = null;
+
+/**
+ * Bind the live object that receives register/unregister mirrors (typically
+ * `app.interactables`). Pass null to disable mirroring.
+ * @param {Record<string, unknown> | null} target
+ */
+export function setInteractablesMirror(target) {
+    mirrorTarget = target;
+    if (!target) return;
+    for (const [name, handlers] of registry) {
+        target[name] = handlers;
+    }
 }
 
 export function registerInteractable(name, handlers) {
     if (!name || !handlers) return;
     registry.set(name, handlers);
-    const map = ensureWindowMap();
-    if (map) map[name] = handlers;
+    if (mirrorTarget) mirrorTarget[name] = handlers;
 }
 
 export function unregisterInteractable(name) {
     registry.delete(name);
-    const map = ensureWindowMap();
-    if (map) delete map[name];
+    if (mirrorTarget) delete mirrorTarget[name];
 }
 
 export function getInteractable(name) {

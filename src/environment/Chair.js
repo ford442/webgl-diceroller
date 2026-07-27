@@ -21,7 +21,7 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
         bumpScale: 0.05,
         roughnessMap: woodRoughness,
         roughness: 0.8,
-        color: 0x553311 // Darker wood tint
+        color: 0x553311, // Darker wood tint
     });
 
     // Seat
@@ -36,15 +36,15 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     const legGeo = new THREE.BoxGeometry(legWidth, seatHeight, legWidth);
 
     const positions = [
-        { x: -seatWidth/2 + legWidth/2, z: -seatDepth/2 + legWidth/2 },
-        { x: seatWidth/2 - legWidth/2, z: -seatDepth/2 + legWidth/2 },
-        { x: -seatWidth/2 + legWidth/2, z: seatDepth/2 - legWidth/2 },
-        { x: seatWidth/2 - legWidth/2, z: seatDepth/2 - legWidth/2 }
+        { x: -seatWidth / 2 + legWidth / 2, z: -seatDepth / 2 + legWidth / 2 },
+        { x: seatWidth / 2 - legWidth / 2, z: -seatDepth / 2 + legWidth / 2 },
+        { x: -seatWidth / 2 + legWidth / 2, z: seatDepth / 2 - legWidth / 2 },
+        { x: seatWidth / 2 - legWidth / 2, z: seatDepth / 2 - legWidth / 2 },
     ];
 
-    positions.forEach(pos => {
+    positions.forEach((pos) => {
         const leg = new THREE.Mesh(legGeo, material);
-        leg.position.set(pos.x, seatHeight/2, pos.z);
+        leg.position.set(pos.x, seatHeight / 2, pos.z);
         leg.castShadow = true;
         leg.receiveShadow = true;
         chairGroup.add(leg);
@@ -56,13 +56,13 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
 
     // Back Supports (Extensions of rear legs)
     const rearPositions = [
-        { x: -seatWidth/2 + legWidth/2, z: -seatDepth/2 + legWidth/2 },
-        { x: seatWidth/2 - legWidth/2, z: -seatDepth/2 + legWidth/2 }
+        { x: -seatWidth / 2 + legWidth / 2, z: -seatDepth / 2 + legWidth / 2 },
+        { x: seatWidth / 2 - legWidth / 2, z: -seatDepth / 2 + legWidth / 2 },
     ];
 
-    rearPositions.forEach(pos => {
+    rearPositions.forEach((pos) => {
         const support = new THREE.Mesh(backSupportGeo, material);
-        support.position.set(pos.x, seatHeight + backHeight/2, pos.z);
+        support.position.set(pos.x, seatHeight + backHeight / 2, pos.z);
         support.castShadow = true;
         support.receiveShadow = true;
         chairGroup.add(support);
@@ -70,12 +70,12 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
 
     // Back Planks (Horizontal)
     const plank1 = new THREE.Mesh(backPlankGeo, material);
-    plank1.position.set(0, seatHeight + backHeight - 0.5, -seatDepth/2 + legWidth/2);
+    plank1.position.set(0, seatHeight + backHeight - 0.5, -seatDepth / 2 + legWidth / 2);
     plank1.castShadow = true;
     chairGroup.add(plank1);
 
     const plank2 = new THREE.Mesh(backPlankGeo, material);
-    plank2.position.set(0, seatHeight + backHeight/2, -seatDepth/2 + legWidth/2);
+    plank2.position.set(0, seatHeight + backHeight / 2, -seatDepth / 2 + legWidth / 2);
     plank2.castShadow = true;
     chairGroup.add(plank2);
 
@@ -92,14 +92,20 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
         transform.setIdentity();
         // Center the collider vertically based on total height
         const totalHeight = seatHeight + backHeight;
-        transform.setOrigin(new Ammo.btVector3(position.x, position.y + totalHeight / 2, position.z));
+        transform.setOrigin(
+            new Ammo.btVector3(position.x, position.y + totalHeight / 2, position.z)
+        );
 
         // Rotation
         const q = new THREE.Quaternion();
         q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
         transform.setRotation(new Ammo.btQuaternion(q.x, q.y, q.z, q.w));
 
-        const size = new THREE.Vector3(seatWidth/2, seatHeight/2 + backHeight/2, seatDepth/2);
+        const size = new THREE.Vector3(
+            seatWidth / 2,
+            seatHeight / 2 + backHeight / 2,
+            seatDepth / 2
+        );
         const shape = new Ammo.btBoxShape(new Ammo.btVector3(size.x, size.y, size.z));
 
         const localInertia = new Ammo.btVector3(0, 0, 0);

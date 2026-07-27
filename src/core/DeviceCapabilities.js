@@ -1,6 +1,7 @@
-const searchParams = typeof window !== 'undefined'
-    ? new URLSearchParams(window.location.search)
-    : new URLSearchParams();
+const searchParams =
+    typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search)
+        : new URLSearchParams();
 
 import { prefersReducedMotion } from './AccessibilityPrefs.js';
 
@@ -9,9 +10,9 @@ export function isTouchPrimaryDevice() {
     if (searchParams.has('no-touch')) return false;
     if (typeof window === 'undefined') return false;
     return (
-        'ontouchstart' in window
-        || navigator.maxTouchPoints > 0
-        || window.matchMedia?.('(pointer: coarse)').matches === true
+        'ontouchstart' in window ||
+        navigator.maxTouchPoints > 0 ||
+        window.matchMedia?.('(pointer: coarse)').matches === true
     );
 }
 
@@ -23,8 +24,9 @@ export function prefersSquareDesktopLayout() {
 }
 
 export function collectDeviceQualityHints(rendererState = null) {
-    const deviceDpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
-    const hardwareConcurrency = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 4) : 4;
+    const deviceDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    const hardwareConcurrency =
+        typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
     const touchPrimary = isTouchPrimaryDevice();
     const maxTextureSize = rendererState?.renderer?.capabilities?.maxTextureSize ?? 4096;
     const isSoftwareRenderer = rendererState?.isSoftwareRenderer === true;
@@ -40,6 +42,6 @@ export function collectDeviceQualityHints(rendererState = null) {
         isSoftwareRenderer,
         lowDpr,
         lowCores,
-        reducedMotion
+        reducedMotion,
     };
 }

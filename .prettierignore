@@ -1,0 +1,9 @@
+dist/
+node_modules/
+legacy/
+public/
+coverage/
+package-lock.json
+scripts/prop-asset-audit.json
+render-regression-*.png
+tests/baselines/

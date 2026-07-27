@@ -14,14 +14,15 @@ import { Color, DoubleSide, AdditiveBlending } from 'three';
  * the node system. Returns a synchronous factory the walls can call inline.
  */
 export async function loadGodRayNodeMaterialFactory() {
-    const [TSL, WEBGPU] = await Promise.all([
-        import('three/tsl'),
-        import('three/webgpu')
-    ]);
+    const [TSL, WEBGPU] = await Promise.all([import('three/tsl'), import('three/webgpu')]);
     const { uv, texture, uniform, vec2, float, mix, smoothstep, pow } = TSL;
     const { MeshBasicNodeMaterial } = WEBGPU;
 
-    return function createGodRayNodeMaterial({ noiseTexture, color = new Color(0xddeeff), speed = 0.1 }) {
+    return function createGodRayNodeMaterial({
+        noiseTexture,
+        color = new Color(0xddeeff),
+        speed = 0.1,
+    }) {
         const uTime = uniform(0.0);
         const uSpeed = uniform(speed);
         const uColor = uniform(color);
@@ -40,8 +41,7 @@ export async function loadGodRayNodeMaterialFactory() {
 
         // Fade out near the bottom of the beam, brighten near the source.
         const beamFade = smoothstep(0.0, 0.4, vUv.y);
-        const intensity = dust.mul(0.8).add(0.2).mul(beamFade)
-            .add(pow(vUv.y, 2.0).mul(0.3));
+        const intensity = dust.mul(0.8).add(0.2).mul(beamFade).add(pow(vUv.y, 2.0).mul(0.3));
 
         const material = new MeshBasicNodeMaterial();
         material.colorNode = uColor;
@@ -53,7 +53,9 @@ export async function loadGodRayNodeMaterialFactory() {
 
         return {
             material,
-            setTime: (time) => { uTime.value = time; }
+            setTime: (time) => {
+                uTime.value = time;
+            },
         };
     };
 }

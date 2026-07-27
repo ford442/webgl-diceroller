@@ -14,15 +14,28 @@
  */
 
 import {
-    MAX_DICE, STRIDE, HEADER_INTS, H_FRONT, H_COUNT, H_SETTLED,
-    H_CMD_HEAD, H_CMD_TAIL,
-    idsOffset, xfOffset, SAB_BYTES, CMD_RING_FLOATS, CMD_RING_OFFSET,
+    MAX_DICE,
+    STRIDE,
+    HEADER_INTS,
+    H_FRONT,
+    H_COUNT,
+    H_SETTLED,
+    H_CMD_HEAD,
+    H_CMD_TAIL,
+    H_PAIR_CANDIDATES,
+    H_SPHERE_TESTS,
+    H_SAT_TESTS,
+    H_CONTACTS,
+    idsOffset,
+    xfOffset,
+    SAB_BYTES,
+    CMD_RING_FLOATS,
+    CMD_RING_OFFSET,
     sabSupported,
 } from './workerLayout.js';
 import { parsePhysicsFlags } from './physicsFlags.js';
-import {
-    OP, copyIntoRing, countRecords,
-} from './workerCommands.js';
+import { OP, copyIntoRing, countRecords } from './workerCommands.js';
+import { parseCollisionEventBuffer } from './collisionEvents.js';
 
 // ---------------------------------------------------------------------------
 // Debug / perf counters (surfaced via getWorkerPhysicsStats)
@@ -49,20 +62,43 @@ export function getWorkerPhysicsStats() {
     const now = typeof performance !== 'undefined' ? performance.now() : 0;
     const dt = (now - _stats.lastSampleAt) / 1000;
     if (dt >= 0.2) {
-        _stats.msgsPerSecond = dt > 0
-            ? (_stats.structuralMsgs + _stats.batchMsgs) / dt
-            : 0;
+        _stats.msgsPerSecond = dt > 0 ? (_stats.structuralMsgs + _stats.batchMsgs) / dt : 0;
         _stats.structuralMsgs = 0;
         _stats.batchMsgs = 0;
         _stats.batchRecords = 0;
         _stats.lastSampleAt = now;
+    }
+    let stepStats = null;
+    if (_usingSAB && _engine?.header) {
+        const h = _engine.header;
+        stepStats = {
+            pairCandidates: Atomics.load(h, H_PAIR_CANDIDATES),
+            sphereTests: Atomics.load(h, H_SPHERE_TESTS),
+            satTests: Atomics.load(h, H_SAT_TESTS),
+            contacts: Atomics.load(h, H_CONTACTS),
+        };
     }
     return {
         usingCommandBatch: true,
         usingSAB: _usingSAB,
         msgsPerSecond: _stats.msgsPerSecond,
         batchRecords: _stats.batchRecords,
+        stepStats,
     };
+}
+
+/** Last-step broadphase / collision counters (worker SAB header or main-thread engine). */
+export function getPhysicsStepStats() {
+    if (_usingSAB && _engine?.header) {
+        const h = _engine.header;
+        return {
+            pairCandidates: Atomics.load(h, H_PAIR_CANDIDATES),
+            sphereTests: Atomics.load(h, H_SPHERE_TESTS),
+            satTests: Atomics.load(h, H_SAT_TESTS),
+            contacts: Atomics.load(h, H_CONTACTS),
+        };
+    }
+    return null;
 }
 
 const REQUEST_TIMEOUT_MS = 15000;
@@ -151,7 +187,7 @@ class WorkerEngineProxy {
         }
     }
 
-_send(type, payload = {}, transfer = []) {
+    _send(type, payload = {}, transfer = []) {
         this.flushCommandBatch();
         _noteStructuralMsg();
         this.worker.postMessage({ type, payload }, transfer);
@@ -179,9 +215,7 @@ _send(type, payload = {}, transfer = []) {
     }
 
     _enqueue(opcode, id, a, b, c, d, e, f, g) {
-        const len = opcode === OP.SET_TRANSFORM ? 9
-            : opcode === OP.SET_VELOCITY ? 8
-                : 5;
+        const len = opcode === OP.SET_TRANSFORM ? 9 : opcode === OP.SET_VELOCITY ? 8 : 5;
         this._ensureScratch(len);
         const i = this._scratchLen;
         this._scratch[i] = opcode;
@@ -212,10 +246,7 @@ _send(type, payload = {}, transfer = []) {
         } else {
             const copy = batch.slice();
             _noteBatchMsg(records);
-            this.worker.postMessage(
-                { type: 'batch', payload: { commands: copy } },
-                [copy.buffer]
-            );
+            this.worker.postMessage({ type: 'batch', payload: { commands: copy } }, [copy.buffer]);
         }
 
         this._scratchLen = 0;
@@ -224,7 +255,10 @@ _send(type, payload = {}, transfer = []) {
     // --- lifecycle ---------------------------------------------------------
     init(gravity, tableY, tableHalfW, tableHalfD) {
         this._send('init', {
-            gravity, tableY, tableHalfW, tableHalfD,
+            gravity,
+            tableY,
+            tableHalfW,
+            tableHalfD,
             flags: parsePhysicsFlags(_searchParams),
             sab: this.sab || null,
         });
@@ -262,11 +296,15 @@ _send(type, payload = {}, transfer = []) {
         this._send('clearAllDice');
     }
 
-    setDieHull(id, sides) { this._send('setDieHull', { id, sides }); }
+    setDieHull(id, sides) {
+        this._send('setDieHull', { id, sides });
+    }
     setDieMaterial(id, friction, rollingFriction) {
         this._send('setDieMaterial', { id, friction, rollingFriction });
     }
-    setDieDrag(id, drag) { this._send('setDieDrag', { id, drag }); }
+    setDieDrag(id, drag) {
+        this._send('setDieDrag', { id, drag });
+    }
 
     // --- forces (batched) --------------------------------------------------
     applyImpulse(id, fx, fy, fz) {
@@ -287,8 +325,86 @@ _send(type, payload = {}, transfer = []) {
         this._send('setDieKinematic', { id, kinematic });
     }
 
+    setContainerActive(active) {
+        this._send('setContainerActive', { active: !!active });
+    }
+
+    setContainerPlanes(planes) {
+        this._send('setContainerPlanes', { planes: Array.from(planes) });
+    }
+
+    clearStatics() {
+        this._send('clearStatics');
+    }
+
+    removeStatic(userId) {
+        this._send('removeStatic', { userId });
+    }
+
+    addStaticBox(userId, cx, cy, cz, hx, hy, hz, qx, qy, qz, qw, materialTag) {
+        this._send('addStaticBox', {
+            userId,
+            cx,
+            cy,
+            cz,
+            hx,
+            hy,
+            hz,
+            qx,
+            qy,
+            qz,
+            qw,
+            materialTag,
+        });
+    }
+
+    addStaticPlane(userId, nx, ny, nz, dist, materialTag) {
+        this._send('addStaticPlane', { userId, nx, ny, nz, dist, materialTag });
+    }
+
+    addStaticConvexHull(userId, cx, cy, cz, qx, qy, qz, qw, flatVerts, materialTag) {
+        this._send('addStaticConvexHull', {
+            userId,
+            cx,
+            cy,
+            cz,
+            qx,
+            qy,
+            qz,
+            qw,
+            vertices: Array.from(flatVerts),
+            materialTag,
+        });
+    }
+
+    addStaticOpenCylinder(
+        userId,
+        cx,
+        cy,
+        cz,
+        radius,
+        halfHeight,
+        segments,
+        closedBottom,
+        materialTag
+    ) {
+        this._send('addStaticOpenCylinder', {
+            userId,
+            cx,
+            cy,
+            cz,
+            radius,
+            halfHeight,
+            segments,
+            closedBottom: !!closedBottom,
+            materialTag,
+        });
+    }
+
     // --- simulation --------------------------------------------------------
-    step() { /* worker-driven */ }
+    step() {
+        /* worker-driven */
+    }
 
     // --- queries -----------------------------------------------------------
     getTransforms() {
@@ -330,13 +446,18 @@ _send(type, payload = {}, transfer = []) {
         for (const c of this._eventChunks) total += c.length;
         const merged = new Float32Array(total);
         let off = 0;
-        for (const c of this._eventChunks) { merged.set(c, off); off += c.length; }
+        for (const c of this._eventChunks) {
+            merged.set(c, off);
+            off += c.length;
+        }
         this._eventChunks = [];
         return merged;
     }
 
     // --- determinism -------------------------------------------------------
-    seedRNG(seed) { this._send('seedRNG', { seed }); }
+    seedRNG(seed) {
+        this._send('seedRNG', { seed });
+    }
     seededThrow(seed, dice, tableSurfaceY) {
         this._send('seededThrow', { seed: seed >>> 0, dice, tableSurfaceY });
     }
@@ -345,14 +466,20 @@ _send(type, payload = {}, transfer = []) {
         return new Uint8Array(res.data, 0, res.byteLength);
     }
     randomFloat() {
-        console.warn('[WorkerPhysics] randomFloat() is unavailable synchronously in worker mode; use seededThrow() for deterministic rolls.');
+        console.warn(
+            '[WorkerPhysics] randomFloat() is unavailable synchronously in worker mode; use seededThrow() for deterministic rolls.'
+        );
         return Math.random();
     }
     serializeState() {
-        console.warn('[WorkerPhysics] serializeState() is unavailable synchronously in worker mode; use serializePhysicsState() instead.');
+        console.warn(
+            '[WorkerPhysics] serializeState() is unavailable synchronously in worker mode; use serializePhysicsState() instead.'
+        );
         return new Uint8Array(0);
     }
-    deserializeState(data) { this._send('deserializeState', { data: Array.from(data) }); }
+    deserializeState(data) {
+        this._send('deserializeState', { data: Array.from(data) });
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -379,7 +506,9 @@ export const loadWasmEngine = async () => {
     }
 
     try {
-        const worker = new Worker(new URL('./dice_physics.worker.js', import.meta.url), { type: 'module' });
+        const worker = new Worker(new URL('./dice_physics.worker.js', import.meta.url), {
+            type: 'module',
+        });
 
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error('worker boot timeout')), 15000);
@@ -392,7 +521,10 @@ export const loadWasmEngine = async () => {
                     reject(new Error(e.data.payload?.message || 'worker boot error'));
                 }
             };
-            const onError = (err) => { cleanup(); reject(err); };
+            const onError = (err) => {
+                cleanup();
+                reject(err);
+            };
             const cleanup = () => {
                 clearTimeout(timeout);
                 worker.removeEventListener('message', onReady);
@@ -407,12 +539,16 @@ export const loadWasmEngine = async () => {
             sab = new SharedArrayBuffer(SAB_BYTES);
             _usingSAB = true;
         } else {
-            console.warn('[WorkerPhysics] Not cross-origin isolated — falling back to postMessage snapshots (no SharedArrayBuffer).');
+            console.warn(
+                '[WorkerPhysics] Not cross-origin isolated — falling back to postMessage snapshots (no SharedArrayBuffer).'
+            );
         }
 
         _engine = new WorkerEngineProxy(worker, sab);
         _available = true;
-        console.log(`[WorkerPhysics] Worker physics engine loaded (${_usingSAB ? 'SharedArrayBuffer' : 'postMessage'} transport).`);
+        console.log(
+            `[WorkerPhysics] Worker physics engine loaded (${_usingSAB ? 'SharedArrayBuffer' : 'postMessage'} transport).`
+        );
     } catch (err) {
         console.warn('[WorkerPhysics] Worker init failed.', err);
         _engine = null;
@@ -428,7 +564,8 @@ export const isWasmInitialized = () => _initialized;
 export const isUsingSharedArrayBuffer = () => _usingSAB;
 
 export const getWasmEngine = () => {
-    if (!_initialized) throw new Error('[WorkerPhysics] Engine not initialized. Await loadWasmEngine() first.');
+    if (!_initialized)
+        throw new Error('[WorkerPhysics] Engine not initialized. Await loadWasmEngine() first.');
     return _engine;
 };
 
@@ -437,19 +574,7 @@ export const loadHullForDie = () => {};
 export const pollCollisionEvents = () => {
     if (!_available) return [];
     const buf = _engine.getCollisionEvents();
-    const out = [];
-    for (let i = 0; i + 6 < buf.length; i += 7) {
-        out.push({
-            idA: Math.round(buf[i]),
-            idB: Math.round(buf[i + 1]),
-            impactSpeed: buf[i + 2],
-            mass: buf[i + 3],
-            inertiaScalar: buf[i + 4],
-            linearSpeedSq: buf[i + 5],
-            angularSpeedSq: buf[i + 6],
-        });
-    }
-    return out;
+    return parseCollisionEventBuffer(buf);
 };
 
 export const seedPhysicsRNG = (seed) => {
@@ -475,4 +600,14 @@ export const seededPhysicsThrow = (seed, dice, tableSurfaceY) => {
 export const deserializePhysicsState = (data) => {
     if (!_available) return;
     _engine.deserializeState(data);
+};
+
+export const setContainerActive = (active) => {
+    if (!_available) return;
+    _engine.setContainerActive(active);
+};
+
+export const setContainerPlanes = (planes) => {
+    if (!_available) return;
+    _engine.setContainerPlanes(planes);
 };

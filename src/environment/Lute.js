@@ -16,7 +16,7 @@ export function createLute(scene, physicsWorld, position = { x: 0, y: 0, z: 0 },
         bumpScale: 0.05,
         roughnessMap: woodRoughness,
         roughness: 0.6,
-        color: 0xffcc88 // Lighter wood tint for the body
+        color: 0xffcc88, // Lighter wood tint for the body
     });
 
     const darkWoodMaterial = new THREE.MeshStandardMaterial({
@@ -25,18 +25,18 @@ export function createLute(scene, physicsWorld, position = { x: 0, y: 0, z: 0 },
         bumpScale: 0.05,
         roughnessMap: woodRoughness,
         roughness: 0.8,
-        color: 0x3f1f1f // Dark wood for neck
+        color: 0x3f1f1f, // Dark wood for neck
     });
 
     const stringMaterial = new THREE.MeshStandardMaterial({
         color: 0xdddddd,
         metalness: 0.5,
-        roughness: 0.2
+        roughness: 0.2,
     });
 
     const blackMaterial = new THREE.MeshStandardMaterial({
         color: 0x111111,
-        roughness: 0.9
+        roughness: 0.9,
     });
 
     // 1. Body (Tear-drop shape approximated)
@@ -85,7 +85,7 @@ export function createLute(scene, physicsWorld, position = { x: 0, y: 0, z: 0 },
     const neckMesh = new THREE.Mesh(neckGeo, darkWoodMaterial);
     // Position extending from the body
     // Body radius is 1.5, neck starts around -1.2 (overlapping)
-    neckMesh.position.set(0, 0.05, -1.2 - neckLen/2);
+    neckMesh.position.set(0, 0.05, -1.2 - neckLen / 2);
     neckMesh.castShadow = true;
     neckMesh.receiveShadow = true;
     luteGroup.add(neckMesh);
@@ -95,7 +95,7 @@ export function createLute(scene, physicsWorld, position = { x: 0, y: 0, z: 0 },
     for (let i = 0; i < numFrets; i++) {
         const fretGeo = new THREE.BoxGeometry(0.42, 0.02, 0.02);
         const fretMesh = new THREE.Mesh(fretGeo, stringMaterial);
-        const fretZ = -1.2 - 0.2 - (i * (neckLen - 0.4) / numFrets);
+        const fretZ = -1.2 - 0.2 - (i * (neckLen - 0.4)) / numFrets;
         fretMesh.position.set(0, 0.13, fretZ);
         luteGroup.add(fretMesh);
     }
@@ -107,7 +107,7 @@ export function createLute(scene, physicsWorld, position = { x: 0, y: 0, z: 0 },
     // Attach to end of neck
     const pegboxZ = -1.2 - neckLen;
     // Lute pegboxes are angled back almost 90 degrees, but let's do ~60 deg.
-    pegboxMesh.position.set(0, -0.2, pegboxZ - pegboxLen/2 * Math.cos(Math.PI/3));
+    pegboxMesh.position.set(0, -0.2, pegboxZ - (pegboxLen / 2) * Math.cos(Math.PI / 3));
     pegboxMesh.rotation.x = -Math.PI / 3;
     pegboxMesh.castShadow = true;
     pegboxMesh.receiveShadow = true;
@@ -128,13 +128,13 @@ export function createLute(scene, physicsWorld, position = { x: 0, y: 0, z: 0 },
 
     // 4. Strings (Simple lines/thin cylinders)
     const stringLen = 1.2 + neckLen - 0.6 + 0.2; // From bridge to nut
-    for(let i=0; i<6; i++) {
+    for (let i = 0; i < 6; i++) {
         const sGeo = new THREE.CylinderGeometry(0.005, 0.005, stringLen, 4);
         const sMesh = new THREE.Mesh(sGeo, stringMaterial);
         sMesh.rotation.x = Math.PI / 2; // Lie flat along Z
 
         const offsetX = (i - 2.5) * 0.06;
-        sMesh.position.set(offsetX, 0.16, -0.2 - stringLen/2 + 0.6);
+        sMesh.position.set(offsetX, 0.16, -0.2 - stringLen / 2 + 0.6);
         luteGroup.add(sMesh);
     }
 
@@ -174,7 +174,7 @@ export function createLute(scene, physicsWorld, position = { x: 0, y: 0, z: 0 },
         // For static clutter, a box covering the main body is usually enough to stop dice cleanly.
         if (ammo && physicsWorld) {
             const shape = new ammo.btBoxShape(new ammo.btVector3(1.5, 0.5, 2.5)); // Half sizes
-    
+
             // The physics body will be centered on the group origin (0,0,0) which is center of the body.
             // This is perfectly fine for the Lute body.
             createStaticBody(physicsWorld, luteGroup, shape);

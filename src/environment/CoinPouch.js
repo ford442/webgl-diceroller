@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createCoinPouch(scene, physicsWorld, position = { x: -6, y: -2.75, z: 6 }, rotationY = 0) {
+export function createCoinPouch(
+    scene,
+    physicsWorld,
+    position = { x: -6, y: -2.75, z: 6 },
+    rotationY = 0
+) {
     const group = new THREE.Group();
     group.name = 'CoinPouch';
 
@@ -11,14 +16,14 @@ export function createCoinPouch(scene, physicsWorld, position = { x: -6, y: -2.7
     const leatherMat = new THREE.MeshStandardMaterial({
         color: 0x5c3a21, // Dark brown leather
         roughness: 0.9,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // Material: Tie / String
     const stringMat = new THREE.MeshStandardMaterial({
         color: 0x8b5a2b, // Lighter brown
         roughness: 1.0,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // 1. Pouch Body (Lathe Geometry for a sack shape)
@@ -66,7 +71,6 @@ export function createCoinPouch(scene, physicsWorld, position = { x: -6, y: -2.7
     string2.rotation.x = -Math.PI / 16;
     string2.castShadow = true;
     group.add(string2);
-
 
     // Position on table
     // Table Top -2.75.

@@ -75,7 +75,7 @@ function createRopeBumpTexture() {
     return texture;
 }
 
-export function createRope(scene, physicsWorld, position = {x: 0, y: -2.75, z: 0}, rotation = 0) {
+export function createRope(scene, physicsWorld, position = { x: 0, y: -2.75, z: 0 }, rotation = 0) {
     const group = new THREE.Group();
     group.name = 'Rope';
 
@@ -91,7 +91,7 @@ export function createRope(scene, physicsWorld, position = {x: 0, y: -2.75, z: 0
         bumpMap: bumpTex,
         bumpScale: 0.1,
         roughness: 0.9,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     const coilRadius = 1.0;
@@ -104,7 +104,7 @@ export function createRope(scene, physicsWorld, position = {x: 0, y: -2.75, z: 0
         // Slight randomness in radius to look natural
         const r = coilRadius + (Math.random() * 0.1 - 0.05);
         // Shrink top coil slightly
-        const currentRadius = (i === coils - 1) ? r * 0.9 : r;
+        const currentRadius = i === coils - 1 ? r * 0.9 : r;
 
         const torusGeo = new THREE.TorusGeometry(currentRadius, ropeThickness, 16, 64);
         const torus = new THREE.Mesh(torusGeo, ropeMat);
@@ -114,7 +114,7 @@ export function createRope(scene, physicsWorld, position = {x: 0, y: -2.75, z: 0
 
         // Add some slight tilt and offset for realism
         torus.rotation.y = (Math.random() - 0.5) * 0.1;
-        torus.position.y = ropeThickness + (i * ropeThickness * 1.3); // Stack them up
+        torus.position.y = ropeThickness + i * ropeThickness * 1.3; // Stack them up
         torus.position.x = (Math.random() - 0.5) * 0.1;
         torus.position.z = (Math.random() - 0.5) * 0.1;
 
@@ -155,16 +155,20 @@ export function createRope(scene, physicsWorld, position = {x: 0, y: -2.75, z: 0
 
         // Bounding box for the coil
         if (Ammo && physicsWorld) {
-            const halfExtents = new Ammo.btVector3(coilRadius + ropeThickness, totalHeight / 2, coilRadius + ropeThickness);
+            const halfExtents = new Ammo.btVector3(
+                coilRadius + ropeThickness,
+                totalHeight / 2,
+                coilRadius + ropeThickness
+            );
             if (Ammo && physicsWorld) {
                 const shape = new Ammo.btBoxShape(halfExtents);
-        
+
                 // Center the physics body on the visual bounds
                 const physTransform = new THREE.Group();
                 physTransform.position.copy(group.position);
                 physTransform.position.y += totalHeight / 2; // Offset to center of mass
                 physTransform.rotation.copy(group.rotation);
-        
+
                 createStaticBody(physicsWorld, physTransform, shape);
             }
         }

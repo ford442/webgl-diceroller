@@ -7,7 +7,7 @@ export const QUALITY_PROFILES = {
         bloomEnabled: true,
         godRaysEnabled: true,
         shadowLights: 'all',
-        pixelRatioCap: 2
+        pixelRatioCap: 2,
     },
     medium: {
         id: 'medium',
@@ -15,7 +15,7 @@ export const QUALITY_PROFILES = {
         bloomEnabled: true,
         godRaysEnabled: false,
         shadowLights: 'key',
-        pixelRatioCap: 1.5
+        pixelRatioCap: 1.5,
     },
     mobile: {
         id: 'mobile',
@@ -23,13 +23,21 @@ export const QUALITY_PROFILES = {
         bloomEnabled: true,
         godRaysEnabled: false,
         shadowLights: 'key',
-        pixelRatioCap: 1.25
-    }
+        pixelRatioCap: 1.25,
+    },
 };
 
 function hasExplicitQualityOverride() {
     const params = new URLSearchParams(window.location.search);
-    return params.has('no-post') || params.has('low-post') || params.has('no-godrays') || params.has('no-bloom') || params.has('pr');
+    return (
+        params.has('no-post') ||
+        params.has('low-post') ||
+        params.has('no-godrays') ||
+        params.has('no-bloom') ||
+        params.has('pr') ||
+        params.has('xr') ||
+        params.has('xr-emulator')
+    );
 }
 
 export function guessInitialQualityProfile(rendererState) {
@@ -67,7 +75,9 @@ export function createFrameProbe(scheduler, { durationMs = 1000 } = {}) {
     let result = null;
 
     return {
-        update({ time } = {}) {
+        /** @param {{ time?: number }} [frameState] */
+        update(frameState = {}) {
+            const { time = 0 } = frameState;
             if (done) return result;
             const now = typeof performance !== 'undefined' ? performance.now() : time * 1000;
             if (startedAt === null) startedAt = now;
@@ -83,13 +93,17 @@ export function createFrameProbe(scheduler, { durationMs = 1000 } = {}) {
                 result = {
                     avgFrameMs: sampleCount > 0 ? totalMs / sampleCount : 16.7,
                     sampleCount,
-                    durationMs: now - startedAt
+                    durationMs: now - startedAt,
                 };
             }
             return result;
         },
-        get done() { return done; },
-        get result() { return result; }
+        get done() {
+            return done;
+        },
+        get result() {
+            return result;
+        },
     };
 }
 
@@ -122,7 +136,7 @@ export function applyQualityProfile({
     composer,
     spotLight,
     profile,
-    rendererState
+    rendererState,
 }) {
     if (!profile || !postConfig) return profile;
 
@@ -170,7 +184,7 @@ export function bootstrapAdaptiveQuality({
     composer,
     spotLight,
     rendererState,
-    scheduler
+    scheduler,
 }) {
     if (hasExplicitQualityOverride()) {
         postConfig.adaptiveProfile = 'manual';
@@ -185,7 +199,7 @@ export function bootstrapAdaptiveQuality({
         composer,
         spotLight,
         profile: initialProfile,
-        rendererState
+        rendererState,
     });
 
     const probe = createFrameProbe(scheduler, { durationMs: 1000 });
@@ -207,12 +221,12 @@ export function updateAdaptiveQualityProbe(probe, context, state) {
             composer: state.composer,
             spotLight: state.spotLight,
             profile: refined,
-            rendererState: state.rendererState
+            rendererState: state.rendererState,
         });
         state.appliedProfile = refined;
         console.info(
-            `[AdaptiveQuality] Profile ${refined.id} after probe `
-            + `(avg ${result.avgFrameMs.toFixed(1)} ms / ${result.sampleCount} frames)`
+            `[AdaptiveQuality] Profile ${refined.id} after probe ` +
+                `(avg ${result.avgFrameMs.toFixed(1)} ms / ${result.sampleCount} frames)`
         );
     }
 }

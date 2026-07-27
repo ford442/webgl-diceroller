@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createScroll(scene, physicsWorld, position = { x: 8, y: -2.4, z: 12 }, rotationY = 0) {
+export function createScroll(
+    scene,
+    physicsWorld,
+    position = { x: 8, y: -2.4, z: 12 },
+    rotationY = 0
+) {
     const group = new THREE.Group();
     group.name = 'SealedScroll';
 
@@ -16,20 +21,20 @@ export function createScroll(scene, physicsWorld, position = { x: 8, y: -2.4, z:
     const parchmentMat = new THREE.MeshStandardMaterial({
         color: 0xf5deb3, // Wheat
         roughness: 0.9,
-        bumpScale: 0.02
+        bumpScale: 0.02,
     });
 
     // Darker ends for the paper layers
-    const paperEndMat = new THREE.MeshStandardMaterial({
+    const _paperEndMat = new THREE.MeshStandardMaterial({
         color: 0xcbbfa5, // Darker wheat
-        roughness: 1.0
+        roughness: 1.0,
     });
 
     // Ribbon: Red Velvet
     const ribbonMat = new THREE.MeshStandardMaterial({
         color: 0x8b0000, // Dark Red
         roughness: 0.6,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     // Wax Seal: Bright Red
@@ -38,7 +43,7 @@ export function createScroll(scene, physicsWorld, position = { x: 8, y: -2.4, z:
         roughness: 0.3,
         metalness: 0.1,
         clearcoat: 0.5,
-        clearcoatRoughness: 0.2
+        clearcoatRoughness: 0.2,
     });
 
     // --- Geometries ---
@@ -55,7 +60,11 @@ export function createScroll(scene, physicsWorld, position = { x: 8, y: -2.4, z:
     // Add "End Caps" manually to simulate spiral/layers
     // We generated a spiral texture below
     const spiralTexture = generateSpiralTexture();
-    const spiralMat = new THREE.MeshStandardMaterial({ map: spiralTexture, color: 0xcbbfa5, roughness: 1.0 });
+    const spiralMat = new THREE.MeshStandardMaterial({
+        map: spiralTexture,
+        color: 0xcbbfa5,
+        roughness: 1.0,
+    });
 
     const capGeo = new THREE.CircleGeometry(radius * 0.9, 32);
 
@@ -103,7 +112,6 @@ export function createScroll(scene, physicsWorld, position = { x: 8, y: -2.4, z:
     sealMesh.add(sealInner);
 
     group.add(sealMesh);
-
 
     // --- Position & Rotation ---
     // Scroll Group contains Y-aligned objects.

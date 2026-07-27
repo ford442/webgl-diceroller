@@ -1,14 +1,19 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createHourglass(scene, physicsWorld, position = { x: -12, y: -1.75, z: -8 }, rotationY = 0) {
+export function createHourglass(
+    scene,
+    physicsWorld,
+    position = { x: -12, y: -1.75, z: -8 },
+    rotationY = 0
+) {
     const group = new THREE.Group();
     group.name = 'Hourglass';
 
     // Materials
     const woodMat = new THREE.MeshStandardMaterial({
         color: 0x5c4033,
-        roughness: 0.8
+        roughness: 0.8,
     });
 
     const glassMat = new THREE.MeshPhysicalMaterial({
@@ -18,12 +23,12 @@ export function createHourglass(scene, physicsWorld, position = { x: -12, y: -1.
         transmission: 0.9,
         transparent: true,
         thickness: 0.1,
-        ior: 1.5
+        ior: 1.5,
     });
 
     const sandMat = new THREE.MeshStandardMaterial({
         color: 0xeedd82, // Light goldenrod
-        roughness: 1.0
+        roughness: 1.0,
     });
 
     // Dimensions
@@ -51,7 +56,7 @@ export function createHourglass(scene, physicsWorld, position = { x: -12, y: -1.
     const rodGeo = new THREE.CylinderGeometry(rodRadius, rodRadius, height - plateHeight * 2, 8);
 
     for (let i = 0; i < 3; i++) {
-        const angle = (Math.PI * 2 / 3) * i;
+        const angle = ((Math.PI * 2) / 3) * i;
         const rod = new THREE.Mesh(rodGeo, woodMat);
         const rDist = radius * 0.8;
         rod.position.set(Math.cos(angle) * rDist, 0, Math.sin(angle) * rDist);

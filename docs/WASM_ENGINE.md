@@ -6,6 +6,7 @@
 > deterministic replay, collision events, build-time hull extraction) remain.
 
 ## Table of Contents
+
 1. [Overview](#overview)
 2. [Architecture](#architecture)
 3. [Build Instructions](#build-instructions)
@@ -23,13 +24,13 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 
 ### Why WASM?
 
-| Concern | Current (ammo.js) | WASM Engine |
-|---------|-------------------|-------------|
-| Execution speed | ~JS speed (Bullet WASM via ammo.js) | Near-native via Emscripten |
-| Bundle size | ~2 MB (full Bullet Physics) | ~16 KB gzipped (tailored solver) |
-| Dice-specific tuning | Limited — general-purpose solver | Full control |
-| Determinism | Floating-point non-determinism | Reproducible with fixed seed |
-| Multi-threading | Not supported | Experimental Web Worker bridge |
+| Concern              | Current (ammo.js)                   | WASM Engine                      |
+| -------------------- | ----------------------------------- | -------------------------------- |
+| Execution speed      | ~JS speed (Bullet WASM via ammo.js) | Near-native via Emscripten       |
+| Bundle size          | ~2 MB (full Bullet Physics)         | ~16 KB gzipped (tailored solver) |
+| Dice-specific tuning | Limited — general-purpose solver    | Full control                     |
+| Determinism          | Floating-point non-determinism      | Reproducible with fixed seed     |
+| Multi-threading      | Not supported                       | Experimental Web Worker bridge   |
 
 ### Completed milestones
 
@@ -48,7 +49,7 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 - [x] **Phase 3:** Hardening — max dice limits, hull vertex limits, memory caps, NaN checks.
 - [x] **Phase 3:** Experimental Web Worker bridge (`WorkerPhysicsBridge.js`).
 - [x] **Phase 5:** Native solver test harness (`npm run test:solver`) — unit tests,
-  2000-seed invariant fuzz loop, determinism checks, optional native↔WASM parity.
+      2000-seed invariant fuzz loop, determinism checks, optional native↔WASM parity.
 
 ---
 
@@ -134,7 +135,7 @@ Transforms are exchanged via a `Float32Array` memory view:
 ```
 
 `engine.getTransforms()` returns a typed memory view directly into the WASM
-heap — **zero copy** from C++ to JS.  The view is valid until the next
+heap — **zero copy** from C++ to JS. The view is valid until the next
 structural mutation (`addDie` / `removeDie` / `clearAllDice`).
 
 ### Convex Hull Pipeline
@@ -142,7 +143,7 @@ structural mutation (`addDie` / `removeDie` / `clearAllDice`).
 Dice models are now Draco-compressed GLB files (`public/images/dice/*.glb`).
 A build-time Node script (`scripts/extract-hulls.mjs`) reads each GLB via
 `@gltf-transform/core` + `draco3dgltf`, computes the canonical polyhedral
-vertices, and writes `public/wasm/hulls.json`.  At runtime the JS bridge loads
+vertices, and writes `public/wasm/hulls.json`. At runtime the JS bridge loads
 this JSON and passes hull vertices to `engine.setDieHull(id, vertices)`.
 
 ---
@@ -152,29 +153,65 @@ this JSON and passes hull vertices to `engine.setDieHull(id, vertices)`.
 ### Prerequisites
 
 1. **Install Emscripten SDK** (one-time):
-   ```bash
-   git clone https://github.com/emscripten-core/emsdk.git
-   cd emsdk
-   ./emsdk install latest
-   ./emsdk activate latest
-   source ./emsdk_env.sh
-   ```
+
+    ```bash
+    git clone https://github.com/emscripten-core/emsdk.git
+    cd emsdk
+    ./emsdk install latest
+    ./emsdk activate latest
+    source ./emsdk_env.sh
+    ```
 
 2. Verify installation:
-   ```bash
-   emcc --version
-   # emcc (Emscripten gcc/clang-like replacement) 3.x.x
-   ```
+    ```bash
+    emcc --version
+    # emcc (Emscripten gcc/clang-like replacement) 3.x.x
+    ```
 
 ### Build WASM module
 
+Shared Emscripten flags live in [`src/wasm/emcc_flags.inc.sh`](src/wasm/emcc_flags.inc.sh) and are consumed by [`build.sh`](src/wasm/build.sh), [`build_colab.sh`](src/wasm/build_colab.sh), and CMake (via [`emcc_flags.sh --print-link-line`](src/wasm/emcc_flags.sh)).
+
 ```bash
-# From the repository root:
+# Release profile (default): -O3 -flto -msimd128, ASSERTIONS=0
 npm run build:wasm
+
+# Debug profile: -O0 -g, ASSERTIONS=2, SAFE_HEAP=1 (no SIMD/LTO)
+npm run build:wasm:debug
 
 # Equivalent direct invocation:
 cd src/wasm && ./build.sh
+cd src/wasm && ./build.sh --debug
 ```
+
+Both profiles write to the same paths (`public/wasm/dice_physics.{js,wasm}`); a release build overwrites a prior debug build and vice versa. The Embind API surface is identical.
+
+After each build, [`build.sh`](src/wasm/build.sh) emits `public/wasm/build-info.json` (gitignored) with `emcc_version`, full flag list, `git_sha`, and artifact byte sizes. CI uploads it inside the `wasm-artifacts` artifact.
+
+#### Release flag set (EMSDK 3.1.61 / CI pin)
+
+| Flag | Purpose |
+|------|---------|
+| `--bind -std=c++17` | Embind exports |
+| `-O3 -flto` | Release optimisation (+ ~30–60 s link time in CI) |
+| `-msimd128` | WASM SIMD128 for SAT hot paths (`projectHullOntoAxis`, `transformHullVerts`; `#ifdef __wasm_simd128__`; native `test:solver` stays scalar) |
+| `DICE_FORCE_SCALAR_SAT` | Compile-time scalar SAT path (`build.sh --scalar` → `public/wasm-scalar/`) for SIMD parity checks |
+| `-s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=64MB` | Heap policy |
+| `-s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME=DicePhysicsModule` | ES module factory |
+| `-s ENVIRONMENT=web,worker,node` | Main thread, physics worker, and Node parity tooling |
+| `-s FILESYSTEM=0` | No FS usage in `dice_physics.cpp` |
+| `-s ABORTING_MALLOC=0` | OOM returns null under the 64 MB cap |
+| `-s ASSERTIONS=0` | Release assertions off |
+
+**Browser note:** `-msimd128` requires WASM SIMD128 (Chrome 91+, Firefox 89+, Safari 16.4+). A scalar-only artifact is available via `cd src/wasm && ./build.sh --scalar` (`public/wasm-scalar/`).
+
+#### Debug flag set
+
+| Flag | Purpose |
+|------|---------|
+| `-O0 -g` | Fast rebuilds, source maps |
+| `-s ASSERTIONS=2 -s SAFE_HEAP=1` | Extra runtime checks |
+| (no `-msimd128`, no `-flto`) | Easier debugging |
 
 ### Native solver tests (no browser, no Emscripten)
 
@@ -190,17 +227,25 @@ FUZZ_SEEDS=500 npm run test:solver
 ```
 
 When `public/wasm/dice_physics.wasm` is present (after `npm run build:wasm`), the
-same script also runs a native↔WASM `serializeState()` parity check for a fixed
-seed via `scripts/compare-solver-wasm.mjs`.
+same script also runs a native↔WASM `serializeState()` parity check (fixed-literal
+scenario; no PRNG) via `scripts/compare-solver-wasm.mjs`.
+
+Optional step-time benchmarks (native scalar path):
+
+```bash
+BENCH_SOLVER=1 npm run test:solver
+# or: src/wasm/build-native/solver_tests --bench --dice=50 --steps=600
+```
 
 Source layout:
 
-| File | Role |
-|------|------|
-| `dice_physics_engine.hpp` | Portable solver (SAT, integration, PRNG, serialize) |
-| `dice_physics.cpp` | Emscripten Embind exports for the WASM build |
-| `solver_tests.cpp` | doctest unit + fuzz harness (`--dump-serialize` for parity) |
-| `build_solver_test.sh` | Native compile + run script |
+| File                      | Role                                                        |
+| ------------------------- | ----------------------------------------------------------- |
+| `dice_physics_engine.hpp` | Portable solver (SAT, integration, PRNG, serialize)         |
+| `dice_physics.cpp`        | Emscripten Embind exports for the WASM build                |
+| `solver_tests.cpp`        | doctest unit + fuzz harness (`--dump-serialize`, `--bench`) |
+| `emcc_flags.inc.sh`       | Single source of truth for Emscripten link flags            |
+| `build_solver_test.sh`    | Native compile + run script                                 |
 
 ### Runtime flags
 
@@ -265,11 +310,15 @@ Local SAB path (Vite already sends COOP/COEP): `npm run verify:worker-physics`
 and `npm run verify:pwa-isolation`.
 
 Output files land in `public/wasm/`:
-- `dice_physics.js`   — Emscripten ES module loader
-- `dice_physics.wasm` — Compiled binary (~16 KB gzipped)
-- `hulls.json`        — Precomputed convex hull vertices per die type
+
+- `dice_physics.js` — Emscripten ES module loader
+- `dice_physics.wasm` — Compiled binary (~52 KB raw release; ~16 KB gzipped over the wire when served compressed)
+- `build-info.json` — Build metadata (gitignored; see above)
+- `hulls.json` — Precomputed convex hull vertices per die type
 
 ### CMake alternative (advanced)
+
+Uses the same release flags as `build.sh` via `emcc_flags.sh --print-link-line release`:
 
 ```bash
 mkdir build && cd build
@@ -309,7 +358,7 @@ import {
 await loadWasmEngine();
 
 // Check status
-isWasmAvailable();   // true → real WASM loaded; false → stub
+isWasmAvailable(); // true → real WASM loaded; false → stub
 isWasmInitialized(); // true after loadWasmEngine() resolves
 
 // Access the engine
@@ -320,58 +369,61 @@ const engine = getWasmEngine();
 
 #### Lifecycle
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `setFlags` | `(flags: u32): void` | Engine options from the main thread (`FLAG_NO_DRAG = 1` disables quadratic drag). Call after construction, before `init`. |
-| `init` | `(gravity, tableY, tableHalfW, tableHalfD): void` | Configure world parameters. |
-| `reset` | `(): void` | Remove all dice and reset the ID counter. |
+| Method     | Signature                                         | Description                                                                                                               |
+| ---------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `setFlags` | `(flags: u32): void`                              | Engine options from the main thread (`FLAG_NO_DRAG = 1` disables quadratic drag). Call after construction, before `init`. |
+| `init`     | `(gravity, tableY, tableHalfW, tableHalfD): void` | Configure world parameters.                                                                                               |
+| `reset`    | `(): void`                                        | Remove all dice and reset the ID counter.                                                                                 |
 
 #### Die management
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `addDie` | `(sides, x, y, z): i32` | Spawn a die. Returns unique ID (or -1 at max capacity). |
-| `removeDie` | `(id): void` | Remove a die by ID. |
-| `clearAllDice` | `(): void` | Remove all dice. |
-| `setDieHull` | `(id, vertices: VectorFloat): void` | Attach convex hull vertices (flat `[x,y,z,…]`). |
+| Method         | Signature                           | Description                                             |
+| -------------- | ----------------------------------- | ------------------------------------------------------- |
+| `addDie`       | `(sides, x, y, z): i32`             | Spawn a die. Returns unique ID (or -1 at max capacity). |
+| `removeDie`    | `(id): void`                        | Remove a die by ID.                                     |
+| `clearAllDice` | `(): void`                          | Remove all dice.                                        |
+| `setDieHull`   | `(id, vertices: VectorFloat): void` | Attach convex hull vertices (flat `[x,y,z,…]`).         |
 
 #### Forces
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `applyImpulse` | `(id, fx, fy, fz): void` | Apply linear impulse (wakes the die). |
+| Method               | Signature                | Description                            |
+| -------------------- | ------------------------ | -------------------------------------- |
+| `applyImpulse`       | `(id, fx, fy, fz): void` | Apply linear impulse (wakes the die).  |
 | `applyTorqueImpulse` | `(id, tx, ty, tz): void` | Apply angular impulse (wakes the die). |
 
 #### State sync
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `setDieTransform` | `(id, px,py,pz, qx,qy,qz,qw): void` | Teleport a die and zero velocities. |
-| `setDieVelocity` | `(id, lvx,lvy,lvz, avx,avy,avz): void` | Override velocities. |
+| Method               | Signature                              | Description                                                                                                        |
+| -------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `setDieTransform`    | `(id, px,py,pz, qx,qy,qz,qw): void`    | Teleport a die and zero velocities.                                                                                |
+| `setDieVelocity`     | `(id, lvx,lvy,lvz, avx,avy,avz): void` | Override velocities.                                                                                               |
+| `setDieKinematic`    | `(id, kinematic: bool): void`          | Toggle kinematic mode (no integration).                                                                            |
+| `setContainerActive` | `(active: bool): void`                 | Enable/disable dice-cup interior planes.                                                                           |
+| `setContainerPlanes` | `(planes: VectorFloat): void`          | Upload world-space planes (4 floats each: nx, ny, nz, d). Up to 9. Collision events use `idB = -100 - planeIndex`. |
 
 #### Simulation
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
+| Method | Signature         | Description                                       |
+| ------ | ----------------- | ------------------------------------------------- |
 | `step` | `(dt: f32): void` | Advance by `dt` seconds (4 sub-steps internally). |
 
 #### Query
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `getDieCount` | `(): i32` | Number of dice in the world. |
-| `areAllSettled` | `(): bool` | True when all dice are sleeping. |
-| `getTransforms` | `(): Float32Array` | Zero-copy view of `[px,py,pz,qx,qy,qz,qw]` per die. |
+| Method               | Signature          | Description                                              |
+| -------------------- | ------------------ | -------------------------------------------------------- |
+| `getDieCount`        | `(): i32`          | Number of dice in the world.                             |
+| `areAllSettled`      | `(): bool`         | True when all dice are sleeping.                         |
+| `getTransforms`      | `(): Float32Array` | Zero-copy view of `[px,py,pz,qx,qy,qz,qw]` per die.      |
 | `getCollisionEvents` | `(): Float32Array` | Events as `[idA, idB, impactSpeed, …]`. Cleared on read. |
 
 #### Determinism & replay
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `seedRNG` | `(seed: u64): void` | Seed the internal xorshift64* generator. |
-| `randomFloat` | `(): f32` | Return next deterministic float in `[0,1)`. |
-| `serializeState` | `(): VectorU8` | Snapshot all body states to a byte vector. |
-| `deserializeState` | `(data: VectorU8): void` | Restore a snapshot. |
+| Method             | Signature                | Description                                 |
+| ------------------ | ------------------------ | ------------------------------------------- |
+| `seedRNG`          | `(seed: u64): void`      | Seed the internal xorshift64* generator.    |
+| `randomFloat`      | `(): f32`                | Return next deterministic float in `[0,1)`. |
+| `serializeState`   | `(): VectorU8`           | Snapshot all body states to a byte vector.  |
+| `deserializeState` | `(data: VectorU8): void` | Restore a snapshot.                         |
 
 ---
 
@@ -423,9 +475,9 @@ for (const ev of events) {
 Global debug handles are exposed for console inspection:
 
 ```js
-window.getWasmEngine()      // engine instance
-window.isWasmAvailable()    // true when WASM is loaded
-window.replayRoll(seed)     // deterministic re-roll with seed
+window.getWasmEngine(); // engine instance
+window.isWasmAvailable(); // true when WASM is loaded
+window.replayRoll(seed); // deterministic re-roll with seed
 ```
 
 ---
@@ -434,14 +486,23 @@ window.replayRoll(seed)     // deterministic re-roll with seed
 
 Recorded on a 2023 mid-range laptop (Ryzen 5 7530U, Chrome 125):
 
-| Metric | ammo.js | WASM Phase 3 | Target |
-|--------|---------|--------------|--------|
-| 10 dice step time | ~0.3 ms | ~0.01 ms | < 0.05 ms |
-| 50 dice step time | ~1.2 ms | ~0.034 ms | < 0.2 ms |
-| 100 dice step time | ~2.5 ms | ~0.07 ms | < 0.4 ms |
-| Bundle size (gzip) | ~2 MB | ~16 KB | < 100 KB |
+| Metric             | ammo.js | WASM Phase 3 | Target    |
+| ------------------ | ------- | ------------ | --------- |
+| 10 dice step time  | ~0.3 ms | ~0.01 ms     | < 0.05 ms |
+| 50 dice step time  | ~1.2 ms | ~0.034 ms    | < 0.2 ms  |
+| 100 dice step time | ~2.5 ms | ~0.07 ms     | < 0.4 ms  |
+| 200 dice step time | —       | ~0.15 ms     | < 0.25 ms |
+| Bundle size (gzip) | ~2 MB   | ~16 KB       | < 100 KB  |
+
+CI informational warn thresholds (ubuntu-latest, `scripts/solver-bench-baselines.json`):
+
+| Dice | WASM release warn | Native scalar warn |
+| ---- | ----------------- | ------------------ |
+| 200  | 0.8 ms/step       | 1.6 ms/step        |
 
 ### Quick benchmark
+
+Browser/console (WASM release, SIMD when supported):
 
 ```js
 const engine = window.getWasmEngine();
@@ -449,17 +510,41 @@ engine.init(-15, -2.75, 18, 18);
 for (let i = 0; i < 50; i++) engine.addDie(6, 0, 5 + i * 0.1, 0);
 // Load hulls via loadHullForDie in a loop
 const t0 = performance.now();
-for (let i = 0; i < 600; i++) engine.step(1/60);
+for (let i = 0; i < 600; i++) engine.step(1 / 60);
 const ms = performance.now() - t0;
-console.log(`WASM: 600 steps × 50 dice = ${ms.toFixed(1)} ms  (${(ms/600).toFixed(3)} ms/step)`);
+console.log(`WASM: 600 steps × 50 dice = ${ms.toFixed(1)} ms  (${(ms / 600).toFixed(3)} ms/step)`);
 ```
+
+Native scalar baseline (no Emscripten):
+
+```bash
+npm run test:solver   # compiles solver_tests
+src/wasm/build-native/solver_tests --bench --dice=50 --steps=600 --warmup=60
+# CI (informational): BENCH_SOLVER=1 npm run test:solver  (10/50/100/200 dice)
+node scripts/bench-solver-wasm.mjs   # WASM release in Node (after build:wasm)
+node scripts/compare-solver-bench.mjs bench-results.txt
+```
+
+WASM SIMD vs scalar parity (same engine/arch, fixed-literal scenario):
+
+```bash
+npm run build:wasm
+cd src/wasm && ./build.sh --scalar   # → public/wasm-scalar/
+node scripts/compare-solver-simd.mjs
+```
+
+Determinism notes:
+
+- Native g++ vs Emscripten may diverge on seeded scenarios (toolchain FP); fixed-literal parity is CI-gated.
+- Scalar vs SIMD WASM builds must match on the same host (`compare-solver-simd.mjs`).
+- Native `test:solver` fuzz (2000 seeds) stays scalar-only (`-O2`, no `-msimd128`).
 
 ### Replay determinism test
 
 ```js
-window.replayRoll(42);               // throw with seed 42
+window.replayRoll(42); // throw with seed 42
 const t1 = window.getWasmEngine().getTransforms();
-window.replayRoll(42);               // reset and replay same seed
+window.replayRoll(42); // reset and replay same seed
 const t2 = window.getWasmEngine().getTransforms();
 // t1 and t2 are bit-identical
 ```
@@ -520,11 +605,20 @@ const t2 = window.getWasmEngine().getTransforms();
   (both the in-process bridge and the worker init payload). The C++ constructor
   no longer touches `window`.
 
-### Phase 5+ (Future)
+### Phase 5 (Dice ammo retirement — in progress)
 
-- [ ] True `setDieKinematic(id, bool)` in C++ so held dice ignore gravity/contacts
-      internally instead of being overwritten each frame (retire ammo dice bodies).
-- [~] Mirror drag/levitation into WASM (retire ammo for dice). **In progress:** `?wasm-drag` drives both interactions kinematically in the WASM world via `setDieTransform`/`setDieVelocity` (`src/interaction.js`, helpers in `src/dice.js`). Default off; ammo path remains the default and fallback. Remaining: soak-test under `?wasm-drag`, then drop the ammo dice bodies in `spawnDicePhysics`. Optional C++ follow-up: a true `setDieKinematic(id, bool)` flag so held dice ignore gravity/contacts internally instead of being overwritten each frame.
-- [ ] Web Audio integration: dice clack, table thump, lamp jiggle on collision.
-- [x] Fuzz testing harness for the C++ solver (`npm run test:solver`).
-- [ ] SIMD optimisation (`-msimd128`) for SAT projections.
+- [x] WASM worker is the default dice simulator; drag/levitation use WASM kinematic control (`setDieKinematic` in C++/embind/worker).
+- [x] `shouldLoadAmmoPhysics()` skips the ammo chunk when WASM is available (unless `?no-wasm`, `?dual-physics`, or `?ammo-drag`).
+- [x] Dice ammo helpers consolidated in `src/dice/AmmoDiceBackend.js` (dynamic import; not on the default critical path).
+- [x] Default WASM sessions spawn WASM dice bodies only (`needsAmmoDiceBackend()` gates ammo bodies to fallback/validation flags).
+- [ ] Static prop colliders still use ammo when loaded — see [issue #237](https://github.com/ford442/webgl-diceroller/issues/237).
+- [x] SIMD optimisation (`-msimd128`) for SAT axis projections (`projectHullOntoAxis` in `dice_physics_engine.hpp`).
+
+### Phase 6 (Broadphase, SIMD, bench — complete)
+
+- [x] Uniform XZ grid broadphase for die–die pairs (`resolveDieCollisions` in `dice_physics_engine.hpp`); brute-force parity unit test.
+- [x] Skip container/static/table resolution for sleeping bodies.
+- [x] Extended SIMD: `transformHullVerts` (quat→mat3, 4-wide) in `satTest`; scalar fallback via `DICE_FORCE_SCALAR_SAT` / `build.sh --scalar`.
+- [x] `StepStats` + `getLastStepStats()` exposed to JS; worker SAB header slots for `?debug-perf`.
+- [x] Bench harness: native `--bench` + `bench_json` lines (10/50/100/200 dice); `scripts/bench-solver-wasm.mjs`; CI artifact + warn-only `compare-solver-bench.mjs`.
+- [x] `scripts/compare-solver-simd.mjs` — scalar vs SIMD WASM serialize parity on fixed-literal scenario.

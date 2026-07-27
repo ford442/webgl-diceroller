@@ -75,11 +75,14 @@ export async function run() {
 `;
 
 async function startVite() {
-    const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'],
-        { stdio: ['ignore', 'pipe', 'pipe'] });
+    const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
     for (let i = 0; i < 60; i++) {
         await sleep(500);
-        try { if ((await fetch(`${BASE}/`)).ok) return proc; } catch {}
+        try {
+            if ((await fetch(`${BASE}/`)).ok) return proc;
+        } catch {}
     }
     proc.kill('SIGKILL');
     throw new Error('vite timeout');
@@ -99,13 +102,17 @@ try {
         if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text());
     });
     page.on('pageerror', (ex) => errors.push('pageerror: ' + ex.message));
-    page.on('worker', (w) => { w.on('console', (m) => errors.push('worker ' + m.type() + ': ' + m.text())); });
+    page.on('worker', (w) => {
+        w.on('console', (m) => errors.push('worker ' + m.type() + ': ' + m.text()));
+    });
     await page.goto(`${BASE}/src/wasm/physicsFlags.js`, { waitUntil: 'domcontentloaded' });
     result = await page.evaluate(async () => {
         try {
             const m = await import('/src/__worker_replay_test.js');
             return await m.run();
-        } catch (ex) { return { ok: false, reason: String(ex && ex.stack || ex) }; }
+        } catch (ex) {
+            return { ok: false, reason: String((ex && ex.stack) || ex) };
+        }
     });
     console.log('RESULT:', JSON.stringify(result, null, 2));
     console.log('ERRORS:', JSON.stringify(errors.slice(0, 8)));
@@ -115,8 +122,13 @@ try {
     await rm(TEST_MODULE, { force: true });
 }
 
-const pass = result && result.ok && result.replayIdentical && result.settled1 && result.settled2
-    && result.hasSnapshot;
+const pass =
+    result &&
+    result.ok &&
+    result.replayIdentical &&
+    result.settled1 &&
+    result.settled2 &&
+    result.hasSnapshot;
 if (!pass) {
     console.error('[verify] FAILED');
     process.exit(1);

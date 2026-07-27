@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createWaterskin(scene, physicsWorld, position = { x: 5, y: -2.75, z: 5 }, rotation = Math.PI / 4) {
+export function createWaterskin(
+    scene,
+    physicsWorld,
+    position = { x: 5, y: -2.75, z: 5 },
+    rotation = Math.PI / 4
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Waterskin';
@@ -11,19 +16,19 @@ export function createWaterskin(scene, physicsWorld, position = { x: 5, y: -2.75
         color: 0x5c3a21, // Dark brown leather
         roughness: 0.85,
         metalness: 0.0,
-        bumpScale: 0.02
+        bumpScale: 0.02,
     });
 
     const spoutMat = new THREE.MeshStandardMaterial({
         color: 0x8b5a2b, // Wood/Cork color
         roughness: 0.9,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     const strapMat = new THREE.MeshStandardMaterial({
         color: 0x3d2314, // Darker leather strap
         roughness: 0.9,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // 1. Main Body (Flattened Sphere/Capsule)
@@ -84,6 +89,6 @@ export function createWaterskin(scene, physicsWorld, position = { x: 5, y: -2.75
 
     return {
         group,
-        physicsBody: body
+        physicsBody: body,
     };
 }

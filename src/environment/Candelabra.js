@@ -116,8 +116,16 @@ export function createCandelabra(
         // Smooth curved arm using CatmullRomCurve3
         const curve = new THREE.CatmullRomCurve3([
             new THREE.Vector3(Math.cos(angle) * 0.2, 1.0, Math.sin(angle) * 0.2), // start at center
-            new THREE.Vector3(Math.cos(angle) * armRadius * 0.6, 0.8, Math.sin(angle) * armRadius * 0.6), // dip
-            new THREE.Vector3(Math.cos(angle) * armRadius, armHeight - 0.2, Math.sin(angle) * armRadius), // end at cup
+            new THREE.Vector3(
+                Math.cos(angle) * armRadius * 0.6,
+                0.8,
+                Math.sin(angle) * armRadius * 0.6
+            ), // dip
+            new THREE.Vector3(
+                Math.cos(angle) * armRadius,
+                armHeight - 0.2,
+                Math.sin(angle) * armRadius
+            ), // end at cup
         ]);
 
         const armGeo = new THREE.TubeGeometry(curve, 16, 0.08, 8, false);
@@ -142,7 +150,12 @@ export function createCandelabra(
     const transform = new ammo.btTransform();
     transform.setIdentity();
     transform.setOrigin(new ammo.btVector3(position.x, position.y + 0.1, position.z));
-    const q = new ammo.btQuaternion(group.quaternion.x, group.quaternion.y, group.quaternion.z, group.quaternion.w);
+    const q = new ammo.btQuaternion(
+        group.quaternion.x,
+        group.quaternion.y,
+        group.quaternion.z,
+        group.quaternion.w
+    );
     transform.setRotation(q);
 
     const motionState = new ammo.btDefaultMotionState(transform);
@@ -159,7 +172,12 @@ export function createCandelabra(
     stemTransform.setRotation(q);
 
     const stemMotionState = new ammo.btDefaultMotionState(stemTransform);
-    const stemRbInfo = new ammo.btRigidBodyConstructionInfo(0, stemMotionState, stemShape, localInertia);
+    const stemRbInfo = new ammo.btRigidBodyConstructionInfo(
+        0,
+        stemMotionState,
+        stemShape,
+        localInertia
+    );
     const stemBody = new ammo.btRigidBody(stemRbInfo);
     physicsWorld.addRigidBody(stemBody);
 

@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createPocketWatch(scene, physicsWorld, position = { x: 6, y: -2.65, z: 6 }, rotationY = 0) {
+export function createPocketWatch(
+    scene,
+    physicsWorld,
+    position = { x: 6, y: -2.65, z: 6 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'PocketWatch';
@@ -10,7 +15,7 @@ export function createPocketWatch(scene, physicsWorld, position = { x: 6, y: -2.
     const goldMat = new THREE.MeshStandardMaterial({
         color: 0xffd700,
         roughness: 0.3,
-        metalness: 1.0
+        metalness: 1.0,
     });
 
     const glassMat = new THREE.MeshPhysicalMaterial({
@@ -19,19 +24,19 @@ export function createPocketWatch(scene, physicsWorld, position = { x: 6, y: -2.
         roughness: 0,
         transmission: 0.9,
         transparent: true,
-        thickness: 0.1
+        thickness: 0.1,
     });
 
     const faceTexture = generateWatchFaceTexture();
     const faceMat = new THREE.MeshStandardMaterial({
         map: faceTexture,
         roughness: 0.5,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     const handsMat = new THREE.MeshStandardMaterial({
         color: 0x111111,
-        roughness: 0.8
+        roughness: 0.8,
     });
 
     // --- Case ---
@@ -59,8 +64,8 @@ export function createPocketWatch(scene, physicsWorld, position = { x: 6, y: -2.
     // Rotate to 10 o'clock (approx -60 degrees)
     hourHand.rotation.y = -Math.PI / 3;
     // Offset so pivot is at one end (approx)
-    hourHand.position.x = -0.1 * Math.sin(-Math.PI/3);
-    hourHand.position.z = -0.1 * Math.cos(-Math.PI/3);
+    hourHand.position.x = -0.1 * Math.sin(-Math.PI / 3);
+    hourHand.position.z = -0.1 * Math.cos(-Math.PI / 3);
     // Actually geometry translation is easier for pivot
     // Let's reset pos and use geometry translation or pivot group.
     // Simple way: Geometry translation
@@ -114,7 +119,7 @@ export function createPocketWatch(scene, physicsWorld, position = { x: 6, y: -2.
     // Hinge point at Z- (near knob)
     // Create a pivot group for the lid
     const lidPivot = new THREE.Group();
-    lidPivot.position.set(0, thickness/2, -radius);
+    lidPivot.position.set(0, thickness / 2, -radius);
     group.add(lidPivot);
 
     const lidGeo = new THREE.CylinderGeometry(radius, radius, 0.05, 32);
@@ -145,7 +150,9 @@ export function createPocketWatch(scene, physicsWorld, position = { x: 6, y: -2.
     // Simple cylinder shape
     if (ammo) {
         if (ammo && physicsWorld) {
-            const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, thickness / 2, radius));
+            const shape = new ammo.btCylinderShape(
+                new ammo.btVector3(radius, thickness / 2, radius)
+            );
             createStaticBody(physicsWorld, group, shape);
         }
     }
@@ -179,7 +186,7 @@ function generateWatchFaceTexture() {
         // Angle: 12 is at -PI/2.
         // i=12 -> -PI/2. i=3 -> 0.
         // angle = (i-3) * (2PI/12)
-        const angle = (i - 3) * (Math.PI * 2) / 12;
+        const angle = ((i - 3) * (Math.PI * 2)) / 12;
         const x = 256 + Math.cos(angle) * radius;
         const y = 256 + Math.sin(angle) * radius;
 
@@ -207,7 +214,21 @@ function generateWatchFaceTexture() {
 }
 
 function convertToRoman(num) {
-    const lookup = {M:1000,CM:900,D:500,CD:400,C:100,XC:90,L:50,XL:40,X:10,IX:9,V:5,IV:4,I:1};
+    const lookup = {
+        M: 1000,
+        CM: 900,
+        D: 500,
+        CD: 400,
+        C: 100,
+        XC: 90,
+        L: 50,
+        XL: 40,
+        X: 10,
+        IX: 9,
+        V: 5,
+        IV: 4,
+        I: 1,
+    };
     let roman = '';
     for (let i in lookup) {
         while (num >= lookup[i]) {

@@ -1,5 +1,9 @@
 import * as THREE from 'three';
-import { DICE_MATERIAL_PRESETS, DICE_PRESET_IDS, isHighQualityProfile } from '../dice/DiceMaterials.js';
+import {
+    DICE_MATERIAL_PRESETS,
+    DICE_PRESET_IDS,
+    isHighQualityProfile,
+} from '../dice/DiceMaterials.js';
 import { DICE_TYPES } from '../dice/DiceAppearanceConfig.js';
 
 /**
@@ -28,11 +32,12 @@ export function createDiceCasePanel(hooks) {
         'padding:10px',
         'z-index:1000',
         'width:min(92vw, 220px)',
-        'box-shadow:0 8px 24px rgba(0,0,0,0.35)'
+        'box-shadow:0 8px 24px rgba(0,0,0,0.35)',
     ].join(';');
 
     const header = document.createElement('div');
-    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
+    header.style.cssText =
+        'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
     const title = document.createElement('div');
     title.textContent = 'Dice Case';
     title.style.fontWeight = 'bold';
@@ -50,7 +55,8 @@ export function createDiceCasePanel(hooks) {
     const previewCanvas = document.createElement('canvas');
     previewCanvas.width = 160;
     previewCanvas.height = 120;
-    previewCanvas.style.cssText = 'width:100%;height:auto;border-radius:4px;background:rgba(0,0,0,0.35);display:block;margin-bottom:8px;';
+    previewCanvas.style.cssText =
+        'width:100%;height:auto;border-radius:4px;background:rgba(0,0,0,0.35);display:block;margin-bottom:8px;';
     body.appendChild(previewCanvas);
 
     const typeRow = document.createElement('div');
@@ -95,7 +101,8 @@ export function createDiceCasePanel(hooks) {
     bodyColorLabel.style.minWidth = '42px';
     const bodyColorInput = document.createElement('input');
     bodyColorInput.type = 'color';
-    bodyColorInput.style.cssText = 'flex:1;height:28px;border:none;padding:0;background:transparent;cursor:pointer;';
+    bodyColorInput.style.cssText =
+        'flex:1;height:28px;border:none;padding:0;background:transparent;cursor:pointer;';
     bodyColorRow.appendChild(bodyColorLabel);
     bodyColorRow.appendChild(bodyColorInput);
     body.appendChild(bodyColorRow);
@@ -108,7 +115,8 @@ export function createDiceCasePanel(hooks) {
     pipColorLabel.style.minWidth = '42px';
     const pipColorInput = document.createElement('input');
     pipColorInput.type = 'color';
-    pipColorInput.style.cssText = 'flex:1;height:28px;border:none;padding:0;background:transparent;cursor:pointer;';
+    pipColorInput.style.cssText =
+        'flex:1;height:28px;border:none;padding:0;background:transparent;cursor:pointer;';
     pipColorRow.appendChild(pipColorLabel);
     pipColorRow.appendChild(pipColorInput);
     body.appendChild(pipColorRow);
@@ -133,13 +141,18 @@ export function createDiceCasePanel(hooks) {
     const previewRenderer = new THREE.WebGLRenderer({
         canvas: previewCanvas,
         antialias: true,
-        alpha: true
+        alpha: true,
     });
     previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio ?? 1, 2));
     previewRenderer.setSize(previewCanvas.width, previewCanvas.height, false);
 
     const previewScene = new THREE.Scene();
-    const previewCamera = new THREE.PerspectiveCamera(35, previewCanvas.width / previewCanvas.height, 0.1, 50);
+    const previewCamera = new THREE.PerspectiveCamera(
+        35,
+        previewCanvas.width / previewCanvas.height,
+        0.1,
+        50
+    );
     previewCamera.position.set(0, 0.4, 2.4);
 
     const previewLight = new THREE.DirectionalLight(0xfff0dd, 1.4);
@@ -159,13 +172,16 @@ export function createDiceCasePanel(hooks) {
         bodyColorInput.value = entry.bodyColor;
         pipColorInput.value = entry.pipColor;
 
-        const gemstone = DICE_MATERIAL_PRESETS.gemstone;
+        const _gemstone = DICE_MATERIAL_PRESETS.gemstone;
         const highQ = isHighQualityProfile(hooks.getQualityProfile?.());
-        presetSelect.querySelector('option[value="gemstone"]').disabled = false;
+        /** @type {HTMLOptionElement | null} */ (
+            presetSelect.querySelector('option[value="gemstone"]')
+        ).disabled = false;
         if (!highQ && entry.preset === 'gemstone') {
             hint.textContent = 'Gemstone uses a lighter faux-gem look on this quality profile.';
         } else if (!highQ) {
-            hint.textContent = 'Saved locally and included in shared roll links. Gemstone needs high quality for transmission.';
+            hint.textContent =
+                'Saved locally and included in shared roll links. Gemstone needs high quality for transmission.';
         } else {
             hint.textContent = 'Saved locally and included in shared roll links.';
         }
@@ -235,6 +251,6 @@ export function createDiceCasePanel(hooks) {
             if (previewMesh) previewScene.remove(previewMesh);
             previewRenderer.dispose();
             panel.remove();
-        }
+        },
     };
 }

@@ -5,7 +5,7 @@ const FRAME_PHASES = [
     'updates',
     'preRender',
     'render',
-    'postRender'
+    'postRender',
 ];
 
 function createPhaseBucket() {
@@ -29,7 +29,7 @@ export class FrameScheduler {
             interpolationAlpha: 0,
             phaseTimes: {},
             systemTimes: {},
-            renderer: null
+            renderer: null,
         };
     }
 
@@ -43,20 +43,27 @@ export class FrameScheduler {
         this.systems[phase].sort((a, b) => a.priority - b.priority);
 
         return {
-            enable: () => { system.enabled = true; },
-            disable: () => { system.enabled = false; },
+            enable: () => {
+                system.enabled = true;
+            },
+            disable: () => {
+                system.enabled = false;
+            },
             dispose: () => {
                 const bucket = this.systems[phase];
                 const index = bucket.indexOf(system);
                 if (index >= 0) bucket.splice(index, 1);
-            }
+            },
         };
     }
 
     runFrame(baseContext) {
         this.stats.frame += 1;
         this.stats.lastDeltaTime = baseContext.deltaTime;
-        this.accumulator = Math.min(this.accumulator + baseContext.deltaTime, this.fixedDeltaTime * this.maxPhysicsSteps);
+        this.accumulator = Math.min(
+            this.accumulator + baseContext.deltaTime,
+            this.fixedDeltaTime * this.maxPhysicsSteps
+        );
 
         const frameContext = {
             ...baseContext,
@@ -64,7 +71,7 @@ export class FrameScheduler {
             physicsSteps: 0,
             interpolationAlpha: 0,
             frame: this.stats.frame,
-            phase: null
+            phase: null,
         };
 
         this.#runPhase('preStep', frameContext);
@@ -75,7 +82,7 @@ export class FrameScheduler {
                 ...frameContext,
                 deltaTime: this.fixedDeltaTime,
                 isFixedStep: true,
-                physicsStepIndex: physicsSteps
+                physicsStepIndex: physicsSteps,
             };
             this.#runPhase('physicsStep', stepContext);
             this.accumulator -= this.fixedDeltaTime;
@@ -83,7 +90,8 @@ export class FrameScheduler {
         }
 
         frameContext.physicsSteps = physicsSteps;
-        frameContext.interpolationAlpha = this.fixedDeltaTime > 0 ? this.accumulator / this.fixedDeltaTime : 0;
+        frameContext.interpolationAlpha =
+            this.fixedDeltaTime > 0 ? this.accumulator / this.fixedDeltaTime : 0;
         this.stats.physicsSteps = physicsSteps;
         this.stats.interpolationAlpha = frameContext.interpolationAlpha;
 
@@ -96,7 +104,7 @@ export class FrameScheduler {
         if (frameContext.renderer?.info) {
             this.stats.renderer = {
                 render: { ...frameContext.renderer.info.render },
-                memory: { ...frameContext.renderer.info.memory }
+                memory: { ...frameContext.renderer.info.memory },
             };
         }
 
@@ -120,7 +128,9 @@ export class FrameScheduler {
                 const duration = performance.now() - systemStart;
                 this.stats.systemTimes[system.name] = duration;
                 if (duration > 4) {
-                    console.warn(`[FrameScheduler] Slow system "${system.name}" in ${phase}: ${duration.toFixed(2)}ms`);
+                    console.warn(
+                        `[FrameScheduler] Slow system "${system.name}" in ${phase}: ${duration.toFixed(2)}ms`
+                    );
                 }
             }
         }

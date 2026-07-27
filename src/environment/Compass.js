@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createCompass(scene, physicsWorld, position = { x: 8, y: -2.65, z: -8 }, rotationY = 0) {
+export function createCompass(
+    scene,
+    physicsWorld,
+    position = { x: 8, y: -2.65, z: -8 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Compass';
@@ -10,13 +15,13 @@ export function createCompass(scene, physicsWorld, position = { x: 8, y: -2.65, 
     const brassMat = new THREE.MeshStandardMaterial({
         color: 0xb5a642, // Brass
         metalness: 1.0,
-        roughness: 0.2
+        roughness: 0.2,
     });
 
     const faceMat = new THREE.MeshStandardMaterial({
         color: 0xfffdd0, // Cream color for compass face
         roughness: 0.8,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     const glassMat = new THREE.MeshPhysicalMaterial({
@@ -26,19 +31,19 @@ export function createCompass(scene, physicsWorld, position = { x: 8, y: -2.65, 
         transmission: 0.9,
         transparent: true,
         ior: 1.5,
-        thickness: 0.05
+        thickness: 0.05,
     });
 
     const needleMatRed = new THREE.MeshStandardMaterial({
         color: 0xcc0000,
         metalness: 0.5,
-        roughness: 0.4
+        roughness: 0.4,
     });
 
     const needleMatSilver = new THREE.MeshStandardMaterial({
         color: 0xcccccc,
         metalness: 0.8,
-        roughness: 0.4
+        roughness: 0.4,
     });
 
     // 1. Compass Case (Main Body)
@@ -122,7 +127,7 @@ export function createCompass(scene, physicsWorld, position = { x: 8, y: -2.65, 
     // Physics
     // Simple cylinder collision shape for the compass
     if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height/2, radius));
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
         createStaticBody(physicsWorld, group, shape);
     }
 
@@ -157,10 +162,10 @@ function generateCompassFaceTexture() {
         { label: 'N', angle: 0 },
         { label: 'E', angle: Math.PI / 2 },
         { label: 'S', angle: Math.PI },
-        { label: 'W', angle: Math.PI * 1.5 }
+        { label: 'W', angle: Math.PI * 1.5 },
     ];
 
-    directions.forEach(dir => {
+    directions.forEach((dir) => {
         const x = center + Math.sin(dir.angle) * 90;
         const y = center - Math.cos(dir.angle) * 90;
         ctx.fillText(dir.label, x, y);

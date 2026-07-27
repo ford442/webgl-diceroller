@@ -51,11 +51,14 @@ export async function run() {
 `;
 
 async function startVite() {
-    const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'],
-        { stdio: ['ignore', 'pipe', 'pipe'] });
+    const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
     for (let i = 0; i < 60; i++) {
         await sleep(500);
-        try { if ((await fetch(`${BASE}/`)).ok) return proc; } catch {}
+        try {
+            if ((await fetch(`${BASE}/`)).ok) return proc;
+        } catch {}
     }
     proc.kill('SIGKILL');
     throw new Error('vite timeout');
@@ -70,7 +73,9 @@ console.log('[verify] browser launched');
 try {
     const page = await browser.newPage();
     const errors = [];
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    page.on('console', (m) => {
+        if (m.type() === 'error') errors.push(m.text());
+    });
     page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
     // The bridge reads window.location.search; load a clean URL.
     await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
@@ -79,7 +84,9 @@ try {
             // @ts-ignore — runtime-generated test module written just before this browser-side import runs.
             const m = await import('/src/__wasm_prim_test.js');
             return await m.run();
-        } catch (e) { return { ok: false, reason: String(e && e.stack || e) }; }
+        } catch (e) {
+            return { ok: false, reason: String((e && e.stack) || e) };
+        }
     });
     console.log('RESULT:', JSON.stringify(result));
     console.log('ERRORS:', JSON.stringify(errors.slice(0, 5)));

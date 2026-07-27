@@ -41,7 +41,7 @@ function ensureFeelMaterialState(material) {
     if (!material.userData.feelBase) {
         material.userData.feelBase = {
             emissive: material.emissive?.clone?.() ?? new THREE.Color(0x000000),
-            emissiveIntensity: material.emissiveIntensity ?? 0
+            emissiveIntensity: material.emissiveIntensity ?? 0,
         };
         if (!material.emissive) material.emissive = new THREE.Color(0x000000);
     }
@@ -90,7 +90,7 @@ function createParticlePool(scene) {
         opacity: 0.85,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
-        sizeAttenuation: true
+        sizeAttenuation: true,
     });
 
     const points = new THREE.Points(geometry, material);
@@ -100,12 +100,11 @@ function createParticlePool(scene) {
 
     let writeIndex = 0;
 
-    function spawnBurst(origin, count, {
-        speed = 2.5,
-        upward = 1.2,
-        color = 0xffcc88,
-        size = 0.14
-    } = {}) {
+    function spawnBurst(
+        origin,
+        count,
+        { speed = 2.5, upward = 1.2, color = 0xffcc88, size = 0.14 } = {}
+    ) {
         material.color.setHex(color);
         material.size = size;
         const spawned = Math.min(count, MAX_PARTICLES);
@@ -162,16 +161,14 @@ function createParticlePool(scene) {
     return { spawnBurst, update, dispose, points };
 }
 
-export function createDiceGameFeelSystem(scene, {
-    postConfig = null,
-    rendererState = null
-} = {}) {
+export function createDiceGameFeelSystem(scene, { postConfig = null, rendererState = null } = {}) {
     const searchParams = new URLSearchParams(window.location.search);
     const disabled = searchParams.has('no-gamefeel');
-    const motionBlurEnabled = !disabled
-        && !searchParams.has('no-post')
-        && postConfig?.quality === 'high'
-        && rendererState?.usingWebGPU === true;
+    const motionBlurEnabled =
+        !disabled &&
+        !searchParams.has('no-post') &&
+        postConfig?.quality === 'high' &&
+        rendererState?.usingWebGPU === true;
 
     const particles = createParticlePool(scene);
 
@@ -187,7 +184,7 @@ export function createDiceGameFeelSystem(scene, {
         activeParticles: 0,
         critCount: 0,
         settlePulses: 0,
-        motionBlurDice: 0
+        motionBlurDice: 0,
     };
 
     function resolveDieFromEvent(event) {
@@ -210,7 +207,7 @@ export function createDiceGameFeelSystem(scene, {
             speed: Math.min(4.5, event.impactSpeed * 0.35),
             upward: 0.8,
             color: event.idB === -1 ? 0xd4c4a8 : 0xffaa66,
-            size: 0.1 + Math.min(0.08, event.impactSpeed * 0.01)
+            size: 0.1 + Math.min(0.08, event.impactSpeed * 0.01),
         });
     }
 
@@ -222,7 +219,7 @@ export function createDiceGameFeelSystem(scene, {
             elapsed: 0,
             duration: CRIT_DURATION,
             color: isCrit ? new THREE.Color(0xffcc44) : new THREE.Color(0x887766),
-            lightColor: isCrit ? 0xffdd88 : 0x998877
+            lightColor: isCrit ? 0xffdd88 : 0x998877,
         });
         stats.critCount += 1;
 
@@ -231,7 +228,7 @@ export function createDiceGameFeelSystem(scene, {
             speed: isCrit ? 3.8 : 2.6,
             upward: isCrit ? 2.0 : 1.0,
             color: isCrit ? 0xffdd66 : 0xaaa099,
-            size: isCrit ? 0.18 : 0.14
+            size: isCrit ? 0.18 : 0.14,
         });
     }
 
@@ -277,7 +274,7 @@ export function createDiceGameFeelSystem(scene, {
             speed: 1.2,
             upward: 0.4,
             color: 0xc8d8ff,
-            size: 0.08
+            size: 0.08,
         });
     }
 
@@ -289,7 +286,7 @@ export function createDiceGameFeelSystem(scene, {
                 prev: new THREE.Vector3().copy(_worldPos),
                 velocity: new THREE.Vector3(),
                 wasMoving: false,
-                speed: 0
+                speed: 0,
             };
             dieMotion.set(die, state);
             return;
@@ -344,12 +341,20 @@ export function createDiceGameFeelSystem(scene, {
 
             const pulse = Math.sin(t * Math.PI);
             const ramp = pulse * (1 - t * 0.35);
-            applyEmissivePulse(fx.die.mesh, fx.color, ramp * (fx.kind === 'crit' ? 2.2 : 1.4), ramp);
+            applyEmissivePulse(
+                fx.die.mesh,
+                fx.color,
+                ramp * (fx.kind === 'crit' ? 2.2 : 1.4),
+                ramp
+            );
 
             fx.die.mesh.getWorldPosition(_worldPos);
             flareLight.position.copy(_worldPos);
             flareLight.color.setHex(fx.lightColor);
-            flareLight.intensity = Math.max(flareLight.intensity, ramp * (fx.kind === 'crit' ? 3.5 : 2.0));
+            flareLight.intensity = Math.max(
+                flareLight.intensity,
+                ramp * (fx.kind === 'crit' ? 3.5 : 2.0)
+            );
         }
     }
 
@@ -410,6 +415,6 @@ export function createDiceGameFeelSystem(scene, {
         update,
         clearRollState,
         dispose,
-        getStats: () => stats
+        getStats: () => stats,
     };
 }

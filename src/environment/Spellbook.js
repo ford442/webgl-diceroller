@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createSpellbook(scene, physicsWorld, position = { x: -10, y: -2.35, z: 8 }, rotationY = Math.PI / 4) {
+export function createSpellbook(
+    scene,
+    physicsWorld,
+    position = { x: -10, y: -2.35, z: 8 },
+    rotationY = Math.PI / 4
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Spellbook';
@@ -16,21 +21,21 @@ export function createSpellbook(scene, physicsWorld, position = { x: -10, y: -2.
     const coverMat = new THREE.MeshStandardMaterial({
         color: 0x2b1b54, // Deep purple/blue
         roughness: 0.7,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     // Gold Trim
     const goldMat = new THREE.MeshStandardMaterial({
         color: 0xffd700,
         roughness: 0.3,
-        metalness: 0.8
+        metalness: 0.8,
     });
 
     // Pages (Yellowed parchment)
     const pagesMat = new THREE.MeshStandardMaterial({
         color: 0xf5deb3,
         roughness: 0.9,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // 1. Book Body (Cover)
@@ -44,7 +49,7 @@ export function createSpellbook(scene, physicsWorld, position = { x: -10, y: -2.
     const pagesGeo = new THREE.BoxGeometry(width - 0.2, height - 0.1, depth - 0.1);
     const pagesMesh = new THREE.Mesh(pagesGeo, pagesMat);
     // Move slightly forward so spine is solid cover
-    pagesMesh.position.set(0.1, 0, 0); 
+    pagesMesh.position.set(0.1, 0, 0);
     pagesMesh.castShadow = true;
     pagesMesh.receiveShadow = true;
     group.add(pagesMesh);
@@ -52,11 +57,11 @@ export function createSpellbook(scene, physicsWorld, position = { x: -10, y: -2.
     // 3. Decorative Gold Trim (Strap/Clasp)
     const claspGeo = new THREE.BoxGeometry(0.5, height + 0.02, 1.0);
     const claspMesh = new THREE.Mesh(claspGeo, goldMat);
-    claspMesh.position.set(width/2 - 0.25, 0, 0); // Front edge
+    claspMesh.position.set(width / 2 - 0.25, 0, 0); // Front edge
     claspMesh.castShadow = true;
     claspMesh.receiveShadow = true;
     group.add(claspMesh);
-    
+
     // 4. Glowing Arcane Symbol on Cover
     const symbolGroup = new THREE.Group();
     // Use simple primitives for a symbol
@@ -65,12 +70,12 @@ export function createSpellbook(scene, physicsWorld, position = { x: -10, y: -2.
         color: 0x00ffff, // Cyan glow
         emissive: 0x0088ff,
         emissiveIntensity: 0.8,
-        roughness: 0.2
+        roughness: 0.2,
     });
     const circleMesh = new THREE.Mesh(circleGeo, glowMat);
     circleMesh.rotation.x = -Math.PI / 2;
     symbolGroup.add(circleMesh);
-    
+
     // Triangle inside circle
     const triGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.05, 3);
     const triMesh = new THREE.Mesh(triGeo, glowMat);
@@ -79,21 +84,21 @@ export function createSpellbook(scene, physicsWorld, position = { x: -10, y: -2.
     // Rotate to lie flat on the cover.
     // Cylinder default is standing.
     // Just place it flat
-    triMesh.rotation.set(0, Math.PI/2, 0);
+    triMesh.rotation.set(0, Math.PI / 2, 0);
     symbolGroup.add(triMesh);
 
-    symbolGroup.position.set(0, height/2 + 0.01, 0); // Just above cover
+    symbolGroup.position.set(0, height / 2 + 0.01, 0); // Just above cover
     group.add(symbolGroup);
 
     // Add a very subtle point light for the glow
     const bookLight = new THREE.PointLight(0x0088ff, 0.5, 3);
-    bookLight.position.set(0, height/2 + 0.2, 0);
+    bookLight.position.set(0, height / 2 + 0.2, 0);
     group.add(bookLight);
 
     // --- Position on Table ---
     // Table Top -2.75.
     // Center Y = -2.75 + height/2 = -2.75 + 0.4 = -2.35.
-    
+
     group.position.set(position.x, position.y, position.z);
     group.rotation.y = rotationY;
 
@@ -102,7 +107,7 @@ export function createSpellbook(scene, physicsWorld, position = { x: -10, y: -2.
     // --- Physics ---
     // Simple box shape for the book
     if (ammo && physicsWorld) {
-        const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, height/2, depth/2));
+        const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
         createStaticBody(physicsWorld, group, shape);
     }
 

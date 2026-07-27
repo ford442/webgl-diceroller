@@ -58,7 +58,9 @@ export function initTexturePipeline(renderer) {
 
 export function getTexturePipeline() {
     if (!pipeline) {
-        throw new Error('TexturePipeline not initialized — call initTexturePipeline(renderer) first.');
+        throw new Error(
+            'TexturePipeline not initialized — call initTexturePipeline(renderer) first.'
+        );
     }
     return pipeline;
 }
@@ -72,14 +74,18 @@ export function getWoodTextures() {
 
 export function getTableTextures() {
     if (!sets.table) {
-        throw new Error('Shared table textures not preloaded — call preloadSharedTextures() first.');
+        throw new Error(
+            'Shared table textures not preloaded — call preloadSharedTextures() first.'
+        );
     }
     return sets.table;
 }
 
 export function getBrickTextures() {
     if (!sets.brick) {
-        throw new Error('Shared brick textures not preloaded — call preloadSharedTextures() first.');
+        throw new Error(
+            'Shared brick textures not preloaded — call preloadSharedTextures() first.'
+        );
     }
     return sets.brick;
 }

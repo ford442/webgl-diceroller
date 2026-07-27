@@ -14,7 +14,7 @@ export function createRug(scene) {
         metalness: 0.1,
         bumpMap: texture, // Use same pattern for bump
         bumpScale: 0.05,
-        color: 0xdddddd // Slightly dim
+        color: 0xdddddd, // Slightly dim
     });
 
     const geometry = new THREE.BoxGeometry(width, thickness, depth);
@@ -45,28 +45,28 @@ function generateRugTexture() {
     // Inner Rectangle (Pattern Area)
     const border = 100;
     ctx.fillStyle = '#6e0b0b';
-    ctx.fillRect(border, border, w - border*2, h - border*2);
+    ctx.fillRect(border, border, w - border * 2, h - border * 2);
 
     // Gold/Beige Border Lines
     ctx.strokeStyle = '#cba135';
     ctx.lineWidth = 20;
-    ctx.strokeRect(border/2, border/2, w - border, h - border);
+    ctx.strokeRect(border / 2, border / 2, w - border, h - border);
 
     ctx.lineWidth = 5;
-    ctx.strokeRect(border + 10, border + 10, w - border*2 - 20, h - border*2 - 20);
+    ctx.strokeRect(border + 10, border + 10, w - border * 2 - 20, h - border * 2 - 20);
 
     // Central Pattern (Diamond)
     ctx.save();
-    ctx.translate(w/2, h/2);
+    ctx.translate(w / 2, h / 2);
     ctx.rotate(Math.PI / 4);
     ctx.fillStyle = '#220000';
     const diaSize = 300;
-    ctx.fillRect(-diaSize/2, -diaSize/2, diaSize, diaSize);
+    ctx.fillRect(-diaSize / 2, -diaSize / 2, diaSize, diaSize);
 
     // Inner Diamond
     ctx.fillStyle = '#884444';
     const innerDia = 200;
-    ctx.fillRect(-innerDia/2, -innerDia/2, innerDia, innerDia);
+    ctx.fillRect(-innerDia / 2, -innerDia / 2, innerDia, innerDia);
     ctx.restore();
 
     // Corner Patterns
@@ -83,7 +83,7 @@ function generateRugTexture() {
 
     // Noise/Fray effect (simple dots)
     ctx.fillStyle = 'rgba(0,0,0,0.1)';
-    for(let i=0; i<5000; i++) {
+    for (let i = 0; i < 5000; i++) {
         const x = Math.random() * w;
         const y = Math.random() * h;
         ctx.fillRect(x, y, 2, 2);

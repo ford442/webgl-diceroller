@@ -15,7 +15,7 @@ export function createFloatingCandles(scene) {
         { x: 6, y: 2.8, z: 2, phase: 1.5, speed: 0.8 },
         { x: -3, y: 3.2, z: 5, phase: 3.0, speed: 1.2 },
         { x: 4, y: 2.5, z: -5, phase: 4.5, speed: 0.9 },
-        { x: 0, y: 4.0, z: 0, phase: 2.0, speed: 1.1 }
+        { x: 0, y: 4.0, z: 0, phase: 2.0, speed: 1.1 },
     ];
 
     const candles = [];
@@ -25,32 +25,32 @@ export function createFloatingCandles(scene) {
     const waxMaterial = new THREE.MeshStandardMaterial({
         color: 0xf5f5dc, // Cream/off-white wax
         roughness: 0.6,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     const wickMaterial = new THREE.MeshStandardMaterial({
         color: 0x1a1a1a,
-        roughness: 0.9
+        roughness: 0.9,
     });
 
     const flameCoreMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffaa00
+        color: 0xffaa00,
     });
 
     const flameOuterMaterial = new THREE.MeshBasicMaterial({
         color: 0xff6600,
         transparent: true,
-        opacity: 0.6
+        opacity: 0.6,
     });
 
     // Create each floating candle
     candleConfigs.forEach((config, index) => {
         const candleGroup = new THREE.Group();
-        
+
         // Candle dimensions
         const radius = 0.12;
         const height = 0.6;
-        
+
         // Wax body
         const bodyGeo = new THREE.CylinderGeometry(radius, radius, height, 16);
         const bodyMesh = new THREE.Mesh(bodyGeo, waxMaterial);
@@ -100,7 +100,7 @@ export function createFloatingCandles(scene) {
 
         // Initial position
         candleGroup.position.set(config.x, config.y, config.z);
-        
+
         // Random rotation for variety
         candleGroup.rotation.y = Math.random() * Math.PI * 2;
         candleGroup.rotation.z = (Math.random() - 0.5) * 0.1; // Slight tilt
@@ -117,7 +117,7 @@ export function createFloatingCandles(scene) {
             light: light,
             flameCore: flameCore,
             flameOuter: flameOuter,
-            wick: wickMesh
+            wick: wickMesh,
         });
 
         // Create wax drip particles for this candle
@@ -127,19 +127,19 @@ export function createFloatingCandles(scene) {
             const particleMat = new THREE.MeshBasicMaterial({
                 color: 0xffdd88,
                 transparent: true,
-                opacity: 0.8
+                opacity: 0.8,
             });
             const particle = new THREE.Mesh(particleGeo, particleMat);
-            
+
             particles.push({
                 mesh: particle,
                 candleIndex: index,
                 active: false,
                 life: 0,
                 maxLife: 2 + Math.random() * 2,
-                velocity: new THREE.Vector3()
+                velocity: new THREE.Vector3(),
             });
-            
+
             group.add(particle);
         }
     });
@@ -153,7 +153,7 @@ export function createFloatingCandles(scene) {
     // Update function for animations
     const update = (deltaTime, time) => {
         // Animate each candle
-        candles.forEach(candle => {
+        candles.forEach((candle) => {
             // Bobbing motion (sine wave)
             const bobOffset = Math.sin(time * candle.speed + candle.phase) * 0.15;
             candle.group.position.y = candle.baseY + bobOffset;
@@ -165,7 +165,7 @@ export function createFloatingCandles(scene) {
             // Flame flicker
             const flicker = 0.9 + Math.random() * 0.2;
             candle.light.intensity = 1.5 * flicker;
-            
+
             // Flame size variation
             const flameScale = 1 + (Math.random() - 0.5) * 0.2;
             candle.flameCore.scale.setScalar(flameScale);
@@ -177,43 +177,43 @@ export function createFloatingCandles(scene) {
         });
 
         // Animate wax drip particles
-        particles.forEach(p => {
+        particles.forEach((p) => {
             if (!p.active) {
                 // Random chance to activate
                 if (Math.random() < 0.005) {
                     p.active = true;
                     p.life = 0;
-                    
+
                     const candle = candles[p.candleIndex];
                     // Start at bottom of candle
                     p.mesh.position.copy(candle.group.position);
                     p.mesh.position.y -= 0.3; // Bottom of candle body
-                    
+
                     // Initial velocity (falling with slight horizontal drift)
                     p.velocity.set(
                         (Math.random() - 0.5) * 0.1,
                         -0.2 - Math.random() * 0.2,
                         (Math.random() - 0.5) * 0.1
                     );
-                    
+
                     p.mesh.visible = true;
                     p.mesh.material.opacity = 0.8;
                 }
             } else {
                 // Update falling particle
                 p.life += deltaTime;
-                
+
                 // Apply velocity
                 p.mesh.position.addScaledVector(p.velocity, deltaTime);
-                
+
                 // Gravity
                 p.velocity.y -= 0.5 * deltaTime;
-                
+
                 // Fade out
                 const lifeRatio = p.life / p.maxLife;
                 p.mesh.material.opacity = 0.8 * (1 - lifeRatio);
                 p.mesh.scale.setScalar(1 - lifeRatio * 0.5); // Shrink as it falls
-                
+
                 // Check if hit table or life expired
                 if (p.life >= p.maxLife || p.mesh.position.y < -2.75) {
                     p.active = false;
@@ -225,6 +225,6 @@ export function createFloatingCandles(scene) {
 
     return {
         group,
-        update
+        update,
     };
 }

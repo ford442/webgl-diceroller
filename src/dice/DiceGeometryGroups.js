@@ -19,7 +19,7 @@ export function ensureBodyPipGroups(geometry) {
     if (geometry.userData.bodyPipGroupsReady) {
         return {
             bodyGroup: geometry.userData.bodyGroupIndex ?? 0,
-            pipGroup: geometry.userData.pipGroupIndex ?? 1
+            pipGroup: geometry.userData.pipGroupIndex ?? 1,
         };
     }
 
@@ -59,12 +59,19 @@ export function ensureBodyPipGroups(geometry) {
         _n.crossVectors(_e1, _e2);
 
         if (_n.lengthSq() < 1e-10) continue;
-        if (_e1.lengthSq() > maxEdgeSq || _e2.lengthSq() > maxEdgeSq || _b.distanceToSquared(_c) > maxEdgeSq) continue;
+        if (
+            _e1.lengthSq() > maxEdgeSq ||
+            _e2.lengthSq() > maxEdgeSq ||
+            _b.distanceToSquared(_c) > maxEdgeSq
+        )
+            continue;
 
         areas[t] = _n.length() * 0.5;
     }
 
-    const sorted = Array.from(areas).filter((a) => a > 0).sort((x, y) => x - y);
+    const sorted = Array.from(areas)
+        .filter((a) => a > 0)
+        .sort((x, y) => x - y);
     const percentile = sorted[Math.max(0, Math.floor(sorted.length * 0.22) - 1)] ?? 0;
     const areaThreshold = Math.max(percentile, sorted[0] ?? 0) * 1.15;
 

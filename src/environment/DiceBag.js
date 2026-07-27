@@ -2,21 +2,26 @@ import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
 
-export function createDiceBag(scene, physicsWorld, position = { x: -10, y: -1.95, z: 8 }, rotationY = 0) {
+export function createDiceBag(
+    scene,
+    physicsWorld,
+    position = { x: -10, y: -1.95, z: 8 },
+    rotationY = 0
+) {
     const group = new THREE.Group();
     const leatherBump = getWoodTextures().bump;
     leatherBump.repeat.set(2, 2);
 
     const leatherMaterial = new THREE.MeshStandardMaterial({
-        color: 0x8B4513, // Saddle Brown
+        color: 0x8b4513, // Saddle Brown
         roughness: 0.9,
         bumpMap: leatherBump,
-        bumpScale: 0.05
+        bumpScale: 0.05,
     });
 
     const stringMaterial = new THREE.MeshStandardMaterial({
-        color: 0xD2B48C, // Tan
-        roughness: 0.8
+        color: 0xd2b48c, // Tan
+        roughness: 0.8,
     });
 
     // 1. Bag Body (Sphere, slightly flattened)
@@ -85,31 +90,31 @@ export function createDiceBag(scene, physicsWorld, position = { x: -10, y: -1.95
             // Physics sphere (radius 1) goes from -1 to 1.
             // We want physics sphere to match visual.
             // Physics center should be at local Y=0.8.
-    
+
             // createStaticBody implementation:
             // transform.setOrigin(mesh.position)
             // It doesn't support offset shape.
-    
+
             // We can use a Compound Shape or just create the body on the bodyMesh instead of the group?
             // If we use bodyMesh, we need its world position.
             // bodyMesh.position is local (0, 0.8, 0).
             // World position is group.position + local.
             // But createStaticBody reads mesh.position. If mesh is child, mesh.position is local.
             // We should calculate world position.
-    
+
             // Let's use a workaround: Create a hidden mesh for physics that is centered correctly.
             // Or just adjust the group so center is at center of mass.
-    
+
             // Let's adjust group.
             // Shift visuals so center is 0.
             bodyMesh.position.y = 0; // Center at 0.
             neckMesh.position.y = 0.7;
             stringMesh.position.y = 0.7;
-    
+
             // Visual bottom is now at -0.8.
             // To sit on table (-2.75), Group Y must be -2.75 + 0.8 = -1.95.
             group.position.set(position.x, -1.95, position.z);
-    
+
             createStaticBody(physicsWorld, group, shape);
         }
     }

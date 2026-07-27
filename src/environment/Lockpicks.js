@@ -5,7 +5,12 @@ import { createStaticBody, getAmmo } from '../physics.js';
  * Creates a "Lockpicks and Pouch" prop for the tabletop environment.
  * Features procedural leather textures and metallic lockpicks.
  */
-export function createLockpicks(scene, physicsWorld, position = { x: 4.5, y: -2.75, z: 0.5 }, rotationY = Math.PI / 8) {
+export function createLockpicks(
+    scene,
+    physicsWorld,
+    position = { x: 4.5, y: -2.75, z: 0.5 },
+    rotationY = Math.PI / 8
+) {
     const group = new THREE.Group();
     group.name = 'Lockpicks';
 
@@ -16,7 +21,11 @@ export function createLockpicks(scene, physicsWorld, position = { x: 4.5, y: -2.
     const pouchThickness = 0.05;
 
     // Generate procedural leather texture
-    const { diffuseMap: leatherDiffuse, roughnessMap: leatherRoughness, bumpMap: leatherBump } = generateLeatherTextures();
+    const {
+        diffuseMap: leatherDiffuse,
+        roughnessMap: leatherRoughness,
+        bumpMap: leatherBump,
+    } = generateLeatherTextures();
 
     const leatherMaterial = new THREE.MeshStandardMaterial({
         color: 0x4a2e15, // Dark worn leather
@@ -25,7 +34,7 @@ export function createLockpicks(scene, physicsWorld, position = { x: 4.5, y: -2.
         bumpMap: leatherBump,
         bumpScale: 0.03,
         roughness: 0.8,
-        metalness: 0.05
+        metalness: 0.05,
     });
 
     // Main pouch body
@@ -45,17 +54,17 @@ export function createLockpicks(scene, physicsWorld, position = { x: 4.5, y: -2.
 
     // 2. Lockpicks
     const steelMaterial = new THREE.MeshStandardMaterial({
-        color: 0x88929e,     // Steel gray
-        roughness: 0.3,      // Moderately shiny
-        metalness: 0.8,      // Very metallic
-        envMapIntensity: 1.0 // Reflective
+        color: 0x88929e, // Steel gray
+        roughness: 0.3, // Moderately shiny
+        metalness: 0.8, // Very metallic
+        envMapIntensity: 1.0, // Reflective
     });
 
     const brassMaterial = new THREE.MeshStandardMaterial({
-        color: 0x8c7853,     // Brass/bronze
+        color: 0x8c7853, // Brass/bronze
         roughness: 0.4,
         metalness: 0.7,
-        envMapIntensity: 1.0
+        envMapIntensity: 1.0,
     });
 
     // Create 3 different lockpicks resting on the pouch
@@ -91,7 +100,9 @@ export function createLockpicks(scene, physicsWorld, position = { x: 4.5, y: -2.
     const Ammo = getAmmo();
     if (Ammo && physicsWorld) {
         // Use a simple BoxShape for the entire pouch+picks area
-        const shape = new Ammo.btBoxShape(new Ammo.btVector3(pouchWidth / 2, pouchThickness / 2, pouchLength / 2));
+        const shape = new Ammo.btBoxShape(
+            new Ammo.btVector3(pouchWidth / 2, pouchThickness / 2, pouchLength / 2)
+        );
         const body = createStaticBody(physicsWorld, group, shape);
         group.userData.body = body;
     }
@@ -145,10 +156,10 @@ function createRakePick(bladeMat, handleMat) {
     pick.add(shaft);
 
     // Rake tip (using cones for jagged edges)
-    for(let i=0; i<3; i++) {
+    for (let i = 0; i < 3; i++) {
         const bumpGeom = new THREE.ConeGeometry(0.02, 0.06, 8);
         const bump = new THREE.Mesh(bumpGeom, bladeMat);
-        bump.position.set(0.015, 0.5 + (i * 0.05), 0);
+        bump.position.set(0.015, 0.5 + i * 0.05, 0);
         bump.rotation.z = -Math.PI / 2;
         bump.castShadow = true;
         pick.add(bump);

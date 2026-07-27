@@ -1,7 +1,13 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
+import { playPropImpact } from '../audio/DiceCollisionAudio.js';
 
-export function createCauldron(scene, physicsWorld, position = { x: 12, y: -2.75, z: -4 }, rotation = 0) {
+export function createCauldron(
+    scene,
+    physicsWorld,
+    position = { x: 12, y: -2.75, z: -4 },
+    rotation = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Cauldron';
@@ -11,7 +17,7 @@ export function createCauldron(scene, physicsWorld, position = { x: 12, y: -2.75
         color: 0x111111,
         roughness: 0.8,
         metalness: 0.6,
-        bumpScale: 0.05
+        bumpScale: 0.05,
     });
 
     const liquidMat = new THREE.MeshStandardMaterial({
@@ -21,7 +27,7 @@ export function createCauldron(scene, physicsWorld, position = { x: 12, y: -2.75
         roughness: 0.2,
         metalness: 0.1,
         transparent: true,
-        opacity: 0.9
+        opacity: 0.9,
     });
 
     // --- Cauldron Body ---
@@ -36,7 +42,15 @@ export function createCauldron(scene, physicsWorld, position = { x: 12, y: -2.75
     const thetaStart = Math.PI * 0.25;
     const thetaLength = Math.PI - thetaStart;
 
-    const bodyGeo = new THREE.SphereGeometry(radius, 32, 16, 0, Math.PI * 2, thetaStart, thetaLength);
+    const bodyGeo = new THREE.SphereGeometry(
+        radius,
+        32,
+        16,
+        0,
+        Math.PI * 2,
+        thetaStart,
+        thetaLength
+    );
     const body = new THREE.Mesh(bodyGeo, castIronMat);
     // Move up so the bottom rests at y=legHeight
     // The lowest point is at -radius (relative to sphere center). So center should be legHeight + radius
@@ -71,10 +85,20 @@ export function createCauldron(scene, physicsWorld, position = { x: 12, y: -2.75
         const attachmentAngle = Math.PI * 0.8;
         const attachmentRadius = Math.sin(attachmentAngle) * radius;
 
-        leg.position.set(Math.cos(angle) * attachmentRadius, legHeight / 2, Math.sin(angle) * attachmentRadius);
+        leg.position.set(
+            Math.cos(angle) * attachmentRadius,
+            legHeight / 2,
+            Math.sin(angle) * attachmentRadius
+        );
 
         // Splay the legs outward
-        leg.lookAt(new THREE.Vector3(Math.cos(angle) * radius * 2, legHeight / 2, Math.sin(angle) * radius * 2));
+        leg.lookAt(
+            new THREE.Vector3(
+                Math.cos(angle) * radius * 2,
+                legHeight / 2,
+                Math.sin(angle) * radius * 2
+            )
+        );
         leg.rotateX(Math.PI / 2);
         leg.rotateX(-Math.PI / 6); // Adjust splay angle
 
@@ -115,13 +139,33 @@ export function createCauldron(scene, physicsWorld, position = { x: 12, y: -2.75
 
     // --- Animation / Update ---
     let timeOffset = Math.random() * 100;
+    let bubbleTime = 0;
+    const _impactPos = new THREE.Vector3();
+    const baseLiquidY = liquidHeight;
+
+    const interact = () => {
+        group.getWorldPosition(_impactPos);
+        playPropImpact({
+            surface: 'bubble',
+            volume: 0.55,
+            position: { x: _impactPos.x, y: _impactPos.y + rimHeight * 0.5, z: _impactPos.z },
+        });
+        bubbleTime = 0.35;
+    };
+
     const update = (deltaTime, time) => {
         const t = time + timeOffset;
-        // Flicker light intensity
         glowLight.intensity = 1.0 + Math.sin(t * 5) * 0.2 + Math.cos(t * 3.1) * 0.1;
 
-        // Liquid wobble/ripple (simple vertical translation)
-        liquid.position.y = liquidHeight + Math.sin(t * 2) * 0.02;
+        liquid.position.y = baseLiquidY + Math.sin(t * 2) * 0.02;
+        if (bubbleTime > 0) {
+            bubbleTime -= deltaTime;
+            const surge = Math.sin((1 - bubbleTime / 0.35) * Math.PI) * 0.06;
+            liquid.position.y += surge;
+            liquid.scale.setScalar(1 + surge * 0.4);
+        } else {
+            liquid.scale.setScalar(1);
+        }
     };
 
     // --- Physics ---
@@ -132,16 +176,18 @@ export function createCauldron(scene, physicsWorld, position = { x: 12, y: -2.75
         // Total height from bottom to rim is rimHeight.
         const totalHeight = rimHeight;
         if (ammo && physicsWorld) {
-            const shape = new ammo.btCylinderShape(new ammo.btVector3(physRadius, totalHeight / 2, physRadius));
-    
+            const shape = new ammo.btCylinderShape(
+                new ammo.btVector3(physRadius, totalHeight / 2, physRadius)
+            );
+
             const dummy = new THREE.Object3D();
             dummy.position.copy(group.position);
             dummy.position.y += totalHeight / 2;
             dummy.quaternion.copy(group.quaternion);
-    
+
             createStaticBody(physicsWorld, dummy, shape);
         }
     }
 
-    return { group, update };
+    return { group, update, interact };
 }

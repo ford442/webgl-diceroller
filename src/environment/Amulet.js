@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createAmulet(scene, physicsWorld, position = { x: -6, y: -2.74, z: -8 }, rotationY = Math.PI / 6) {
+export function createAmulet(
+    scene,
+    physicsWorld,
+    position = { x: -6, y: -2.74, z: -8 },
+    rotationY = Math.PI / 6
+) {
     const group = new THREE.Group();
     group.name = 'Amulet';
 
@@ -22,14 +27,14 @@ export function createAmulet(scene, physicsWorld, position = { x: -6, y: -2.74, 
         thickness: 0.2,
         ior: 1.5,
         clearcoat: 1.0,
-        clearcoatRoughness: 0.1
+        clearcoatRoughness: 0.1,
     });
 
     // Chain/String material
     const stringMaterial = new THREE.MeshStandardMaterial({
         color: 0x332211, // Dark leather/twine
         roughness: 0.9,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // 1. Amulet Base (Gold Ring)

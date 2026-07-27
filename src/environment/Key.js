@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 import { getIronMaterial } from '../core/MaterialPalette.js';
 
-export function createKey(scene, physicsWorld, position = { x: 6, y: -2.75, z: 8 }, rotationY = Math.PI / 4) {
+export function createKey(
+    scene,
+    physicsWorld,
+    position = { x: 6, y: -2.75, z: 8 },
+    rotationY = Math.PI / 4
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.position.set(position.x, position.y, position.z);
@@ -41,7 +46,7 @@ export function createKey(scene, physicsWorld, position = { x: 6, y: -2.75, z: 8
     const bitGeometry = new THREE.BoxGeometry(bitWidth, bitHeight, bitDepth);
     const bit = new THREE.Mesh(bitGeometry, ironMaterial);
     // Position bit near the other end of the shaft, sticking out to the side
-    bit.position.set((shaftLength / 2) - 0.3, 0, bitDepth / 2 + shaftRadius);
+    bit.position.set(shaftLength / 2 - 0.3, 0, bitDepth / 2 + shaftRadius);
     bit.castShadow = true;
     bit.receiveShadow = true;
     group.add(bit);
@@ -49,13 +54,13 @@ export function createKey(scene, physicsWorld, position = { x: 6, y: -2.75, z: 8
     // Additional intricate cut-out on bit
     const cutOutGeometry = new THREE.BoxGeometry(0.15, bitHeight + 0.05, 0.3);
     const cutOut1 = new THREE.Mesh(cutOutGeometry, ironMaterial);
-    cutOut1.position.set((shaftLength / 2) - 0.2, 0, bitDepth + shaftRadius);
+    cutOut1.position.set(shaftLength / 2 - 0.2, 0, bitDepth + shaftRadius);
     cutOut1.castShadow = true;
     cutOut1.receiveShadow = true;
     group.add(cutOut1);
 
     const cutOut2 = new THREE.Mesh(cutOutGeometry, ironMaterial);
-    cutOut2.position.set((shaftLength / 2) - 0.45, 0, bitDepth + shaftRadius);
+    cutOut2.position.set(shaftLength / 2 - 0.45, 0, bitDepth + shaftRadius);
     cutOut2.castShadow = true;
     cutOut2.receiveShadow = true;
     group.add(cutOut2);
@@ -74,24 +79,24 @@ export function createKey(scene, physicsWorld, position = { x: 6, y: -2.75, z: 8
             const halfExtents = new ammo.btVector3(size.x * 0.5, size.y * 0.5, size.z * 0.5);
             if (ammo && physicsWorld) {
                 const shape = new ammo.btBoxShape(halfExtents);
-        
+
                 // Center physics body at the center of the bounding box
                 const center = new THREE.Vector3();
                 box3.getCenter(center);
-        
+
                 // Since the mesh is created around the origin but offset components,
                 // we'll center the physics body using the visual center.
                 // `createStaticBody` expects a mesh object with position and quaternion.
                 const dummyMesh = new THREE.Mesh();
                 dummyMesh.position.copy(center);
                 dummyMesh.quaternion.copy(group.quaternion); // Actually we should use group quaternion
-        
+
                 createStaticBody(physicsWorld, dummyMesh, shape);
             }
         }
     }
 
     return {
-        group
+        group,
     };
 }

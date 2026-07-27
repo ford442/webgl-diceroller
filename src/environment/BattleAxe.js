@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createBattleAxe(scene, physicsWorld, position = { x: 15, y: -6, z: 15 }, rotationY = Math.PI / 4) {
+export function createBattleAxe(
+    scene,
+    physicsWorld,
+    position = { x: 15, y: -6, z: 15 },
+    rotationY = Math.PI / 4
+) {
     const group = new THREE.Group();
     group.name = 'BattleAxe';
 
@@ -16,13 +21,13 @@ export function createBattleAxe(scene, physicsWorld, position = { x: 15, y: -6, 
     const woodMaterial = new THREE.MeshStandardMaterial({
         color: 0x5c4033,
         roughness: 0.9,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     const steelMaterial = new THREE.MeshStandardMaterial({
         color: 0xaaaaaa,
         roughness: 0.3,
-        metalness: 0.9
+        metalness: 0.9,
     });
 
     // --- Geometries ---
@@ -46,14 +51,24 @@ export function createBattleAxe(scene, physicsWorld, position = { x: 15, y: -6, 
     shape.moveTo(0, -0.5); // Bottom of center
     shape.lineTo(0.5, -0.5); // Right
     // Curve out for right blade
-    shape.quadraticCurveTo(bladeWidth/2, -bladeHeight/2, bladeWidth/2 + 0.5, -bladeHeight/2 - 0.5); // Bottom tip
-    shape.quadraticCurveTo(bladeWidth/2 - 0.2, 0, bladeWidth/2 + 0.5, bladeHeight/2 + 0.5); // Top tip
-    shape.quadraticCurveTo(bladeWidth/2, bladeHeight/2, 0.5, 0.5); // Top right center
+    shape.quadraticCurveTo(
+        bladeWidth / 2,
+        -bladeHeight / 2,
+        bladeWidth / 2 + 0.5,
+        -bladeHeight / 2 - 0.5
+    ); // Bottom tip
+    shape.quadraticCurveTo(bladeWidth / 2 - 0.2, 0, bladeWidth / 2 + 0.5, bladeHeight / 2 + 0.5); // Top tip
+    shape.quadraticCurveTo(bladeWidth / 2, bladeHeight / 2, 0.5, 0.5); // Top right center
     // Left side (symmetric)
     shape.lineTo(-0.5, 0.5);
-    shape.quadraticCurveTo(-bladeWidth/2, bladeHeight/2, -bladeWidth/2 - 0.5, bladeHeight/2 + 0.5);
-    shape.quadraticCurveTo(-bladeWidth/2 + 0.2, 0, -bladeWidth/2 - 0.5, -bladeHeight/2 - 0.5);
-    shape.quadraticCurveTo(-bladeWidth/2, -bladeHeight/2, -0.5, -0.5);
+    shape.quadraticCurveTo(
+        -bladeWidth / 2,
+        bladeHeight / 2,
+        -bladeWidth / 2 - 0.5,
+        bladeHeight / 2 + 0.5
+    );
+    shape.quadraticCurveTo(-bladeWidth / 2 + 0.2, 0, -bladeWidth / 2 - 0.5, -bladeHeight / 2 - 0.5);
+    shape.quadraticCurveTo(-bladeWidth / 2, -bladeHeight / 2, -0.5, -0.5);
     shape.lineTo(0, -0.5); // Close loop
 
     const extrudeSettings = {
@@ -62,7 +77,7 @@ export function createBattleAxe(scene, physicsWorld, position = { x: 15, y: -6, 
         bevelEnabled: true,
         bevelThickness: 0.05,
         bevelSize: 0.05,
-        bevelSegments: 2
+        bevelSegments: 2,
     };
 
     const headGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
@@ -168,12 +183,14 @@ export function createBattleAxe(scene, physicsWorld, position = { x: 15, y: -6, 
 
     // Re-calculate
     const direction = new THREE.Vector3().subVectors(legPos, basePos).normalize();
-    const midPoint = new THREE.Vector3().copy(basePos).add(direction.clone().multiplyScalar(handleLen / 2));
+    const midPoint = new THREE.Vector3()
+        .copy(basePos)
+        .add(direction.clone().multiplyScalar(handleLen / 2));
 
     group.position.copy(midPoint);
     group.lookAt(legPos);
     group.rotateX(Math.PI / 2);
-    
+
     // Apply additional rotation if specified
     if (rotationY !== 0) {
         group.rotateY(rotationY);
@@ -181,14 +198,16 @@ export function createBattleAxe(scene, physicsWorld, position = { x: 15, y: -6, 
 
     // Reset visual positions relative to new center
     handle.position.y = 0; // Centered
-    head.position.y = (handleLen / 2) - 1.0; // Top part
+    head.position.y = handleLen / 2 - 1.0; // Top part
 
     // Re-add to scene (it was added before pos update, which is fine, but good to be clean)
 
     // Now create physics
     const Ammo = getAmmo();
     if (Ammo && physicsWorld) {
-        const physicsShape = new Ammo.btCylinderShape(new Ammo.btVector3(handleRad, handleLen/2, handleRad));
+        const physicsShape = new Ammo.btCylinderShape(
+            new Ammo.btVector3(handleRad, handleLen / 2, handleRad)
+        );
         createStaticBody(physicsWorld, group, physicsShape);
     }
 }

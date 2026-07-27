@@ -1,4 +1,12 @@
-import { loadDiceModels, spawnObjects, updateDiceSet, initDiceAppearance, getDiceAppearanceConfig, setDieTypeAppearance, diceModels } from '../dice.js';
+import {
+    loadDiceModels,
+    spawnObjects,
+    updateDiceSet,
+    initDiceAppearance,
+    getDiceAppearanceConfig,
+    setDieTypeAppearance,
+    diceModels,
+} from '../dice.js';
 import { initUI, createCrosshair } from '../ui.js';
 import { createDiceCasePanel } from '../ui/DiceCasePanel.js';
 import { initResultsUI } from '../results.js';
@@ -8,7 +16,7 @@ import {
     TIER_PROP_DEFINITIONS,
     DECORATIVE_TIER_ENTRIES,
     spawnProp,
-    spawnTierWithRandomPool
+    spawnTierWithRandomPool,
 } from '../environment/PropRegistry.js';
 import { resolveTableLayoutConfig, persistTableLayoutConfig } from './TableLayoutConfig.js';
 import { createLayoutManager } from './RandomLayout.js';
@@ -29,9 +37,14 @@ function updateLoadingText(text) {
 
 function registerUpdate(orchestrator, name, update, priority = 0) {
     if (!update) return null;
-    return orchestrator.scheduler.register('updates', name, ({ deltaTime, time }) => {
-        update(deltaTime, time);
-    }, { priority });
+    return orchestrator.scheduler.register(
+        'updates',
+        name,
+        ({ deltaTime, time }) => {
+            update(deltaTime, time);
+        },
+        { priority }
+    );
 }
 
 async function spawnTier(entries, context) {
@@ -40,9 +53,18 @@ async function spawnTier(entries, context) {
     }
 }
 
+/**
+ * @param {import('three').Scene} scene
+ * @param {import('three').Camera} camera
+ * @param {import('../types/ammo').AmmoWorld | null | undefined} physicsWorld
+ * @param {import('../types/app').AppOrchestrator} orchestrator
+ * @param {import('../types/app').TierLoadCallbacks} callbacks
+ * @param {import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer} renderer
+ */
 export async function loadTiers(scene, camera, physicsWorld, orchestrator, callbacks, renderer) {
     const layoutConfig = resolveTableLayoutConfig();
-    const registerUpdateFn = (name, update, priority = 0) => registerUpdate(orchestrator, name, update, priority);
+    const registerUpdateFn = (name, update, priority = 0) =>
+        registerUpdate(orchestrator, name, update, priority);
 
     const cullingSystem = orchestrator.cullingSystem ?? null;
 
@@ -52,7 +74,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         scheduler: orchestrator.scheduler,
         callbacks,
         registerUpdate: registerUpdateFn,
-        cullingSystem
+        cullingSystem,
     });
 
     const context = {
@@ -70,9 +92,9 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         clutterOptions: {
             count: layoutConfig.clutterCount,
             seed: layoutConfig.seed,
-            theme: layoutConfig.theme
+            theme: layoutConfig.theme,
         },
-        tierRenderStats: createTierRenderStats(scene)
+        tierRenderStats: createTierRenderStats(scene),
     };
 
     updateLoadingText('Initializing physics engine...');
@@ -96,13 +118,13 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
     updateLoadingText('Loading dice models...');
     updateLoadingBar(30);
     await loadDiceModels((done, total, label) => {
-        const percent = 30 + ((done / total) * 10);
+        const percent = 30 + (done / total) * 10;
         updateLoadingBar(percent);
         if (label) updateLoadingText(`Loading dice models... (${label})`);
     });
     initDiceAppearance(scene, {
         envMap: scene.environment ?? null,
-        qualityProfile: callbacks.qualityProfile ?? null
+        qualityProfile: callbacks.qualityProfile ?? null,
     });
     spawnObjects(scene, physicsWorld);
 
@@ -123,7 +145,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
                 const result = await layoutManager.rerollLayout(overrides);
                 return result;
             },
-            onShareTable: () => layoutManager.getConfig()
+            onShareTable: () => layoutManager.getConfig(),
         },
         callbacks.notationHooks ?? null,
         callbacks.rollShareHooks ?? null
@@ -132,7 +154,12 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
 
     initResultsUI();
 
-    const interaction = initInteraction(camera, scene, physicsWorld, callbacks.interactionHooks || {});
+    const interaction = initInteraction(
+        camera,
+        scene,
+        physicsWorld,
+        callbacks.interactionHooks || {}
+    );
     callbacks.setInteraction?.(interaction);
 
     const diceCasePanel = createDiceCasePanel({
@@ -140,11 +167,16 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         onTypeChange: (type, partial) => setDieTypeAppearance(type, partial),
         getTemplateMesh: (type) => diceModels[type] ?? null,
         getEnvMap: () => scene.environment ?? null,
-        getQualityProfile: () => callbacks.qualityProfile ?? window.qualityProfile ?? null
+        getQualityProfile: () => callbacks.qualityProfile ?? callbacks.app?.qualityProfile ?? null,
     });
-    orchestrator.scheduler.register('updates', 'diceCasePreview', ({ deltaTime }) => {
-        diceCasePanel.updatePreview(deltaTime);
-    }, { priority: -20 });
+    orchestrator.scheduler.register(
+        'updates',
+        'diceCasePreview',
+        ({ deltaTime }) => {
+            diceCasePanel.updatePreview(deltaTime);
+        },
+        { priority: -20 }
+    );
 
     updateLoadingText('Loading furniture and props...');
     await yieldToMain();
@@ -161,7 +193,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         DECORATIVE_TIER_ENTRIES,
         layoutConfig.decorCount,
         context,
-        { seed: layoutConfig.seed + 0xDEC0, theme: layoutConfig.theme }
+        { seed: layoutConfig.seed + 0xdec0, theme: layoutConfig.theme }
     );
     context.tierRenderStats.snapshotAfter('tierDecor');
     layoutManager.setInitialDecor(decorRecords);
@@ -183,7 +215,10 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         setTimeout(() => overlay.remove(), 500);
     }
 
-    window.sceneReady = true;
+    if (callbacks.app) {
+        callbacks.app.ready = true;
+        callbacks.app.events?.emit(callbacks.app.events.AppEvent.APP_READY, { ready: true });
+    }
 
     const tierRenderStats = context.tierRenderStats;
     const tierSummary = tierRenderStats.formatSummary();
@@ -197,7 +232,8 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         lampData: context.state.lampData,
         gongResult: context.state.gongData,
         fireplaceLight: context.state.fireplaceLight,
+        diceCupProp: context.state.diceCupProp,
         tierRenderStats,
-        diceCasePanel
+        diceCasePanel,
     };
 }

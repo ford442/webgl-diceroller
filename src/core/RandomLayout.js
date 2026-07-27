@@ -3,13 +3,13 @@ import { hideResults } from '../results.js';
 import {
     DECORATIVE_TIER_ENTRIES,
     despawnProp,
-    spawnTierWithRandomPool
+    spawnTierWithRandomPool,
 } from '../environment/PropRegistry.js';
 import { createRandomClutter, despawnRandomClutter } from '../environment/RandomClutter.js';
 import {
     DENSITY_PRESETS,
     persistTableLayoutConfig,
-    resolveTableLayoutConfig
+    resolveTableLayoutConfig,
 } from './TableLayoutConfig.js';
 import { createSeededRng } from '../environment/clutter/ClutterPlacement.js';
 
@@ -19,10 +19,10 @@ function randomInRange([min, max], rng) {
 
 function resolveCountsForDensity(density, seed) {
     const preset = DENSITY_PRESETS[density] ?? DENSITY_PRESETS.med;
-    const rng = createSeededRng((seed >>> 0) + 0xA5A5A5A5);
+    const rng = createSeededRng((seed >>> 0) + 0xa5a5a5a5);
     return {
         clutterCount: randomInRange(preset.clutter, rng),
-        decorCount: randomInRange(preset.decor, rng)
+        decorCount: randomInRange(preset.decor, rng),
     };
 }
 
@@ -32,7 +32,7 @@ export function createLayoutManager({
     scheduler,
     callbacks,
     registerUpdate,
-    cullingSystem = null
+    cullingSystem = null,
 }) {
     let config = resolveTableLayoutConfig();
     let clutterHandles = [];
@@ -48,7 +48,7 @@ export function createLayoutManager({
         cullingSystem,
         get layoutConfig() {
             return config;
-        }
+        },
     };
 
     function applyClutterResult(result) {
@@ -76,7 +76,7 @@ export function createLayoutManager({
             DECORATIVE_TIER_ENTRIES,
             config.decorCount,
             context,
-            { seed: config.seed + 0xDEC0, theme: config.theme }
+            { seed: config.seed + 0xdec0, theme: config.theme }
         );
     }
 
@@ -101,19 +101,20 @@ export function createLayoutManager({
         const nextDensity = overrides.density ?? config.density;
         const nextTheme = overrides.theme ?? config.theme;
         const useFreshSeed = overrides.newSeed !== false;
-        const nextSeed = overrides.seed
-            ?? (useFreshSeed ? ((Math.random() * 0xFFFFFFFF) >>> 0) : config.seed);
+        const nextSeed =
+            overrides.seed ?? (useFreshSeed ? (Math.random() * 0xffffffff) >>> 0 : config.seed);
 
-        const counts = overrides.clutterCount && overrides.decorCount
-            ? { clutterCount: overrides.clutterCount, decorCount: overrides.decorCount }
-            : resolveCountsForDensity(nextDensity, nextSeed);
+        const counts =
+            overrides.clutterCount && overrides.decorCount
+                ? { clutterCount: overrides.clutterCount, decorCount: overrides.decorCount }
+                : resolveCountsForDensity(nextDensity, nextSeed);
 
         config = {
             density: nextDensity,
             theme: nextTheme,
             seed: nextSeed >>> 0,
             clutterCount: Math.max(4, Math.min(10, overrides.clutterCount ?? counts.clutterCount)),
-            decorCount: Math.max(4, Math.min(15, overrides.decorCount ?? counts.decorCount))
+            decorCount: Math.max(4, Math.min(15, overrides.decorCount ?? counts.decorCount)),
         };
 
         clearDice(scene, physicsWorld);
@@ -125,7 +126,7 @@ export function createLayoutManager({
         const clutterResult = createRandomClutter(scene, physicsWorld, {
             count: config.clutterCount,
             seed: config.seed,
-            theme: config.theme
+            theme: config.theme,
         });
         applyClutterResult(clutterResult);
 
@@ -137,7 +138,7 @@ export function createLayoutManager({
         return {
             ...config,
             clutterIds: clutterResult.selectedIds,
-            decorCount: decorRecords.length
+            decorCount: decorRecords.length,
         };
     }
 
@@ -147,6 +148,6 @@ export function createLayoutManager({
         setInitialDecor: (records) => {
             decorRecords = records ?? [];
         },
-        rerollLayout
+        rerollLayout,
     };
 }

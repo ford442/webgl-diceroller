@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createScrollCase(scene, physicsWorld, position = { x: 0, y: -2.6, z: 0 }, rotation = 0) {
+export function createScrollCase(
+    scene,
+    physicsWorld,
+    position = { x: 0, y: -2.6, z: 0 },
+    rotation = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'ScrollCase';
@@ -10,13 +15,13 @@ export function createScrollCase(scene, physicsWorld, position = { x: 0, y: -2.6
     const leatherMat = new THREE.MeshStandardMaterial({
         color: 0x3d2314, // Dark brown leather
         roughness: 0.8,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     const brassMat = new THREE.MeshStandardMaterial({
         color: 0xb5a642, // Tarnished brass
         roughness: 0.4,
-        metalness: 0.7
+        metalness: 0.7,
     });
 
     // Main Tube (Leather)
@@ -74,15 +79,19 @@ export function createScrollCase(scene, physicsWorld, position = { x: 0, y: -2.6
     // Our cylinder is along X axis after rotation. But wait, createStaticBody applies group's transform!
     // So the shape should match the local geometry (cylinder along Y).
     if (ammo && physicsWorld) {
-        const halfExtents = new ammo.btVector3(capRadius, tubeLength / 2 + capLength / 2, capRadius);
+        const halfExtents = new ammo.btVector3(
+            capRadius,
+            tubeLength / 2 + capLength / 2,
+            capRadius
+        );
         if (ammo && physicsWorld) {
             const shape = new ammo.btCylinderShape(halfExtents);
-        
+
             createStaticBody(physicsWorld, group, shape);
         }
     }
 
     return {
-        group
+        group,
     };
 }

@@ -5,7 +5,13 @@ const FRAME_BUDGET_MS = 32; // ~30 fps — step down when sustained above this
 const SLOW_FRAME_STREAK = 90; // ~1.5 s of slow frames before stepping down
 
 function getRendererPreference(searchParams, { forceWebGl = false } = {}) {
-    if (forceWebGl || searchParams.has('webgl')) {
+    // WebXR spike requires WebGLRenderer.xr; ignore conflicting ?webgpu/?wgpu.
+    if (
+        forceWebGl ||
+        searchParams.has('webgl') ||
+        searchParams.has('xr') ||
+        searchParams.has('xr-emulator')
+    ) {
         return 'webgl';
     }
 
@@ -19,12 +25,17 @@ function getRendererPreference(searchParams, { forceWebGl = false } = {}) {
     return 'webgpu';
 }
 
+/** Exported for unit-style verify scripts. */
+export { getRendererPreference };
+
 /**
  * Resolve the render pixel ratio from URL flags and device DPR.
  * `?pr=1` forces 1.0 (MSAA path); `?pr=N` caps at N (clamped to [0.5, 3]).
  */
-export function resolvePixelRatioConfig(searchParams = new URLSearchParams(window.location.search)) {
-    const deviceDpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+export function resolvePixelRatioConfig(
+    searchParams = new URLSearchParams(window.location.search)
+) {
+    const deviceDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
     if (searchParams.has('pr')) {
         const forced = Number.parseFloat(searchParams.get('pr'));
@@ -34,7 +45,7 @@ export function resolvePixelRatioConfig(searchParams = new URLSearchParams(windo
                 pixelRatio: clamped,
                 forced: true,
                 cap: clamped,
-                deviceDpr
+                deviceDpr,
             };
         }
     }
@@ -44,7 +55,7 @@ export function resolvePixelRatioConfig(searchParams = new URLSearchParams(windo
         pixelRatio: cap,
         forced: false,
         cap,
-        deviceDpr
+        deviceDpr,
     };
 }
 
@@ -65,7 +76,7 @@ export function detectSoftwareWebGL() {
         const canvas = document.createElement('canvas');
         const gl = canvas.getContext('webgl', {
             failIfMajorPerformanceCaveat: true,
-            powerPreference: 'high-performance'
+            powerPreference: 'high-performance',
         });
 
         if (!gl) {
@@ -119,11 +130,11 @@ function createWebGlRenderer({
     height,
     pixelRatio,
     requestedRenderer,
-    fallbackReason
+    fallbackReason,
 }) {
     const renderer = new THREE.WebGLRenderer({
         antialias,
-        powerPreference: 'high-performance'
+        powerPreference: 'high-performance',
     });
     applySharedRendererConfig(renderer, width, height, pixelRatio);
 
@@ -133,7 +144,7 @@ function createWebGlRenderer({
         usingWebGPU: false,
         usingWebGL: true,
         requestedRenderer,
-        fallbackReason
+        fallbackReason,
     };
 }
 
@@ -182,7 +193,12 @@ function attachRecoveryHandlers(state, handlers = {}) {
             notifyRestored();
             const container = canvas.parentElement;
             if (container) {
-                applyRendererSize(renderer, container.clientWidth, container.clientHeight, state.pixelRatio);
+                applyRendererSize(
+                    renderer,
+                    container.clientWidth,
+                    container.clientHeight,
+                    state.pixelRatio
+                );
             }
             renderer.shadowMap.needsUpdate = true;
         };
@@ -204,7 +220,14 @@ function attachRecoveryHandlers(state, handlers = {}) {
  * Lightweight frame-time monitor that steps pixel ratio down when sustained
  * frame times exceed the budget. Disabled when `?pr=` forces a ratio.
  */
-export function createPixelRatioMonitor(rendererState, { onPixelRatioChange, debugPerf = false } = {}) {
+/**
+ * @param {import('../types/app').RendererState} rendererState
+ * @param {{ onPixelRatioChange?: (ratio: number) => void; debugPerf?: boolean }} [options]
+ */
+export function createPixelRatioMonitor(
+    rendererState,
+    { onPixelRatioChange, debugPerf = false } = {}
+) {
     let frameMsSmoothed = 16.7;
     let slowFrameStreak = 0;
     let steppedDown = false;
@@ -239,13 +262,17 @@ export function createPixelRatioMonitor(rendererState, { onPixelRatioChange, deb
         onPixelRatioChange?.(next);
 
         if (debugPerf) {
-            console.info(`[RendererFactory] Pixel ratio stepped down to ${next} (smoothed ${frameMsSmoothed.toFixed(1)} ms)`);
+            console.info(
+                `[RendererFactory] Pixel ratio stepped down to ${next} (smoothed ${frameMsSmoothed.toFixed(1)} ms)`
+            );
         }
     }
 
     return {
         update,
-        get steppedDown() { return steppedDown; }
+        get steppedDown() {
+            return steppedDown;
+        },
     };
 }
 
@@ -271,7 +298,7 @@ export async function createRenderer(container, options = {}) {
         isSoftwareRenderer,
         usePostAA: !antialias && pixelRatio > 1,
         contextStatus: 'ok',
-        contextMessage: null
+        contextMessage: null,
     };
 
     if (preferredRenderer === 'webgpu') {
@@ -282,11 +309,14 @@ export async function createRenderer(container, options = {}) {
             (webgpuExplicit ? console.warn : console.info)(`[RendererFactory] ${reason}`);
             return {
                 ...createWebGlRenderer({
-                    antialias, width, height, pixelRatio,
+                    antialias,
+                    width,
+                    height,
+                    pixelRatio,
                     requestedRenderer: preferredRenderer,
-                    fallbackReason: reason
+                    fallbackReason: reason,
                 }),
-                ...sharedMeta
+                ...sharedMeta,
             };
         }
 
@@ -294,7 +324,7 @@ export async function createRenderer(container, options = {}) {
             const THREE_WEBGPU = await import('three/webgpu');
             const renderer = new THREE_WEBGPU.WebGPURenderer({
                 antialias,
-                powerPreference: 'high-performance'
+                powerPreference: 'high-performance',
             });
             applySharedRendererConfig(renderer, width, height, pixelRatio);
             await renderer.init();
@@ -306,29 +336,35 @@ export async function createRenderer(container, options = {}) {
                 usingWebGL: false,
                 requestedRenderer: preferredRenderer,
                 fallbackReason: null,
-                ...sharedMeta
+                ...sharedMeta,
             };
         } catch (error) {
             const reason = `WebGPU init failed (${error?.message ?? error}); using WebGLRenderer fallback.`;
             console.warn(`[RendererFactory] ${reason}`, error);
             return {
                 ...createWebGlRenderer({
-                    antialias, width, height, pixelRatio,
+                    antialias,
+                    width,
+                    height,
+                    pixelRatio,
                     requestedRenderer: preferredRenderer,
-                    fallbackReason: reason
+                    fallbackReason: reason,
                 }),
-                ...sharedMeta
+                ...sharedMeta,
             };
         }
     }
 
     return {
         ...createWebGlRenderer({
-            antialias, width, height, pixelRatio,
+            antialias,
+            width,
+            height,
+            pixelRatio,
             requestedRenderer: preferredRenderer,
-            fallbackReason: null
+            fallbackReason: null,
         }),
-        ...sharedMeta
+        ...sharedMeta,
     };
 }
 
@@ -342,7 +378,7 @@ export async function recoverRenderer(container, priorState) {
         forceWebGl,
         pixelRatio: priorState?.pixelRatio,
         antialias: priorState?.antialias,
-        isSoftwareRenderer: priorState?.isSoftwareRenderer
+        isSoftwareRenderer: priorState?.isSoftwareRenderer,
     });
 }
 

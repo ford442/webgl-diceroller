@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createMagnifyingGlass(scene, physicsWorld, position = { x: 0, y: -2.75, z: 0 }, rotationY = 0) {
+export function createMagnifyingGlass(
+    scene,
+    physicsWorld,
+    position = { x: 0, y: -2.75, z: 0 },
+    rotationY = 0
+) {
     const group = new THREE.Group();
     group.name = 'MagnifyingGlass';
 
@@ -12,13 +17,13 @@ export function createMagnifyingGlass(scene, physicsWorld, position = { x: 0, y:
         color: 0xb5a642, // Brass
         metalness: 1.0,
         roughness: 0.2,
-        envMapIntensity: 1.2
+        envMapIntensity: 1.2,
     });
 
     const woodMat = new THREE.MeshStandardMaterial({
         color: 0x5c4033, // Dark Wood
         roughness: 0.7,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     const glassMat = new THREE.MeshPhysicalMaterial({
@@ -28,7 +33,7 @@ export function createMagnifyingGlass(scene, physicsWorld, position = { x: 0, y:
         transmission: 0.95,
         transparent: true,
         ior: 1.5,
-        thickness: 0.1
+        thickness: 0.1,
     });
 
     // --- Dimensions ---
@@ -42,7 +47,7 @@ export function createMagnifyingGlass(scene, physicsWorld, position = { x: 0, y:
     const lensThickness = 0.05;
 
     // Total length along Z axis
-    const totalLength = handleLength + connectorLength + (rimOuterRadius * 2);
+    const totalLength = handleLength + connectorLength + rimOuterRadius * 2;
     // Offset to center the group on the Z axis
     const zOffset = -(totalLength / 2) + handleLength + connectorLength + rimOuterRadius;
 
@@ -58,7 +63,12 @@ export function createMagnifyingGlass(scene, physicsWorld, position = { x: 0, y:
     group.add(handleMesh);
 
     // 2. Connector (Brass)
-    const connectorGeo = new THREE.CylinderGeometry(connectorRadius, connectorRadius, connectorLength, 16);
+    const connectorGeo = new THREE.CylinderGeometry(
+        connectorRadius,
+        connectorRadius,
+        connectorLength,
+        16
+    );
     const connectorMesh = new THREE.Mesh(connectorGeo, brassMat);
     connectorMesh.rotation.x = Math.PI / 2;
     connectorMesh.position.set(0, 0, -(connectorLength / 2) - rimOuterRadius + zOffset);
@@ -108,8 +118,10 @@ export function createMagnifyingGlass(scene, physicsWorld, position = { x: 0, y:
     // Height (Y) = thickness (max radius * 2)
     // Length (Z) = totalLength
     if (ammo && physicsWorld) {
-        const shape = new ammo.btBoxShape(new ammo.btVector3(rimOuterRadius, handleRadius, totalLength / 2));
-    
+        const shape = new ammo.btBoxShape(
+            new ammo.btVector3(rimOuterRadius, handleRadius, totalLength / 2)
+        );
+
         // Note: createStaticBody assumes the group origin is the center of mass.
         // Our zOffset calculation above should have centered the geometry within the group.
         createStaticBody(physicsWorld, group, shape);

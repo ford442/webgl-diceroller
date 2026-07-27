@@ -37,12 +37,7 @@ function resolveBasisu() {
 }
 
 function encodeKtx2(basisuBin, srcPath, outPath, { linear = false } = {}) {
-    const args = [
-        '-ktx2',
-        '-q', '128',
-        '-file', srcPath,
-        '-output_file', outPath,
-    ];
+    const args = ['-ktx2', '-q', '128', '-file', srcPath, '-output_file', outPath];
     if (linear) args.push('-linear');
 
     const result = spawnSync(basisuBin, args, { encoding: 'utf8' });
@@ -101,10 +96,10 @@ export async function convertTexturesToKtx2({ quiet = false } = {}) {
 
         if (!quiet) {
             process.stdout.write(
-                `  ${entry.src.padEnd(58)} `
-                + `${(jpgBytes / 1024).toFixed(0).padStart(5)} KB -> `
-                + `${(ktx2Bytes / 1024).toFixed(0).padStart(5)} KB `
-                + `(${ratio}% smaller)\n`
+                `  ${entry.src.padEnd(58)} ` +
+                    `${(jpgBytes / 1024).toFixed(0).padStart(5)} KB -> ` +
+                    `${(ktx2Bytes / 1024).toFixed(0).padStart(5)} KB ` +
+                    `(${ratio}% smaller)\n`
             );
         }
     }
@@ -112,8 +107,8 @@ export async function convertTexturesToKtx2({ quiet = false } = {}) {
     if (!quiet) {
         const overall = totalJpg > 0 ? ((1 - totalKtx2 / totalJpg) * 100).toFixed(1) : '0.0';
         console.log(
-            `\n  TEXTURE TOTAL  ${(totalJpg / 1024).toFixed(0)} KB JPG -> `
-            + `${(totalKtx2 / 1024).toFixed(0)} KB KTX2 (${overall}% smaller)`
+            `\n  TEXTURE TOTAL  ${(totalJpg / 1024).toFixed(0)} KB JPG -> ` +
+                `${(totalKtx2 / 1024).toFixed(0)} KB KTX2 (${overall}% smaller)`
         );
     }
 

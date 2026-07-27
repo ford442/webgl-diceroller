@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import { getHoveredDie, isHoveringOverDice } from '../interaction.js';
 import { applyFlickImpulseToDice } from '../dice.js';
 import { isTouchPrimaryDevice } from './DeviceCapabilities.js';
@@ -17,7 +16,7 @@ function touchDistance(t0, t1) {
 function touchCenter(t0, t1) {
     return {
         x: (t0.clientX + t1.clientX) * 0.5,
-        y: (t0.clientY + t1.clientY) * 0.5
+        y: (t0.clientY + t1.clientY) * 0.5,
     };
 }
 
@@ -28,7 +27,7 @@ export function setupTouchInput({
     cameraController,
     diceFocusStateRef,
     onRoll,
-    getContainerRect
+    getContainerRect,
 }) {
     if (!isTouchPrimaryDevice()) {
         return { enabled: false };
@@ -60,7 +59,7 @@ export function setupTouchInput({
         const relY = clientY - rect.top;
         return {
             normX: (relX / rect.width) * 2 - 1,
-            normY: -(relY / rect.height) * 2 + 1
+            normY: -(relY / rect.height) * 2 + 1,
         };
     };
 
@@ -167,7 +166,10 @@ export function setupTouchInput({
                     interaction?.handleDown(normX, normY);
                     interaction?.handleUp();
                 } else if (!onDie && distance >= FLICK_MIN_DISTANCE && speed >= FLICK_MIN_SPEED) {
-                    applyFlickImpulseToDice(camera, dx / duration, dy / duration, { normOriginX: normX, normOriginY: normY });
+                    applyFlickImpulseToDice(camera, dx / duration, dy / duration, {
+                        normOriginX: normX,
+                        normOriginY: normY,
+                    });
                 } else if (!onDie && distance < 12 && duration < 250) {
                     onRoll?.();
                 }
@@ -201,6 +203,6 @@ export function setupTouchInput({
             canvas.removeEventListener('touchmove', onTouchMove);
             canvas.removeEventListener('touchend', onTouchEnd);
             canvas.removeEventListener('touchcancel', onTouchEnd);
-        }
+        },
     };
 }

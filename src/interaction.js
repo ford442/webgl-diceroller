@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet part of the incremental checkJs rollout (issue #192); pulled in transitively via PropRegistry.js.
 import * as THREE from 'three';
 import { getAmmo } from './physics.js';
 import { isWasmAvailable, isWasmInitialized } from './wasm/PhysicsBridge.js';
@@ -10,49 +9,86 @@ import {
     syncDieMeshStateToWasm,
     applyWasmImpulseForDie,
     driveDieWasmTransform,
-    setDieWasmKinematic
+    setDieWasmKinematic,
 } from './dice.js';
+import { isCupInteractionActive, getDiceCupController } from './interaction/DiceCupController.js';
+import {
+    createWasmDieGrabState,
+    startWasmDieGrab,
+    setWasmDieGrabTarget,
+    updateWasmDieGrab,
+    endWasmDieGrab,
+} from './interaction/WasmDieGrab.js';
 
+/** @typedef {import('./types/ammo').AmmoRigidBody} AmmoRigidBody */
+/** @typedef {import('./types/ammo').AmmoWorld} AmmoWorld */
+/** @typedef {import('./types/ammo').AmmoPoint2PointConstraint} AmmoPoint2PointConstraint */
+
+/**
+ * @typedef {Object} InteractionHooks
+ * @property {(active: boolean, reason: 'drag' | 'levitation') => void} [onMotionActivityChange]
+ */
+
+/**
+ * @typedef {Object} InteractiveObjectEntry
+ * @property {import('three').Object3D} mesh
+ * @property {() => void} callback
+ */
+
+/**
+ * @typedef {Object} LevitationState
+ * @property {import('three').Mesh} object
+ * @property {AmmoRigidBody | null | undefined} body
+ * @property {import('three').PointLight} light
+ * @property {import('three').Scene} scene
+ * @property {AmmoWorld | null | undefined} physicsWorld
+ * @property {InteractionHooks} hooks
+ * @property {boolean} wasm
+ * @property {number} startTime
+ * @property {number} startX
+ * @property {number} startZ
+ * @property {number} startY
+ * @property {number} targetY
+ * @property {import('three').Quaternion} spinQuat
+ * @property {'lifting'} state
+ */
+
+/** @type {import('three').Raycaster | undefined} */
 let raycaster;
+/** @type {import('three').Vector2 | undefined} */
 let mouse;
+let prevMouse = new THREE.Vector2(0, 0);
+/** @type {import('three').Mesh | null} */
 let draggedItem = null;
+/** @type {AmmoPoint2PointConstraint | null} */
 let dragConstraint = null;
 
-// Phase 4: drag + levitation are routed through the WASM world by default
-// (kinematic control via setDieTransform/setDieVelocity), which keeps held dice
-// authoritative in the physics worker instead of stepping ammo on the main
-// thread. `?ammo-drag` opts back into the legacy ammo constraint path; the
-// historical `?wasm-drag` flag is now a no-op alias since this is the default.
-// When WASM is unavailable we transparently fall back to the ammo path.
 const _interactionParams = new URLSearchParams(window.location.search);
 const _ammoDragRequested = _interactionParams.has('ammo-drag');
-const isWasmInteractionMode = () =>
-    !_ammoDragRequested && isWasmInitialized() && isWasmAvailable();
+const isWasmInteractionMode = () => !_ammoDragRequested && isWasmInitialized() && isWasmAvailable();
 
-// WASM-authoritative drag state (used only when isWasmInteractionMode()).
-let wasmDragActive = false;
-const _wasmDragTarget = new THREE.Vector3();
-let _wasmDragHasTarget = false;
-const MAX_DRAG_SPEED = 60; // clamp so a fast cursor can't fling the die wildly
+const wasmGrab = createWasmDieGrabState();
 
 let lastClickTime = 0;
+/** @type {import('three').Object3D | null} */
 let lastClickObject = null;
 const DOUBLE_CLICK_DELAY = 300;
 
-// Interactive Objects Registry
+/** @type {InteractiveObjectEntry[]} */
 const interactiveObjects = [];
 
+/**
+ * @param {import('three').Camera} camera
+ * @param {import('three').Scene} scene
+ * @param {AmmoWorld | null | undefined} physicsWorld
+ * @param {InteractionHooks} [hooks]
+ */
 export const initInteraction = (camera, scene, physicsWorld, hooks = {}) => {
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
 
-    // Pre-warm: force shader compilation for levitation effects
-    // This prevents the freeze on first double-click.
-    // Use requestAnimationFrame instead of setTimeout to guarantee the renderer
-    // has completed at least one frame before we try to compile shaders.
     const warmMaterials = () => {
         if (!scene.userData.renderer) {
-            // Renderer not ready yet — retry on the next frame
             requestAnimationFrame(warmMaterials);
             return;
         }
@@ -61,15 +97,13 @@ export const initInteraction = (camera, scene, physicsWorld, hooks = {}) => {
         const warmMat = new THREE.MeshBasicMaterial({ color: 0x0088ff });
         const warmMesh = new THREE.Mesh(warmGeo, warmMat);
         warmMesh.add(warmLight);
-        warmMesh.position.set(0, -1000, 0); // Hide far away
+        warmMesh.position.set(0, -1000, 0);
         scene.add(warmMesh);
-        
-        // Force shader/material warmup when the active renderer supports it.
+
         if (typeof scene.userData.renderer.compile === 'function') {
             scene.userData.renderer.compile(scene, camera);
         }
-        
-        // Clean up after a few frames
+
         setTimeout(() => {
             scene.remove(warmMesh);
             warmGeo.dispose();
@@ -77,42 +111,52 @@ export const initInteraction = (camera, scene, physicsWorld, hooks = {}) => {
             warmLight.dispose();
         }, 500);
     };
-    
-    // Kick off on the next animation frame so the renderer is ready
+
     requestAnimationFrame(warmMaterials);
 
     return {
         handleDown: (x, y) => onPointerDown(x, y, camera, scene, physicsWorld, hooks),
         handleMove: (x, y) => onPointerMove(x, y, camera),
-        handleUp: () => onPointerUp(physicsWorld, hooks)
+        handleUp: () => onPointerUp(physicsWorld, hooks),
     };
 };
 
+/**
+ * @param {import('three').Object3D} mesh
+ * @param {() => void} callback
+ */
 export const registerInteractiveObject = (mesh, callback) => {
     interactiveObjects.push({ mesh, callback });
 };
 
+/** @param {import('three').Object3D} mesh */
 export const unregisterInteractiveObject = (mesh) => {
     const index = interactiveObjects.findIndex((entry) => entry.mesh === mesh);
     if (index >= 0) interactiveObjects.splice(index, 1);
 };
 
+/**
+ * @param {number} x
+ * @param {number} y
+ * @param {import('three').Camera} camera
+ * @param {import('three').Scene} scene
+ * @param {AmmoWorld | null | undefined} physicsWorld
+ * @param {InteractionHooks} [hooks]
+ */
 function onPointerDown(x, y, camera, scene, physicsWorld, hooks = {}) {
     updateMouse(x, y);
-    
-    // Configure raycaster for precise dice picking
+
     raycaster.setFromCamera(mouse, camera);
     raycaster.params.Points.threshold = 0.1;
     raycaster.params.Line.threshold = 0.1;
-    
-    // 1. Check Interactive Objects (Static props like Lamps)
+
     if (interactiveObjects.length > 0) {
-        const interactiveMeshes = interactiveObjects.map(obj => obj.mesh);
+        const interactiveMeshes = interactiveObjects.map((obj) => obj.mesh);
         const intersectsInteractive = raycaster.intersectObjects(interactiveMeshes, true);
 
         if (intersectsInteractive.length > 0) {
             const hit = intersectsInteractive[0];
-            const registered = interactiveObjects.find(io => {
+            const registered = interactiveObjects.find((io) => {
                 return io.mesh === hit.object || isDescendant(hit.object, io.mesh);
             });
 
@@ -123,30 +167,34 @@ function onPointerDown(x, y, camera, scene, physicsWorld, hooks = {}) {
         }
     }
 
-    // 2. Check Physics Objects (Dice) - use recursive to catch all mesh children
-    const diceGroups = spawnedDice.map(d => d.mesh);
+    if (isCupInteractionActive()) return;
+
+    const diceGroups = spawnedDice.map((d) => d.mesh);
     const intersects = raycaster.intersectObjects(diceGroups, true);
 
     if (intersects.length > 0) {
         const intersect = intersects[0];
+        /** @type {import('three').Object3D | null} */
         let object = intersect.object;
         const point = intersect.point;
 
-        // Traverse up to find the die root (ammo body or WASM-only marker).
         while (object && !object.userData.isDie && !object.userData.body && object.parent) {
             object = object.parent;
         }
 
         if (object && (object.userData.isDie || object.userData.body)) {
             const wasmMode = isWasmInteractionMode();
-            // In WASM mode the die stays WASM-authoritative; in ammo mode we hand
-            // it to ammo for constraint-based dragging.
-            if (!wasmMode) prepareDieForAmmoInteraction(object);
+            if (!wasmMode)
+                prepareDieForAmmoInteraction(/** @type {import('three').Mesh} */ (object));
 
             const now = Date.now();
-            if (lastClickObject === object && (now - lastClickTime) < DOUBLE_CLICK_DELAY) {
-                // Double click detected
-                triggerLevitation(object, scene, physicsWorld, hooks);
+            if (lastClickObject === object && now - lastClickTime < DOUBLE_CLICK_DELAY) {
+                triggerLevitation(
+                    /** @type {import('three').Mesh} */ (object),
+                    scene,
+                    physicsWorld,
+                    hooks
+                );
                 lastClickObject = null;
                 lastClickTime = 0;
                 return;
@@ -155,10 +203,10 @@ function onPointerDown(x, y, camera, scene, physicsWorld, hooks = {}) {
             lastClickTime = now;
             lastClickObject = object;
 
-            draggedItem = object;
+            draggedItem = /** @type {import('three').Mesh} */ (object);
             hooks.onMotionActivityChange?.(true, 'drag');
             if (wasmMode) {
-                startWasmDrag(object, point);
+                startWasmDieGrab(wasmGrab, draggedItem, point);
             } else {
                 startDrag(object.userData.body, point, physicsWorld);
             }
@@ -166,6 +214,9 @@ function onPointerDown(x, y, camera, scene, physicsWorld, hooks = {}) {
     }
 }
 
+/**
+ * @param {import('three').Object3D} child @param {import('three').Object3D} parent
+ */
 function isDescendant(child, parent) {
     let curr = child.parent;
     while (curr) {
@@ -175,19 +226,23 @@ function isDescendant(child, parent) {
     return false;
 }
 
+/** @param {number} x @param {number} y @param {import('three').Camera} camera */
 function onPointerMove(x, y, camera) {
     updateMouse(x, y);
 
+    const cup = getDiceCupController();
+    if (cup) {
+        cup.handlePointerMove(x, y, prevMouse.x, prevMouse.y);
+    }
+    prevMouse.set(x, y);
+
     if (!draggedItem) return;
 
-    // Project the cursor onto a camera-parallel plane through the die.
     const target = projectCursorToDiePlane(camera);
     if (!target) return;
 
-    if (wasmDragActive) {
-        // Drive happens in the update loop (needs dt); just record the target.
-        _wasmDragTarget.copy(target);
-        _wasmDragHasTarget = true;
+    if (wasmGrab.active) {
+        setWasmDieGrabTarget(wasmGrab, target);
     } else if (dragConstraint) {
         const Ammo = getAmmo();
         if (!Ammo) return;
@@ -195,7 +250,9 @@ function onPointerMove(x, y, camera) {
     }
 }
 
+/** @param {import('three').Camera} camera @returns {import('three').Vector3 | null} */
 function projectCursorToDiePlane(camera) {
+    if (!draggedItem) return null;
     raycaster.setFromCamera(mouse, camera);
     const plane = new THREE.Plane();
     plane.setFromNormalAndCoplanarPoint(
@@ -206,31 +263,24 @@ function projectCursorToDiePlane(camera) {
     return raycaster.ray.intersectPlane(plane, target) ? target : null;
 }
 
+/** @param {AmmoWorld | null | undefined} physicsWorld @param {InteractionHooks} [hooks] */
 function onPointerUp(physicsWorld, hooks = {}) {
-    if (wasmDragActive) {
-        if (draggedItem) setDieWasmKinematic(draggedItem, false);
-        // Release: impart the tracked cursor velocity as an impulse (applyImpulse
-        // wakes the body) so a flick tosses the die; otherwise it just drops. The
-        // WASM solver takes over from here. Authority is already 'wasm'.
-        if (_dragHasPrev && _dragReleaseVel.lengthSq() > 0.0001) {
-            applyWasmImpulseForDie(draggedItem, {
-                x: _dragReleaseVel.x, y: _dragReleaseVel.y, z: _dragReleaseVel.z
-            }, null);
-        }
-        wasmDragActive = false;
-        _wasmDragHasTarget = false;
-        _dragHasPrev = false;
+    getDiceCupController()?.handlePointerUp();
+
+    if (wasmGrab.active) {
+        endWasmDieGrab(wasmGrab, {
+            onReleased: () => hooks.onMotionActivityChange?.(false, 'drag'),
+        });
         draggedItem = null;
-        hooks.onMotionActivityChange?.(false, 'drag');
         return;
     }
 
-    if (dragConstraint) {
+    if (dragConstraint && draggedItem) {
         const Ammo = getAmmo();
-        if (Ammo) {
+        if (Ammo && physicsWorld) {
             syncDieBodyStateToWasm(draggedItem);
             setDiePhysicsAuthority(draggedItem, 'wasm');
-            physicsWorld.removeConstraint(dragConstraint);
+            physicsWorld.removeConstraint?.(dragConstraint);
             Ammo.destroy(dragConstraint);
         }
         dragConstraint = null;
@@ -239,139 +289,133 @@ function onPointerUp(physicsWorld, hooks = {}) {
     }
 }
 
+/** @param {number} x @param {number} y */
 function updateMouse(x, y) {
-    // x and y are assumed to be Normalized Device Coordinates (-1 to +1)
-    // passed directly from the main loop which calculates them from the crosshair position
+    if (!mouse) return;
     mouse.x = x;
     mouse.y = y;
 }
 
+/**
+ * @param {AmmoRigidBody | null | undefined} body
+ * @param {import('three').Vector3} point
+ * @param {AmmoWorld | null | undefined} physicsWorld
+ */
 function startDrag(body, point, physicsWorld) {
     const Ammo = getAmmo();
-    if (!Ammo || !body || !physicsWorld) return;
+    if (!Ammo || !body || !physicsWorld || !draggedItem) return;
     const localPointThree = draggedItem.worldToLocal(point.clone());
-    const localPivotAmmo = new Ammo.btVector3(localPointThree.x, localPointThree.y, localPointThree.z);
+    const localPivotAmmo = new Ammo.btVector3(
+        localPointThree.x,
+        localPointThree.y,
+        localPointThree.z
+    );
 
     dragConstraint = new Ammo.btPoint2PointConstraint(body, localPivotAmmo);
 
-    // Make the constraint stronger
-    const setting = (typeof dragConstraint.get_m_setting === 'function') ? dragConstraint.get_m_setting() : (dragConstraint.m_setting || null);
+    const setting =
+        typeof dragConstraint.get_m_setting === 'function'
+            ? dragConstraint.get_m_setting()
+            : dragConstraint.m_setting || null;
     if (setting) {
-        if (typeof setting.set_m_impulseClamp === 'function') {
-            setting.set_m_impulseClamp(100);
-            setting.set_m_tau(0.001);
-            setting.set_m_damping(1.0);
+        /** @type {import('./types/ammo').AmmoConstraintSettings} */
+        const constraintSettings = setting;
+        if (typeof constraintSettings.set_m_impulseClamp === 'function') {
+            constraintSettings.set_m_impulseClamp(100);
+            constraintSettings.set_m_tau(0.001);
+            constraintSettings.set_m_damping(1.0);
         } else {
-            setting.m_impulseClamp = 100;
-            setting.m_tau = 0.001;
-            setting.m_damping = 1.0;
+            constraintSettings.m_impulseClamp = 100;
+            constraintSettings.m_tau = 0.001;
+            constraintSettings.m_damping = 1.0;
         }
     }
 
-    physicsWorld.addConstraint(dragConstraint);
-    body.activate();
+    physicsWorld.addConstraint?.(dragConstraint);
+    body.activate?.();
 }
 
-function startWasmDrag(object, point) {
-    setDiePhysicsAuthority(object, 'wasm');
-    setDieWasmKinematic(object, true);
-    wasmDragActive = true;
-    _wasmDragHasTarget = true;
-    _wasmDragTarget.copy(point);
-}
-
-// Reusable scratch vectors for the WASM drag drive (avoid per-frame allocation).
-const _dragPrevTarget = new THREE.Vector3();
-let _dragHasPrev = false;
-const _dragReleaseVel = new THREE.Vector3();
-
-function updateWasmDrag(deltaTime) {
-    if (!wasmDragActive || !draggedItem || !_wasmDragHasTarget) return;
-    const dt = deltaTime > 0 ? deltaTime : 1 / 60;
-
-    // Track the cursor velocity so releasing the die imparts a natural toss.
-    if (_dragHasPrev) {
-        _dragReleaseVel.copy(_wasmDragTarget).sub(_dragPrevTarget).divideScalar(dt);
-        if (_dragReleaseVel.lengthSq() > MAX_DRAG_SPEED * MAX_DRAG_SPEED) {
-            _dragReleaseVel.setLength(MAX_DRAG_SPEED);
-        }
-    }
-    _dragPrevTarget.copy(_wasmDragTarget);
-    _dragHasPrev = true;
-
-    // Kinematic hold: place the die at the cursor target each frame, keeping its
-    // current orientation. setDieTransform wakes the body and zeroes velocity, so
-    // this works reliably against the shipped WASM binary (setDieVelocity alone
-    // does not wake a settled die — see the C++ note).
-    driveDieWasmTransform(draggedItem, _wasmDragTarget, draggedItem.quaternion);
-    draggedItem.position.copy(_wasmDragTarget); // mirror for immediate visuals
-}
-
+/** @param {number} [deltaTime] */
 export const updateInteraction = (deltaTime = 1 / 60) => {
-    if (wasmDragActive) {
-        updateWasmDrag(deltaTime);
-    } else if (draggedItem && draggedItem.userData.body) {
-        draggedItem.userData.body.activate();
+    if (wasmGrab.active) {
+        updateWasmDieGrab(wasmGrab, deltaTime);
+    } else if (draggedItem?.userData.body) {
+        draggedItem.userData.body.activate?.();
     }
-    updateLevitation(deltaTime);
+    updateLevitation();
 };
 
 export const isDragging = () => draggedItem !== null;
 export const hasActiveDiceInteraction = () => draggedItem !== null || levitatingDice.length > 0;
 
-// True only when an active interaction relies on the ammo.js solver (so the main
-// loop must keep stepping ammo). WASM-mode interactions don't need ammo stepping.
 export const interactionNeedsAmmoStep = () =>
     !isWasmInteractionMode() && hasActiveDiceInteraction();
 
+/**
+ * @param {import('three').Camera} camera
+ * @param {number} normX
+ * @param {number} normY
+ */
 export const isHoveringOverDice = (camera, normX, normY) => {
-    if (!raycaster) return false;
+    if (!raycaster || !mouse) return false;
     mouse.x = normX;
     mouse.y = normY;
     raycaster.setFromCamera(mouse, camera);
-    const meshes = spawnedDice.map(d => d.mesh);
+    const meshes = spawnedDice.map((d) => d.mesh);
     const intersects = raycaster.intersectObjects(meshes, true);
     return intersects.length > 0;
 };
 
-// Get the first die under the cursor (for hover effects)
+/**
+ * @param {import('three').Camera} camera
+ * @param {number} normX
+ * @param {number} normY
+ * @returns {import('three').Mesh | null}
+ */
 export const getHoveredDie = (camera, normX, normY) => {
-    if (!raycaster) return null;
+    if (!raycaster || !mouse) return null;
     mouse.x = normX;
     mouse.y = normY;
     raycaster.setFromCamera(mouse, camera);
-    const meshes = spawnedDice.map(d => d.mesh);
+    const meshes = spawnedDice.map((d) => d.mesh);
     const intersects = raycaster.intersectObjects(meshes, true);
     if (intersects.length > 0) {
+        /** @type {import('three').Object3D | null} */
         let object = intersects[0].object;
-        // Traverse up to find the die group
         while (object && !object.userData.isDie && !object.userData.body && object.parent) {
             object = object.parent;
         }
-        return object?.userData?.isDie || object?.userData?.body ? object : null;
+        return object?.userData?.isDie || object?.userData?.body
+            ? /** @type {import('three').Mesh} */ (object)
+            : null;
     }
     return null;
 };
 
+/** @type {LevitationState[]} */
 const levitatingDice = [];
 
+/**
+ * @param {import('three').Mesh} object
+ * @param {import('three').Scene} scene
+ * @param {AmmoWorld | null | undefined} physicsWorld
+ * @param {InteractionHooks} [hooks]
+ */
 function triggerLevitation(object, scene, physicsWorld, hooks = {}) {
-    if (levitatingDice.find(d => d.object === object)) return;
+    if (levitatingDice.find((d) => d.object === object)) return;
 
     const wasmMode = isWasmInteractionMode();
-    const body = object.userData.body;
+    const body = /** @type {AmmoRigidBody | null | undefined} */ (object.userData.body);
 
     if (wasmMode) {
         setDiePhysicsAuthority(object, 'wasm');
         setDieWasmKinematic(object, true);
-    } else {
+    } else if (body) {
         prepareDieForAmmoInteraction(object);
-        // Switch to Kinematic so we can control position manually
-        body.setCollisionFlags(body.getCollisionFlags() | 2); // CF_KINEMATIC_OBJECT
-        body.setActivationState(4); // DISABLE_DEACTIVATION
+        body.setCollisionFlags?.((body.getCollisionFlags?.() ?? 0) | 2);
+        body.setActivationState?.(4);
     }
 
-    // Create Blue Light
     const light = new THREE.PointLight(0x0088ff, 5, 5);
     light.castShadow = true;
     light.shadow.bias = -0.0001;
@@ -379,11 +423,11 @@ function triggerLevitation(object, scene, physicsWorld, hooks = {}) {
     object.add(light);
 
     levitatingDice.push({
-        object: object,
-        body: body,
-        light: light,
-        scene: scene,
-        physicsWorld: physicsWorld,
+        object,
+        body,
+        light,
+        scene,
+        physicsWorld,
         hooks,
         wasm: wasmMode,
         startTime: Date.now(),
@@ -391,20 +435,22 @@ function triggerLevitation(object, scene, physicsWorld, hooks = {}) {
         startZ: object.position.z,
         startY: object.position.y,
         targetY: object.position.y + 2.0,
-        // Tracked spin orientation for WASM kinematic control.
         spinQuat: object.quaternion.clone(),
-        state: 'lifting'
+        state: 'lifting',
     });
 
     if (!wasmMode) setDiePhysicsAuthority(object, 'ammo');
     hooks.onMotionActivityChange?.(true, 'levitation');
 }
 
-// Per-frame Y-axis spin increment applied during levitation hover.
 const _levitationSpinStep = new THREE.Quaternion();
 const _UP = new THREE.Vector3(0, 1, 0);
 
-// Reusable transform for levitation updates
+/**
+ * @typedef {{ setIdentity(): void, setOrigin(v: unknown): void, setRotation(q: unknown): void }} LevitationTransform
+ */
+
+/** @type {LevitationTransform | null} */
 let _levitationTransform = null;
 
 function updateLevitation() {
@@ -413,7 +459,6 @@ function updateLevitation() {
     const now = Date.now();
     const Ammo = getAmmo();
 
-    // Lazy-init shared transform (only needed for the ammo path)
     if (!_levitationTransform && Ammo) {
         _levitationTransform = new Ammo.btTransform();
     }
@@ -423,11 +468,10 @@ function updateLevitation() {
         const elapsed = (now - item.startTime) / 1000;
 
         if (elapsed < 1.5) {
-            // Lifting (0-0.5s) or Hovering (0.5-1.5s)
             let currentY = item.startY;
             if (elapsed < 0.5) {
                 const t = elapsed / 0.5;
-                const ease = t * (2 - t); // Ease out quad
+                const ease = t * (2 - t);
                 currentY = item.startY + (item.targetY - item.startY) * ease;
             } else {
                 currentY = item.targetY;
@@ -443,30 +487,24 @@ function updateLevitation() {
                 );
                 item.object.position.set(item.startX, currentY, item.startZ);
                 item.object.quaternion.copy(item.spinQuat);
-            } else if (item.body && _levitationTransform) {
-                // Update Mesh Position
+            } else if (item.body && _levitationTransform && Ammo) {
                 item.object.position.y = currentY;
-                // Spin Mesh
-                item.object.rotateY(0.15); // Spin speed
+                item.object.rotateY(0.15);
 
-                // Sync Body to Mesh
                 const p = item.object.position;
                 const q = item.object.quaternion;
                 _levitationTransform.setIdentity();
                 _levitationTransform.setOrigin(new Ammo.btVector3(p.x, p.y, p.z));
                 _levitationTransform.setRotation(new Ammo.btQuaternion(q.x, q.y, q.z, q.w));
-                item.body.setWorldTransform(_levitationTransform);
-                item.body.getMotionState().setWorldTransform(_levitationTransform);
+                item.body.setWorldTransform?.(_levitationTransform);
+                item.body.getMotionState?.()?.setWorldTransform(_levitationTransform);
             }
-
         } else {
-            // Release
             if (item.light) {
                 item.object.remove(item.light);
                 if (item.light.dispose) item.light.dispose();
             }
 
-            // Random Throw — weaker than a normal roll.
             const forceX = (Math.random() - 0.5) * 50;
             const forceY = Math.random() * 20 - 10;
             const forceZ = (Math.random() - 0.5) * 50;
@@ -485,8 +523,8 @@ function updateLevitation() {
                 );
                 setDiePhysicsAuthority(item.object, 'wasm');
             } else if (item.body && Ammo) {
-                item.body.setCollisionFlags(item.body.getCollisionFlags() & ~2);
-                item.body.setActivationState(1); // ACTIVE_TAG
+                item.body.setCollisionFlags?.((item.body.getCollisionFlags?.() ?? 0) & ~2);
+                item.body.setActivationState?.(1);
 
                 syncDieMeshStateToWasm(item.object);
                 applyWasmImpulseForDie(
@@ -496,8 +534,8 @@ function updateLevitation() {
                 );
                 setDiePhysicsAuthority(item.object, 'wasm');
 
-                item.body.applyCentralImpulse(new Ammo.btVector3(forceX, forceY, forceZ));
-                item.body.applyTorqueImpulse(new Ammo.btVector3(spinX, spinY, spinZ));
+                item.body.applyCentralImpulse?.(new Ammo.btVector3(forceX, forceY, forceZ));
+                item.body.applyTorqueImpulse?.(new Ammo.btVector3(spinX, spinY, spinZ));
             }
 
             item.hooks?.onMotionActivityChange?.(false, 'levitation');

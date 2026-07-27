@@ -4,7 +4,7 @@ const DIE_SIDES = {
     d8: 8,
     d10: 10,
     d12: 12,
-    d20: 20
+    d20: 20,
 };
 
 const DIE_ORDER = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
@@ -12,11 +12,11 @@ const DIE_ORDER = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
 // Chi-squared critical values for alpha=0.05, df = sides - 1.
 const CHI_SQUARED_CRITICAL_95 = {
     4: 7.815,
-    6: 11.070,
+    6: 11.07,
     8: 14.067,
     10: 16.919,
     12: 19.675,
-    20: 30.144
+    20: 30.144,
 };
 
 const DEFAULT_MIN_SAMPLE_SIZE = 100;
@@ -30,7 +30,7 @@ function createEmptyEntry(sides) {
     return {
         sides,
         totalRolls: 0,
-        counts
+        counts,
     };
 }
 
@@ -52,9 +52,7 @@ export function computeChiSquared(observedCounts, sides) {
     const expected = total / sides;
     if (expected === 0) return 0;
 
-    return observedCounts.reduce((sum, count) => (
-        sum + ((count - expected) ** 2) / expected
-    ), 0);
+    return observedCounts.reduce((sum, count) => sum + (count - expected) ** 2 / expected, 0);
 }
 
 function serializeStore(store) {
@@ -63,7 +61,7 @@ function serializeStore(store) {
         payload[dieType] = {
             sides: entry.sides,
             totalRolls: entry.totalRolls,
-            counts: Object.fromEntries(entry.counts)
+            counts: Object.fromEntries(entry.counts),
         };
     }
     return payload;
@@ -97,7 +95,7 @@ function deserializeStore(payload) {
 export function createRollStats({
     minSampleSize = DEFAULT_MIN_SAMPLE_SIZE,
     storageKey = STORAGE_KEY,
-    persist = true
+    persist = true,
 } = {}) {
     const store = new Map();
 
@@ -151,36 +149,38 @@ export function createRollStats({
     }
 
     function getStats() {
-        return DIE_ORDER
-            .map((dieType) => {
-                const entry = store.get(dieType);
-                if (!entry) return null;
+        /** @type {import('../types/roll').RollDieStats[]} */
+        const stats = DIE_ORDER.map((dieType) => {
+            const entry = store.get(dieType);
+            if (!entry) return null;
 
-                const observedCounts = Array.from(
-                    { length: entry.sides },
-                    (_, index) => entry.counts.get(index + 1) ?? 0
-                );
-                const chiSquared = computeChiSquared(observedCounts, entry.sides);
-                const criticalValue = CHI_SQUARED_CRITICAL_95[entry.sides] ?? null;
-                const expectedMean = (entry.sides + 1) / 2;
-                const actualMean = entry.totalRolls > 0
-                    ? observedCounts.reduce((sum, count, index) => sum + count * (index + 1), 0) / entry.totalRolls
+            const observedCounts = Array.from(
+                { length: entry.sides },
+                (_, index) => entry.counts.get(index + 1) ?? 0
+            );
+            const chiSquared = computeChiSquared(observedCounts, entry.sides);
+            const criticalValue = CHI_SQUARED_CRITICAL_95[entry.sides] ?? null;
+            const expectedMean = (entry.sides + 1) / 2;
+            const actualMean =
+                entry.totalRolls > 0
+                    ? observedCounts.reduce((sum, count, index) => sum + count * (index + 1), 0) /
+                      entry.totalRolls
                     : 0;
 
-                return {
-                    dieType,
-                    sides: entry.sides,
-                    totalRolls: entry.totalRolls,
-                    observedCounts,
-                    chiSquared,
-                    criticalValue,
-                    expectedMean,
-                    actualMean,
-                    hasEnoughSamples: entry.totalRolls >= minSampleSize,
-                    passes: criticalValue == null ? null : chiSquared <= criticalValue
-                };
-            })
-            .filter(Boolean);
+            return {
+                dieType,
+                sides: entry.sides,
+                totalRolls: entry.totalRolls,
+                observedCounts,
+                chiSquared,
+                criticalValue,
+                expectedMean,
+                actualMean,
+                hasEnoughSamples: entry.totalRolls >= minSampleSize,
+                passes: criticalValue == null ? null : chiSquared <= criticalValue,
+            };
+        }).filter(Boolean);
+        return stats;
     }
 
     load();
@@ -189,7 +189,7 @@ export function createRollStats({
         recordResults,
         reset,
         getStats,
-        minSampleSize
+        minSampleSize,
     };
 }
 

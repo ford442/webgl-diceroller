@@ -13,7 +13,7 @@ const EXPECTED = '#6486ff';
 export function createFairnessMonitor({
     enabled = false,
     rollStats = null,
-    minSampleSize = DEFAULT_MIN_SAMPLE_SIZE
+    minSampleSize = DEFAULT_MIN_SAMPLE_SIZE,
 } = {}) {
     let panel = null;
 
@@ -102,18 +102,19 @@ export function createFairnessMonitor({
     function renderDieSection(stat) {
         const expected = stat.totalRolls / stat.sides;
         const maxObserved = Math.max(...stat.observedCounts, expected, 1);
-        const statusColor = !stat.hasEnoughSamples
-            ? LABEL
-            : (stat.passes ? PASS : FAIL);
+        const statusColor = !stat.hasEnoughSamples ? LABEL : stat.passes ? PASS : FAIL;
         const statusText = !stat.hasEnoughSamples
             ? `warming up (${minSampleSize - stat.totalRolls} to go)`
-            : (stat.passes ? 'pass' : 'fail');
+            : stat.passes
+              ? 'pass'
+              : 'fail';
 
-        const rows = stat.observedCounts.map((count, index) => {
-            const face = index + 1;
-            const observedWidth = `${(count / maxObserved) * 100}%`;
-            const expectedWidth = `${(expected / maxObserved) * 100}%`;
-            return `
+        const rows = stat.observedCounts
+            .map((count, index) => {
+                const face = index + 1;
+                const observedWidth = `${(count / maxObserved) * 100}%`;
+                const expectedWidth = `${(expected / maxObserved) * 100}%`;
+                return `
                 <div style="display:grid;grid-template-columns:28px 1fr 56px;gap:8px;align-items:center;">
                     <div style="color:${LABEL};font-variant-numeric:tabular-nums;">${face}</div>
                     <div style="display:flex;align-items:center;gap:4px;height:10px;">
@@ -123,7 +124,8 @@ export function createFairnessMonitor({
                     <div style="text-align:right;color:${MUTED};font-variant-numeric:tabular-nums;">${count}/${expected.toFixed(1)}</div>
                 </div>
             `;
-        }).join('');
+            })
+            .join('');
 
         return `
             <section style="padding:8px 9px 9px;background:rgba(255,255,255,0.03);border:1px solid rgba(232, 200, 130, 0.16);border-radius:6px;">
@@ -145,7 +147,7 @@ export function createFairnessMonitor({
         init,
         reset,
         render,
-        getStats: () => rollStats?.getStats() ?? []
+        getStats: () => rollStats?.getStats() ?? [],
     };
 }
 

@@ -104,14 +104,16 @@ export function createAstrolabe(scene, physicsWorld, position, rotationY) {
         const collisionRadius = ringRadius * 1.1; // Slightly larger for padding
 
         if (Ammo && physicsWorld) {
-            const shape = new Ammo.btCylinderShape(new Ammo.btVector3(collisionRadius, totalHeight / 2, collisionRadius));
-    
+            const shape = new Ammo.btCylinderShape(
+                new Ammo.btVector3(collisionRadius, totalHeight / 2, collisionRadius)
+            );
+
             // Create an invisible proxy mesh to align the physics body
             const proxyMesh = new THREE.Mesh();
             proxyMesh.position.copy(group.position);
             proxyMesh.position.y += totalHeight / 2; // Move origin to center of cylinder
             proxyMesh.quaternion.copy(group.quaternion);
-    
+
             body = createStaticBody(physicsWorld, proxyMesh, shape);
         }
     }
@@ -119,11 +121,11 @@ export function createAstrolabe(scene, physicsWorld, position, rotationY) {
     return {
         group,
         physicsBody: body,
-        update: (deltaTime, elapsedTime) => {
+        update: (deltaTime, _elapsedTime) => {
             // Optional: Make inner rings slowly rotate for a magical effect
             innerRing1.rotation.y += deltaTime * 0.2;
             innerRing2.rotation.z += deltaTime * 0.3;
             innerRing1.rotation.x += deltaTime * 0.1;
-        }
+        },
     };
 }

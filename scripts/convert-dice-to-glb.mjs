@@ -216,16 +216,14 @@ async function dracoCompress(io, inputBuffer) {
         dedup(),
         weld(),
         prune(),
-        quantize({ quantizePosition: 14, quantizeNormal: 10, quantizeTexcoord: 12 }),
+        quantize({ quantizePosition: 14, quantizeNormal: 10, quantizeTexcoord: 12 })
     );
 
-    doc.createExtension(KHRDracoMeshCompression)
-        .setRequired(true)
-        .setEncoderOptions({
-            method: KHRDracoMeshCompression.EncoderMethod.EDGEBREAKER,
-            encodeSpeed: 5,
-            decodeSpeed: 5,
-        });
+    doc.createExtension(KHRDracoMeshCompression).setRequired(true).setEncoderOptions({
+        method: KHRDracoMeshCompression.EncoderMethod.EDGEBREAKER,
+        encodeSpeed: 5,
+        decodeSpeed: 5,
+    });
 
     return io.writeBinary(doc);
 }
@@ -233,12 +231,10 @@ async function dracoCompress(io, inputBuffer) {
 async function main() {
     await fs.mkdir(OUT_DIR, { recursive: true });
 
-    const io = new NodeIO()
-        .registerExtensions([KHRDracoMeshCompression])
-        .registerDependencies({
-            'draco3d.encoder': await draco3d.createEncoderModule(),
-            'draco3d.decoder': await draco3d.createDecoderModule(),
-        });
+    const io = new NodeIO().registerExtensions([KHRDracoMeshCompression]).registerDependencies({
+        'draco3d.encoder': await draco3d.createEncoderModule(),
+        'draco3d.decoder': await draco3d.createDecoderModule(),
+    });
 
     const server = await startServer();
     const { port } = server.address();
@@ -246,7 +242,9 @@ async function main() {
 
     const browser = await chromium.launch();
     const page = await browser.newPage();
-    page.on('console', (m) => { if (m.type() === 'error') console.error('  [page]', m.text()); });
+    page.on('console', (m) => {
+        if (m.type() === 'error') console.error('  [page]', m.text());
+    });
     page.on('pageerror', (e) => console.error('  [page error]', e.message));
     await page.goto(base + '/__convert.html', { waitUntil: 'load' });
     await page.waitForFunction('window.__ready === true');
@@ -270,7 +268,9 @@ async function main() {
         totalRaw += dracoGlb.length;
         totalGz += gz;
         results.push({ out: die.out, glb: dracoGlb.length, gz });
-        console.log(`${(dracoGlb.length / 1024).toFixed(1)} KB (gzip ${(gz / 1024).toFixed(1)} KB)`);
+        console.log(
+            `${(dracoGlb.length / 1024).toFixed(1)} KB (gzip ${(gz / 1024).toFixed(1)} KB)`
+        );
     }
 
     await browser.close();
@@ -278,9 +278,13 @@ async function main() {
 
     console.log('\n--- Summary ---');
     for (const r of results) {
-        console.log(`  ${r.out.padEnd(12)} ${(r.glb / 1024).toFixed(1).padStart(8)} KB   gzip ${(r.gz / 1024).toFixed(1).padStart(7)} KB`);
+        console.log(
+            `  ${r.out.padEnd(12)} ${(r.glb / 1024).toFixed(1).padStart(8)} KB   gzip ${(r.gz / 1024).toFixed(1).padStart(7)} KB`
+        );
     }
-    console.log(`  ${'TOTAL'.padEnd(12)} ${(totalRaw / 1024).toFixed(1).padStart(8)} KB   gzip ${(totalGz / 1024).toFixed(1).padStart(7)} KB`);
+    console.log(
+        `  ${'TOTAL'.padEnd(12)} ${(totalRaw / 1024).toFixed(1).padStart(8)} KB   gzip ${(totalGz / 1024).toFixed(1).padStart(7)} KB`
+    );
     console.log(`\nDone. Output in ${path.relative(ROOT, OUT_DIR)}/`);
 }
 

@@ -1,33 +1,38 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createSmokingPipe(scene, physicsWorld, position = { x: -6, y: -2.75, z: 5 }, rotation = Math.PI / 8) {
+export function createSmokingPipe(
+    scene,
+    physicsWorld,
+    position = { x: -6, y: -2.75, z: 5 },
+    rotation = Math.PI / 8
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'SmokingPipe';
 
     // Materials
     const woodMat = new THREE.MeshStandardMaterial({
-        color: 0x8B4513,
+        color: 0x8b4513,
         roughness: 0.6,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     const darkWoodMat = new THREE.MeshStandardMaterial({
-        color: 0x5D3A1A,
+        color: 0x5d3a1a,
         roughness: 0.7,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     const leatherMat = new THREE.MeshStandardMaterial({
-        color: 0x8B4513,
+        color: 0x8b4513,
         roughness: 0.9,
-        bumpScale: 0.05
+        bumpScale: 0.05,
     });
 
     const tobaccoMat = new THREE.MeshStandardMaterial({
-        color: 0x3D2314,
-        roughness: 1.0
+        color: 0x3d2314,
+        roughness: 1.0,
     });
 
     // --- The Pipe ---
@@ -66,9 +71,9 @@ export function createSmokingPipe(scene, physicsWorld, position = { x: -6, y: -2
 
     // Pipe Stem (Curved tube)
     const curve = new THREE.QuadraticBezierCurve3(
-        new THREE.Vector3(0.25, 0.8, 0),           // Start at bowl
-        new THREE.Vector3(0.8, 1.0, 0),            // Control point (up curve)
-        new THREE.Vector3(1.8, 0.3, 0)             // End at mouthpiece
+        new THREE.Vector3(0.25, 0.8, 0), // Start at bowl
+        new THREE.Vector3(0.8, 1.0, 0), // Control point (up curve)
+        new THREE.Vector3(1.8, 0.3, 0) // End at mouthpiece
     );
     const stemGeo = new THREE.TubeGeometry(curve, 16, 0.08, 8, false);
     const stem = new THREE.Mesh(stemGeo, darkWoodMat);
@@ -102,7 +107,7 @@ export function createSmokingPipe(scene, physicsWorld, position = { x: -6, y: -2
         }
     }
     pouchGeo.computeVertexNormals();
-    
+
     const pouch = new THREE.Mesh(pouchGeo, leatherMat);
     pouch.scale.set(1, 0.8, 0.6);
     pouch.castShadow = true;
@@ -118,17 +123,20 @@ export function createSmokingPipe(scene, physicsWorld, position = { x: -6, y: -2
 
     // Drawstring
     const drawstringCurve = new THREE.EllipseCurve(
-        0, 0,           // center
-        0.32, 0.32,     // x, y radius
-        0, 2 * Math.PI, // start, end angle
-        false,          // clockwise
-        0               // rotation
+        0,
+        0, // center
+        0.32,
+        0.32, // x, y radius
+        0,
+        2 * Math.PI, // start, end angle
+        false, // clockwise
+        0 // rotation
     );
     const drawstringPoints = drawstringCurve.getPoints(32);
     const drawstringGeo = new THREE.BufferGeometry().setFromPoints(
-        drawstringPoints.map(p => new THREE.Vector3(p.x, 0, p.y))
+        drawstringPoints.map((p) => new THREE.Vector3(p.x, 0, p.y))
     );
-    const drawstringMat = new THREE.LineBasicMaterial({ color: 0x3D2314 });
+    const drawstringMat = new THREE.LineBasicMaterial({ color: 0x3d2314 });
     const drawstring = new THREE.Line(drawstringGeo, drawstringMat);
     drawstring.position.y = 0.35;
     pouchGroup.add(drawstring);
@@ -139,11 +147,7 @@ export function createSmokingPipe(scene, physicsWorld, position = { x: -6, y: -2
         const flake = new THREE.Mesh(flakeGeo, tobaccoMat);
         const angle = Math.random() * Math.PI * 2;
         const dist = 0.6 + Math.random() * 0.4;
-        flake.position.set(
-            Math.cos(angle) * dist,
-            0.01,
-            Math.sin(angle) * dist
-        );
+        flake.position.set(Math.cos(angle) * dist, 0.01, Math.sin(angle) * dist);
         flake.rotation.y = Math.random() * Math.PI;
         flake.rotation.x = Math.random() * 0.3;
         flake.castShadow = true;
@@ -170,7 +174,7 @@ export function createSmokingPipe(scene, physicsWorld, position = { x: -6, y: -2
     const smokeMat = new THREE.MeshBasicMaterial({
         color: 0xaaaaaa,
         transparent: true,
-        opacity: 0.3
+        opacity: 0.3,
     });
 
     for (let i = 0; i < 8; i++) {
@@ -184,7 +188,7 @@ export function createSmokingPipe(scene, physicsWorld, position = { x: -6, y: -2
             initialY: smoke.position.y,
             speed: 0.2 + Math.random() * 0.3,
             offset: Math.random() * Math.PI * 2,
-            life: Math.random()
+            life: Math.random(),
         };
         smokeGroup.add(smoke);
         smokeParticles.push(smoke);
@@ -192,10 +196,10 @@ export function createSmokingPipe(scene, physicsWorld, position = { x: -6, y: -2
 
     // Store update function for animation
     group.userData.updateSmoke = (time) => {
-        smokeParticles.forEach((smoke, idx) => {
+        smokeParticles.forEach((smoke, _idx) => {
             const data = smoke.userData;
             data.life += 0.01;
-            
+
             if (data.life > 1) {
                 data.life = 0;
                 smoke.position.set(
@@ -205,10 +209,10 @@ export function createSmokingPipe(scene, physicsWorld, position = { x: -6, y: -2
                 );
                 smoke.scale.setScalar(1);
             }
-            
+
             smoke.position.y += data.speed * 0.016;
             smoke.position.x += Math.sin(time * 2 + data.offset) * 0.002;
-            
+
             const scale = 1 + data.life * 2;
             smoke.scale.setScalar(scale);
             smoke.material.opacity = 0.3 * (1 - data.life);
@@ -220,7 +224,9 @@ export function createSmokingPipe(scene, physicsWorld, position = { x: -6, y: -2
     if (ammo && physicsWorld) {
         const bowlShape = new ammo.btBoxShape(new ammo.btVector3(0.35, 0.5, 0.35));
         const bowlDummy = new THREE.Object3D();
-        bowlDummy.position.copy(group.position).add(new THREE.Vector3(-0.8, 0.5, 0).applyEuler(group.rotation));
+        bowlDummy.position
+            .copy(group.position)
+            .add(new THREE.Vector3(-0.8, 0.5, 0).applyEuler(group.rotation));
         bowlDummy.quaternion.copy(group.quaternion);
         createStaticBody(physicsWorld, bowlDummy, bowlShape);
     }
@@ -229,7 +235,9 @@ export function createSmokingPipe(scene, physicsWorld, position = { x: -6, y: -2
     if (ammo && physicsWorld) {
         const stemShape = new ammo.btBoxShape(new ammo.btVector3(0.6, 0.1, 0.1));
         const stemDummy = new THREE.Object3D();
-        stemDummy.position.copy(group.position).add(new THREE.Vector3(0.2, 0.3, 0).applyEuler(group.rotation));
+        stemDummy.position
+            .copy(group.position)
+            .add(new THREE.Vector3(0.2, 0.3, 0).applyEuler(group.rotation));
         stemDummy.quaternion.copy(group.quaternion);
         stemDummy.rotation.y = rotation - Math.PI / 6;
         createStaticBody(physicsWorld, stemDummy, stemShape);
@@ -239,7 +247,9 @@ export function createSmokingPipe(scene, physicsWorld, position = { x: -6, y: -2
     if (ammo && physicsWorld) {
         const pouchShape = new ammo.btBoxShape(new ammo.btVector3(0.5, 0.3, 0.35));
         const pouchDummy = new THREE.Object3D();
-        pouchDummy.position.copy(group.position).add(new THREE.Vector3(0.6, 0.15, 0.3).applyEuler(group.rotation));
+        pouchDummy.position
+            .copy(group.position)
+            .add(new THREE.Vector3(0.6, 0.15, 0.3).applyEuler(group.rotation));
         pouchDummy.quaternion.copy(group.quaternion);
         createStaticBody(physicsWorld, pouchDummy, pouchShape);
     }

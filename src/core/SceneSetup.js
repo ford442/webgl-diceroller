@@ -9,7 +9,15 @@ import { VignetteShader } from '../shaders/VignetteShader.js';
 import { TavernEnvironment } from '../environment/TavernEnvironment.js';
 import { createRenderer } from './RendererFactory.js';
 import { preloadSharedTextures } from './TexturePipeline.js';
-import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z, TABLE_SURFACE_Y, LAMP_HANG_Y, applyViewportToCamera, computeCameraAspect } from './SceneMetrics.js';
+import {
+    CAMERA_EYE_Y,
+    CAMERA_LOOK_AT_Y,
+    CAMERA_START_Z,
+    TABLE_SURFACE_Y,
+    LAMP_HANG_Y,
+    applyViewportToCamera,
+    computeCameraAspect,
+} from './SceneMetrics.js';
 import { guessInitialQualityProfile } from './AdaptiveQuality.js';
 import { prefersReducedMotion } from './AccessibilityPrefs.js';
 
@@ -17,19 +25,15 @@ const VIGNETTE_OFFSET = 1.0;
 const VIGNETTE_DARKNESS = 1.0;
 
 async function createWebGpuPostPipeline(renderer, scene, camera, { width, height, postConfig }) {
-    const [
-        { PostProcessing },
-        { pass, uniform, float, vec2, vec3, vec4, mix, Fn, screenUV, clamp },
-        { bloom },
-        { chromaticAberration },
-        { fxaa }
-    ] = await Promise.all([
-        import('three/webgpu'),
-        import('three/tsl'),
-        import('three/addons/tsl/display/BloomNode.js'),
-        import('three/addons/tsl/display/ChromaticAberrationNode.js'),
-        import('three/addons/tsl/display/FXAANode.js')
-    ]);
+    const [{ PostProcessing }, tsl, { bloom }, { chromaticAberration }, { fxaa }] =
+        await Promise.all([
+            import('three/webgpu'),
+            import('three/tsl'),
+            import('three/addons/tsl/display/BloomNode.js'),
+            import('three/addons/tsl/display/ChromaticAberrationNode.js'),
+            import('three/addons/tsl/display/FXAANode.js'),
+        ]);
+    const { pass, uniform, vec2, vec3, vec4, mix, Fn, screenUV, clamp } = /** @type {any} */ (tsl);
 
     const postProcessing = new PostProcessing(renderer);
     const scenePass = pass(scene, camera);
@@ -51,20 +55,22 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
 
     const vignetteStrength = uniform(0.85);
     const vignetteOffset = uniform(VIGNETTE_OFFSET);
-    const vignetteDarkness = uniform(VIGNETTE_DARKNESS);
+    const _vignetteDarkness = uniform(VIGNETTE_DARKNESS);
     const vignetteNode = Fn(() => {
         const vignetteUv = screenUV.sub(vec2(0.5, 0.5)).mul(vignetteOffset);
         const vignetteMix = clamp(vignetteUv.dot(vignetteUv).mul(vignetteStrength), 0, 1);
-        return vec4(
-            mix(colorNode.rgb, vec3(0, 0, 0), vignetteMix),
-            colorNode.a
-        );
+        return vec4(mix(colorNode.rgb, vec3(0, 0, 0), vignetteMix), colorNode.a);
     })();
 
     let outputNode = vignetteNode;
 
     if (postConfig.chromaticAberrationEnabled) {
-        outputNode = chromaticAberration(outputNode, 0.2, vec2(0.5, 0.5), 1.08);
+        outputNode = chromaticAberration(
+            outputNode,
+            /** @type {any} */ (0.2),
+            vec2(0.5, 0.5),
+            /** @type {any} */ (1.08)
+        );
     }
 
     if (postConfig.fxaaEnabled) {
@@ -84,7 +90,7 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
         },
         dispose() {
             postProcessing.dispose();
-        }
+        },
     };
 }
 
@@ -99,6 +105,21 @@ async function compilePmremSceneShader(pmremGenerator) {
     }
 }
 
+/**
+ * @param {HTMLElement} container
+ * @returns {Promise<{
+ *   scene: import('three').Scene;
+ *   camera: import('three').PerspectiveCamera;
+ *   renderer: import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer;
+ *   composer: unknown;
+ *   postConfig: import('../types/app').PostConfig;
+ *   rendererState: import('../types/app').RendererState;
+ *   spotLight: import('three').SpotLight;
+ *   pointLight: import('three').PointLight;
+ *   postPasses: unknown;
+ *   initialQuality: unknown;
+ * }>}
+ */
 export async function setupScene(container) {
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;
@@ -108,7 +129,12 @@ export async function setupScene(container) {
     scene.background = new THREE.Color(0x111111); // Darker for atmosphere
 
     // Camera setup — aspect follows the container (portrait-friendly on phones).
-    const camera = new THREE.PerspectiveCamera(80, computeCameraAspect(containerWidth, containerHeight), 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(
+        80,
+        computeCameraAspect(containerWidth, containerHeight),
+        0.1,
+        1000
+    );
     camera.position.set(0, CAMERA_EYE_Y, CAMERA_START_Z);
     camera.lookAt(0, CAMERA_LOOK_AT_Y, 0);
     applyViewportToCamera(camera, containerWidth, containerHeight);
@@ -126,14 +152,20 @@ export async function setupScene(container) {
     const isSoftwareRenderer = rendererState.isSoftwareRenderer;
     const initialQuality = guessInitialQualityProfile(rendererState);
     const forceLowPost = params.has('low-post');
-    const disablePost = params.has('no-post');
+    // ?xr implies no-post — EffectComposer fights the XR framebuffer.
+    const disablePost = params.has('no-post') || params.has('xr') || params.has('xr-emulator');
     const disableBloom = params.has('no-bloom');
     const disableGodRays = params.has('no-godrays');
     const reducedMotion = prefersReducedMotion();
-    const postQuality = disablePost ? 'off' : (forceLowPost || initialQuality.postQuality === 'low' || reducedMotion ? 'low' : 'high');
+    const postQuality = disablePost
+        ? 'off'
+        : forceLowPost || initialQuality.postQuality === 'low' || reducedMotion
+          ? 'low'
+          : 'high';
     const postConfig = {
         quality: postQuality,
-        bloomEnabled: !disablePost && !disableBloom && initialQuality.bloomEnabled && !reducedMotion,
+        bloomEnabled:
+            !disablePost && !disableBloom && initialQuality.bloomEnabled && !reducedMotion,
         godRaysEnabled: !disableGodRays && initialQuality.godRaysEnabled && !reducedMotion,
         fxaaEnabled: rendererState.usePostAA && !disablePost,
         lowEndDetected: initialQuality.id !== 'high',
@@ -141,7 +173,8 @@ export async function setupScene(container) {
         adaptiveProfile: initialQuality.id,
         rendererType: rendererState.rendererType,
         requestedRenderer: rendererState.requestedRenderer,
-        chromaticAberrationEnabled: rendererState.usingWebGPU && postQuality === 'high' && !reducedMotion
+        chromaticAberrationEnabled:
+            rendererState.usingWebGPU && postQuality === 'high' && !reducedMotion,
     };
     scene.userData.postConfig = postConfig;
 
@@ -150,16 +183,19 @@ export async function setupScene(container) {
     // instead. WebGL keeps the original ShaderMaterial path (no factory stashed).
     if (rendererState.usingWebGPU && postConfig.godRaysEnabled) {
         try {
-            const { loadGodRayNodeMaterialFactory } = await import('../shaders/GodRayNodeMaterial.js');
+            const { loadGodRayNodeMaterialFactory } =
+                await import('../shaders/GodRayNodeMaterial.js');
             scene.userData.godRayMaterialFactory = await loadGodRayNodeMaterialFactory();
         } catch (error) {
-            console.warn('[SceneSetup] God ray TSL material unavailable; disabling on WebGPU.', error);
+            console.warn(
+                '[SceneSetup] God ray TSL material unavailable; disabling on WebGPU.',
+                error
+            );
             postConfig.godRaysEnabled = false;
         }
     }
 
     // Lights
-
 
     // Warm overhead pool on the velvet dice zone (no shadows — fill only).
     const diceZoneLight = new THREE.SpotLight(0xfff2d6, 2.8, 40, Math.PI / 4, 0.65, 1.2);
@@ -172,7 +208,11 @@ export async function setupScene(container) {
     const ambientLight = new THREE.AmbientLight(0xfff8f0, ambientIntensity);
     scene.add(ambientLight);
 
-    const hemisphereLight = new THREE.HemisphereLight(0xc8d4ff, 0x3a2418, rendererState.usingWebGPU ? 0.38 : 0.24);
+    const hemisphereLight = new THREE.HemisphereLight(
+        0xc8d4ff,
+        0x3a2418,
+        rendererState.usingWebGPU ? 0.38 : 0.24
+    );
     scene.add(hemisphereLight);
 
     const diceFillLight = new THREE.DirectionalLight(0xfff0dd, 0.32);
@@ -229,18 +269,18 @@ export async function setupScene(container) {
         bloomPass: null,
         vignettePass: null,
         outputPass: null,
-        postProcessing: null
+        postProcessing: null,
     };
     if (!disablePost) {
         if (rendererState.usingWebGPU) {
             composer = await createWebGpuPostPipeline(renderer, scene, camera, {
                 width: containerWidth,
                 height: containerHeight,
-                postConfig
+                postConfig,
             });
             postPasses.postProcessing = composer;
         } else {
-            composer = new EffectComposer(renderer);
+            composer = new EffectComposer(/** @type {import('three').WebGLRenderer} */ (renderer));
 
             const renderPass = new RenderPass(scene, camera);
             composer.addPass(renderPass);
@@ -295,7 +335,9 @@ export async function setupScene(container) {
     // can even lose the device. Keep the richer tavern PMREM on WebGL, and let
     // WebGPU fall back to direct lighting only until upstream support stabilizes.
     if (rendererState.usingWebGPU) {
-        console.warn('[SceneSetup] Skipping tavern PMREM environment on WebGPU due to a Three.js renderer bug.');
+        console.warn(
+            '[SceneSetup] Skipping tavern PMREM environment on WebGPU due to a Three.js renderer bug.'
+        );
         scene.environment = null;
     } else {
         const tavernEnvironment = new TavernEnvironment();
@@ -303,12 +345,17 @@ export async function setupScene(container) {
 
         // `fromScene()` renders the source scene into an internal cubemap, so it
         // needs the cubemap PMREM path, not the equirectangular one.
-        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        const pmremGenerator = new THREE.PMREMGenerator(
+            /** @type {import('three').WebGLRenderer} */ (renderer)
+        );
         try {
             await compilePmremSceneShader(pmremGenerator);
             scene.environment = pmremGenerator.fromScene(tavernEnvironment).texture;
         } catch (error) {
-            console.warn('[SceneSetup] Failed to build tavern PMREM environment map; continuing without reflections.', error);
+            console.warn(
+                '[SceneSetup] Failed to build tavern PMREM environment map; continuing without reflections.',
+                error
+            );
             scene.environment = null;
         } finally {
             pmremGenerator.dispose();
@@ -316,5 +363,16 @@ export async function setupScene(container) {
         }
     }
 
-    return { scene, camera, renderer, composer, pointLight, spotLight, postConfig, postPasses, rendererState, initialQuality };
+    return {
+        scene,
+        camera,
+        renderer,
+        composer,
+        pointLight,
+        spotLight,
+        postConfig,
+        postPasses,
+        rendererState,
+        initialQuality,
+    };
 }

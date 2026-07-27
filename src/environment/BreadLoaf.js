@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createBreadLoaf(scene, physicsWorld, position = { x: 8, y: -2.75, z: 4 }, rotationY = Math.PI / 6) {
+export function createBreadLoaf(
+    scene,
+    physicsWorld,
+    position = { x: 8, y: -2.75, z: 4 },
+    rotationY = Math.PI / 6
+) {
     const group = new THREE.Group();
     group.name = 'BreadLoaf';
 
@@ -14,7 +19,7 @@ export function createBreadLoaf(scene, physicsWorld, position = { x: 8, y: -2.75
         color: 0x8b5a2b, // Crusty brown
         roughness: 0.9,
         metalness: 0.0,
-        bumpScale: 0.05
+        bumpScale: 0.05,
     });
 
     const geometry = new THREE.SphereGeometry(1, 32, 16);

@@ -33,15 +33,20 @@ let failed = 0;
 
 try {
     const browser = await chromium.launch({
-        args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']
+        args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
     });
     const page = await browser.newPage();
 
-    await page.goto(`${BASE}/?webgl&no-post&fair-dice`, { waitUntil: 'networkidle', timeout: 120000 });
+    await page.goto(`${BASE}/?webgl&no-post&fair-dice`, {
+        waitUntil: 'networkidle',
+        timeout: 120000,
+    });
 
     const beforeSw = await page.evaluate(() => ({
         isolated: window.crossOriginIsolated === true,
-        coop: document.querySelector('meta[http-equiv="Cross-Origin-Opener-Policy"]')?.content ?? null
+        coop:
+            document.querySelector('meta[http-equiv="Cross-Origin-Opener-Policy"]')?.content ??
+            null,
     }));
 
     if (!beforeSw.isolated) {
@@ -52,20 +57,22 @@ try {
     }
 
     // Wait for vite-plugin-pwa registration (auto-injected).
-    await page.waitForFunction(
-        () => 'serviceWorker' in navigator && navigator.serviceWorker.controller != null,
-        null,
-        { timeout: 60000 }
-    ).catch(() => {
-        failed += 1;
-        console.error('FAIL: service worker did not take control within 60s');
-    });
+    await page
+        .waitForFunction(
+            () => 'serviceWorker' in navigator && navigator.serviceWorker.controller != null,
+            null,
+            { timeout: 60000 }
+        )
+        .catch(() => {
+            failed += 1;
+            console.error('FAIL: service worker did not take control within 60s');
+        });
 
     await page.reload({ waitUntil: 'networkidle' });
 
     const afterSw = await page.evaluate(() => ({
         isolated: window.crossOriginIsolated === true,
-        swControlled: navigator.serviceWorker.controller != null
+        swControlled: navigator.serviceWorker.controller != null,
     }));
 
     if (!afterSw.swControlled) {

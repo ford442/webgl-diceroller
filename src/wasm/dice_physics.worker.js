@@ -24,14 +24,28 @@
 
 import { publicAssetUrl } from '../core/publicAssetUrl.js';
 import {
-    MAX_DICE, STRIDE, HEADER_INTS, H_SEQNO, H_FRONT, H_COUNT, H_SETTLED,
-    H_CMD_HEAD, H_CMD_TAIL,
-    idsOffset, xfOffset, CMD_RING_FLOATS, CMD_RING_OFFSET,
+    MAX_DICE,
+    STRIDE,
+    HEADER_INTS,
+    H_SEQNO,
+    H_FRONT,
+    H_COUNT,
+    H_SETTLED,
+    H_CMD_HEAD,
+    H_CMD_TAIL,
+    H_PAIR_CANDIDATES,
+    H_SPHERE_TESTS,
+    H_SAT_TESTS,
+    H_CONTACTS,
+    idsOffset,
+    xfOffset,
+    CMD_RING_FLOATS,
+    CMD_RING_OFFSET,
 } from './workerLayout.js';
 import { computeSeededThrowParams, applyThrowParams } from './seededThrowParams.js';
 import { dispatchLinear, drainRing } from './workerCommands.js';
 
-const FIXED_DT = 1 / 120;          // worker simulates at 120 Hz
+const FIXED_DT = 1 / 120; // worker simulates at 120 Hz
 const STEP_MS = 1000 * FIXED_DT;
 
 let Module = null;
@@ -39,12 +53,12 @@ let engine = null;
 let hulls = null;
 
 // SAB transport state (null when running in postMessage-snapshot fallback).
-let header = null;                 // Int32Array view over the header
-const idsView = [null, null];      // Float32Array per buffer
+let header = null; // Int32Array view over the header
+const idsView = [null, null]; // Float32Array per buffer
 const xfView = [null, null];
-let cmdRing = null;                // Float32Array command ring (SAB path)
+let cmdRing = null; // Float32Array command ring (SAB path)
 
-let running = false;               // true once init() has configured the world
+let running = false; // true once init() has configured the world
 let stepTimer = null;
 
 // ---------------------------------------------------------------------------
@@ -62,7 +76,7 @@ async function boot() {
     try {
         const res = await fetch(publicAssetUrl('wasm/hulls.json'));
         if (res.ok) hulls = await res.json();
-    } catch (e) {
+    } catch (_e) {
         // Hulls are optional; collision quality degrades but sim still runs.
     }
 }
@@ -109,6 +123,11 @@ function publishSAB() {
     // is guaranteed to also see the matching count.
     Atomics.store(header, H_COUNT, count);
     Atomics.store(header, H_SETTLED, engine.areAllSettled() ? 1 : 0);
+    const stepStats = engine.getLastStepStats();
+    Atomics.store(header, H_PAIR_CANDIDATES, stepStats.pairCandidates | 0);
+    Atomics.store(header, H_SPHERE_TESTS, stepStats.sphereTests | 0);
+    Atomics.store(header, H_SAT_TESTS, stepStats.satTests | 0);
+    Atomics.store(header, H_CONTACTS, stepStats.contacts | 0);
     Atomics.store(header, H_FRONT, back);
     Atomics.add(header, H_SEQNO, 1);
 }
@@ -140,7 +159,7 @@ function publish() {
 function drainEvents() {
     const ev = engine.getCollisionEvents();
     if (!ev || ev.length === 0) return;
-    const copy = new Float32Array(ev);   // copy out of the heap before transfer
+    const copy = new Float32Array(ev); // copy out of the heap before transfer
     self.postMessage({ type: 'events', payload: { events: copy } }, [copy.buffer]);
 }
 
@@ -178,7 +197,7 @@ function startLoop() {
     stepTimer = setInterval(tick, STEP_MS);
 }
 
-function stopLoop() {
+function _stopLoop() {
     if (stepTimer !== null) {
         clearInterval(stepTimer);
         stepTimer = null;
@@ -262,14 +281,104 @@ function handle(type, payload) {
             break;
         case 'setDieTransform':
             drainCommandQueue();
-            engine.setDieTransform(payload.id, payload.px, payload.py, payload.pz, payload.qx, payload.qy, payload.qz, payload.qw);
+            engine.setDieTransform(
+                payload.id,
+                payload.px,
+                payload.py,
+                payload.pz,
+                payload.qx,
+                payload.qy,
+                payload.qz,
+                payload.qw
+            );
             break;
         case 'setDieVelocity':
             drainCommandQueue();
-            engine.setDieVelocity(payload.id, payload.lvx, payload.lvy, payload.lvz, payload.avx, payload.avy, payload.avz);
+            engine.setDieVelocity(
+                payload.id,
+                payload.lvx,
+                payload.lvy,
+                payload.lvz,
+                payload.avx,
+                payload.avy,
+                payload.avz
+            );
             break;
         case 'setDieKinematic':
             engine.setDieKinematic(payload.id, payload.kinematic);
+            break;
+        case 'setContainerActive':
+            engine.setContainerActive(!!payload.active);
+            break;
+        case 'setContainerPlanes': {
+            const vec = new Module.VectorFloat();
+            for (const f of payload.planes) vec.push_back(f);
+            engine.setContainerPlanes(vec);
+            if (typeof vec.delete === 'function') vec.delete();
+            break;
+        }
+        case 'clearStatics':
+            engine.clearStatics();
+            break;
+        case 'removeStatic':
+            engine.removeStatic(payload.userId);
+            break;
+        case 'addStaticBox':
+            engine.addStaticBox(
+                payload.userId,
+                payload.cx,
+                payload.cy,
+                payload.cz,
+                payload.hx,
+                payload.hy,
+                payload.hz,
+                payload.qx,
+                payload.qy,
+                payload.qz,
+                payload.qw,
+                payload.materialTag ?? 0
+            );
+            break;
+        case 'addStaticPlane':
+            engine.addStaticPlane(
+                payload.userId,
+                payload.nx,
+                payload.ny,
+                payload.nz,
+                payload.dist,
+                payload.materialTag ?? 0
+            );
+            break;
+        case 'addStaticConvexHull': {
+            const vec = new Module.VectorFloat();
+            for (const f of payload.vertices) vec.push_back(f);
+            engine.addStaticConvexHull(
+                payload.userId,
+                payload.cx,
+                payload.cy,
+                payload.cz,
+                payload.qx,
+                payload.qy,
+                payload.qz,
+                payload.qw,
+                vec,
+                payload.materialTag ?? 0
+            );
+            if (typeof vec.delete === 'function') vec.delete();
+            break;
+        }
+        case 'addStaticOpenCylinder':
+            engine.addStaticOpenCylinder(
+                payload.userId,
+                payload.cx,
+                payload.cy,
+                payload.cz,
+                payload.radius,
+                payload.halfHeight,
+                payload.segments ?? 16,
+                !!payload.closedBottom,
+                payload.materialTag ?? 0
+            );
             break;
         case 'applyImpulse':
             drainCommandQueue();
@@ -289,7 +398,10 @@ function handle(type, payload) {
             for (let i = 0; i < vec.size(); i++) arr[i] = vec.get(i);
             if (typeof vec.delete === 'function') vec.delete();
             self.postMessage(
-                { type: 'response', payload: { reqId: payload.reqId, byteLength: arr.byteLength, data: arr.buffer } },
+                {
+                    type: 'response',
+                    payload: { reqId: payload.reqId, byteLength: arr.byteLength, data: arr.buffer },
+                },
                 [arr.buffer]
             );
             break;
@@ -324,7 +436,10 @@ const pending = [];
 let booted = false;
 
 self.onmessage = (e) => {
-    if (!booted) { pending.push(e.data); return; }
+    if (!booted) {
+        pending.push(e.data);
+        return;
+    }
     const { type, payload } = e.data;
     try {
         handle(type, payload);
@@ -333,17 +448,25 @@ self.onmessage = (e) => {
     }
 };
 
-boot().then(() => {
-    booted = true;
-    for (const msg of pending) {
-        try {
-            handle(msg.type, msg.payload);
-        } catch (err) {
-            self.postMessage({ type: 'error', payload: { message: err.message || String(err) } });
+boot()
+    .then(() => {
+        booted = true;
+        for (const msg of pending) {
+            try {
+                handle(msg.type, msg.payload);
+            } catch (err) {
+                self.postMessage({
+                    type: 'error',
+                    payload: { message: err.message || String(err) },
+                });
+            }
         }
-    }
-    pending.length = 0;
-    self.postMessage({ type: 'ready' });
-}).catch((err) => {
-    self.postMessage({ type: 'error', payload: { message: 'boot failed: ' + (err.message || String(err)) } });
-});
+        pending.length = 0;
+        self.postMessage({ type: 'ready' });
+    })
+    .catch((err) => {
+        self.postMessage({
+            type: 'error',
+            payload: { message: 'boot failed: ' + (err.message || String(err)) },
+        });
+    });

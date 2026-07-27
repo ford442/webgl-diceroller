@@ -16,9 +16,9 @@
  * traversal are throttled to fixed intervals so the panel never causes jank.
  */
 
-const DOM_INTERVAL_MS = 200;     // ~5 Hz text refresh
+const DOM_INTERVAL_MS = 200; // ~5 Hz text refresh
 const TRAVERSE_INTERVAL_MS = 500; // ~2 Hz scene-graph summary
-const SLOW_FRAME_MS = 50;         // < 20 fps — log when debug-perf is on
+const SLOW_FRAME_MS = 50; // < 20 fps — log when debug-perf is on
 const SLOW_FRAME_LOG_COOLDOWN_MS = 1000;
 
 function compact(n) {
@@ -33,6 +33,24 @@ function ms(value) {
     return (value ?? 0).toFixed(1);
 }
 
+/**
+ * @param {object} config
+ * @param {import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer} config.renderer
+ * @param {import('three').Scene} config.scene
+ * @param {import('../core/FrameScheduler.js').FrameScheduler} config.scheduler
+ * @param {import('../core/CullingSystem.js').CullingSystem | null} [config.cullingSystem]
+ * @param {() => import('../types/app').RendererState | null} [config.getRendererState]
+ * @param {() => import('../types/app').PostConfig | null} [config.getPost]
+ * @param {() => Record<string, unknown> | null} [config.getShadow]
+ * @param {() => Record<string, unknown> | null} [config.getDice]
+ * @param {() => Record<string, unknown> | null} [config.getWasm]
+ * @param {() => Record<string, unknown> | null} [config.getAudio]
+ * @param {() => number} [config.getCollisionTotal]
+ * @param {() => unknown} [config.getTierRenderStats]
+ * @param {boolean} [config.debugPerf]
+ * @param {boolean} [config.visible]
+ */
+/** @param {import('../types/app').RenderStatsConfig} config */
 export function createRenderStats({
     renderer,
     scene,
@@ -47,8 +65,8 @@ export function createRenderStats({
     getCollisionTotal = () => 0,
     getTierRenderStats = () => null,
     debugPerf = false,
-    visible = true
-} = {}) {
+    visible = true,
+}) {
     const container = document.getElementById('canvas-container') || document.body;
     const el = document.createElement('div');
     el.id = 'render-stats-hud';
@@ -67,7 +85,7 @@ export function createRenderStats({
         pointerEvents: 'none',
         whiteSpace: 'pre',
         minWidth: '210px',
-        textShadow: '0 1px 1px rgba(0,0,0,0.8)'
+        textShadow: '0 1px 1px rgba(0,0,0,0.8)',
     });
     el.style.display = visible ? 'block' : 'none';
     container.appendChild(el);
@@ -92,10 +110,14 @@ export function createRenderStats({
         let visibleMeshes = 0;
         scene?.traverse((obj) => {
             objects++;
-            if (obj.isMesh) {
+            const node =
+                /** @type {import('three').Object3D & { isMesh?: boolean; isLight?: boolean }} */ (
+                    obj
+                );
+            if (node.isMesh) {
                 meshes++;
                 if (obj.visible) visibleMeshes++;
-            } else if (obj.isLight) {
+            } else if (node.isLight) {
                 lights++;
             }
         });
@@ -103,7 +125,10 @@ export function createRenderStats({
     }
 
     function buildText() {
-        const info = renderer?.info ?? {};
+        const info =
+            /** @type {{ render?: Record<string, number>; memory?: Record<string, number>; programs?: { length?: number } }} */ (
+                renderer?.info ?? {}
+            );
         const render = info.render ?? {};
         const memory = info.memory ?? {};
         const programs = info.programs?.length ?? 0;
@@ -117,7 +142,9 @@ export function createRenderStats({
 
         const lines = [];
         lines.push('DICE ROLLER · DEBUG');
-        lines.push(`fps ${(1000 / frameMsSmoothed).toFixed(0)}  (${frameMsSmoothed.toFixed(1)} ms)`);
+        lines.push(
+            `fps ${(1000 / frameMsSmoothed).toFixed(0)}  (${frameMsSmoothed.toFixed(1)} ms)`
+        );
 
         const backend = state?.rendererType ?? 'unknown';
         const fallbackSuffix = state?.fallbackReason ? ' (fallback)' : '';
@@ -125,21 +152,33 @@ export function createRenderStats({
         lines.push(`renderer ${backend}${fallbackSuffix}${contextSuffix}`);
 
         if (state?.pixelRatio != null) {
-            const msaa = state.antialias ? 'msaa' : (state.usePostAA ? 'fxaa' : 'no-aa');
+            const msaa = state.antialias ? 'msaa' : state.usePostAA ? 'fxaa' : 'no-aa';
             const forced = state.pixelRatioForced ? ' forced' : '';
-            lines.push(`pixelRatio ${state.pixelRatio.toFixed(2)} (dpr ${state.deviceDpr?.toFixed(2) ?? '?'}) ${msaa}${forced}`);
+            lines.push(
+                `pixelRatio ${Number(state.pixelRatio).toFixed(2)} (dpr ${Number(state.deviceDpr ?? NaN).toFixed(2) || '?'}) ${msaa}${forced}`
+            );
         }
         if (state?.isSoftwareRenderer) {
             lines.push('software WebGL · low-post');
         }
 
-        const physicsLabel = wasm ? (wasm.active ? 'WASM' : (wasm.available ? 'WASM(idle)' : 'ammo')) : 'ammo';
+        const physicsLabel = wasm
+            ? wasm.active
+                ? 'WASM'
+                : wasm.available
+                  ? 'WASM(idle)'
+                  : 'ammo'
+            : 'ammo';
         const diceLabel = dice
             ? `${dice.count} dice${dice.count ? (dice.settled ? ' · settled' : ' · moving') : ''}`
             : '';
         lines.push(`physics ${physicsLabel}  ${diceLabel}`.trimEnd());
+        if (debugPerf && wasm?.stepStats) {
+            const s = wasm.stepStats;
+            lines.push(`pairs ${s.pairCandidates}  sat ${s.satTests}  contacts ${s.contacts}`);
+        }
         if (debugPerf && wasm?.worker) {
-            const w = wasm.worker;
+            const w = /** @type {{ usingSAB?: boolean; msgsPerSecond?: number }} */ (wasm.worker);
             const sab = w.usingSAB ? 'sab-cmd' : 'batch-cmd';
             lines.push(`worker ${sab}  ${w.msgsPerSecond.toFixed(0)} msg/s`);
         }
@@ -147,36 +186,51 @@ export function createRenderStats({
         lines.push(`draws ${render.calls ?? 0}  tris ${compact(render.triangles)}`);
         lines.push(`geom ${memory.geometries ?? 0}  tex ${memory.textures ?? 0}  prog ${programs}`);
 
-        const tierStats = getTierRenderStats();
+        const tierStats =
+            /** @type {{ getAllTiers?: () => Record<string, unknown>; getTotals?: () => Record<string, unknown> } | null} */ (
+                getTierRenderStats()
+            );
         if (tierStats) {
             const tiers = tierStats.getAllTiers?.() ?? {};
             const tierParts = [];
             for (const [tierId, entry] of Object.entries(tiers)) {
-                const d = entry.delta;
+                const tierEntry = /** @type {{ delta?: { drawCalls?: number } }} */ (entry);
+                const d = tierEntry.delta;
                 if (!d) continue;
                 tierParts.push(`${tierId}:+${d.drawCalls}`);
             }
             if (tierParts.length) {
                 lines.push(`tier Δdraws ${tierParts.join('  ')}`);
             }
-            const totals = tierStats.getTotals?.();
+            const totals =
+                /** @type {{ current?: { drawCalls?: number; triangles?: number } }} | undefined} */ (
+                    tierStats.getTotals?.()
+                );
             if (totals?.current) {
-                lines.push(`scene ${totals.current.drawCalls} draws  ${compact(totals.current.triangles)} tris`);
+                lines.push(
+                    `scene ${totals.current.drawCalls} draws  ${compact(totals.current.triangles)} tris`
+                );
             }
         }
 
-        lines.push(`objects ${sceneSummary.objects}  meshes ${sceneSummary.visibleMeshes}/${sceneSummary.meshes}  lights ${sceneSummary.lights}`);
+        lines.push(
+            `objects ${sceneSummary.objects}  meshes ${sceneSummary.visibleMeshes}/${sceneSummary.meshes}  lights ${sceneSummary.lights}`
+        );
 
         if (cullingSystem) {
             const cs = cullingSystem.stats;
             lines.push(`cull ${cullingSystem.enabled ? `${cs.culled}/${cs.total} hidden` : 'off'}`);
         }
         if (shadow) {
-            lines.push(`shadows ${shadow.autoUpdate ? 'dynamic' : 'static'}  refresh ${shadow.staticRefreshes ?? 0}`);
+            lines.push(
+                `shadows ${shadow.autoUpdate ? 'dynamic' : 'static'}  refresh ${shadow.staticRefreshes ?? 0}`
+            );
         }
         if (post) {
             const fxaa = post.fxaaEnabled ? ' +fxaa' : '';
-            lines.push(`post ${post.quality}${post.bloomEnabled ? ' +bloom' : ''}${fxaa}${post.chromaticAberrationEnabled ? ' +ca' : ''}`);
+            lines.push(
+                `post ${post.quality}${post.bloomEnabled ? ' +bloom' : ''}${fxaa}${post.chromaticAberrationEnabled ? ' +ca' : ''}`
+            );
         }
 
         const audioLabel = audio ? `  audio ${audio.played}` : '';
@@ -184,14 +238,18 @@ export function createRenderStats({
 
         const gameFeel = scheduler?.stats?.gameFeel;
         if (gameFeel) {
-            lines.push(`feel px ${gameFeel.activeParticles}  blur ${gameFeel.motionBlurDice}  crit ${gameFeel.critCount}`);
+            lines.push(
+                `feel px ${gameFeel.activeParticles}  blur ${gameFeel.motionBlurDice}  crit ${gameFeel.critCount}`
+            );
         }
 
         if (debugPerf && scheduler?.stats?.phaseTimes) {
             const pt = scheduler.stats.phaseTimes;
             lines.push('— phases (ms) —');
             lines.push(`pre ${ms(pt.preStep)}  phys ${ms(pt.physicsStep)}  upd ${ms(pt.updates)}`);
-            lines.push(`preR ${ms(pt.preRender)}  render ${ms(pt.render)}  postR ${ms(pt.postRender)}`);
+            lines.push(
+                `preR ${ms(pt.preRender)}  render ${ms(pt.render)}  postR ${ms(pt.postRender)}`
+            );
             lines.push(`steps ${scheduler.stats.physicsSteps}`);
         }
 
@@ -207,15 +265,21 @@ export function createRenderStats({
 
         const now = performance.now();
 
-        if (debugPerf && frameMs > SLOW_FRAME_MS && (now - lastSlowLog) > SLOW_FRAME_LOG_COOLDOWN_MS) {
+        if (
+            debugPerf &&
+            frameMs > SLOW_FRAME_MS &&
+            now - lastSlowLog > SLOW_FRAME_LOG_COOLDOWN_MS
+        ) {
             lastSlowLog = now;
-            console.warn(`[RenderStats] Slow frame: ${frameMs.toFixed(1)}ms (${(1000 / frameMs).toFixed(0)} fps)`);
+            console.warn(
+                `[RenderStats] Slow frame: ${frameMs.toFixed(1)}ms (${(1000 / frameMs).toFixed(0)} fps)`
+            );
         }
 
         if (el.style.display === 'none') return;
 
         // Throttled collision-rate sample.
-        if ((now - lastCollisionSampleAt) >= DOM_INTERVAL_MS) {
+        if (now - lastCollisionSampleAt >= DOM_INTERVAL_MS) {
             const total = getCollisionTotal();
             const dt = (now - lastCollisionSampleAt) / 1000;
             collisionRate = dt > 0 ? (total - lastCollisionTotal) / dt : 0;
@@ -224,13 +288,13 @@ export function createRenderStats({
         }
 
         // Throttled scene-graph traversal.
-        if ((now - lastTraverse) >= TRAVERSE_INTERVAL_MS) {
+        if (now - lastTraverse >= TRAVERSE_INTERVAL_MS) {
             lastTraverse = now;
             refreshSceneSummary();
         }
 
         // Throttled DOM rebuild.
-        if ((now - lastDom) >= DOM_INTERVAL_MS) {
+        if (now - lastDom >= DOM_INTERVAL_MS) {
             lastDom = now;
             el.textContent = buildText();
         }

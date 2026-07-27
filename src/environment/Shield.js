@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createShield(scene, physicsWorld, position = { x: 16, y: 10, z: 0 }, rotationY = -Math.PI / 2) {
+export function createShield(
+    scene,
+    physicsWorld,
+    position = { x: 16, y: 10, z: 0 },
+    rotationY = -Math.PI / 2
+) {
     const group = new THREE.Group();
     group.name = 'VikingShield';
 
@@ -10,7 +15,7 @@ export function createShield(scene, physicsWorld, position = { x: 16, y: 10, z: 
     const thickness = 0.2;
     const rimThickness = 0.1;
     const bossRadius = 0.5;
-    const bossHeight = 0.4;
+    const _bossHeight = 0.4;
 
     // --- Materials ---
     // Wood Planks
@@ -19,14 +24,14 @@ export function createShield(scene, physicsWorld, position = { x: 16, y: 10, z: 
         map: woodTexture,
         roughness: 0.8,
         metalness: 0.1,
-        color: 0x8b4513
+        color: 0x8b4513,
     });
 
     // Iron Rim & Boss
     const ironMaterial = new THREE.MeshStandardMaterial({
         color: 0x444444,
         roughness: 0.5,
-        metalness: 0.8
+        metalness: 0.8,
     });
 
     // Paint (Pattern) - baked into texture or overlay?
@@ -135,7 +140,7 @@ export function createShield(scene, physicsWorld, position = { x: 16, y: 10, z: 
 
     const Ammo = getAmmo();
     if (Ammo && physicsWorld) {
-        const shape = new Ammo.btBoxShape(new Ammo.btVector3(radius, radius, thickness/2 + 0.1)); // Extra depth for rim/boss
+        const shape = new Ammo.btBoxShape(new Ammo.btVector3(radius, radius, thickness / 2 + 0.1)); // Extra depth for rim/boss
         createStaticBody(physicsWorld, group, shape);
     }
 }
@@ -164,7 +169,7 @@ function createShieldTexture() {
         ctx.stroke();
 
         // Wood grain variation
-        ctx.fillStyle = (i % 2 === 0) ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.05)';
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.05)';
         ctx.fillRect(x, 0, plankWidth, 512);
     }
 
@@ -188,7 +193,7 @@ function createShieldTexture() {
         const cx = 256 + Math.cos(angle) * 200;
         const cy = 256 + Math.sin(angle) * 200;
         ctx.beginPath();
-        ctx.arc(cx, cy, 5, 0, Math.PI*2);
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
         ctx.fill();
     }
 

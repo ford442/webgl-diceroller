@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createApple(scene, physicsWorld, position = { x: -3, y: -2.75, z: -3 }, rotationY = 0) {
+export function createApple(
+    scene,
+    physicsWorld,
+    position = { x: -3, y: -2.75, z: -3 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Apple';
@@ -10,14 +15,14 @@ export function createApple(scene, physicsWorld, position = { x: -3, y: -2.75, z
     const appleMat = new THREE.MeshStandardMaterial({
         color: 0xaa0000, // Deep red
         roughness: 0.4,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     // Stem material
     const stemMat = new THREE.MeshStandardMaterial({
         color: 0x4a2f1d, // Dark brown
         roughness: 0.8,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // 1. Apple Body
@@ -53,17 +58,17 @@ export function createApple(scene, physicsWorld, position = { x: -3, y: -2.75, z
     // Using btBoxShape as it's safe and verified in the codebase
     // Half-extents for the box encompassing the apple
     if (ammo && physicsWorld) {
-        const halfExtents = new ammo.btVector3(radius, radius * 0.9 + (stemHeight / 2), radius);
+        const halfExtents = new ammo.btVector3(radius, radius * 0.9 + stemHeight / 2, radius);
         if (ammo && physicsWorld) {
             const shape = new ammo.btBoxShape(halfExtents);
-        
+
             // Because the apple body sits above the group's origin (group.position is at the bottom),
             // we need to shift the physical shape up to match the visual mass.
             const proxyMesh = new THREE.Mesh();
             proxyMesh.position.copy(group.position);
             proxyMesh.position.y += radius * 0.9; // Shift center of mass up
             proxyMesh.rotation.copy(group.rotation);
-        
+
             createStaticBody(physicsWorld, proxyMesh, shape);
         }
     }

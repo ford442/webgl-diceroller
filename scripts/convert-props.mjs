@@ -37,7 +37,8 @@ async function copyBasisTranscoder() {
     // WASM is not shipped inside the npm three package; fetch from three.js dev branch.
     const wasmDst = path.join(BASIS_OUT, 'basis_transcoder.wasm');
     if (!existsSync(wasmDst)) {
-        const wasmUrl = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/jsm/libs/basis/basis_transcoder.wasm';
+        const wasmUrl =
+            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/jsm/libs/basis/basis_transcoder.wasm';
         const response = await fetch(wasmUrl);
         if (!response.ok) {
             throw new Error(`Failed to download basis_transcoder.wasm (${response.status})`);
@@ -92,9 +93,12 @@ async function main() {
             entries: textureReport.results,
             jpgBytesBefore: textureReport.totalJpg,
             ktx2BytesAfter: textureReport.totalKtx2,
-            savingsPct: textureReport.totalJpg > 0
-                ? Number(((1 - textureReport.totalKtx2 / textureReport.totalJpg) * 100).toFixed(1))
-                : 0,
+            savingsPct:
+                textureReport.totalJpg > 0
+                    ? Number(
+                          ((1 - textureReport.totalKtx2 / textureReport.totalJpg) * 100).toFixed(1)
+                      )
+                    : 0,
             encoder: textureReport.basisuBin,
         },
         meshes: {
@@ -102,9 +106,10 @@ async function main() {
             srcBytesBefore: meshReport.totalSrc,
             glbBytesAfter: meshReport.totalGlb,
             gzipBytesAfter: meshReport.totalGz,
-            savingsPct: meshReport.totalSrc > 0
-                ? Number(((1 - meshReport.totalGlb / meshReport.totalSrc) * 100).toFixed(1))
-                : 0,
+            savingsPct:
+                meshReport.totalSrc > 0
+                    ? Number(((1 - meshReport.totalGlb / meshReport.totalSrc) * 100).toFixed(1))
+                    : 0,
         },
         proceduralProps: PROCEDURAL_PROP_MODULES,
         externalMeshSources: PROP_MESH_SOURCES.map((p) => ({
@@ -123,14 +128,18 @@ async function main() {
 
     const totalBefore = jpgBefore + meshBefore;
     const totalAfter = textureReport.totalKtx2 + meshReport.totalGlb;
-    const overallPct = totalBefore > 0
-        ? ((1 - totalAfter / totalBefore) * 100).toFixed(1)
-        : '0.0';
+    const overallPct = totalBefore > 0 ? ((1 - totalAfter / totalBefore) * 100).toFixed(1) : '0.0';
 
     console.log('\n=== Overall ===');
-    console.log(`  Textures:  ${(jpgBefore / 1024).toFixed(0)} KB JPG -> ${(textureReport.totalKtx2 / 1024).toFixed(0)} KB KTX2`);
-    console.log(`  Meshes:    ${(meshBefore / 1024).toFixed(0)} KB src -> ${(meshReport.totalGlb / 1024).toFixed(0)} KB GLB`);
-    console.log(`  Combined:  ${(totalBefore / 1024).toFixed(0)} KB -> ${(totalAfter / 1024).toFixed(0)} KB (${overallPct}% smaller)`);
+    console.log(
+        `  Textures:  ${(jpgBefore / 1024).toFixed(0)} KB JPG -> ${(textureReport.totalKtx2 / 1024).toFixed(0)} KB KTX2`
+    );
+    console.log(
+        `  Meshes:    ${(meshBefore / 1024).toFixed(0)} KB src -> ${(meshReport.totalGlb / 1024).toFixed(0)} KB GLB`
+    );
+    console.log(
+        `  Combined:  ${(totalBefore / 1024).toFixed(0)} KB -> ${(totalAfter / 1024).toFixed(0)} KB (${overallPct}% smaller)`
+    );
     console.log(`\nAudit written to ${path.relative(ROOT, AUDIT_PATH)}`);
     console.log('Done.');
 }

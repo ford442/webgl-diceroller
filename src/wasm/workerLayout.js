@@ -14,14 +14,18 @@
  *   │   [1] front    — index (0|1) of the buffer safe to read      │
  *   │   [2] count    — number of dice in the front buffer          │
  *   │   [3] settled  — 1 when all dice are sleeping, else 0         │
+ *   │   [4] cmdHead  — batched command ring producer (main thread)  │
+ *   │   [5] cmdTail  — batched command ring consumer (worker)       │
+ *   │   [6] pairCandidates — die–die broadphase pairs last step     │
+ *   │   [7] sphereTests    — pairs passing sphere cull last step     │
+ *   │   [8] satTests       — SAT hull tests last step               │
+ *   │   [9] contacts       — die–die contacts resolved last step    │
  *   ├────────────────────────────────────────────────────────────┤
  *   │ Buffer 0:  ids[MAX_DICE] (f32)   transforms[MAX_DICE*7] (f32)│
  *   ├────────────────────────────────────────────────────────────┤
  *   │ Buffer 1:  ids[MAX_DICE] (f32)   transforms[MAX_DICE*7] (f32)│
  *   ├────────────────────────────────────────────────────────────┤
  *   │ Command ring: CMD_RING_FLOATS (f32) — batched per-frame ops  │
- *   │   header[4] cmdHead  — producer (main thread)                  │
- *   │   header[5] cmdTail  — consumer (worker)                     │
  *   └────────────────────────────────────────────────────────────┘
  *
  * The worker writes the freshly stepped frame into the *back* buffer, stores the
@@ -31,25 +35,27 @@
  * without locking.
  */
 
-export const MAX_DICE = 500;          // must match dice_physics.cpp MAX_DICE
-export const STRIDE = 7;              // [px,py,pz, qx,qy,qz,qw] per die
+export const MAX_DICE = 500; // must match dice_physics.cpp MAX_DICE
+export const STRIDE = 7; // [px,py,pz, qx,qy,qz,qw] per die
 
-// Header (Int32). Indices 4..7 reserved for future use.
-export const HEADER_INTS = 8;
+// Header (Int32).
+export const HEADER_INTS = 10;
 export const HEADER_BYTES = HEADER_INTS * 4;
 
 export const H_SEQNO = 0;
 export const H_FRONT = 1;
 export const H_COUNT = 2;
 export const H_SETTLED = 3;
-// Batched per-frame command ring (float slots).  Main thread publishes head
-// after each flush; the worker drains up to head and advances tail.
 export const H_CMD_HEAD = 4;
 export const H_CMD_TAIL = 5;
+export const H_PAIR_CANDIDATES = 6;
+export const H_SPHERE_TESTS = 7;
+export const H_SAT_TESTS = 8;
+export const H_CONTACTS = 9;
 
 // Per-buffer byte sizes.
-export const IDS_BYTES = MAX_DICE * 4;            // f32 ids
-export const XF_BYTES = MAX_DICE * STRIDE * 4;    // f32 transforms
+export const IDS_BYTES = MAX_DICE * 4; // f32 ids
+export const XF_BYTES = MAX_DICE * STRIDE * 4; // f32 transforms
 export const BUFFER_BYTES = IDS_BYTES + XF_BYTES;
 
 import { MAX_RECORD_LEN } from './workerCommands.js';

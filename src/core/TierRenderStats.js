@@ -26,7 +26,8 @@ function countMeshStats(scene) {
                 const instanceCount = obj.count ?? 1;
                 let trisPerInstance = 0;
                 if (geo?.index) trisPerInstance = geo.index.count / 3;
-                else if (geo?.attributes?.position) trisPerInstance = geo.attributes.position.count / 3;
+                else if (geo?.attributes?.position)
+                    trisPerInstance = geo.attributes.position.count / 3;
                 triangles += trisPerInstance * instanceCount;
                 return;
             }
@@ -53,7 +54,7 @@ function diffStats(after, before) {
         visibleMeshes: after.visibleMeshes - before.visibleMeshes,
         drawCalls: after.drawCalls - before.drawCalls,
         triangles: after.triangles - before.triangles,
-        instancedMeshes: after.instancedMeshes - before.instancedMeshes
+        instancedMeshes: after.instancedMeshes - before.instancedMeshes,
     };
 }
 
@@ -89,7 +90,7 @@ export function createTierRenderStats(scene) {
             return {
                 baseline,
                 current,
-                delta: diffStats(current, baseline)
+                delta: diffStats(current, baseline),
             };
         },
 
@@ -107,6 +108,6 @@ export function createTierRenderStats(scene) {
                 `total: ${totals.current.drawCalls} draws  ${Math.round(totals.current.triangles)} tris`
             );
             return lines.join('\n');
-        }
+        },
     };
 }

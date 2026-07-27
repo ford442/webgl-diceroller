@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createTavernMeal(scene, physicsWorld, position = { x: 10, y: -2.75, z: 10 }, rotationY = Math.PI / 4) {
+export function createTavernMeal(
+    scene,
+    physicsWorld,
+    position = { x: 10, y: -2.75, z: 10 },
+    rotationY = Math.PI / 4
+) {
     const ammo = getAmmo();
 
     // 1. Tankard of Ale
@@ -18,24 +23,24 @@ function createTankard(scene, physicsWorld, ammo, basePosition, baseRotation) {
     // Dimensions
     const radius = 0.35;
     const height = 0.8;
-    const thickness = 0.05;
+    const _thickness = 0.05;
 
     // Materials
     const woodMat = new THREE.MeshStandardMaterial({
         color: 0x5c4033, // Dark Wood
-        roughness: 0.7
+        roughness: 0.7,
     });
 
     const metalMat = new THREE.MeshStandardMaterial({
         color: 0xaaaaaa, // Steel/Pewter
         metalness: 0.8,
-        roughness: 0.4
+        roughness: 0.4,
     });
 
     const foamMat = new THREE.MeshStandardMaterial({
         color: 0xffffee, // Creamy foam
         roughness: 0.9,
-        bumpScale: 0.02
+        bumpScale: 0.02,
     });
 
     // Body (Cylinder)
@@ -49,13 +54,13 @@ function createTankard(scene, physicsWorld, ammo, basePosition, baseRotation) {
     const bandGeo = new THREE.CylinderGeometry(radius + 0.01, radius + 0.01, 0.1, 16);
 
     const topBand = new THREE.Mesh(bandGeo, metalMat);
-    topBand.position.y = height/2 - 0.1;
+    topBand.position.y = height / 2 - 0.1;
     topBand.castShadow = true;
     topBand.receiveShadow = true;
     group.add(topBand);
 
     const botBand = new THREE.Mesh(bandGeo, metalMat);
-    botBand.position.y = -height/2 + 0.1;
+    botBand.position.y = -height / 2 + 0.1;
     botBand.castShadow = true;
     botBand.receiveShadow = true;
     group.add(botBand);
@@ -77,7 +82,7 @@ function createTankard(scene, physicsWorld, ammo, basePosition, baseRotation) {
     // Flatten bottom, stretch top
     foamGeo.applyMatrix4(new THREE.Matrix4().makeScale(1, 0.4, 1));
     const foamMesh = new THREE.Mesh(foamGeo, foamMat);
-    foamMesh.position.y = height/2 + 0.05;
+    foamMesh.position.y = height / 2 + 0.05;
     group.add(foamMesh);
 
     // Position on Table
@@ -91,7 +96,7 @@ function createTankard(scene, physicsWorld, ammo, basePosition, baseRotation) {
 
     // Physics
     if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height/2, radius));
+        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
         createStaticBody(physicsWorld, group, shape);
     }
 }
@@ -103,17 +108,17 @@ function createFoodPlate(scene, physicsWorld, ammo, basePosition, baseRotation) 
     // Materials
     const plateMat = new THREE.MeshStandardMaterial({
         color: 0xdddddd, // Greyish white ceramic
-        roughness: 0.3
+        roughness: 0.3,
     });
 
     const breadMat = new THREE.MeshStandardMaterial({
         color: 0xcd853f, // Peru/Brown
-        roughness: 0.8
+        roughness: 0.8,
     });
 
     const cheeseMat = new THREE.MeshStandardMaterial({
         color: 0xffd700, // Gold/Yellow
-        roughness: 0.5
+        roughness: 0.5,
     });
 
     // 1. Plate
@@ -129,15 +134,15 @@ function createFoodPlate(scene, physicsWorld, ammo, basePosition, baseRotation) 
     const breadGeo = new THREE.SphereGeometry(0.3, 16, 16);
     breadGeo.applyMatrix4(new THREE.Matrix4().makeScale(1.2, 0.7, 1)); // Oval, flattened
     const breadMesh = new THREE.Mesh(breadGeo, breadMat);
-    breadMesh.position.set(-0.2, plateHeight/2 + 0.15, -0.2);
+    breadMesh.position.set(-0.2, plateHeight / 2 + 0.15, -0.2);
     breadMesh.castShadow = true;
     breadMesh.receiveShadow = true;
     group.add(breadMesh);
 
     // 3. Cheese Wedge
-    const cheeseGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 16, 1, false, 0, Math.PI/3); // 60 deg wedge
+    const cheeseGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 16, 1, false, 0, Math.PI / 3); // 60 deg wedge
     const cheeseMesh = new THREE.Mesh(cheeseGeo, cheeseMat);
-    cheeseMesh.position.set(0.3, plateHeight/2 + 0.1, 0.3);
+    cheeseMesh.position.set(0.3, plateHeight / 2 + 0.1, 0.3);
     cheeseMesh.castShadow = true;
     cheeseMesh.receiveShadow = true;
     group.add(cheeseMesh);
@@ -153,7 +158,9 @@ function createFoodPlate(scene, physicsWorld, ammo, basePosition, baseRotation) 
 
     // Physics
     if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(plateRadius, plateHeight/2, plateRadius));
+        const shape = new ammo.btCylinderShape(
+            new ammo.btVector3(plateRadius, plateHeight / 2, plateRadius)
+        );
         createStaticBody(physicsWorld, group, shape);
     }
 }

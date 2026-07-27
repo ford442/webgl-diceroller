@@ -28,12 +28,21 @@ function buttonStyle(extra = '') {
     `;
 }
 
+/** @typedef {import('../types/roll').RollHistoryEntry} RollHistoryEntry */
+
+/**
+ * @param {object} config
+ * @param {{ getEntries: () => RollHistoryEntry[]; exportAsText: () => string; exportAsCsv: () => string; clear: () => void }} config.rollHistory
+ * @param {{ getStats: () => import('../types/roll').RollDieStats[]; minSampleSize?: number; reset: () => void }} config.rollStats
+ * @param {(seed: number) => void} [config.onReplay]
+ * @param {HTMLElement} [config.container]
+ */
 export function createRollHistoryPanel({
     rollHistory,
     rollStats,
     onReplay = null,
-    container = null
-} = {}) {
+    container = null,
+}) {
     if (!rollHistory || !rollStats) {
         throw new Error('createRollHistoryPanel requires rollHistory and rollStats');
     }
@@ -104,7 +113,8 @@ export function createRollHistoryPanel({
     `;
 
     const title = document.createElement('div');
-    title.style.cssText = 'font-size:14px;font-weight:bold;letter-spacing:0.6px;color:' + GOLD + ';';
+    title.style.cssText =
+        'font-size:14px;font-weight:bold;letter-spacing:0.6px;color:' + GOLD + ';';
     title.textContent = 'Roll Chronicle';
 
     const closeBtn = document.createElement('button');
@@ -190,7 +200,9 @@ export function createRollHistoryPanel({
     function updateTabStyles() {
         tabs.forEach((tab) => {
             const selected = tab.dataset.tab === activeTab;
-            tab.style.background = selected ? 'rgba(232, 200, 130, 0.22)' : 'rgba(139, 105, 20, 0.22)';
+            tab.style.background = selected
+                ? 'rgba(232, 200, 130, 0.22)'
+                : 'rgba(139, 105, 20, 0.22)';
             tab.style.color = selected ? GOLD : GOLD_DIM;
             tab.style.fontWeight = selected ? 'bold' : 'normal';
         });
@@ -236,7 +248,7 @@ export function createRollHistoryPanel({
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit',
-                second: '2-digit'
+                second: '2-digit',
             });
             const setLabel = formatDiceSet(entry.diceSet);
             const summary = formatResultsSummary(entry.diceResults);
@@ -343,18 +355,19 @@ export function createRollHistoryPanel({
         stats.forEach((stat) => {
             const expected = stat.totalRolls / stat.sides;
             const maxObserved = Math.max(...stat.observedCounts, expected, 1);
-            const statusColor = !stat.hasEnoughSamples
-                ? GOLD_DIM
-                : (stat.passes ? PASS : FAIL);
+            const statusColor = !stat.hasEnoughSamples ? GOLD_DIM : stat.passes ? PASS : FAIL;
             const statusText = !stat.hasEnoughSamples
                 ? `warming up (${Math.max(0, minSampleSize - stat.totalRolls)} to go)`
-                : (stat.passes ? 'fair' : 'skewed');
+                : stat.passes
+                  ? 'fair'
+                  : 'skewed';
 
-            const rows = stat.observedCounts.map((count, index) => {
-                const face = index + 1;
-                const observedWidth = `${(count / maxObserved) * 100}%`;
-                const expectedWidth = `${(expected / maxObserved) * 100}%`;
-                return `
+            const rows = stat.observedCounts
+                .map((count, index) => {
+                    const face = index + 1;
+                    const observedWidth = `${(count / maxObserved) * 100}%`;
+                    const expectedWidth = `${(expected / maxObserved) * 100}%`;
+                    return `
                     <div style="display:grid;grid-template-columns:28px 1fr 56px;gap:8px;align-items:center;">
                         <div style="color:${GOLD_DIM};font-variant-numeric:tabular-nums;">${face}</div>
                         <div style="display:flex;align-items:center;gap:4px;height:10px;">
@@ -364,7 +377,8 @@ export function createRollHistoryPanel({
                         <div style="text-align:right;color:${MUTED};font-variant-numeric:tabular-nums;">${count}/${expected.toFixed(1)}</div>
                     </div>
                 `;
-            }).join('');
+                })
+                .join('');
 
             const section = document.createElement('section');
             section.style.cssText = `
@@ -409,7 +423,9 @@ export function createRollHistoryPanel({
             try {
                 await navigator.clipboard.writeText(text);
                 copyBtn.textContent = 'Copied!';
-                setTimeout(() => { copyBtn.textContent = 'Copy log'; }, 1500);
+                setTimeout(() => {
+                    copyBtn.textContent = 'Copy log';
+                }, 1500);
             } catch {
                 window.prompt('Roll history:', text);
             }
@@ -487,6 +503,6 @@ export function createRollHistoryPanel({
             window.removeEventListener('keydown', onKeyDown);
             toggleBtn.remove();
             panel.remove();
-        }
+        },
     };
 }

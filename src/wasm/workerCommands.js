@@ -55,15 +55,24 @@ export function dispatchLinear(engine, buf, start = 0, end = buf.length) {
             case OP.SET_TRANSFORM:
                 engine.setDieTransform(
                     id,
-                    buf[i + 2], buf[i + 3], buf[i + 4],
-                    buf[i + 5], buf[i + 6], buf[i + 7], buf[i + 8]
+                    buf[i + 2],
+                    buf[i + 3],
+                    buf[i + 4],
+                    buf[i + 5],
+                    buf[i + 6],
+                    buf[i + 7],
+                    buf[i + 8]
                 );
                 break;
             case OP.SET_VELOCITY:
                 engine.setDieVelocity(
                     id,
-                    buf[i + 2], buf[i + 3], buf[i + 4],
-                    buf[i + 5], buf[i + 6], buf[i + 7]
+                    buf[i + 2],
+                    buf[i + 3],
+                    buf[i + 4],
+                    buf[i + 5],
+                    buf[i + 6],
+                    buf[i + 7]
                 );
                 break;
             default:

@@ -71,7 +71,7 @@ export function createParchment(scene, physicsWorld, options = {}) {
         map: texture,
         color: 0xffffff,
         roughness: 0.9,
-        bumpScale: 0.01
+        bumpScale: 0.01,
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -143,7 +143,7 @@ export function createTarotCards(scene, physicsWorld, options = {}) {
     const cards = [
         { name: 'THE FOOL', number: '0', color: '#ffcc00' },
         { name: 'DEATH', number: 'XIII', color: '#333333' },
-        { name: 'THE TOWER', number: 'XVI', color: '#8b0000' }
+        { name: 'THE TOWER', number: 'XVI', color: '#8b0000' },
     ];
 
     const placement = resolvePlacement(options, { x: -7, z: 6 });
@@ -155,23 +155,27 @@ export function createTarotCards(scene, physicsWorld, options = {}) {
         const material = new THREE.MeshStandardMaterial({
             map: texture,
             roughness: 0.6,
-            metalness: 0.1
+            metalness: 0.1,
         });
 
         const mesh = new THREE.Mesh(geometry, material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
 
-        const x = baseX + (i * 1.5) + (randomUnit(options) - 0.5) * 0.5;
+        const x = baseX + i * 1.5 + (randomUnit(options) - 0.5) * 0.5;
         const z = baseZ + (randomUnit(options) - 0.5) * 0.5;
-        const y = tabletopY(-2.745) + (i * 0.002);
+        const y = tabletopY(-2.745) + i * 0.002;
 
         mesh.position.set(x, y, z);
         mesh.rotation.y = (randomUnit(options) - 0.5) * 0.5;
 
         group.add(mesh);
         if (ammo && physicsWorld) {
-            createStaticBody(physicsWorld, mesh, new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, height / 2)));
+            createStaticBody(
+                physicsWorld,
+                mesh,
+                new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, height / 2))
+            );
         }
     });
 
@@ -238,7 +242,7 @@ export function createWantedPoster(scene, physicsWorld, options = {}) {
         map: texture,
         roughness: 0.9,
         metalness: 0.0,
-        color: 0xffffff
+        color: 0xffffff,
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -312,7 +316,7 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
         map: chartsTexture,
         roughness: 0.7,
         metalness: 0.05,
-        color: 0xffffff
+        color: 0xffffff,
     });
 
     const centerGeo = new THREE.BoxGeometry(centerWidth, height, thickness);
@@ -333,7 +337,9 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
     options.track?.(centerMesh);
 
     if (ammo && physicsWorld) {
-        const centerShape = new ammo.btBoxShape(new ammo.btVector3(centerWidth / 2, height / 2, thickness / 2));
+        const centerShape = new ammo.btBoxShape(
+            new ammo.btVector3(centerWidth / 2, height / 2, thickness / 2)
+        );
         createStaticBody(physicsWorld, centerMesh, centerShape);
     }
 
@@ -348,7 +354,9 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
     options.track?.(leftWingMesh);
 
     if (ammo && physicsWorld) {
-        const leftShape = new ammo.btBoxShape(new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2));
+        const leftShape = new ammo.btBoxShape(
+            new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2)
+        );
         createStaticBody(physicsWorld, leftWingMesh, leftShape);
     }
 
@@ -361,7 +369,9 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
     options.track?.(rightWingMesh);
 
     if (ammo && physicsWorld) {
-        const rightShape = new ammo.btBoxShape(new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2));
+        const rightShape = new ammo.btBoxShape(
+            new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2)
+        );
         createStaticBody(physicsWorld, rightWingMesh, rightShape);
     }
 }

@@ -9,9 +9,9 @@ import * as THREE from 'three';
  * never culled by this system.
  */
 const NEVER_CULL_NAMES = new Set([
-    'SkullProp',   // Skull (interactive)
-    'Gong',        // Gong (interactive)
-    'BilliardLamp' // Hanging lamp (interactive, also the key light source)
+    'SkullProp', // Skull (interactive)
+    'Gong', // Gong (interactive)
+    'BilliardLamp', // Hanging lamp (interactive, also the key light source)
 ]);
 
 function subtreeHasLight(root) {
@@ -53,13 +53,16 @@ export class CullingSystem {
      * `important: true`) are kept always-visible. The bounding sphere is computed
      * lazily on the first cull frame so callers don't need world matrices ready.
      */
+    /**
+     * @param {import('three').Object3D} root
+     * @param {{ important?: boolean }} [options]
+     */
     register(root, { important } = {}) {
         if (!root || !root.isObject3D || this.byRoot.has(root)) return null;
         // A subtree that owns a light must never be hidden: toggling `.visible`
         // would also remove the light's contribution to on-screen objects.
-        const isImportant = important === true
-            || NEVER_CULL_NAMES.has(root.name)
-            || subtreeHasLight(root);
+        const isImportant =
+            important === true || NEVER_CULL_NAMES.has(root.name) || subtreeHasLight(root);
         const entry = { root, sphere: new THREE.Sphere(), important: isImportant, ready: false };
         this.entries.push(entry);
         this.byRoot.set(root, entry);

@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createCharacterSheet(scene, physicsWorld, position = { x: -6, y: -2.75, z: -6 }, rotationY = Math.PI / 6) {
+export function createCharacterSheet(
+    scene,
+    physicsWorld,
+    position = { x: -6, y: -2.75, z: -6 },
+    rotationY = Math.PI / 6
+) {
     const width = 4;
     const length = 5.5;
     const thickness = 0.02;
@@ -59,7 +64,7 @@ export function createCharacterSheet(scene, physicsWorld, position = { x: -6, y:
         map: texture,
         roughness: 0.9, // Paper is rough
         metalness: 0.0,
-        color: 0xffffff
+        color: 0xffffff,
     });
 
     const geometry = new THREE.BoxGeometry(width, thickness, length);
@@ -67,7 +72,7 @@ export function createCharacterSheet(scene, physicsWorld, position = { x: -6, y:
 
     // Position on table (table surface is Y = -2.75)
     // Add half thickness to sit exactly on top
-    mesh.position.set(position.x, position.y + thickness/2, position.z);
+    mesh.position.set(position.x, position.y + thickness / 2, position.z);
     mesh.rotation.y = rotationY;
 
     mesh.castShadow = true;
@@ -80,7 +85,9 @@ export function createCharacterSheet(scene, physicsWorld, position = { x: -6, y:
     if (Ammo) {
         // Simple box shape for the paper
         if (Ammo && physicsWorld) {
-            const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, thickness / 2, length / 2));
+            const shape = new Ammo.btBoxShape(
+                new Ammo.btVector3(width / 2, thickness / 2, length / 2)
+            );
             createStaticBody(physicsWorld, mesh, shape);
         }
     }

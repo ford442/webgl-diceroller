@@ -26,7 +26,9 @@ async function startVite() {
         try {
             const res = await fetch(`${BASE}/`);
             if (res.ok) return proc;
-        } catch { /* not up yet */ }
+        } catch {
+            /* not up yet */
+        }
     }
     proc.kill('SIGKILL');
     throw new Error('vite start timeout');
@@ -35,18 +37,32 @@ async function startVite() {
 async function probe(browser, query, file) {
     const page = await browser.newPage({ viewport: { width: 800, height: 800 } });
     const errors = [];
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    page.on('console', (m) => {
+        if (m.type() === 'error') errors.push(m.text());
+    });
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 
     await page.goto(`${BASE}/${query}`, { waitUntil: 'load' });
     await sleep(6000); // let renderer init + a few animation frames run
 
-    const info = await page.evaluate(() => ({
-        backend: window.__renderStats?.post?.rendererType
-            ?? window.scene?.userData?.rendererState?.rendererType ?? 'unknown',
-        godRays: window.postConfig?.godRaysEnabled ?? null,
-        hasFactory: Boolean(window.scene?.userData?.godRayMaterialFactory),
-    })).catch(() => ({ backend: 'unknown', godRays: null }));
+    const info = await page
+        .evaluate(() => {
+            const app = window.__app;
+            const scene = app?.scene ?? window.scene;
+            const stats = app?.stats ?? window.__renderStats;
+            const post = app?.postConfig ?? window.postConfig;
+            return {
+                backend:
+                    stats?.post?.rendererType ??
+                    /** @type {{ rendererType?: string } | undefined} */ (
+                        scene?.userData?.rendererState
+                    )?.rendererType ??
+                    'unknown',
+                godRays: post?.godRaysEnabled ?? null,
+                hasFactory: Boolean(scene?.userData?.godRayMaterialFactory),
+            };
+        })
+        .catch(() => ({ backend: 'unknown', godRays: null }));
 
     await page.screenshot({ path: file });
     await page.close();
@@ -56,8 +72,8 @@ async function probe(browser, query, file) {
 const vite = await startVite();
 const browser = await chromium.launch({ args: WGPU_ARGS });
 try {
-    const webgl = await probe(browser, '?webgl', 'godrays-webgl.png');
-    const webgpu = await probe(browser, '?webgpu', 'godrays-webgpu.png');
+    const webgl = await probe(browser, '?webgl&test', 'godrays-webgl.png');
+    const webgpu = await probe(browser, '?webgpu&test', 'godrays-webgpu.png');
     console.log('WEBGL :', JSON.stringify(webgl));
     console.log('WEBGPU:', JSON.stringify(webgpu));
 } finally {

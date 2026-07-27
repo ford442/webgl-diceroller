@@ -19,13 +19,17 @@
 
 import * as workerBridge from './WorkerPhysicsBridge.js';
 import * as mainBridge from './WasmPhysicsBridge.js';
+import {
+    addStaticColliderForEngine,
+    clearStaticCollidersForEngine,
+    createWasmTableBoundsForEngine,
+    removeStaticColliderForEngine,
+} from './staticColliders.js';
 
 const _params = new URLSearchParams(window.location.search);
 
 const _forceMain =
-    _params.has('no-wasm') ||
-    _params.has('no-worker') ||
-    _params.get('worker-physics') === 'off';
+    _params.has('no-wasm') || _params.has('no-worker') || _params.get('worker-physics') === 'off';
 
 // `active` is swapped to the chosen backend during loadWasmEngine(). Until then
 // it points at the main bridge so any early accidental call is harmless.
@@ -66,6 +70,30 @@ export const serializePhysicsState = () => active.serializePhysicsState();
 export const seededPhysicsThrow = (seed, dice, tableSurfaceY) =>
     active.seededPhysicsThrow(seed, dice, tableSurfaceY);
 export const deserializePhysicsState = (data) => active.deserializePhysicsState(data);
+export const setContainerActive = (isActive) => active.setContainerActive(isActive);
+export const setContainerPlanes = (planes) => active.setContainerPlanes(planes);
+
+/** Register a declarative static collider spec in the WASM engine. */
+export const addStaticCollider = (spec, anchor) => {
+    if (!active.isWasmAvailable()) return -1;
+    return addStaticColliderForEngine(active.getWasmEngine(), spec, anchor);
+};
+
+export const removeStaticCollider = (userId) => {
+    if (!active.isWasmAvailable()) return false;
+    return removeStaticColliderForEngine(active.getWasmEngine(), userId);
+};
+
+export const clearStaticColliders = () => {
+    if (!active.isWasmAvailable()) return;
+    clearStaticCollidersForEngine(active.getWasmEngine());
+};
+
+/** Upload Table.js physicsBodies as WASM static boxes (walls, velvet zone, lips). */
+export const createWasmTableBounds = (tableConfig) => {
+    if (!active.isWasmAvailable()) return 0;
+    return createWasmTableBoundsForEngine(active.getWasmEngine(), tableConfig);
+};
 
 /** True when the worker backend is live and using SharedArrayBuffer transport. */
 export const isUsingWorkerPhysics = () => active === workerBridge;
@@ -80,3 +108,6 @@ export const flushWorkerCommandBatch = () => {
 /** Worker transport stats for ?debug-perf (null when not on the worker bridge). */
 export const getWorkerPhysicsStats = () =>
     active === workerBridge ? workerBridge.getWorkerPhysicsStats() : null;
+
+/** WASM step stats for ?debug-perf (SAB worker header or main-thread engine). */
+export const getPhysicsStepStats = () => active.getPhysicsStepStats?.() ?? null;

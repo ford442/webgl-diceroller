@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createPadlock(scene, physicsWorld, position = { x: 0, y: -2.75, z: 0 }, rotationY = 0) {
+export function createPadlock(
+    scene,
+    physicsWorld,
+    position = { x: 0, y: -2.75, z: 0 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
 
     // Group
@@ -14,15 +19,15 @@ export function createPadlock(scene, physicsWorld, position = { x: 0, y: -2.75, 
     // Dark, slightly rusted iron for the padlock body and shackle
     const ironMaterial = new THREE.MeshStandardMaterial({
         color: 0x222222, // Dark gray/black
-        roughness: 0.8,  // Rough, weathered
-        metalness: 0.6,  // Metallic but dull
+        roughness: 0.8, // Rough, weathered
+        metalness: 0.6, // Metallic but dull
     });
 
     // A slightly darker/different material for the keyhole interior
     const holeMaterial = new THREE.MeshStandardMaterial({
         color: 0x050505,
         roughness: 1.0,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // --- Geometry ---
@@ -132,21 +137,23 @@ export function createPadlock(scene, physicsWorld, position = { x: 0, y: -2.75, 
         const physDepth = bodyHeight + shackleRadius + shackleTube;
 
         if (ammo && physicsWorld) {
-            const shape = new ammo.btBoxShape(new ammo.btVector3(physWidth / 2, physHeight / 2, physDepth / 2));
-    
+            const shape = new ammo.btBoxShape(
+                new ammo.btVector3(physWidth / 2, physHeight / 2, physDepth / 2)
+            );
+
             // Center the physics body roughly over the padlock group
             // The shackle shifts the center of mass slightly into negative Z.
-            const zOffset = - (shackleRadius / 2);
-    
+            const zOffset = -(shackleRadius / 2);
+
             // We'll attach the physics body to a proxy mesh to handle the offset properly
             const proxyGeo = new THREE.BoxGeometry(physWidth, physHeight, physDepth);
             const proxyMesh = new THREE.Mesh(proxyGeo);
             proxyMesh.visible = false;
-    
+
             // Local position offset
             proxyMesh.position.set(0, physHeight / 2, zOffset);
             padlockGroup.add(proxyMesh);
-    
+
             // createStaticBody handles world position/rotation of the mesh
             createStaticBody(physicsWorld, proxyMesh, shape);
         }

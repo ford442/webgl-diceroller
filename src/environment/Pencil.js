@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createPencil(scene, physicsWorld, position = { x: -4, y: -2.75, z: -6 }, rotationY = -Math.PI / 4) {
+export function createPencil(
+    scene,
+    physicsWorld,
+    position = { x: -4, y: -2.75, z: -6 },
+    rotationY = -Math.PI / 4
+) {
     const group = new THREE.Group();
     group.name = 'Pencil';
 
@@ -18,35 +23,35 @@ export function createPencil(scene, physicsWorld, position = { x: -4, y: -2.75, 
     const yellowPaintMat = new THREE.MeshStandardMaterial({
         color: 0xf4c542, // classic pencil yellow
         roughness: 0.4,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     // Wood cone
     const woodMat = new THREE.MeshStandardMaterial({
         color: 0xdeb887, // burlywood
         roughness: 0.8,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // Graphite tip
     const graphiteMat = new THREE.MeshStandardMaterial({
         color: 0x333333,
         roughness: 0.3,
-        metalness: 0.5
+        metalness: 0.5,
     });
 
     // Metal ferrule
     const metalMat = new THREE.MeshStandardMaterial({
         color: 0xaaaaaa, // silver/aluminum
         roughness: 0.3,
-        metalness: 0.8
+        metalness: 0.8,
     });
 
     // Pink eraser
     const eraserMat = new THREE.MeshStandardMaterial({
         color: 0xffb6c1, // light pink
         roughness: 0.9,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // --- Geometries ---
@@ -62,7 +67,12 @@ export function createPencil(scene, physicsWorld, position = { x: -4, y: -2.75, 
     group.add(eraserMesh);
 
     // Ferrule (Metal band)
-    const ferruleGeo = new THREE.CylinderGeometry(pencilRadius + 0.01, pencilRadius + 0.01, ferruleLength, 16);
+    const ferruleGeo = new THREE.CylinderGeometry(
+        pencilRadius + 0.01,
+        pencilRadius + 0.01,
+        ferruleLength,
+        16
+    );
     const ferruleMesh = new THREE.Mesh(ferruleGeo, metalMat);
     ferruleMesh.castShadow = true;
     ferruleMesh.receiveShadow = true;
@@ -97,7 +107,7 @@ export function createPencil(scene, physicsWorld, position = { x: -4, y: -2.75, 
 
     // Center the entire pencil group on its local Y-axis origin
     const totalLength = tipLength + bodyLength + ferruleLength + eraserLength;
-    group.children.forEach(c => {
+    group.children.forEach((c) => {
         c.position.y -= totalLength / 2;
     });
 
@@ -118,7 +128,9 @@ export function createPencil(scene, physicsWorld, position = { x: -4, y: -2.75, 
         // Physics CylinderShape matches the Y-aligned group geometry perfectly.
         // Size: X=radius, Y=halfLength, Z=radius
         if (Ammo && physicsWorld) {
-            const shape = new Ammo.btCylinderShape(new Ammo.btVector3(pencilRadius, totalLength / 2, pencilRadius));
+            const shape = new Ammo.btCylinderShape(
+                new Ammo.btVector3(pencilRadius, totalLength / 2, pencilRadius)
+            );
             createStaticBody(physicsWorld, group, shape);
         }
     }

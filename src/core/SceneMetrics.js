@@ -40,9 +40,9 @@ export function applyViewportToCamera(camera, width, height, { reframe = true } 
 
     const targetZ = computeCameraStartZ(aspect);
     const nearDefaultPose =
-        Math.abs(camera.position.x) < 0.01
-        && Math.abs(camera.position.y - CAMERA_EYE_Y) < 0.5
-        && Math.abs(camera.position.z - CAMERA_START_Z) < 2.5;
+        Math.abs(camera.position.x) < 0.01 &&
+        Math.abs(camera.position.y - CAMERA_EYE_Y) < 0.5 &&
+        Math.abs(camera.position.z - CAMERA_START_Z) < 2.5;
 
     if (nearDefaultPose) {
         camera.position.z = targetZ;
@@ -55,6 +55,6 @@ export function applyViewportToCamera(camera, width, height, { reframe = true } 
 export function toCurrentTabletopY(position) {
     return {
         ...position,
-        y: position.y + TABLETOP_Y_OFFSET
+        y: position.y + TABLETOP_Y_OFFSET,
     };
 }

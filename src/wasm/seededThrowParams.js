@@ -19,8 +19,8 @@ function eulerToQuaternion(ex, ey, ez) {
     };
 }
 
-const DEFAULT_RNG_STATE = 0x123456789ABCDEF0n;
-const RNG_MUL = 0x2545F4914F6CDD1Dn;
+const DEFAULT_RNG_STATE = 0x123456789abcdef0n;
+const RNG_MUL = 0x2545f4914f6cdd1dn;
 
 /** xorshift64* PRNG matching DicePhysicsEngine::DeterministicRNG in dice_physics.cpp */
 export function createSeededRng(seed) {
@@ -29,7 +29,7 @@ export function createSeededRng(seed) {
         state ^= state >> 12n;
         state ^= state << 25n;
         state ^= state >> 27n;
-        state = (state * RNG_MUL) & 0xFFFFFFFFFFFFFFFFn;
+        state = (state * RNG_MUL) & 0xffffffffffffffffn;
         return Number(state >> 32n) * (1.0 / 4294967296.0);
     };
 }
@@ -42,7 +42,7 @@ export function createSeededRng(seed) {
 export function computeSeededThrowParams(rand, dice, tableSurfaceY) {
     return dice.map(({ id, index }) => {
         const x = (rand() - 0.5) * 4;
-        const y = tableSurfaceY + 6.75 + (index * 0.5);
+        const y = tableSurfaceY + 6.75 + index * 0.5;
         const z = (rand() - 0.5) * 4;
         const q = eulerToQuaternion(
             rand() * Math.PI * 2,
@@ -56,9 +56,17 @@ export function computeSeededThrowParams(rand, dice, tableSurfaceY) {
         const spinY = (rand() - 0.5) * 100;
         const spinZ = (rand() - 0.5) * 100;
         return {
-            id, x, y, z, ...q,
-            forceX, forceY, forceZ,
-            spinX, spinY, spinZ,
+            id,
+            x,
+            y,
+            z,
+            ...q,
+            forceX,
+            forceY,
+            forceZ,
+            spinX,
+            spinY,
+            spinZ,
         };
     });
 }

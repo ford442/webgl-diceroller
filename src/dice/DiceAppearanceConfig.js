@@ -10,7 +10,7 @@ export const DEFAULT_DICE_APPEARANCE = {
     d8: { preset: 'metal', bodyColor: '#8b7355', pipColor: '#1a1410' },
     d10: { preset: 'gemstone', bodyColor: '#5b3fa6', pipColor: '#efe8ff' },
     d12: { preset: 'bone', bodyColor: '#e8dcc8', pipColor: '#3d3428' },
-    d20: { preset: 'obsidian', bodyColor: '#1a1a22', pipColor: '#c9a84c' }
+    d20: { preset: 'obsidian', bodyColor: '#1a1a22', pipColor: '#c9a84c' },
 };
 
 function normalizeHex(raw, fallback) {
@@ -31,7 +31,7 @@ function normalizeTypeAppearance(type, raw) {
     return {
         preset,
         bodyColor: normalizeHex(raw?.bodyColor, defaults.bodyColor),
-        pipColor: normalizeHex(raw?.pipColor, defaults.pipColor)
+        pipColor: normalizeHex(raw?.pipColor, defaults.pipColor),
     };
 }
 
@@ -58,19 +58,19 @@ function readStoredConfig() {
  * @param {Record<string, { preset: string, bodyColor: string, pipColor: string }>} config
  */
 export function serializeDiceAppearance(config) {
-    return DICE_TYPES
-        .map((type) => {
-            const entry = config[type];
-            if (!entry) return null;
-            const defaults = DEFAULT_DICE_APPEARANCE[type];
-            const sameAsDefault = entry.preset === defaults.preset
-                && entry.bodyColor === defaults.bodyColor
-                && entry.pipColor === defaults.pipColor;
-            if (sameAsDefault) return null;
-            const body = entry.bodyColor.replace('#', '');
-            const pip = entry.pipColor.replace('#', '');
-            return `${type}:${presetToShortCode(entry.preset)}:${body}:${pip}`;
-        })
+    return DICE_TYPES.map((type) => {
+        const entry = config[type];
+        if (!entry) return null;
+        const defaults = DEFAULT_DICE_APPEARANCE[type];
+        const sameAsDefault =
+            entry.preset === defaults.preset &&
+            entry.bodyColor === defaults.bodyColor &&
+            entry.pipColor === defaults.pipColor;
+        if (sameAsDefault) return null;
+        const body = entry.bodyColor.replace('#', '');
+        const pip = entry.pipColor.replace('#', '');
+        return `${type}:${presetToShortCode(entry.preset)}:${body}:${pip}`;
+    })
         .filter(Boolean)
         .join(',');
 }
@@ -103,15 +103,20 @@ export function parseDiceAppearanceParam(raw) {
  * @param {URLSearchParams} [searchParams]
  */
 export function resolveDiceAppearanceConfig(searchParams = null) {
-    const params = searchParams ?? new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const params =
+        searchParams ??
+        new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
     const stored = typeof window !== 'undefined' ? readStoredConfig() : null;
-    const urlPartial = parseDiceAppearanceParam(params.get('dice-look') ?? params.get('look') ?? '');
+    const urlPartial = parseDiceAppearanceParam(
+        params.get('dice-look') ?? params.get('look') ?? ''
+    );
 
     const config = createDefaultAppearanceConfig();
 
     if (stored?.types) {
         DICE_TYPES.forEach((type) => {
-            if (stored.types[type]) config[type] = normalizeTypeAppearance(type, stored.types[type]);
+            if (stored.types[type])
+                config[type] = normalizeTypeAppearance(type, stored.types[type]);
         });
     }
 
@@ -132,7 +137,7 @@ export function persistDiceAppearanceConfig(config) {
 
     const payload = {
         version: 1,
-        types: Object.fromEntries(DICE_TYPES.map((type) => [type, { ...config[type] }]))
+        types: Object.fromEntries(DICE_TYPES.map((type) => [type, { ...config[type] }])),
     };
 
     try {
@@ -158,7 +163,7 @@ export function persistDiceAppearanceConfig(config) {
 export function buildDicePresencePayload(config) {
     return {
         diceAppearance: serializeDiceAppearance(config),
-        diceAppearanceVersion: 1
+        diceAppearanceVersion: 1,
     };
 }
 

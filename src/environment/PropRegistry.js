@@ -1,14 +1,13 @@
 import { registerInteractiveObject, unregisterInteractiveObject } from '../interaction.js';
 import { registerInteractable } from '../interactables/InteractableRegistry.js';
 import { LAMP_HANG_Y, toCurrentTabletopY } from '../core/SceneMetrics.js';
-import { shuffleWithRng } from './clutter/ClutterPlacement.js';
 import { LAYOUT_THEMES } from '../core/TableLayoutConfig.js';
 import { disposePropSpawn } from './PropLifecycle.js';
 import { mergePropRecord } from '../core/StaticPropMerger.js';
+import { createWasmTableBounds, isWasmAvailable } from '../wasm/PhysicsBridge.js';
 import './Bone.js';
 import './Cauldron.js';
 import './BreadLoaf.js';
-import './Rulebook.js';
 
 const environmentModules = import.meta.glob('./*.js', { eager: true });
 
@@ -44,20 +43,55 @@ const factoryEntry = (name, options) => ({ name, .../** @type {any} */ (options 
 
 const tier1Position = { x: 0, y: LAMP_HANG_Y, z: 0 };
 const isLegacyTabletopPosition = (position) => position.y > -3.25 && position.y < -1.5;
-const resolveEntryPosition = (entry) => (
-    entry.tabletop === true || (entry.tabletop !== false && isLegacyTabletopPosition(entry.position))
+const resolveEntryPosition = (entry) =>
+    entry.tabletop === true ||
+    (entry.tabletop !== false && isLegacyTabletopPosition(entry.position))
         ? toCurrentTabletopY(entry.position)
-        : entry.position
-);
+        : entry.position;
 
 export const SHADOW_DISABLED_PROP_NAMES = new Set([
-    'Dart', 'Bell', 'Pencil', 'Bone', 'Key', 'CoinPouch', 'PocketFlask', 'Compass', 'WaxSeal',
-    'PocketWatch', 'Dagger', 'PlayingCards', 'DragonScale', 'CharacterSheet', 'BountyPoster',
-    'CheeseWheel', 'Runestones', 'Gemstones', 'WritingSet',
-    'SmokingPipe', 'Crown', 'Chalice', 'Miniature', 'Scroll', 'Coin', 'Amulet', 'Abacus',
-    'Padlock', 'Spectacles', 'Lockpicks', 'LeatherJournal', 'MagnifyingGlass', 'Rope',
-    'Candelabra', 'Waterskin', 'Astrolabe', 'Sundial', 'Flute', 'Apple', 'WoodenSpoon',
-    'Warhammer', 'BreadLoaf'
+    'Dart',
+    'Bell',
+    'Pencil',
+    'Bone',
+    'Key',
+    'CoinPouch',
+    'PocketFlask',
+    'Compass',
+    'WaxSeal',
+    'PocketWatch',
+    'Dagger',
+    'PlayingCards',
+    'DragonScale',
+    'CharacterSheet',
+    'BountyPoster',
+    'CheeseWheel',
+    'Runestones',
+    'Gemstones',
+    'WritingSet',
+    'SmokingPipe',
+    'Crown',
+    'Chalice',
+    'Miniature',
+    'Scroll',
+    'Coin',
+    'Amulet',
+    'Abacus',
+    'Padlock',
+    'Spectacles',
+    'Lockpicks',
+    'LeatherJournal',
+    'MagnifyingGlass',
+    'Rope',
+    'Candelabra',
+    'Waterskin',
+    'Astrolabe',
+    'Sundial',
+    'Flute',
+    'Apple',
+    'WoodenSpoon',
+    'Warhammer',
+    'BreadLoaf',
 ]);
 
 export function resolveRootObject(result) {
@@ -102,42 +136,60 @@ export const TIER_PROP_DEFINITIONS = {
             afterCreate: (result, ctx) => {
                 if (result?.fireplaceLight) ctx.state.fireplaceLight = result.fireplaceLight;
                 if (result?.update) ctx.registerUpdate('walls', result.update);
-            }
+            },
         }),
         factoryEntry('Room', {
             cull: false,
-            call: (ctx) => getPropFactory('Room')(ctx.scene)
+            call: (ctx) => getPropFactory('Room')(ctx.scene),
         }),
         factoryEntry('Table', {
             call: (ctx) => {
                 const tableConfig = getPropFactory('Table')(ctx.scene);
-                ctx.createFloorAndWalls(ctx.scene, ctx.physicsWorld, tableConfig);
+                if (isWasmAvailable()) {
+                    createWasmTableBounds(tableConfig);
+                }
+                if (ctx.physicsWorld) {
+                    ctx.createFloorAndWalls(ctx.scene, ctx.physicsWorld, tableConfig);
+                }
                 return tableConfig;
-            }
+            },
         }),
         factoryEntry('Clutter', {
-            call: (ctx) => getPropFactory('Clutter')(ctx.scene, ctx.physicsWorld, ctx.clutterOptions ?? {}),
+            call: (ctx) =>
+                getPropFactory('Clutter')(ctx.scene, ctx.physicsWorld, ctx.clutterOptions ?? {}),
             afterCreate: (result, ctx) => {
                 ctx.state.clutterResult = result;
                 if (result?.flamePosition) ctx.callbacks.setCandleFlamePos?.(result.flamePosition);
-            }
+            },
         }),
         factoryEntry('TarotDeck', {
-            call: (ctx) => getPropFactory('TarotDeck')(ctx.scene, ctx.physicsWorld)
-        })
+            call: (ctx) => getPropFactory('TarotDeck')(ctx.scene, ctx.physicsWorld),
+        }),
     ],
     tier1: [
         factoryEntry('Bookshelf', { position: { x: -18, y: -10, z: 0 }, rotation: Math.PI / 2 }),
-        factoryEntry('DecorativeWalls', { cull: false, call: (ctx) => getPropFactory('DecorativeWalls')(ctx.scene, ctx.physicsWorld) }),
+        factoryEntry('DecorativeWalls', {
+            cull: false,
+            call: (ctx) => getPropFactory('DecorativeWalls')(ctx.scene, ctx.physicsWorld),
+        }),
         factoryEntry('Chair', { position: { x: -14, y: -9.5, z: 6 }, rotation: Math.PI / 3 }),
-        factoryEntry('Chair', { name: 'ChairRight', factoryName: 'Chair', position: { x: 14, y: -9.5, z: -6 }, rotation: -Math.PI / 3 }),
+        factoryEntry('Chair', {
+            name: 'ChairRight',
+            factoryName: 'Chair',
+            position: { x: 14, y: -9.5, z: -6 },
+            rotation: -Math.PI / 3,
+        }),
         factoryEntry('Chest', {
             position: { x: -10, y: -9.5, z: -18 },
             rotation: Math.PI / 8,
-            afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('chest', result.update)
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('chest', result.update),
         }),
         factoryEntry('Rug', { cull: false, call: (ctx) => getPropFactory('Rug')(ctx.scene) }),
-        factoryEntry('Atmosphere', { cull: false, call: (ctx) => getPropFactory('Atmosphere')(ctx.scene) }),
+        factoryEntry('Atmosphere', {
+            cull: false,
+            call: (ctx) => getPropFactory('Atmosphere')(ctx.scene),
+        }),
         factoryEntry('Lamp', {
             call: async (ctx) => {
                 const result = await getPropFactory('Lamp')();
@@ -151,30 +203,88 @@ export const TIER_PROP_DEFINITIONS = {
                 ctx.state.lampData = result;
                 ctx.callbacks.setLampData?.(result);
                 ctx.registerUpdate('lamp', result.update);
-            }
+            },
         }),
         factoryEntry('FloatingCandles', {
             call: (ctx) => getPropFactory('FloatingCandles')(ctx.scene),
-            afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('floatingCandles', result.update)
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('floatingCandles', result.update),
         }),
         factoryEntry('Runecircle', {
             call: (ctx) => getPropFactory('Runecircle')(ctx.scene),
-            afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('runecircle', result.update)
-        })
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('runecircle', result.update),
+        }),
     ],
     tier2: [
         factoryEntry('Horseshoe', { randomPool: true }),
         factoryEntry('DiceTower', { position: { x: 0, y: -3.0, z: -14 }, rotation: 0 }),
         factoryEntry('DiceTray', { position: { x: 12, y: -2.75, z: 10 }, rotation: Math.PI / 6 }),
-        factoryEntry('DiceJail', { position: { x: -13, y: -2.75, z: -13 }, rotation: -Math.PI / 4 }),
+        factoryEntry('DiceJail', {
+            position: { x: -13, y: -2.75, z: -13 },
+            rotation: -Math.PI / 4,
+        }),
         factoryEntry('DiceBag', { position: { x: -10, y: -1.95, z: 12 }, rotation: Math.PI / 8 }),
-        factoryEntry('Bell', { randomPool: true, call: (ctx) => getPropFactory('Bell')(ctx.scene, toCurrentTabletopY({ x: 0, y: -2.75, z: 15 })) }),
-        factoryEntry('TavernMeal', { randomPool: true, position: { x: 14, y: -2.75, z: 5 }, rotation: -Math.PI / 6 }),
-        factoryEntry('Hourglass', { randomPool: true, position: { x: 11, y: -1.75, z: -11 }, rotation: Math.PI / 12 }),
-        factoryEntry('Map', { randomPool: true, position: { x: -14, y: -2.75, z: 0 }, rotation: Math.PI / 3 }),
-        factoryEntry('Scroll', { randomPool: true, position: { x: 10, y: -2.4, z: 13 }, rotation: -Math.PI / 8 }),
-        factoryEntry('CrystalBall', { randomPool: true, position: { x: 13, y: -2.75, z: -13 }, rotation: 0 }),
-        factoryEntry('PotionSet', { randomPool: true, position: { x: -13, y: -2.75, z: -6 }, rotation: Math.PI / 5 }),
+        factoryEntry('DiceCup', {
+            position: { x: 5, y: -2.75, z: 2 },
+            rotation: -Math.PI / 8,
+            afterCreate: (result, ctx) => {
+                if (!result) return;
+                ctx.state.diceCupProp = result;
+                registerInteractiveObject(result.group, () => {
+                    ctx.callbacks.onDiceCupInteract?.();
+                });
+                registerInteractable('diceCup', {
+                    trigger: () => ctx.callbacks.onDiceCupInteract?.(),
+                    getState: () => ({
+                        ...result.getState(),
+                        ...(ctx.callbacks.getDiceCupState?.() ?? {}),
+                    }),
+                });
+            },
+        }),
+        factoryEntry('Bell', {
+            randomPool: true,
+            call: (ctx) =>
+                getPropFactory('Bell')(ctx.scene, toCurrentTabletopY({ x: 0, y: -2.75, z: 15 })),
+            afterCreate: (result, ctx) => {
+                if (result?.interact) {
+                    registerInteractiveObject(result.group, result.interact);
+                    registerInteractable('bell', { trigger: result.interact });
+                }
+                if (result?.update) ctx.registerUpdate('bell', result.update);
+            },
+        }),
+        factoryEntry('TavernMeal', {
+            randomPool: true,
+            position: { x: 14, y: -2.75, z: 5 },
+            rotation: -Math.PI / 6,
+        }),
+        factoryEntry('Hourglass', {
+            randomPool: true,
+            position: { x: 11, y: -1.75, z: -11 },
+            rotation: Math.PI / 12,
+        }),
+        factoryEntry('Map', {
+            randomPool: true,
+            position: { x: -14, y: -2.75, z: 0 },
+            rotation: Math.PI / 3,
+        }),
+        factoryEntry('Scroll', {
+            randomPool: true,
+            position: { x: 10, y: -2.4, z: 13 },
+            rotation: -Math.PI / 8,
+        }),
+        factoryEntry('CrystalBall', {
+            randomPool: true,
+            position: { x: 13, y: -2.75, z: -13 },
+            rotation: 0,
+        }),
+        factoryEntry('PotionSet', {
+            randomPool: true,
+            position: { x: -13, y: -2.75, z: -6 },
+            rotation: Math.PI / 5,
+        }),
         factoryEntry('Skull', {
             position: { x: -11, y: -2.4, z: 11 },
             rotation: Math.PI / 6,
@@ -182,79 +292,167 @@ export const TIER_PROP_DEFINITIONS = {
                 if (!result?.toggleGlow) return;
                 registerInteractiveObject(result.group, result.toggleGlow);
                 registerInteractable('skull', { trigger: result.toggleGlow });
-            }
+            },
         }),
         factoryEntry('MerchantScale', {
             randomPool: true,
             position: { x: 14, y: -2.75, z: -3 },
             rotation: -Math.PI / 4,
-            afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('scale', result.update)
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('scale', result.update),
         }),
         factoryEntry('Lantern', {
             randomPool: true,
             position: { x: -6, y: -2.75, z: -14 },
             rotation: 0,
-            afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('lantern', result.update)
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('lantern', result.update),
         }),
-        factoryEntry('Spellbook', { randomPool: true, position: { x: -14, y: -2.35, z: 7 }, rotation: Math.PI / 2 }),
+        factoryEntry('Spellbook', {
+            randomPool: true,
+            position: { x: -14, y: -2.35, z: 7 },
+            rotation: Math.PI / 2,
+        }),
         factoryEntry('Mug', {
             randomPool: true,
             position: { x: -5, y: -2.75, z: 14 },
             rotation: Math.PI / 4,
-            afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('mug', result.update)
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('mug', result.update),
         }),
         factoryEntry('Tankard', {
             randomPool: true,
             position: { x: 12, y: -2.75, z: 9 },
             rotation: -Math.PI / 6,
-            afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('tankard', result.update)
-        })
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('tankard', result.update),
+        }),
     ],
     tier3: [
-        factoryEntry('Dagger', { randomPool: true, position: { x: 13, y: -2.45, z: 11 }, rotation: Math.PI / 3 }),
-        factoryEntry('Sword', { randomPool: true, position: { x: -14, y: -2.45, z: 12 }, rotation: -Math.PI / 6 }),
+        factoryEntry('Dagger', {
+            randomPool: true,
+            position: { x: 13, y: -2.45, z: 11 },
+            rotation: Math.PI / 3,
+        }),
+        factoryEntry('Sword', {
+            randomPool: true,
+            position: { x: -14, y: -2.45, z: 12 },
+            rotation: -Math.PI / 6,
+        }),
         factoryEntry('Shield', { randomPool: true, position: { x: 0, y: 2, z: -24 }, rotation: 0 }),
-        factoryEntry('BattleAxe', { randomPool: true, position: { x: -16, y: -6, z: -16 }, rotation: -Math.PI / 3 }),
-        factoryEntry('PocketWatch', { randomPool: true, position: { x: 14, y: -2.65, z: 3 }, rotation: 0 }),
-        factoryEntry('Compass', { randomPool: true, position: { x: 7, y: -2.65, z: 14 }, rotation: Math.PI / 8 }),
-        factoryEntry('Chalice', { randomPool: true, position: { x: 6, y: -2.75, z: -13 }, rotation: 0 }),
-        factoryEntry('Miniature', { randomPool: true, position: { x: -13, y: -2.75, z: -8 }, rotation: Math.PI / 4 }),
-        factoryEntry('CharacterSheet', { randomPool: true, position: { x: 14, y: -2.75, z: 8 }, rotation: -Math.PI / 6 }),
-        factoryEntry('BountyPoster', { randomPool: true, position: { x: -20, y: 4, z: -20 }, rotation: Math.PI / 4 }),
-        factoryEntry('Pencil', { randomPool: true, position: { x: -8, y: -2.75, z: 14 }, rotation: Math.PI / 5 }),
-        factoryEntry('BreadLoaf', { randomPool: true, position: { x: 8, y: -2.75, z: 4 }, rotation: Math.PI / 6 }),
-        factoryEntry('Bone', { randomPool: true, position: { x: 5, y: -2.75, z: 5 }, rotation: Math.PI / 3 }),
-        factoryEntry('CoinPouch', { randomPool: true, position: { x: 9, y: -2.75, z: 13 }, rotation: -Math.PI / 8 }),
-        factoryEntry('Lute', { randomPool: true, position: { x: -14, y: -1.85, z: -10 }, rotation: Math.PI / 4 }),
-        factoryEntry('Runestones', { randomPool: true, position: { x: 12, y: -2.75, z: -12 }, rotation: -Math.PI / 12 }),
+        factoryEntry('BattleAxe', {
+            randomPool: true,
+            position: { x: -16, y: -6, z: -16 },
+            rotation: -Math.PI / 3,
+        }),
+        factoryEntry('PocketWatch', {
+            randomPool: true,
+            position: { x: 14, y: -2.65, z: 3 },
+            rotation: 0,
+        }),
+        factoryEntry('Compass', {
+            randomPool: true,
+            position: { x: 7, y: -2.65, z: 14 },
+            rotation: Math.PI / 8,
+        }),
+        factoryEntry('Chalice', {
+            randomPool: true,
+            position: { x: 6, y: -2.75, z: -13 },
+            rotation: 0,
+        }),
+        factoryEntry('Miniature', {
+            randomPool: true,
+            position: { x: -13, y: -2.75, z: -8 },
+            rotation: Math.PI / 4,
+        }),
+        factoryEntry('CharacterSheet', {
+            randomPool: true,
+            position: { x: 14, y: -2.75, z: 8 },
+            rotation: -Math.PI / 6,
+        }),
+        factoryEntry('BountyPoster', {
+            randomPool: true,
+            position: { x: -20, y: 4, z: -20 },
+            rotation: Math.PI / 4,
+        }),
+        factoryEntry('Pencil', {
+            randomPool: true,
+            position: { x: -8, y: -2.75, z: 14 },
+            rotation: Math.PI / 5,
+        }),
+        factoryEntry('BreadLoaf', {
+            randomPool: true,
+            position: { x: 8, y: -2.75, z: 4 },
+            rotation: Math.PI / 6,
+        }),
+        factoryEntry('Bone', {
+            randomPool: true,
+            position: { x: 5, y: -2.75, z: 5 },
+            rotation: Math.PI / 3,
+        }),
+        factoryEntry('CoinPouch', {
+            randomPool: true,
+            position: { x: 9, y: -2.75, z: 13 },
+            rotation: -Math.PI / 8,
+        }),
+        factoryEntry('Lute', {
+            randomPool: true,
+            position: { x: -14, y: -1.85, z: -10 },
+            rotation: Math.PI / 4,
+        }),
+        factoryEntry('Runestones', {
+            randomPool: true,
+            position: { x: 12, y: -2.75, z: -12 },
+            rotation: -Math.PI / 12,
+        }),
         factoryEntry('Candelabra', {
             randomPool: true,
             position: { x: 6, y: -2.75, z: -10 },
             rotation: Math.PI / 4,
-            afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('candelabra', result.update)
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('candelabra', result.update),
         }),
         factoryEntry('SmokingPipe', {
             randomPool: true,
             position: { x: -4, y: -2.73, z: 14 },
             rotation: Math.PI / 8,
-            afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('pipe', result.update)
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('pipe', result.update),
         }),
         factoryEntry('Gemstones', {
             randomPool: true,
             position: { x: 14, y: -2.73, z: -8 },
             rotation: -Math.PI / 12,
-            afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('gems', result.update)
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('gems', result.update),
         }),
         factoryEntry('WritingSet', {
             randomPool: true,
             position: { x: -10, y: -2.73, z: -14 },
             rotation: Math.PI / 6,
-            afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('writing', result.update)
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('writing', result.update),
         }),
-        factoryEntry('CheeseWheel', { randomPool: true, position: { x: -12, y: -2.75, z: 11 }, rotation: Math.PI / 4 }),
-        factoryEntry('WaxSeal', { randomPool: true, position: { x: 4, y: -2.75, z: 14 }, rotation: 0 }),
-        factoryEntry('Crown', { randomPool: true, position: { x: 0, y: -2.75, z: -13 }, rotation: 0 }),
-        factoryEntry('Helmet', { randomPool: true, position: { x: -15, y: -2.75, z: 8 }, rotation: Math.PI / 6 }),
+        factoryEntry('CheeseWheel', {
+            randomPool: true,
+            position: { x: -12, y: -2.75, z: 11 },
+            rotation: Math.PI / 4,
+        }),
+        factoryEntry('WaxSeal', {
+            randomPool: true,
+            position: { x: 4, y: -2.75, z: 14 },
+            rotation: 0,
+        }),
+        factoryEntry('Crown', {
+            randomPool: true,
+            position: { x: 0, y: -2.75, z: -13 },
+            rotation: 0,
+        }),
+        factoryEntry('Helmet', {
+            randomPool: true,
+            position: { x: -15, y: -2.75, z: 8 },
+            rotation: Math.PI / 6,
+        }),
         factoryEntry('Gong', {
             position: { x: 0, y: 0, z: -24 },
             rotation: 0,
@@ -265,7 +463,7 @@ export const TIER_PROP_DEFINITIONS = {
                 ctx.state.gongData = result;
                 ctx.callbacks.setGongData?.(result);
                 ctx.registerUpdate('gong', result.update);
-            }
+            },
         }),
         factoryEntry('MysticOrb', {
             position: { x: 15, y: -2.75, z: -15 },
@@ -275,62 +473,203 @@ export const TIER_PROP_DEFINITIONS = {
                 registerInteractiveObject(result.group, result.interact);
                 registerInteractable('mysticOrb', { trigger: result.interact });
                 ctx.registerUpdate('mysticOrb', result.update);
-            }
+            },
         }),
-        factoryEntry('DMScreen', { randomPool: true, position: { x: 0, y: -2.75, z: -16 }, rotation: 0 }),
-        factoryEntry('DragonScale', { randomPool: true, position: { x: -14, y: -2.75, z: 0 }, rotation: Math.PI / 3 }),
-        factoryEntry('Spyglass', { randomPool: true, position: { x: 14, y: -2.75, z: 6 }, rotation: -Math.PI / 6 }),
+        factoryEntry('DMScreen', {
+            randomPool: true,
+            position: { x: 0, y: -2.75, z: -16 },
+            rotation: 0,
+        }),
+        factoryEntry('DragonScale', {
+            randomPool: true,
+            position: { x: -14, y: -2.75, z: 0 },
+            rotation: Math.PI / 3,
+        }),
+        factoryEntry('Spyglass', {
+            randomPool: true,
+            position: { x: 14, y: -2.75, z: 6 },
+            rotation: -Math.PI / 6,
+        }),
         factoryEntry('PlayingCards', {
             randomPool: true,
             position: { x: -2, y: -2.75, z: 13 },
             rotation: Math.PI / 8,
-            afterCreate: (result) => result?.interact && registerInteractiveObject(result.group, result.interact)
+            afterCreate: (result) =>
+                result?.interact && registerInteractiveObject(result.group, result.interact),
         }),
-        factoryEntry('Key', { randomPool: true, position: { x: 10, y: -2.75, z: 13 }, rotation: Math.PI / 4 }),
-        factoryEntry('Padlock', { randomPool: true, position: { x: -14, y: -2.75, z: -4 }, rotation: Math.PI / 6 }),
-        factoryEntry('Lockpicks', { randomPool: true, position: { x: -13, y: -2.75, z: -3 }, rotation: Math.PI / 8 }),
-        factoryEntry('Spectacles', { randomPool: true, position: { x: 3, y: -2.75, z: 14 }, rotation: 0 }),
-        factoryEntry('Warhammer', { randomPool: true, position: { x: 5, y: -2.75, z: 2 }, rotation: Math.PI / 3 }),
-        factoryEntry('LeatherJournal', { randomPool: true, position: { x: 12, y: -2.5, z: -13 }, rotation: Math.PI / 5 }),
-        factoryEntry('Rulebook', { randomPool: true, position: { x: -8, y: -2.75, z: -8 }, rotation: Math.PI / 5 }),
-        factoryEntry('DrinkingHorn', { randomPool: true, position: { x: 14, y: -2.75, z: 2 }, rotation: -Math.PI / 4 }),
-        factoryEntry('Wand', { randomPool: true, position: { x: -14, y: -2.70, z: 9 }, rotation: Math.PI / 3 }),
-        factoryEntry('Coin', { randomPool: true, position: { x: 11, y: -2.75, z: 11 }, rotation: 0 }),
-        factoryEntry('Amulet', { randomPool: true, position: { x: -8, y: -2.74, z: -14 }, rotation: Math.PI / 6 }),
-        factoryEntry('Abacus', { randomPool: true, position: { x: 13, y: -2.75, z: -10 }, rotation: -Math.PI / 8 }),
-        factoryEntry('Dart', { randomPool: true, position: { x: 8, y: -2.75, z: 14 }, rotation: Math.PI / 4 }),
-        factoryEntry('ScrollCase', { randomPool: true, position: { x: 1, y: -2.43, z: 10 }, rotation: Math.PI / 6 }),
-        factoryEntry('MagnifyingGlass', { randomPool: true, position: { x: 9, y: -2.75, z: -14 }, rotation: Math.PI / 3 }),
-        factoryEntry('Rope', { randomPool: true, position: { x: 6, y: -2.75, z: -15 }, rotation: Math.PI / 6 }),
+        factoryEntry('Key', {
+            randomPool: true,
+            position: { x: 10, y: -2.75, z: 13 },
+            rotation: Math.PI / 4,
+        }),
+        factoryEntry('Padlock', {
+            randomPool: true,
+            position: { x: -14, y: -2.75, z: -4 },
+            rotation: Math.PI / 6,
+        }),
+        factoryEntry('Lockpicks', {
+            randomPool: true,
+            position: { x: -13, y: -2.75, z: -3 },
+            rotation: Math.PI / 8,
+        }),
+        factoryEntry('Spectacles', {
+            randomPool: true,
+            position: { x: 3, y: -2.75, z: 14 },
+            rotation: 0,
+        }),
+        factoryEntry('Warhammer', {
+            randomPool: true,
+            position: { x: 5, y: -2.75, z: 2 },
+            rotation: Math.PI / 3,
+        }),
+        factoryEntry('LeatherJournal', {
+            randomPool: true,
+            position: { x: 12, y: -2.5, z: -13 },
+            rotation: Math.PI / 5,
+        }),
+        factoryEntry('Rulebook', {
+            randomPool: true,
+            position: { x: -8, y: -2.75, z: -8 },
+            rotation: Math.PI / 5,
+        }),
+        factoryEntry('DrinkingHorn', {
+            randomPool: true,
+            position: { x: 14, y: -2.75, z: 2 },
+            rotation: -Math.PI / 4,
+        }),
+        factoryEntry('Wand', {
+            randomPool: true,
+            position: { x: -14, y: -2.7, z: 9 },
+            rotation: Math.PI / 3,
+        }),
+        factoryEntry('Coin', {
+            randomPool: true,
+            position: { x: 11, y: -2.75, z: 11 },
+            rotation: 0,
+        }),
+        factoryEntry('Amulet', {
+            randomPool: true,
+            position: { x: -8, y: -2.74, z: -14 },
+            rotation: Math.PI / 6,
+        }),
+        factoryEntry('Abacus', {
+            randomPool: true,
+            position: { x: 13, y: -2.75, z: -10 },
+            rotation: -Math.PI / 8,
+        }),
+        factoryEntry('Dart', {
+            randomPool: true,
+            position: { x: 8, y: -2.75, z: 14 },
+            rotation: Math.PI / 4,
+        }),
+        factoryEntry('ScrollCase', {
+            randomPool: true,
+            position: { x: 1, y: -2.43, z: 10 },
+            rotation: Math.PI / 6,
+        }),
+        factoryEntry('MagnifyingGlass', {
+            randomPool: true,
+            position: { x: 9, y: -2.75, z: -14 },
+            rotation: Math.PI / 3,
+        }),
+        factoryEntry('Rope', {
+            randomPool: true,
+            position: { x: 6, y: -2.75, z: -15 },
+            rotation: Math.PI / 6,
+        }),
         factoryEntry('Candelabra', {
             randomPool: true,
             name: 'CandelabraFront',
             factoryName: 'Candelabra',
             position: { x: -8, y: -2.75, z: 12 },
             rotation: Math.PI / 4,
-            afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('candelabra2', result.update)
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('candelabra2', result.update),
         }),
-        factoryEntry('Goblet', { randomPool: true, position: { x: 5, y: -2.75, z: 12 }, rotation: 0 }),
-        factoryEntry('Crossbow', { randomPool: true, position: { x: -8, y: -2.75, z: -2 }, rotation: Math.PI / 4 }),
-        factoryEntry('Waterskin', { randomPool: true, position: { x: 7, y: -2.75, z: 2 }, rotation: Math.PI / 6 }),
+        factoryEntry('Goblet', {
+            randomPool: true,
+            position: { x: 5, y: -2.75, z: 12 },
+            rotation: 0,
+        }),
+        factoryEntry('Crossbow', {
+            randomPool: true,
+            position: { x: -8, y: -2.75, z: -2 },
+            rotation: Math.PI / 4,
+        }),
+        factoryEntry('Waterskin', {
+            randomPool: true,
+            position: { x: 7, y: -2.75, z: 2 },
+            rotation: Math.PI / 6,
+        }),
         factoryEntry('Astrolabe', {
             randomPool: true,
             position: { x: 10, y: -2.75, z: -8 },
             rotation: Math.PI / 4,
-            afterCreate: (result, ctx) => result?.update && ctx.registerUpdate('astrolabe', result.update)
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('astrolabe', result.update),
         }),
-        factoryEntry('Sundial', { randomPool: true, position: { x: 8, y: -2.75, z: 8 }, rotation: -Math.PI / 6 }),
-        factoryEntry('AleKeg', { randomPool: true, position: { x: -16, y: -2.75, z: -10 }, rotation: Math.PI / 4 }),
-        factoryEntry('Flute', { randomPool: true, name: 'FluteBack', factoryName: 'Flute', position: { x: -16, y: -2.75, z: -10 }, rotation: Math.PI / 4, afterCreate: (result) => result?.interact && registerInteractiveObject(result.group, result.interact) }),
-        factoryEntry('Flute', { randomPool: true, name: 'FluteFront', factoryName: 'Flute', position: { x: 2, y: -2.75, z: 14 }, rotation: -Math.PI / 8, afterCreate: (result) => result?.interact && registerInteractiveObject(result.group, result.interact) }),
-        factoryEntry('Apple', { randomPool: true, position: { x: 13, y: -2.75, z: 7 }, rotation: Math.PI / 6 }),
-        factoryEntry('PocketFlask', { randomPool: true, position: { x: -4, y: -2.75, z: 2 }, rotation: Math.PI / 4 }),
-        factoryEntry('WoodenSpoon', { randomPool: true, position: { x: 10, y: -2.75, z: 12 }, rotation: Math.PI / 3 }),
-        factoryEntry('Cauldron', { randomPool: true, position: { x: 12, y: -2.75, z: -4 }, rotation: 0 })
-    ]
+        factoryEntry('Sundial', {
+            randomPool: true,
+            position: { x: 8, y: -2.75, z: 8 },
+            rotation: -Math.PI / 6,
+        }),
+        factoryEntry('AleKeg', {
+            randomPool: true,
+            position: { x: -16, y: -2.75, z: -10 },
+            rotation: Math.PI / 4,
+        }),
+        factoryEntry('Flute', {
+            randomPool: true,
+            name: 'FluteBack',
+            factoryName: 'Flute',
+            position: { x: -16, y: -2.75, z: -10 },
+            rotation: Math.PI / 4,
+            afterCreate: (result) =>
+                result?.interact && registerInteractiveObject(result.group, result.interact),
+        }),
+        factoryEntry('Flute', {
+            randomPool: true,
+            name: 'FluteFront',
+            factoryName: 'Flute',
+            position: { x: 2, y: -2.75, z: 14 },
+            rotation: -Math.PI / 8,
+            afterCreate: (result) =>
+                result?.interact && registerInteractiveObject(result.group, result.interact),
+        }),
+        factoryEntry('Apple', {
+            randomPool: true,
+            position: { x: 13, y: -2.75, z: 7 },
+            rotation: Math.PI / 6,
+        }),
+        factoryEntry('PocketFlask', {
+            randomPool: true,
+            position: { x: -4, y: -2.75, z: 2 },
+            rotation: Math.PI / 4,
+        }),
+        factoryEntry('WoodenSpoon', {
+            randomPool: true,
+            position: { x: 10, y: -2.75, z: 12 },
+            rotation: Math.PI / 3,
+        }),
+        factoryEntry('Cauldron', {
+            randomPool: true,
+            position: { x: 12, y: -2.75, z: -4 },
+            rotation: 0,
+            afterCreate: (result, ctx) => {
+                if (result?.interact) {
+                    registerInteractiveObject(result.group, result.interact);
+                    registerInteractable('cauldron', { trigger: result.interact });
+                }
+                if (result?.update) ctx.registerUpdate('cauldron', result.update);
+            },
+        }),
+    ],
 };
 
-export const DECORATIVE_TIER_ENTRIES = [...TIER_PROP_DEFINITIONS.tier2, ...TIER_PROP_DEFINITIONS.tier3];
+export const DECORATIVE_TIER_ENTRIES = [
+    ...TIER_PROP_DEFINITIONS.tier2,
+    ...TIER_PROP_DEFINITIONS.tier3,
+];
 
 // ---------------------------------------------------------------------------
 // Tagging, categories, and querying
@@ -352,14 +691,57 @@ const WALL_DECOR_NAMES = new Set(['Shield', 'BountyPoster', 'DecorativeWalls']);
 // `tags` declared on the entry itself.
 const SEMANTIC_TAGS = {
     weapon: ['Dagger', 'Sword', 'Shield', 'BattleAxe', 'Warhammer', 'Crossbow', 'Helmet', 'Dart'],
-    drinkware: ['Mug', 'Tankard', 'Goblet', 'Chalice', 'DrinkingHorn', 'AleKeg', 'Waterskin', 'PocketFlask'],
-    paper: ['Scroll', 'Map', 'PlayingCards', 'CharacterSheet', 'BountyPoster', 'ScrollCase', 'LeatherJournal', 'WritingSet', 'DMScreen', 'Spellbook', 'Rulebook'],
+    drinkware: [
+        'Mug',
+        'Tankard',
+        'Goblet',
+        'Chalice',
+        'DrinkingHorn',
+        'AleKeg',
+        'Waterskin',
+        'PocketFlask',
+    ],
+    paper: [
+        'Scroll',
+        'Map',
+        'PlayingCards',
+        'CharacterSheet',
+        'BountyPoster',
+        'ScrollCase',
+        'LeatherJournal',
+        'WritingSet',
+        'DMScreen',
+        'Spellbook',
+        'Rulebook',
+    ],
     light: ['Lantern', 'Candelabra', 'FloatingCandles'],
-    magic: ['CrystalBall', 'MysticOrb', 'Wand', 'Runestones', 'Spellbook', 'Amulet', 'DragonScale', 'PotionSet'],
+    magic: [
+        'CrystalBall',
+        'MysticOrb',
+        'Wand',
+        'Runestones',
+        'Spellbook',
+        'Amulet',
+        'DragonScale',
+        'PotionSet',
+    ],
     treasure: ['Coin', 'CoinPouch', 'Gemstones', 'Crown', 'Chalice', 'Amulet', 'Bone'],
     food: ['TavernMeal', 'CheeseWheel', 'Apple'],
-    game: ['PlayingCards', 'TarotDeck', 'DiceTower', 'DiceTray', 'DiceJail', 'DiceBag'],
-    tool: ['Compass', 'Spyglass', 'MagnifyingGlass', 'Astrolabe', 'Sundial', 'Abacus', 'Lockpicks', 'Key', 'Padlock', 'PocketWatch', 'Spectacles', 'Rope']
+    game: ['PlayingCards', 'TarotDeck', 'DiceTower', 'DiceTray', 'DiceJail', 'DiceBag', 'DiceCup'],
+    tool: [
+        'Compass',
+        'Spyglass',
+        'MagnifyingGlass',
+        'Astrolabe',
+        'Sundial',
+        'Abacus',
+        'Lockpicks',
+        'Key',
+        'Padlock',
+        'PocketWatch',
+        'Spectacles',
+        'Rope',
+    ],
 };
 
 // factoryName -> Set(semantic tags), inverted from SEMANTIC_TAGS once.
@@ -408,10 +790,10 @@ function deriveTags(entry, tier, category) {
  * randomPool, position }.
  */
 export const PROP_INDEX = [];
-const indexByName = new Map();      // entry.name -> descriptor
-const indexByEntry = new Map();     // entry object -> descriptor
-const indexByTag = new Map();       // tag -> descriptor[]
-const indexByCategory = new Map();  // category -> descriptor[]
+const indexByName = new Map(); // entry.name -> descriptor
+const indexByEntry = new Map(); // entry object -> descriptor
+const indexByTag = new Map(); // tag -> descriptor[]
+const indexByCategory = new Map(); // category -> descriptor[]
 
 for (const [tier, entries] of Object.entries(TIER_PROP_DEFINITIONS)) {
     for (const entry of entries) {
@@ -426,7 +808,7 @@ for (const [tier, entries] of Object.entries(TIER_PROP_DEFINITIONS)) {
             category,
             tags,
             randomPool: !!entry.randomPool,
-            position: entry.position ?? null
+            position: entry.position ?? null,
         };
         PROP_INDEX.push(descriptor);
         indexByName.set(entry.name, descriptor);
@@ -461,9 +843,9 @@ export const getClutterPool = () => PROP_INDEX.filter((d) => d.randomPool);
 // Deterministic, seedable PRNG (mulberry32-style). Shared so query-based
 // selection and the legacy decor selection produce identical sequences.
 function createPoolRng(seed) {
-    let state = ((seed ?? 1) >>> 0) + 0x9E3779B9;
+    let state = ((seed ?? 1) >>> 0) + 0x9e3779b9;
     return () => {
-        state = (state + 0x6D2B79F5) >>> 0;
+        state = (state + 0x6d2b79f5) >>> 0;
         let t = Math.imul(state ^ (state >>> 15), 1 | state);
         t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -503,7 +885,7 @@ export function getRandomProps({
     exclude = [],
     seed = 1,
     theme = 'default',
-    randomPoolOnly = true
+    randomPoolOnly = true,
 } = {}) {
     const excludeSet = new Set(exclude);
     const tierSet = tiers ? new Set(tiers) : null;
@@ -521,7 +903,7 @@ export function getRandomProps({
     const rng = createPoolRng(seed);
     const weighted = pool.map((d) => ({
         entry: d.entry,
-        sortKey: rng() / getDecorThemeWeight(d.entry, theme)
+        sortKey: rng() / getDecorThemeWeight(d.entry, theme),
     }));
     weighted.sort((a, b) => a.sortKey - b.sortKey);
     const limit = count > 0 ? count : weighted.length;
@@ -547,7 +929,14 @@ export function selectDecorPoolEntries(entries, maxRandom, options = {}) {
 function getForcedProps() {
     try {
         const raw = new URLSearchParams(window.location.search).get('forceProps');
-        return raw ? new Set(raw.split(',').map((s) => s.trim()).filter(Boolean)) : null;
+        return raw
+            ? new Set(
+                  raw
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+              )
+            : null;
     } catch {
         return null;
     }
@@ -557,7 +946,10 @@ function getForcedProps() {
 export async function spawnTierWithRandomPool(entries, maxRandom, context, options = {}) {
     const { seed, theme } = options;
     const always = entries.filter((entry) => !entry.randomPool);
-    const selected = selectDecorPoolEntries(entries, maxRandom, { seed: seed ?? context.layoutConfig?.seed, theme: theme ?? context.layoutConfig?.theme });
+    const selected = selectDecorPoolEntries(entries, maxRandom, {
+        seed: seed ?? context.layoutConfig?.seed,
+        theme: theme ?? context.layoutConfig?.theme,
+    });
 
     const forced = getForcedProps();
     if (forced) {
@@ -627,9 +1019,8 @@ export async function spawnProp(entry, context) {
         context.cullingSystem.register(root, { important: entry.important === true });
     }
 
-    const canStaticMerge = entry.staticMerge !== false
-        && !updateHandle
-        && !INTERACTIVE_NAMES.has(factoryName);
+    const canStaticMerge =
+        entry.staticMerge !== false && !updateHandle && !INTERACTIVE_NAMES.has(factoryName);
     let mergeStats = null;
     if (canStaticMerge) {
         mergeStats = mergePropRecord({ result, updateHandle });

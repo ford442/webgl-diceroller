@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createWritingSet(scene, physicsWorld, position = { x: 4, y: -2.75, z: 4 }, rotation = -Math.PI / 6) {
+export function createWritingSet(
+    scene,
+    physicsWorld,
+    position = { x: 4, y: -2.75, z: 4 },
+    rotation = -Math.PI / 6
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'WritingSet';
@@ -11,13 +16,13 @@ export function createWritingSet(scene, physicsWorld, position = { x: 4, y: -2.7
         color: 0xf5f5f5,
         roughness: 0.6,
         metalness: 0.0,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
     });
 
     const goldMat = new THREE.MeshStandardMaterial({
         color: 0xffd700,
         roughness: 0.3,
-        metalness: 0.8
+        metalness: 0.8,
     });
 
     const glassMat = new THREE.MeshPhysicalMaterial({
@@ -27,7 +32,7 @@ export function createWritingSet(scene, physicsWorld, position = { x: 4, y: -2.7
         transmission: 0.9,
         thickness: 0.5,
         transparent: true,
-        ior: 1.5
+        ior: 1.5,
     });
 
     const inkMat = new THREE.MeshPhysicalMaterial({
@@ -35,25 +40,25 @@ export function createWritingSet(scene, physicsWorld, position = { x: 4, y: -2.7
         metalness: 0.2,
         roughness: 0.1,
         transmission: 0.3,
-        transparent: true
+        transparent: true,
     });
 
     const parchmentMat = new THREE.MeshStandardMaterial({
         color: 0xf5deb3,
         roughness: 0.9,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     const waxMat = new THREE.MeshStandardMaterial({
         color: 0x8b0000,
         roughness: 0.3,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     const woodMat = new THREE.MeshStandardMaterial({
         color: 0x5c4033,
         roughness: 0.8,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // --- Inkwell ---
@@ -129,7 +134,7 @@ export function createWritingSet(scene, physicsWorld, position = { x: 4, y: -2.7
         bevelEnabled: true,
         bevelThickness: 0.01,
         bevelSize: 0.01,
-        bevelSegments: 2
+        bevelSegments: 2,
     };
     const featherGeo = new THREE.ExtrudeGeometry(featherShape, featherExtrudeSettings);
     const feather = new THREE.Mesh(featherGeo, featherMat);
@@ -168,10 +173,7 @@ export function createWritingSet(scene, physicsWorld, position = { x: 4, y: -2.7
     parchmentGroup.add(paper1);
 
     // Smaller sheet (partially under)
-    const paper2 = new THREE.Mesh(
-        new THREE.BoxGeometry(1.5, 0.01, 1.2),
-        parchmentMat
-    );
+    const paper2 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.01, 1.2), parchmentMat);
     paper2.position.set(0.5, 0.005, -0.5);
     paper2.rotation.y = -0.2;
     paper2.castShadow = true;
@@ -179,10 +181,7 @@ export function createWritingSet(scene, physicsWorld, position = { x: 4, y: -2.7
     parchmentGroup.add(paper2);
 
     // Small note scrap
-    const scrap = new THREE.Mesh(
-        new THREE.BoxGeometry(0.6, 0.008, 0.5),
-        parchmentMat
-    );
+    const scrap = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.008, 0.5), parchmentMat);
     scrap.position.set(0.8, 0.004, 0.3);
     scrap.rotation.y = 0.5;
     scrap.castShadow = true;
@@ -263,7 +262,9 @@ export function createWritingSet(scene, physicsWorld, position = { x: 4, y: -2.7
     if (ammo && physicsWorld) {
         const paperShape = new ammo.btBoxShape(new ammo.btVector3(1.0, 0.01, 0.75));
         const paperDummy = new THREE.Object3D();
-        paperDummy.position.copy(group.position).add(new THREE.Vector3(-0.3, 0, -0.8).applyEuler(group.rotation));
+        paperDummy.position
+            .copy(group.position)
+            .add(new THREE.Vector3(-0.3, 0, -0.8).applyEuler(group.rotation));
         paperDummy.rotation.y = rotation + 0.1;
         createStaticBody(physicsWorld, paperDummy, paperShape);
     }
@@ -272,7 +273,9 @@ export function createWritingSet(scene, physicsWorld, position = { x: 4, y: -2.7
     if (ammo && physicsWorld) {
         const stampShape = new ammo.btBoxShape(new ammo.btVector3(0.2, 0.1, 0.4));
         const stampDummy = new THREE.Object3D();
-        stampDummy.position.copy(group.position).add(new THREE.Vector3(1.0, 0.1, 0.8).applyEuler(group.rotation));
+        stampDummy.position
+            .copy(group.position)
+            .add(new THREE.Vector3(1.0, 0.1, 0.8).applyEuler(group.rotation));
         stampDummy.rotation.set(Math.PI / 2, 0, rotation + Math.PI / 4);
         createStaticBody(physicsWorld, stampDummy, stampShape);
     }

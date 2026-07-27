@@ -12,32 +12,21 @@ add_executable(dice_physics
 )
 
 # ---------------------------------------------------------------------------
-# Emscripten link flags
-#
-# Key options:
-#   WASM=1                    — Emit a .wasm binary (not just asm.js)
-#   ALLOW_MEMORY_GROWTH=1     — Let the heap grow at runtime
-#   MODULARIZE=1              — Wrap output in a factory function
-#   EXPORT_NAME               — Name of the factory function
-#   --bind                    — Enable Embind (required for class bindings)
-#   EXPORTED_RUNTIME_METHODS  — Expose typed_memory_view helpers to JS
-#   -O3                       — Full optimisation
+# Emscripten link flags — shared with build.sh via emcc_flags.sh
 # ---------------------------------------------------------------------------
-set(EM_FLAGS
-    "-s WASM=1"
-    "-s ALLOW_MEMORY_GROWTH=1"
-    "-s MODULARIZE=1"
-    "-s EXPORT_NAME=DicePhysicsModule"
-    "-s EXPORTED_RUNTIME_METHODS=['typed_memory_view']"
-    "--bind"
-    "-O3"
+execute_process(
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/emcc_flags.sh" --print-link-line release
+    OUTPUT_VARIABLE EM_LINK_FLAGS
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE EM_FLAGS_RESULT
 )
-
-string(JOIN " " EM_FLAGS_STR ${EM_FLAGS})
+if(NOT EM_FLAGS_RESULT EQUAL 0)
+    message(FATAL_ERROR "emcc_flags.sh --print-link-line failed")
+endif()
 
 set_target_properties(dice_physics PROPERTIES
     SUFFIX ".js"
-    LINK_FLAGS "${EM_FLAGS_STR}"
+    LINK_FLAGS "${EM_LINK_FLAGS}"
 )
 
 # ---------------------------------------------------------------------------

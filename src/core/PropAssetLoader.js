@@ -31,7 +31,10 @@ export async function loadPropMesh(glbUrl, { fallbackObjUrl = null } = {}) {
         return gltf.scene;
     } catch (glbError) {
         if (!fallbackObjUrl) throw glbError;
-        console.warn(`[PropAssetLoader] GLB failed (${glbUrl}), falling back to OBJ:`, glbError.message);
+        console.warn(
+            `[PropAssetLoader] GLB failed (${glbUrl}), falling back to OBJ:`,
+            glbError.message
+        );
         return objLoader.loadAsync(fallbackObjUrl);
     }
 }

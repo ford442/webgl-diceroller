@@ -10,7 +10,7 @@ export const LampMode = {
     STROBE: 'strobe',
     RGB: 'rgb',
     LASER: 'laser',
-    CRITICAL: 'critical'
+    CRITICAL: 'critical',
 };
 
 // Colors for different modes
@@ -20,7 +20,7 @@ const MODE_COLORS = {
     [LampMode.STROBE]: 0xffffff,
     [LampMode.RGB]: null,
     [LampMode.LASER]: 0xff0000,
-    [LampMode.CRITICAL]: 0xffd700
+    [LampMode.CRITICAL]: 0xffd700,
 };
 
 /**
@@ -66,18 +66,18 @@ export async function createLamp() {
         map: texCopper,
         roughness: 0.4,
         metalness: 0.8,
-        color: 0xffaa88
+        color: 0xffaa88,
     });
     const matSteel = new THREE.MeshStandardMaterial({
         map: texSteel,
         roughness: 0.5,
         metalness: 0.7,
-        color: 0xaaaaaa
+        color: 0xaaaaaa,
     });
     const matWood = new THREE.MeshStandardMaterial({
         map: texWood,
         roughness: 0.7,
-        metalness: 0.0
+        metalness: 0.0,
     });
     const matGlass = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
@@ -91,7 +91,7 @@ export async function createLamp() {
         opacity: 0.25,
         thickness: 0.08,
         side: THREE.DoubleSide,
-        envMapIntensity: 1.2
+        envMapIntensity: 1.2,
     });
 
     const lampGroup = new THREE.Group();
@@ -99,12 +99,11 @@ export async function createLamp() {
 
     let object;
     try {
-        object = await loadPropMesh(
-            './images/props/billiard_lamp.glb',
-            { fallbackObjUrl: './images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj' }
-        );
+        object = await loadPropMesh('./images/props/billiard_lamp.glb', {
+            fallbackObjUrl: './images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj',
+        });
     } catch (e) {
-        console.error("Failed to load lamp model:", e);
+        console.error('Failed to load lamp model:', e);
         // Return a safe stub so the rest of the app doesn't crash
         return {
             group: lampGroup,
@@ -112,10 +111,11 @@ export async function createLamp() {
             setMode: () => {},
             setRolling: () => {},
             triggerCritical: () => {},
+            triggerJiggle: () => {},
             update: () => {},
             handleKey: () => {},
             getMode: () => LampMode.NORMAL,
-            LampMode
+            LampMode,
         };
     }
 
@@ -186,7 +186,7 @@ export async function createLamp() {
     let lightPositions = [];
     if (glassShades.length > 0) {
         // Sort left-to-right for consistent left/center/right ordering
-        const shadeData = glassShades.map(shade => {
+        const shadeData = glassShades.map((shade) => {
             const b = new THREE.Box3().setFromObject(shade);
             const c = b.getCenter(new THREE.Vector3());
             const h = b.getSize(new THREE.Vector3()).y;
@@ -199,18 +199,18 @@ export async function createLamp() {
 
         // Take up to 3 shades (the model is a triple lamp)
         const selected = shadeData.slice(0, 3);
-        lightPositions = selected.map(d => d.center);
+        lightPositions = selected.map((d) => d.center);
     }
 
     // Fallback (should rarely happen): approximate positions using overall bounds
     if (lightPositions.length === 0) {
         const scaledW = rawWidth * scaleFactor;
-        const spacing = scaledW * 0.30;
+        const spacing = scaledW * 0.3;
         const approxY = -size.y * scaleFactor * 0.68; // lower half, broad table coverage
         lightPositions = [
             new THREE.Vector3(-spacing, approxY, 0),
             new THREE.Vector3(0, approxY, 0),
-            new THREE.Vector3(spacing, approxY, 0)
+            new THREE.Vector3(spacing, approxY, 0),
         ];
     }
 
@@ -220,7 +220,7 @@ export async function createLamp() {
     lightPositions.forEach((pos, i) => {
         const light = new THREE.PointLight(MODE_COLORS[LampMode.NORMAL], 48, 42);
         light.position.copy(pos);
-        light.castShadow = (i === 1); // only center light casts shadows
+        light.castShadow = i === 1; // only center light casts shadows
         light.shadow.bias = -0.0002;
         light.shadow.normalBias = 0.02;
         light.shadow.radius = 6;
@@ -253,13 +253,13 @@ export async function createLamp() {
             color: 0xff0000,
             transparent: true,
             opacity: 0,
-            blending: THREE.AdditiveBlending
+            blending: THREE.AdditiveBlending,
         });
         const laser = new THREE.Mesh(
             new THREE.CylinderGeometry(0.018, 0.018, laserLength, 6),
             laserMat
         );
-        laser.position.set(pos.x, pos.y - (laserLength * 0.5) - 0.3, pos.z);
+        laser.position.set(pos.x, pos.y - laserLength * 0.5 - 0.3, pos.z);
         laser.rotation.z = (i - 1) * 0.12;
         laser.scale.y = 0.001;
         laser.visible = false;
@@ -275,10 +275,13 @@ export async function createLamp() {
     let rgbHue = 0;
     let criticalTime = 0;
     let isRolling = false;
+    let jiggleTime = 0;
+    let jiggleIntensity = 0;
+    const _lampImpactPos = new THREE.Vector3();
 
     const updateLights = () => {
         const color = MODE_COLORS[currentMode] || MODE_COLORS[LampMode.NORMAL];
-        lights.forEach(l => {
+        lights.forEach((l) => {
             if (!isOn) {
                 l.light.intensity = 0;
                 l.bulb.material.color.setHex(0x111111);
@@ -296,7 +299,7 @@ export async function createLamp() {
         strobeState = false;
         strobeTimer = 0;
         criticalTime = 0;
-        lasers.forEach(l => {
+        lasers.forEach((l) => {
             l.material.opacity = 0;
             l.visible = false;
             l.scale.y = 0.001;
@@ -318,13 +321,37 @@ export async function createLamp() {
     };
 
     const toggle = () => {
-        // Soft metallic click + faint chain rattle.
-        playPropImpact({ surface: 'click', volume: 0.45 });
+        lampGroup.getWorldPosition(_lampImpactPos);
+        playPropImpact({
+            surface: 'click',
+            volume: 0.45,
+            position: { x: _lampImpactPos.x, y: _lampImpactPos.y, z: _lampImpactPos.z },
+        });
         isOn = !isOn;
         updateLights();
     };
 
+    const triggerJiggle = (intensity = 0.5) => {
+        jiggleTime = 0.3;
+        jiggleIntensity = clampIntensity(intensity);
+    };
+
+    function clampIntensity(v) {
+        return Math.min(1, Math.max(0.1, v));
+    }
+
     const update = (deltaTime, elapsedTime) => {
+        if (jiggleTime > 0) {
+            jiggleTime -= deltaTime;
+            const t = Math.max(0, jiggleTime / 0.3);
+            const wobble = Math.sin(t * Math.PI * 10) * 0.05 * jiggleIntensity * t;
+            visualWrapper.position.x = wobble;
+            visualWrapper.rotation.z = wobble * 0.6;
+        } else {
+            visualWrapper.position.x = 0;
+            visualWrapper.rotation.z = 0;
+        }
+
         if (!isOn) return;
 
         switch (currentMode) {
@@ -335,12 +362,12 @@ export async function createLamp() {
                     if (strobeTimer > 0.05) {
                         strobeTimer = 0;
                         strobeState = !strobeState;
-                        lights.forEach(l => {
+                        lights.forEach((l) => {
                             l.light.intensity = strobeState ? l.originalIntensity * 2 : 0;
                         });
                     }
                 } else if (!isRolling) {
-                    lights.forEach(l => l.light.intensity = l.originalIntensity);
+                    lights.forEach((l) => (l.light.intensity = l.originalIntensity));
                 }
                 break;
 
@@ -348,7 +375,7 @@ export async function createLamp() {
                 rgbHue += deltaTime * 60;
                 if (rgbHue > 360) rgbHue -= 360;
                 const rgbColor = new THREE.Color().setHSL(rgbHue / 360, 1, 0.5);
-                lights.forEach(l => {
+                lights.forEach((l) => {
                     l.light.color.copy(rgbColor);
                     l.bulb.material.color.copy(rgbColor);
                 });
@@ -356,7 +383,7 @@ export async function createLamp() {
 
             case LampMode.UV:
                 const uvPulse = 0.8 + Math.sin(elapsedTime * 3) * 0.2;
-                lights.forEach(l => l.light.intensity = l.originalIntensity * uvPulse);
+                lights.forEach((l) => (l.light.intensity = l.originalIntensity * uvPulse));
                 break;
 
             case LampMode.LASER:
@@ -364,9 +391,9 @@ export async function createLamp() {
                     laser.visible = true;
                     laser.scale.y = 1;
                     laser.material.opacity = 0.6 + Math.sin(elapsedTime * 5 + i) * 0.2;
-                    laser.rotation.y = elapsedTime * 2 + i * (Math.PI * 2 / 3);
+                    laser.rotation.y = elapsedTime * 2 + i * ((Math.PI * 2) / 3);
                 });
-                lights.forEach(l => {
+                lights.forEach((l) => {
                     l.light.intensity = l.originalIntensity * 0.3;
                     l.light.color.setHex(0xff0000);
                 });
@@ -376,7 +403,7 @@ export async function createLamp() {
                 criticalTime += deltaTime;
                 const flash = Math.sin(criticalTime * 20) > 0;
                 const critColor = flash ? 0xffd700 : 0xffffff;
-                lights.forEach(l => {
+                lights.forEach((l) => {
                     l.light.color.setHex(critColor);
                     l.light.intensity = flash ? 80 : 48;
                     l.bulb.material.color.setHex(critColor);
@@ -386,7 +413,7 @@ export async function createLamp() {
                     laser.scale.y = 1;
                     laser.material.color.setHex(0xffd700);
                     laser.material.opacity = 0.85;
-                    laser.rotation.y = criticalTime * 8 + i * (Math.PI * 2 / 3);
+                    laser.rotation.y = criticalTime * 8 + i * ((Math.PI * 2) / 3);
                 });
                 break;
         }
@@ -394,12 +421,25 @@ export async function createLamp() {
 
     const handleKey = (key) => {
         switch (key) {
-            case '1': setMode(LampMode.NORMAL); break;
-            case '2': setMode(LampMode.UV); break;
-            case '3': setMode(LampMode.RGB); break;
-            case '4': setMode(LampMode.LASER); break;
-            case '5': setMode(LampMode.STROBE); break;
-            case 'c': case 'C': triggerCritical(); break;
+            case '1':
+                setMode(LampMode.NORMAL);
+                break;
+            case '2':
+                setMode(LampMode.UV);
+                break;
+            case '3':
+                setMode(LampMode.RGB);
+                break;
+            case '4':
+                setMode(LampMode.LASER);
+                break;
+            case '5':
+                setMode(LampMode.STROBE);
+                break;
+            case 'c':
+            case 'C':
+                triggerCritical();
+                break;
         }
     };
 
@@ -409,9 +449,10 @@ export async function createLamp() {
         setMode,
         setRolling,
         triggerCritical,
+        triggerJiggle,
         update,
         handleKey,
         getMode: () => currentMode,
-        LampMode
+        LampMode,
     };
 }

@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createCrown(scene, physicsWorld, position = { x: -14, y: -2.75, z: 6 }, rotationY = 0) {
+export function createCrown(
+    scene,
+    physicsWorld,
+    position = { x: -14, y: -2.75, z: 6 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'KingsCrown';
@@ -15,13 +20,13 @@ export function createCrown(scene, physicsWorld, position = { x: -14, y: -2.75, 
     const goldMat = new THREE.MeshStandardMaterial({
         color: 0xffd700, // Gold
         metalness: 1.0,
-        roughness: 0.3
+        roughness: 0.3,
     });
 
     const velvetMat = new THREE.MeshStandardMaterial({
         color: 0x8b0000, // Dark Red Velvet
         roughness: 0.9,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     const rubyMat = new THREE.MeshPhysicalMaterial({
@@ -31,7 +36,7 @@ export function createCrown(scene, physicsWorld, position = { x: -14, y: -2.75, 
         transmission: 0.8,
         ior: 1.76,
         clearcoat: 1.0,
-        transparent: true
+        transparent: true,
     });
 
     const sapphireMat = new THREE.MeshPhysicalMaterial({
@@ -41,7 +46,7 @@ export function createCrown(scene, physicsWorld, position = { x: -14, y: -2.75, 
         transmission: 0.8,
         ior: 1.76,
         clearcoat: 1.0,
-        transparent: true
+        transparent: true,
     });
 
     // 1. Base Ring (Cylinder with open ends, or just a Torus/Cylinder)
@@ -53,7 +58,15 @@ export function createCrown(scene, physicsWorld, position = { x: -14, y: -2.75, 
     group.add(baseMesh);
 
     // 2. Velvet Inner Cap (Dome)
-    const domeGeo = new THREE.SphereGeometry(radiusBottom - 0.05, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    const domeGeo = new THREE.SphereGeometry(
+        radiusBottom - 0.05,
+        32,
+        16,
+        0,
+        Math.PI * 2,
+        0,
+        Math.PI / 2
+    );
     const domeMesh = new THREE.Mesh(domeGeo, velvetMat);
     domeMesh.position.y = 0.2; // Sit inside base
     // Scale slightly on Y to make it less spherical
@@ -90,7 +103,7 @@ export function createCrown(scene, physicsWorld, position = { x: -14, y: -2.75, 
         // We want the tip pointing UP and slightly OUT.
         // Default Cone points UP (+Y).
         // Rotate around Z or X depending on angle.
-        spikeMesh.rotation.set(0, -angle + Math.PI/2, 0.2, 'YXZ');
+        spikeMesh.rotation.set(0, -angle + Math.PI / 2, 0.2, 'YXZ');
 
         spikeMesh.castShadow = true;
         group.add(spikeMesh);
@@ -112,7 +125,7 @@ export function createCrown(scene, physicsWorld, position = { x: -14, y: -2.75, 
             0.15,
             Math.sin(angle) * (radiusBottom + 0.06)
         );
-        baseGemMesh.rotation.y = -angle + Math.PI/2;
+        baseGemMesh.rotation.y = -angle + Math.PI / 2;
         group.add(baseGemMesh);
     }
 
@@ -137,23 +150,25 @@ export function createCrown(scene, physicsWorld, position = { x: -14, y: -2.75, 
     // --- Physics ---
     // Cylinder shape covering the whole crown
     if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(radiusTop, height / 2, radiusTop));
-    
+        const shape = new ammo.btCylinderShape(
+            new ammo.btVector3(radiusTop, height / 2, radiusTop)
+        );
+
         // The visual group's Y origin is at the bottom (y=0).
         // The physics shape origin should be at y = height / 2.
         // Shift visual meshes down relative to group, and move group up.
         group.position.y = position.y + height / 2;
-    
+
         // Offset all children down by height/2
         const childrenToMove = [...group.children];
-        childrenToMove.forEach(child => {
+        childrenToMove.forEach((child) => {
             child.position.y -= height / 2;
         });
-    
+
         createStaticBody(physicsWorld, group, shape);
     }
 
     return {
-        group
+        group,
     };
 }

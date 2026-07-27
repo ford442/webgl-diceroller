@@ -1,13 +1,18 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createCrystalBall(scene, physicsWorld, position = { x: 12, y: -2.75, z: 0 }, rotationY = 0) {
+export function createCrystalBall(
+    scene,
+    physicsWorld,
+    position = { x: 12, y: -2.75, z: 0 },
+    rotationY = 0
+) {
     const group = new THREE.Group();
     group.name = 'CrystalBall';
 
     // Dimensions
     const ballRadius = 0.5;
-    const standHeight = 0.4;
+    const _standHeight = 0.4;
     const standRadiusTop = 0.35;
     const standRadiusBot = 0.4;
 
@@ -15,7 +20,7 @@ export function createCrystalBall(scene, physicsWorld, position = { x: 12, y: -2
     const goldMat = new THREE.MeshStandardMaterial({
         color: 0xffd700, // Brighter gold
         roughness: 0.3,
-        metalness: 0.8
+        metalness: 0.8,
     });
 
     const glassMat = new THREE.MeshPhysicalMaterial({
@@ -27,15 +32,20 @@ export function createCrystalBall(scene, physicsWorld, position = { x: 12, y: -2
         ior: 1.5,
         clearcoat: 1.0,
         transparent: true,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
     });
 
     // 1. Detailed Stand (Base + Stem + Rim from branch)
     const baseHeight = 0.1;
     const stemHeight = 0.25;
-    
+
     // Base
-    const baseGeo = new THREE.CylinderGeometry(standRadiusBot * 0.8, standRadiusBot, baseHeight, 16);
+    const baseGeo = new THREE.CylinderGeometry(
+        standRadiusBot * 0.8,
+        standRadiusBot,
+        baseHeight,
+        16
+    );
     const baseMesh = new THREE.Mesh(baseGeo, goldMat);
     baseMesh.position.y = baseHeight / 2;
     baseMesh.castShadow = true;
@@ -80,7 +90,7 @@ export function createCrystalBall(scene, physicsWorld, position = { x: 12, y: -2
         emissiveIntensity: 2.0,
         roughness: 0.8,
         transparent: true,
-        opacity: 0.8
+        opacity: 0.8,
     });
     const coreMesh = new THREE.Mesh(coreGeo, coreMat);
     coreMesh.position.copy(ballMesh.position);
@@ -98,7 +108,7 @@ export function createCrystalBall(scene, physicsWorld, position = { x: 12, y: -2
     if (ammo) {
         // Sphere shape for the ball
         const ballPhysMesh = new THREE.Mesh(
-            new THREE.SphereGeometry(ballRadius), 
+            new THREE.SphereGeometry(ballRadius),
             new THREE.MeshBasicMaterial({ visible: false })
         );
         ballPhysMesh.position.set(position.x, position.y + ballMesh.position.y, position.z);

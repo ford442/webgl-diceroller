@@ -1,26 +1,31 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createPotionSet(scene, physicsWorld, position = { x: 12, y: -2.75, z: -6 }, rotationY = -Math.PI / 6) {
+export function createPotionSet(
+    scene,
+    physicsWorld,
+    position = { x: 12, y: -2.75, z: -6 },
+    rotationY = -Math.PI / 6
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'PotionSet';
 
     // Materials
     const woodMat = new THREE.MeshStandardMaterial({
-        color: 0x8B4513,
+        color: 0x8b4513,
         roughness: 0.8,
-        bumpScale: 0.1
+        bumpScale: 0.1,
     });
 
     // Glass Material (Base)
-    const glassMatBase = {
+    const _glassMatBase = {
         metalness: 0,
         roughness: 0.1,
         transmission: 0.95,
         thickness: 0.1,
         transparent: true,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
     };
 
     // --- 1. The Stand ---
@@ -63,8 +68,12 @@ export function createPotionSet(scene, physicsWorld, position = { x: 12, y: -2.7
     scene.add(group);
 
     if (ammo && physicsWorld) {
-        const botShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth / 2, stepHeight / 2, stepDepth));
-        const topShape = new ammo.btBoxShape(new ammo.btVector3(stepWidth / 2, stepHeight / 2, stepDepth / 2));
+        const botShape = new ammo.btBoxShape(
+            new ammo.btVector3(stepWidth / 2, stepHeight / 2, stepDepth)
+        );
+        const topShape = new ammo.btBoxShape(
+            new ammo.btVector3(stepWidth / 2, stepHeight / 2, stepDepth / 2)
+        );
 
         function addBodyForMesh(mesh, shape, offsetY = 0) {
             const worldPos = new THREE.Vector3();
@@ -118,7 +127,7 @@ function createRoundPotion(color) {
         roughness: 0.1,
         transmission: 0.9,
         thickness: 0.1,
-        transparent: true
+        transparent: true,
     });
     const flask = new THREE.Mesh(geo, mat);
     flask.castShadow = true;
@@ -134,7 +143,7 @@ function createRoundPotion(color) {
         metalness: 0.1,
         roughness: 0.1,
         transmission: 0.6,
-        transparent: true
+        transparent: true,
     });
     const liquid = new THREE.Mesh(liquidGeo, liquidMat);
     liquid.position.y = 0.4;
@@ -142,7 +151,7 @@ function createRoundPotion(color) {
 
     // Cork
     const corkGeo = new THREE.CylinderGeometry(0.12, 0.1, 0.2, 16);
-    const corkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 });
+    const corkMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.9 });
     const cork = new THREE.Mesh(corkGeo, corkMat);
     cork.position.y = 0.9;
     group.add(cork);
@@ -164,7 +173,7 @@ function createSquarePotion(color) {
         roughness: 0.1,
         transmission: 0.9,
         thickness: 0.1,
-        transparent: true
+        transparent: true,
     });
     const bottle = new THREE.Mesh(geo, mat);
     bottle.position.y = height / 2;
@@ -179,7 +188,7 @@ function createSquarePotion(color) {
         emissive: color,
         emissiveIntensity: 0.5,
         transmission: 0.6,
-        transparent: true
+        transparent: true,
     });
     const liquid = new THREE.Mesh(liquidGeo, liquidMat);
     liquid.position.y = (height * 0.7) / 2 + 0.05;
@@ -193,7 +202,7 @@ function createSquarePotion(color) {
 
     // Cork
     const corkGeo = new THREE.CylinderGeometry(0.14, 0.12, 0.2, 16);
-    const corkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+    const corkMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
     const cork = new THREE.Mesh(corkGeo, corkMat);
     cork.position.y = height + 0.35;
     group.add(cork);
@@ -205,15 +214,15 @@ function createConicalPotion(color) {
     const group = new THREE.Group();
 
     // Flask (Cone)
-    const radius = 0.5;
-    const height = 1.0;
+    const _radius = 0.5;
+    const _height = 1.0;
 
     // Custom Lathe for better shape
     const points = [
         new THREE.Vector2(0, 0),
         new THREE.Vector2(0.5, 0),
         new THREE.Vector2(0.15, 0.8), // Taper up
-        new THREE.Vector2(0.2, 0.9) // Rim
+        new THREE.Vector2(0.2, 0.9), // Rim
     ];
     const flaskGeo = new THREE.LatheGeometry(points, 16);
     const mat = new THREE.MeshPhysicalMaterial({
@@ -221,7 +230,7 @@ function createConicalPotion(color) {
         transmission: 0.9,
         thickness: 0.1,
         roughness: 0.1,
-        transparent: true
+        transparent: true,
     });
     const flask = new THREE.Mesh(flaskGeo, mat);
     flask.castShadow = true;
@@ -232,7 +241,7 @@ function createConicalPotion(color) {
     const liquidPoints = [
         new THREE.Vector2(0, 0),
         new THREE.Vector2(0.45, 0),
-        new THREE.Vector2(0.2, 0.6)
+        new THREE.Vector2(0.2, 0.6),
     ];
     const liquidGeo = new THREE.LatheGeometry(liquidPoints, 16);
     const liquidMat = new THREE.MeshPhysicalMaterial({
@@ -240,7 +249,7 @@ function createConicalPotion(color) {
         emissive: color,
         emissiveIntensity: 0.5,
         transmission: 0.6,
-        transparent: true
+        transparent: true,
     });
     const liquid = new THREE.Mesh(liquidGeo, liquidMat);
     liquid.position.y = 0.05;
@@ -248,7 +257,7 @@ function createConicalPotion(color) {
 
     // Cork
     const corkGeo = new THREE.CylinderGeometry(0.12, 0.1, 0.2, 16);
-    const corkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+    const corkMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
     const cork = new THREE.Mesh(corkGeo, corkMat);
     cork.position.y = 0.9;
     group.add(cork);

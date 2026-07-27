@@ -23,7 +23,7 @@ export const DICE_MATERIAL_PRESETS = {
                 clearcoat: 0.85,
                 clearcoatRoughness: 0.12,
                 envMap,
-                envMapIntensity: 1.0
+                envMapIntensity: 1.0,
             }),
             pip: new THREE.MeshPhysicalMaterial({
                 color: pipColor,
@@ -32,9 +32,9 @@ export const DICE_MATERIAL_PRESETS = {
                 clearcoat: 0.6,
                 clearcoatRoughness: 0.15,
                 envMap,
-                envMapIntensity: 0.9
-            })
-        })
+                envMapIntensity: 0.9,
+            }),
+        }),
     },
     metal: {
         id: 'metal',
@@ -45,16 +45,16 @@ export const DICE_MATERIAL_PRESETS = {
                 roughness: 0.22,
                 metalness: 0.92,
                 envMap,
-                envMapIntensity: 1.2
+                envMapIntensity: 1.2,
             }),
             pip: new THREE.MeshStandardMaterial({
                 color: pipColor,
                 roughness: 0.35,
                 metalness: 0.75,
                 envMap,
-                envMapIntensity: 1.0
-            })
-        })
+                envMapIntensity: 1.0,
+            }),
+        }),
     },
     gemstone: {
         id: 'gemstone',
@@ -71,7 +71,7 @@ export const DICE_MATERIAL_PRESETS = {
                         thickness: 0.65,
                         ior: 1.52,
                         envMap,
-                        envMapIntensity: 1.4
+                        envMapIntensity: 1.4,
                     }),
                     pip: new THREE.MeshPhysicalMaterial({
                         color: pipColor,
@@ -81,8 +81,8 @@ export const DICE_MATERIAL_PRESETS = {
                         thickness: 0.35,
                         ior: 1.45,
                         envMap,
-                        envMapIntensity: 1.1
-                    })
+                        envMapIntensity: 1.1,
+                    }),
                 };
             }
 
@@ -95,7 +95,7 @@ export const DICE_MATERIAL_PRESETS = {
                     clearcoat: 1.0,
                     clearcoatRoughness: 0.05,
                     envMap,
-                    envMapIntensity: 1.6
+                    envMapIntensity: 1.6,
                 }),
                 pip: new THREE.MeshPhysicalMaterial({
                     color: pipColor,
@@ -104,10 +104,10 @@ export const DICE_MATERIAL_PRESETS = {
                     clearcoat: 0.8,
                     clearcoatRoughness: 0.08,
                     envMap,
-                    envMapIntensity: 1.2
-                })
+                    envMapIntensity: 1.2,
+                }),
             };
-        }
+        },
     },
     bone: {
         id: 'bone',
@@ -118,16 +118,16 @@ export const DICE_MATERIAL_PRESETS = {
                 roughness: 0.62,
                 metalness: 0.02,
                 envMap,
-                envMapIntensity: 0.55
+                envMapIntensity: 0.55,
             }),
             pip: new THREE.MeshStandardMaterial({
                 color: pipColor,
                 roughness: 0.7,
                 metalness: 0.0,
                 envMap,
-                envMapIntensity: 0.45
-            })
-        })
+                envMapIntensity: 0.45,
+            }),
+        }),
     },
     obsidian: {
         id: 'obsidian',
@@ -140,16 +140,16 @@ export const DICE_MATERIAL_PRESETS = {
                 clearcoat: 0.9,
                 clearcoatRoughness: 0.04,
                 envMap,
-                envMapIntensity: 1.3
+                envMapIntensity: 1.3,
             }),
             pip: new THREE.MeshStandardMaterial({
                 color: pipColor,
                 roughness: 0.25,
                 metalness: 0.35,
                 envMap,
-                envMapIntensity: 0.9
-            })
-        })
+                envMapIntensity: 0.9,
+            }),
+        }),
     },
     glow: {
         id: 'glow',
@@ -160,7 +160,7 @@ export const DICE_MATERIAL_PRESETS = {
                 roughness: 0.35,
                 metalness: 0.05,
                 envMap,
-                envMapIntensity: 0.8
+                envMapIntensity: 0.8,
             }),
             pip: new THREE.MeshStandardMaterial({
                 color: pipColor,
@@ -169,10 +169,10 @@ export const DICE_MATERIAL_PRESETS = {
                 emissive: pipColor.clone(),
                 emissiveIntensity: 1.4,
                 envMap,
-                envMapIntensity: 0.6
-            })
-        })
-    }
+                envMapIntensity: 0.6,
+            }),
+        }),
+    },
 };
 
 export const DICE_PRESET_IDS = Object.keys(DICE_MATERIAL_PRESETS);
@@ -183,7 +183,7 @@ const PRESET_SHORT = {
     gemstone: 'g',
     bone: 'b',
     obsidian: 'o',
-    glow: 'l'
+    glow: 'l',
 };
 
 const PRESET_FROM_SHORT = Object.fromEntries(
@@ -220,7 +220,7 @@ export function createDiceMaterials(presetId, colors, options = {}) {
         bodyColor,
         pipColor,
         envMap: options.envMap ?? null,
-        highQuality
+        highQuality,
     });
 }
 

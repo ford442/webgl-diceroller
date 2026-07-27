@@ -9,7 +9,7 @@ import {
     getDarkLeatherMaterial,
     getBlackAccentMaterial,
     getBrassMaterial,
-    getPaperMaterial
+    getPaperMaterial,
 } from '../../core/MaterialPalette.js';
 import { resolvePlacement } from './ClutterPlacement.js';
 
@@ -69,7 +69,7 @@ export function createCandle(scene, physicsWorld, options = {}) {
         scale: 0.5,
         color: 0xffaa00,
         particleCount: 25,
-        spread: 0.1
+        spread: 0.1,
     });
     fire.mesh.position.set(0, height / 2 + wickHeight + 0.05, 0);
     candleMesh.add(fire.mesh);
@@ -116,7 +116,7 @@ export function createCandle(scene, physicsWorld, options = {}) {
     return {
         flamePosition: flameWorldPos,
         update: update,
-        group: candleGroup
+        group: candleGroup,
     };
 }
 
@@ -191,7 +191,7 @@ export function createQuill(scene, physicsWorld, options = {}) {
         color: 0x222222,
         roughness: 0.3,
         metalness: 0.4,
-        envMapIntensity: 0.8
+        envMapIntensity: 0.8,
     });
 
     const potGeo = new THREE.CylinderGeometry(potRadiusTop, potRadiusBot, potHeight, 16);
@@ -205,7 +205,7 @@ export function createQuill(scene, physicsWorld, options = {}) {
         color: 0x000000,
         roughness: 0.1,
         metalness: 0.3,
-        envMapIntensity: 0.5
+        envMapIntensity: 0.5,
     });
     const inkMesh = new THREE.Mesh(inkGeo, inkMat);
     inkMesh.rotation.x = -Math.PI / 2;
@@ -233,7 +233,7 @@ export function createQuill(scene, physicsWorld, options = {}) {
     const featherMat = new THREE.MeshStandardMaterial({
         color: 0xffffff,
         roughness: 0.8,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
     });
     const featherMesh = new THREE.Mesh(featherGeo, featherMat);
     featherMesh.castShadow = true;
@@ -241,7 +241,7 @@ export function createQuill(scene, physicsWorld, options = {}) {
     featherMesh.position.y = 0.2;
     quillGroup.add(featherMesh);
 
-    quillGroup.rotation.z = -Math.PI / 6 - (randomUnit(options) * 0.1);
+    quillGroup.rotation.z = -Math.PI / 6 - randomUnit(options) * 0.1;
     quillGroup.rotation.y = randomUnit(options) * Math.PI * 2;
     quillGroup.position.set(0, potHeight / 2 - 0.1, 0);
 
@@ -256,7 +256,9 @@ export function createQuill(scene, physicsWorld, options = {}) {
     options.track?.(group);
 
     if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(potRadiusBot, potHeight / 2, potRadiusBot));
+        const shape = new ammo.btCylinderShape(
+            new ammo.btVector3(potRadiusBot, potHeight / 2, potRadiusBot)
+        );
         createStaticBody(physicsWorld, group, shape);
     }
 }
@@ -271,14 +273,14 @@ export function createPipe(scene, physicsWorld, options = {}) {
 
     const ashMat = new THREE.MeshStandardMaterial({
         color: 0x333333,
-        roughness: 1.0
+        roughness: 1.0,
     });
 
     const emberMat = new THREE.MeshStandardMaterial({
         color: 0xff4400,
         emissive: 0xff2200,
         emissiveIntensity: 0.5,
-        roughness: 1.0
+        roughness: 1.0,
     });
 
     const points = [];
@@ -314,7 +316,7 @@ export function createPipe(scene, physicsWorld, options = {}) {
         new THREE.Vector3(0.3, -0.1, 0),
         new THREE.Vector3(0.6, -0.05, 0),
         new THREE.Vector3(1.0, 0.1, 0),
-        new THREE.Vector3(1.5, 0.2, 0)
+        new THREE.Vector3(1.5, 0.2, 0),
     ]);
 
     const stemGeo = new THREE.TubeGeometry(curve, 16, 0.05, 8, false);
@@ -356,7 +358,7 @@ export function createSpyglass(scene, physicsWorld, options = {}) {
         metalness: 0,
         roughness: 0,
         transmission: 0.9,
-        transparent: true
+        transparent: true,
     });
 
     const leatherMat = getDarkLeatherMaterial();

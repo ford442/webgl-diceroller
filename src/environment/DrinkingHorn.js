@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createDrinkingHorn(scene, physicsWorld, position = { x: 0, y: -2.75, z: 0 }, rotationY = 0) {
+export function createDrinkingHorn(
+    scene,
+    physicsWorld,
+    position = { x: 0, y: -2.75, z: 0 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'DrinkingHorn';
@@ -12,7 +17,7 @@ export function createDrinkingHorn(scene, physicsWorld, position = { x: 0, y: -2
         color: 0xe3d8c1,
         roughness: 0.3,
         metalness: 0.1,
-        bumpScale: 0.05
+        bumpScale: 0.05,
     });
 
     // Metal fittings (brass/bronze)
@@ -20,14 +25,14 @@ export function createDrinkingHorn(scene, physicsWorld, position = { x: 0, y: -2
         color: 0xb5a642, // Brass
         metalness: 1.0,
         roughness: 0.3,
-        envMapIntensity: 1.2
+        envMapIntensity: 1.2,
     });
 
     // Leather strap/wrapping
-    const leatherMat = new THREE.MeshStandardMaterial({
+    const _leatherMat = new THREE.MeshStandardMaterial({
         color: 0x3f1f1f, // Dark leather
         roughness: 0.9,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // 1. Horn Body (LatheGeometry twisted along path)
@@ -57,7 +62,7 @@ export function createDrinkingHorn(scene, physicsWorld, position = { x: 0, y: -2
     // Instead, let's create a custom geometry by sweeping circles along the curve with decreasing radius
     const segments = 32;
     const radialSegments = 16;
-    const pts = [];
+    const _pts = [];
     const radiusBase = 0.5;
 
     // Build vertices and faces manually for a tapered horn
@@ -84,7 +89,9 @@ export function createDrinkingHorn(scene, physicsWorld, position = { x: 0, y: -2
         const axis = new THREE.Vector3(0, 0, 1);
         let normal = new THREE.Vector3().crossVectors(tangent, axis).normalize();
         if (normal.lengthSq() < 0.001) {
-            normal = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize();
+            normal = new THREE.Vector3()
+                .crossVectors(tangent, new THREE.Vector3(0, 1, 0))
+                .normalize();
         }
         const binormal = new THREE.Vector3().crossVectors(tangent, normal).normalize();
 
@@ -127,9 +134,9 @@ export function createDrinkingHorn(scene, physicsWorld, position = { x: 0, y: -2
     // The uvs variable was not defined properly, but we don't strictly need them since we aren't using a complex texture,
     // only a basic color material. However, adding basic UVs avoids warnings.
     const uvArray = new Float32Array(uvs.length * 2);
-    for(let k=0; k<uvs.length; k+=2){
+    for (let k = 0; k < uvs.length; k += 2) {
         uvArray[k] = uvs[k];
-        uvArray[k+1] = uvs[k+1];
+        uvArray[k + 1] = uvs[k + 1];
     }
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
 
@@ -190,7 +197,7 @@ export function createDrinkingHorn(scene, physicsWorld, position = { x: 0, y: -2
 
     // Legs
     const legGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.6, 8);
-    for(let i=0; i<3; i++) {
+    for (let i = 0; i < 3; i++) {
         const leg = new THREE.Mesh(legGeo, brassMat);
         const angle = (i / 3) * Math.PI * 2;
         const x = Math.cos(angle) * 0.4;
@@ -234,16 +241,16 @@ export function createDrinkingHorn(scene, physicsWorld, position = { x: 0, y: -2
     const depth = 1.0; // Z
     if (ammo && physicsWorld) {
         const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
-    
+
         // Because the group's center is at the base ring (Y = -0.5), we need to shift the physical shape up
         // to match the visual mass
         // But createStaticBody just uses the group's transform. To offset the shape, we can create a proxy mesh.
-    
+
         const proxyMesh = new THREE.Mesh();
         proxyMesh.position.copy(group.position);
-        proxyMesh.position.y += height/2 - 0.5; // Shift center of mass up
+        proxyMesh.position.y += height / 2 - 0.5; // Shift center of mass up
         proxyMesh.rotation.copy(group.rotation);
-    
+
         createStaticBody(physicsWorld, proxyMesh, shape);
     }
 

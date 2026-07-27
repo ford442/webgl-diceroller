@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 import { playPropImpact } from '../audio/DiceCollisionAudio.js';
 
-export function createSkull(scene, physicsWorld, position = { x: -10, y: -2.4, z: -10 }, rotationY = 0.3) {
+export function createSkull(
+    scene,
+    physicsWorld,
+    position = { x: -10, y: -2.4, z: -10 },
+    rotationY = 0.3
+) {
     const group = new THREE.Group();
     group.name = 'SkullProp';
 
@@ -10,13 +15,13 @@ export function createSkull(scene, physicsWorld, position = { x: -10, y: -2.4, z
     const boneMat = new THREE.MeshStandardMaterial({
         color: 0xe3dac9, // Bone white/beige
         roughness: 0.7,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     const socketMat = new THREE.MeshStandardMaterial({
         color: 0x111111, // Dark black
         roughness: 0.9,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     const glowColor = 0xff0000; // Red glow
@@ -68,17 +73,17 @@ export function createSkull(scene, physicsWorld, position = { x: -10, y: -2.4, z
     // 5. Teeth
     const toothGeo = new THREE.BoxGeometry(0.04, 0.06, 0.02);
     const numTeeth = 6;
-    const startX = -((numTeeth-1) * 0.05) / 2;
+    const startX = -((numTeeth - 1) * 0.05) / 2;
 
     // Upper Teeth (Attached to Cranium bottom front)
-    for(let i=0; i<numTeeth; i++) {
+    for (let i = 0; i < numTeeth; i++) {
         const tooth = new THREE.Mesh(toothGeo, boneMat);
         tooth.position.set(startX + i * 0.05, -0.28, 0.34);
         group.add(tooth);
     }
 
     // Lower Teeth (Attached to Jaw top front)
-    for(let i=0; i<numTeeth; i++) {
+    for (let i = 0; i < numTeeth; i++) {
         const tooth = new THREE.Mesh(toothGeo, boneMat);
         tooth.position.set(startX + i * 0.05, -0.32, 0.34); // Slightly lower
         group.add(tooth);
@@ -101,8 +106,13 @@ export function createSkull(scene, physicsWorld, position = { x: -10, y: -2.4, z
     let isGlowing = false;
 
     const toggleGlow = () => {
-        // Hollow bone knock on interaction.
-        playPropImpact({ surface: 'bone', volume: 0.5 });
+        const impactPos = new THREE.Vector3();
+        group.getWorldPosition(impactPos);
+        playPropImpact({
+            surface: 'bone',
+            volume: 0.5,
+            position: { x: impactPos.x, y: impactPos.y, z: impactPos.z },
+        });
         isGlowing = !isGlowing;
         const intensity = isGlowing ? eyeLightIntensity : 0;
         leftLight.intensity = intensity;
@@ -139,6 +149,6 @@ export function createSkull(scene, physicsWorld, position = { x: -10, y: -2.4, z
 
     return {
         group,
-        toggleGlow
+        toggleGlow,
     };
 }

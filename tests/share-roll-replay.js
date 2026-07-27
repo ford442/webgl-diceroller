@@ -7,18 +7,25 @@
 const { launchPage } = require('./helpers/browser');
 
 const BASE = 'http://localhost:4173';
-const REPLAY_QUERY = '?webgl&no-post&fair-dice&seed=42424242&dice=d20:1,d6:1&v=1';
+const REPLAY_QUERY = '?webgl&no-post&fair-dice&test&seed=42424242&dice=d20:1,d6:1&v=1';
 const LOAD_TIMEOUT_MS = 120000;
 const SETTLE_TIMEOUT_MS = 180000;
 
 async function waitForReplaySettled(page) {
-    await page.waitForFunction(() => window.sceneReady === true, { timeout: LOAD_TIMEOUT_MS });
-    const wasmReady = await page.evaluate(() => window.isWasmAvailable?.() === true);
+    await page.waitForFunction(() => (window.__app?.ready ?? window.sceneReady) === true, {
+        timeout: LOAD_TIMEOUT_MS,
+    });
+    const wasmReady = await page.evaluate(
+        () => (window.__app?.isWasmAvailable ?? window.isWasmAvailable)?.() === true
+    );
     if (!wasmReady) {
         return { skipped: true, reason: 'WASM physics not available (run npm run build:wasm)' };
     }
     await page.waitForFunction(
-        () => typeof window.areDiceSettled === 'function' && window.areDiceSettled() === true,
+        () => {
+            const settled = window.__app?.areDiceSettled ?? window.areDiceSettled;
+            return typeof settled === 'function' && settled() === true;
+        },
         { timeout: SETTLE_TIMEOUT_MS }
     );
     await page.waitForTimeout(500);
@@ -30,9 +37,10 @@ function isBenignBrowserError(message) {
 }
 
 async function captureReplayValues(page) {
-    return page.evaluate(() =>
-        window.readAllDiceValues().map((die) => ({ type: die.type, value: die.value }))
-    );
+    return page.evaluate(() => {
+        const read = window.__app?.readAllDiceValues ?? window.readAllDiceValues;
+        return read().map((die) => ({ type: die.type, value: die.value }));
+    });
 }
 
 (async () => {

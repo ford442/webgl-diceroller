@@ -2,6 +2,23 @@ import { getHoveredDie } from '../interaction.js';
 import { isTouchPrimaryDevice } from './DeviceCapabilities.js';
 import { setupTouchInput } from './TouchInput.js';
 
+/**
+ * @param {object} config
+ * @param {import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer} config.renderer
+ * @param {import('three').Camera} config.camera
+ * @param {ReturnType<typeof import('../interaction.js').initInteraction>} config.interaction
+ * @param {ReturnType<typeof import('./CameraController.js').createCameraController>} config.cameraController
+ * @param {{ value: string }} config.diceFocusStateRef
+ * @param {{ value: boolean }} config.isLockedRef
+ * @param {() => boolean} [config.isXrPresenting]
+ * @param {import('three').Vector2} config.cursorPos
+ * @param {ReturnType<typeof import('../ui.js').createCrosshair> | null | undefined} config.crosshairUI
+ * @param {(seed?: number | null) => void} config.onRoll
+ * @param {(() => void | Promise<void>) | null} [config.onRerollLayout]
+ * @param {() => unknown} [config._onLampKey]
+ * @param {() => { handleKey?: (key: string) => void; setRolling?: (rolling: boolean) => void } | null | undefined} [config.getLampData]
+ * @param {() => void} [config.onCupPourKey]
+ */
 export function setupInput({
     renderer,
     camera,
@@ -9,22 +26,27 @@ export function setupInput({
     cameraController,
     diceFocusStateRef,
     isLockedRef,
+    isXrPresenting,
     cursorPos,
     crosshairUI,
     onRoll,
     onRerollLayout,
-    onLampKey,
-    getLampData
+    _onLampKey,
+    getLampData,
+    onCupPourKey,
 }) {
     const keys = {};
     let hoverCheckPending = false;
     let lastHoverNormX = 0;
     let lastHoverNormY = 0;
     const touchPrimary = isTouchPrimaryDevice();
+    const xrActive = () => isXrPresenting?.() === true;
 
     const getContainerRect = () => {
         const container = document.getElementById('canvas-container');
-        return container ? container.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
+        return container
+            ? container.getBoundingClientRect()
+            : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
     };
 
     window.addEventListener('keydown', (event) => {
@@ -42,6 +64,9 @@ export function setupInput({
                 document.exitPointerLock();
             }
         }
+        if (event.code === 'KeyT') {
+            onCupPourKey?.();
+        }
         const lampData = getLampData ? getLampData() : null;
         if (lampData) {
             lampData.handleKey(event.key);
@@ -55,6 +80,7 @@ export function setupInput({
     if (!touchPrimary) {
         renderer.domElement.addEventListener('contextmenu', (event) => {
             event.preventDefault();
+            if (xrActive()) return;
             if (!isLockedRef.value && diceFocusStateRef.value === 'IDLE') {
                 renderer.domElement.requestPointerLock();
             }
@@ -63,7 +89,7 @@ export function setupInput({
         document.addEventListener('pointerlockchange', () => {
             const wasLocked = isLockedRef.value;
             isLockedRef.value = document.pointerLockElement === renderer.domElement;
-            if (crosshairUI) crosshairUI.setVisible(isLockedRef.value);
+            if (crosshairUI) crosshairUI.setVisible(isLockedRef.value && !xrActive());
             if (isLockedRef.value && !wasLocked) {
                 cursorPos.set(0, 0);
             }
@@ -73,7 +99,7 @@ export function setupInput({
     }
 
     document.addEventListener('mousemove', (event) => {
-        if (touchPrimary || diceFocusStateRef.value !== 'IDLE') return;
+        if (touchPrimary || xrActive() || diceFocusStateRef.value !== 'IDLE') return;
 
         if (isLockedRef.value) {
             cursorPos.x += event.movementX;
@@ -101,7 +127,7 @@ export function setupInput({
     });
 
     renderer.domElement.addEventListener('mousedown', (event) => {
-        if (touchPrimary || event.button !== 0) return;
+        if (touchPrimary || xrActive() || event.button !== 0) return;
         if (diceFocusStateRef.value === 'IDLE') {
             const rect = getContainerRect();
             const relX = event.clientX - rect.left;
@@ -122,13 +148,13 @@ export function setupInput({
     });
 
     renderer.domElement.addEventListener('mouseup', (event) => {
-        if (touchPrimary || event.button !== 0) return;
+        if (touchPrimary || xrActive() || event.button !== 0) return;
         if (interaction) interaction.handleUp();
         renderer.domElement.style.cursor = 'default';
     });
 
     renderer.domElement.addEventListener('mouseleave', () => {
-        if (touchPrimary) return;
+        if (touchPrimary || xrActive()) return;
         if (interaction) interaction.handleUp();
         renderer.domElement.style.cursor = 'default';
     });
@@ -140,7 +166,7 @@ export function setupInput({
         cameraController,
         diceFocusStateRef,
         onRoll,
-        getContainerRect
+        getContainerRect,
     });
 
     return { keys, touchPrimary, touchInput };

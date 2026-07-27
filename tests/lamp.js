@@ -13,22 +13,55 @@ async function staticChecks() {
     const registrySrc = fs.readFileSync('src/environment/PropRegistry.js', 'utf8');
 
     const checks = [
-        { name: 'visualWrapper Group present', pass: lampSrc.includes('visualWrapper') && lampSrc.includes('LampVisualWrapper') },
-        { name: 'wrapper scale uses setScalar (no direct geo mutate)', pass: lampSrc.includes('visualWrapper.scale.setScalar') },
-        { name: 'top-center positioning comment', pass: lampSrc.includes('TOP-CENTER') && lampSrc.includes('visualWrapper') },
-        { name: 'safe bbox scale to ~22 wide', pass: lampSrc.includes('targetWidth = 22') && lampSrc.includes('rawWidth') },
-        { name: 'updateMatrixWorld before shade bounds', pass: lampSrc.includes('updateMatrixWorld(true)') },
-        { name: 'shade-based light placement (glass or fallback)', pass: lampSrc.includes('glassShades') || lampSrc.includes('lightPositions') },
-        { name: 'no scene.add(lampGroup) inside createLamp', pass: !lampSrc.includes('scene.add(lampGroup)') },
-        { name: 'returns toggle', pass: lampSrc.includes('toggle,') || lampSrc.includes('toggle:') },
-        { name: 'lamp hang metric near ceiling', pass: metricsSrc.includes('LAMP_HANG_Y = ROOM_CEILING_Y - 0.35') },
+        {
+            name: 'visualWrapper Group present',
+            pass: lampSrc.includes('visualWrapper') && lampSrc.includes('LampVisualWrapper'),
+        },
+        {
+            name: 'wrapper scale uses setScalar (no direct geo mutate)',
+            pass: lampSrc.includes('visualWrapper.scale.setScalar'),
+        },
+        {
+            name: 'top-center positioning comment',
+            pass: lampSrc.includes('TOP-CENTER') && lampSrc.includes('visualWrapper'),
+        },
+        {
+            name: 'safe bbox scale to ~22 wide',
+            pass: lampSrc.includes('targetWidth = 22') && lampSrc.includes('rawWidth'),
+        },
+        {
+            name: 'updateMatrixWorld before shade bounds',
+            pass: lampSrc.includes('updateMatrixWorld(true)'),
+        },
+        {
+            name: 'shade-based light placement (glass or fallback)',
+            pass: lampSrc.includes('glassShades') || lampSrc.includes('lightPositions'),
+        },
+        {
+            name: 'no scene.add(lampGroup) inside createLamp',
+            pass: !lampSrc.includes('scene.add(lampGroup)'),
+        },
+        {
+            name: 'returns toggle',
+            pass: lampSrc.includes('toggle,') || lampSrc.includes('toggle:'),
+        },
+        {
+            name: 'lamp hang metric near ceiling',
+            pass: metricsSrc.includes('LAMP_HANG_Y = ROOM_CEILING_Y - 0.35'),
+        },
         { name: 'lamp tier uses shared hang metric', pass: registrySrc.includes('y: LAMP_HANG_Y') },
-        { name: 'scene.add for lamp in caller', pass: registrySrc.includes('ctx.scene.add(result.group)') },
-        { name: 'lamp interaction registered by prop registry', pass: registrySrc.includes("registerInteractable('lamp'") }
+        {
+            name: 'scene.add for lamp in caller',
+            pass: registrySrc.includes('ctx.scene.add(result.group)'),
+        },
+        {
+            name: 'lamp interaction registered by prop registry',
+            pass: registrySrc.includes("registerInteractable('lamp'"),
+        },
     ];
 
     let allPass = true;
-    checks.forEach(c => {
+    checks.forEach((c) => {
         const status = c.pass ? '✓' : '✗';
         console.log(`${status} ${c.name}`);
         if (!c.pass) allPass = false;
@@ -36,23 +69,32 @@ async function staticChecks() {
 
     // Also check built asset contains key strings (proves it made it through bundler)
     try {
-        const built = fs.readdirSync('dist/assets').find(f => f.startsWith('index-') && f.endsWith('.js'));
+        const built = fs
+            .readdirSync('dist/assets')
+            .find((f) => f.startsWith('index-') && f.endsWith('.js'));
         if (built) {
             const builtCode = fs.readFileSync(`dist/assets/${built}`, 'utf8');
-            const builtOk = builtCode.includes('BilliardLamp') && builtCode.includes('LampVisualWrapper');
-            console.log(builtOk ? '✓ Built bundle contains LampVisualWrapper + BilliardLamp' : '✗ Built bundle missing lamp symbols');
+            const builtOk =
+                builtCode.includes('BilliardLamp') && builtCode.includes('LampVisualWrapper');
+            console.log(
+                builtOk
+                    ? '✓ Built bundle contains LampVisualWrapper + BilliardLamp'
+                    : '✗ Built bundle missing lamp symbols'
+            );
             if (!builtOk) allPass = false;
         }
-    } catch (e) {}
+    } catch (_e) {}
 
-    console.log(allPass ? '\n=== STATIC CHECKS PASSED ===' : '\n=== STATIC CHECKS HAD FAILURES ===');
+    console.log(
+        allPass ? '\n=== STATIC CHECKS PASSED ===' : '\n=== STATIC CHECKS HAD FAILURES ==='
+    );
     return allPass;
 }
 
 const isStatic = process.env.NODE_ENV === 'static' || process.argv.includes('--static');
 
 if (isStatic) {
-    staticChecks().then(ok => process.exit(ok ? 0 : 1));
+    staticChecks().then((ok) => process.exit(ok ? 0 : 1));
 } else {
     runLampTest();
 }
@@ -64,9 +106,9 @@ async function runLampTest() {
 
     // Use the verification server started by our test harness (port 8123 serves dist/)
     const urls = [
-        'http://127.0.0.1:4173/?webgl&no-post&fair-dice',
-        'http://127.0.0.1:5173/?webgl&no-post&fair-dice',
-        'http://127.0.0.1:8123/?webgl&no-post&fair-dice'
+        'http://127.0.0.1:4173/?webgl&no-post&fair-dice&test',
+        'http://127.0.0.1:5173/?webgl&no-post&fair-dice&test',
+        'http://127.0.0.1:8123/?webgl&no-post&fair-dice&test',
     ];
     let loaded = false;
     for (const url of urls) {
@@ -88,9 +130,16 @@ async function runLampTest() {
 
     // Wait for core scene
     try {
-        await page.waitForFunction(() => window.scene !== undefined && window.sceneReady !== undefined, { timeout: 45000 });
-    } catch (e) {
-        console.error('Timeout waiting for window.scene / sceneReady');
+        await page.waitForFunction(
+            () => {
+                const scene = window.__app?.scene ?? window.scene;
+                const ready = window.__app?.ready ?? window.sceneReady;
+                return scene != null && ready === true;
+            },
+            { timeout: 45000 }
+        );
+    } catch (_e) {
+        console.error('Timeout waiting for window.__app.scene / ready');
         await browser.close();
         process.exit(1);
     }
@@ -99,7 +148,7 @@ async function runLampTest() {
     await page.waitForTimeout(8000);
 
     const result = await page.evaluate(() => {
-        const scene = window.scene;
+        const scene = window.__app?.scene ?? window.scene;
         if (!scene) return { error: 'no scene' };
 
         // Find the lamp group
@@ -124,16 +173,36 @@ async function runLampTest() {
         const positions = [];
 
         lamp.traverse((child) => {
+            const node =
+                /** @type {import('three').Object3D & { isPointLight?: boolean; isMesh?: boolean; material?: { type?: string }; geometry?: { type?: string } }} */ (
+                    child
+                );
             if (child.name === 'LampVisualWrapper') wrapper = child;
-            if (child.isPointLight) {
+            if (node.isPointLight) {
                 lightCount++;
-                positions.push({ type: 'light', x: child.position.x.toFixed(2), y: child.position.y.toFixed(2), z: child.position.z.toFixed(2) });
+                positions.push({
+                    type: 'light',
+                    x: child.position.x.toFixed(2),
+                    y: child.position.y.toFixed(2),
+                    z: child.position.z.toFixed(2),
+                });
             }
-            if (child.isMesh && child.material && child.material.type === 'MeshBasicMaterial' && child.geometry && child.geometry.type === 'SphereGeometry') {
+            if (
+                node.isMesh &&
+                node.material &&
+                node.material.type === 'MeshBasicMaterial' &&
+                node.geometry &&
+                node.geometry.type === 'SphereGeometry'
+            ) {
                 bulbCount++;
-                positions.push({ type: 'bulb', x: child.position.x.toFixed(2), y: child.position.y.toFixed(2), z: child.position.z.toFixed(2) });
+                positions.push({
+                    type: 'bulb',
+                    x: child.position.x.toFixed(2),
+                    y: child.position.y.toFixed(2),
+                    z: child.position.z.toFixed(2),
+                });
             }
-            if (child.isMesh) {
+            if (node.isMesh) {
                 const n = (child.name || '').toLowerCase();
                 if (n.includes('glass') || n.includes('shade')) glassCount++;
             }
@@ -151,7 +220,7 @@ async function runLampTest() {
             bulbCount,
             glassCount,
             positions: positions.slice(0, 12),
-            noConsoleErrors: true
+            noConsoleErrors: true,
         };
     });
 
@@ -191,41 +260,55 @@ async function runLampTest() {
             // The source OBJ contains only a single monolithic mesh named after the file.
             // Material-by-name logic (glass/wood/steel) cannot split it; the copper
             // texture map provides the full painted appearance. This is expected.
-            console.log(`✓ (model has 1 monolithic mesh - glassCount=${result.glassCount} is normal)`);
+            console.log(
+                `✓ (model has 1 monolithic mesh - glassCount=${result.glassCount} is normal)`
+            );
         } else {
             console.log(`✓ ${result.glassCount} glass/shade meshes found`);
         }
         // Check that bulbs are not at y=0 or hugely positive (would be floating wrong)
-        const badBulbs = result.positions.filter(p => p.type === 'bulb' && (parseFloat(p.y) > -1 || parseFloat(p.y) < -40));
+        const badBulbs = result.positions.filter(
+            (p) => p.type === 'bulb' && (parseFloat(p.y) > -1 || parseFloat(p.y) < -40)
+        );
         if (badBulbs.length > 0) {
-            console.warn('WARN: Some bulbs have suspicious Y (may be floating or clipped):', badBulbs);
+            console.warn(
+                'WARN: Some bulbs have suspicious Y (may be floating or clipped):',
+                badBulbs
+            );
         } else {
             console.log('✓ Bulb Y positions look reasonable (inside shades)');
         }
     }
 
     // Filter out non-lamp, pre-existing asset 404s (e.g. wasm when built without Emscripten)
-    const lampRelatedErrors = consoleErrors.filter(e =>
+    const lampRelatedErrors = consoleErrors.filter((e) =>
         /lamp|Billiard|glass|shade|RenderStuff/i.test(e)
     );
     if (lampRelatedErrors.length > 0) {
         console.error('FAIL: Lamp-related browser errors:');
-        lampRelatedErrors.forEach(e => console.error('  ', e));
+        lampRelatedErrors.forEach((e) => console.error('  ', e));
         pass = false;
     } else {
-        console.log('✓ No lamp-related console errors (other 404s are expected without full WASM build)');
+        console.log(
+            '✓ No lamp-related console errors (other 404s are expected without full WASM build)'
+        );
     }
 
     // Interactable hook check: the lamp toggle is reachable programmatically
     // (drives the in-game click handler and is now exposed for e2e).
     const lampInteract = await page.evaluate(() => {
-        const api = window.__interactables && window.__interactables.lamp;
+        const api = window.__app?.interactables?.lamp ?? window.__interactables?.lamp;
         if (!api || typeof api.trigger !== 'function') return { ok: false };
-        try { api.trigger(); api.trigger(); return { ok: true }; }
-        catch (e) { return { ok: false, err: String(e) }; }
+        try {
+            api.trigger();
+            api.trigger();
+            return { ok: true };
+        } catch (e) {
+            return { ok: false, err: String(e) };
+        }
     });
     if (lampInteract.ok) {
-        console.log('✓ Lamp interactable hook works (window.__interactables.lamp.trigger)');
+        console.log('✓ Lamp interactable hook works (__app.interactables.lamp.trigger)');
     } else {
         console.error('FAIL: lamp interactable hook missing or threw', lampInteract.err || '');
         pass = false;

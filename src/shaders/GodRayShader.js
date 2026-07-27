@@ -6,17 +6,16 @@ import * as THREE from 'three';
  */
 
 export const GodRayShader = {
-
     name: 'GodRayShader',
 
     uniforms: {
-        'uTime': { value: 0.0 },
-        'tNoise': { value: null },
-        'uColor': { value: new THREE.Color(0xddeeff) }, // Cool blue-white
-        'uSpeed': { value: 0.1 }
+        uTime: { value: 0.0 },
+        tNoise: { value: null },
+        uColor: { value: new THREE.Color(0xddeeff) }, // Cool blue-white
+        uSpeed: { value: 0.1 },
     },
 
-    vertexShader: /* glsl */`
+    vertexShader: /* glsl */ `
         varying vec2 vUv;
 
         void main() {
@@ -24,7 +23,7 @@ export const GodRayShader = {
             gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
         }`,
 
-    fragmentShader: /* glsl */`
+    fragmentShader: /* glsl */ `
         uniform float uTime;
         uniform sampler2D tNoise;
         uniform vec3 uColor;
@@ -66,5 +65,5 @@ export const GodRayShader = {
             intensity += pow(vUv.y, 2.0) * 0.3;
 
             gl_FragColor = vec4( uColor, intensity * 0.4 ); // Low alpha for subtle effect
-        }`
+        }`,
 };

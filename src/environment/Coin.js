@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 import { getInstancedMetalMaterial } from '../core/MaterialPalette.js';
 
-export function createCoin(scene, physicsWorld, position = { x: 8, y: -2.75, z: -2 }, rotationY = 0) {
+export function createCoin(
+    scene,
+    physicsWorld,
+    position = { x: 8, y: -2.75, z: -2 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
 
     const coinGroup = new THREE.Group();

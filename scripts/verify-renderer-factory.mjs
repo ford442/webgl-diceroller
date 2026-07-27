@@ -3,8 +3,10 @@
 import {
     resolvePixelRatioConfig,
     resolveAntialias,
-    detectSoftwareWebGL
+    detectSoftwareWebGL,
+    getRendererPreference,
 } from '../src/core/RendererFactory.js';
+import { isXrRequested, getXrSnapDegrees } from '../src/xr/XrFlags.js';
 
 let failed = 0;
 
@@ -44,6 +46,26 @@ assert(resolveAntialias(2) === false, 'antialias disabled at pixelRatio 2');
 
 // Software probe returns boolean (environment-dependent)
 assert(typeof detectSoftwareWebGL() === 'boolean', 'detectSoftwareWebGL returns boolean');
+
+// XR forces WebGL even when webgpu is also requested
+assert(
+    getRendererPreference(new URLSearchParams('')) === 'webgpu',
+    'default renderer preference is webgpu'
+);
+assert(getRendererPreference(new URLSearchParams('xr')) === 'webgl', '?xr forces webgl preference');
+assert(
+    getRendererPreference(new URLSearchParams('xr-emulator')) === 'webgl',
+    '?xr-emulator forces webgl preference'
+);
+assert(
+    getRendererPreference(new URLSearchParams('xr&webgpu')) === 'webgl',
+    '?xr wins over ?webgpu'
+);
+assert(isXrRequested(new URLSearchParams('')) === false, 'isXrRequested false by default');
+assert(isXrRequested(new URLSearchParams('xr')) === true, 'isXrRequested true for ?xr');
+assert(getXrSnapDegrees(new URLSearchParams('')) === 45, 'default xr snap is 45');
+assert(getXrSnapDegrees(new URLSearchParams('xr-snap=30')) === 30, 'xr-snap=30 honored');
+assert(getXrSnapDegrees(new URLSearchParams('xr-snap=5')) === 15, 'xr-snap clamps to min 15');
 
 if (failed > 0) {
     console.error(`\n${failed} assertion(s) failed`);

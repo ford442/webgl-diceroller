@@ -15,6 +15,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <chrono>
 
 using namespace dice_physics;
 
@@ -157,6 +158,43 @@ TEST_CASE("PRNG golden sequence") {
     CHECK(rng.nextFloat() == doctest::Approx(0.087864459f).epsilon(1e-6f));
 }
 
+TEST_CASE("Container planes bounce die inside open box") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -10.0f, 18.0f, 18.0f);
+    engine.setContainerActive(true);
+    engine.setContainerPlanes({
+        0.0f, 1.0f, 0.0f, 0.0f,
+        -1.0f, 0.0f, 0.0f, -2.0f,
+         1.0f, 0.0f, 0.0f, -2.0f,
+        0.0f, 0.0f, -1.0f, -2.0f,
+        0.0f, 0.0f,  1.0f, -2.0f,
+    });
+    const int id = engine.addDie(6, 0.0f, 3.0f, 0.0f);
+    engine.setDieVelocity(id, 0.0f, -25.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    for (int i = 0; i < 180; ++i) {
+        engine.step(1.0f / 60.0f);
+    }
+    const auto& xf = engine.buildTransformBuffer();
+    REQUIRE(!xf.empty());
+    CHECK(xf[1] > 0.05f);
+    CHECK(std::abs(xf[0]) < 2.5f);
+    CHECK(std::abs(xf[2]) < 2.5f);
+}
+
+TEST_CASE("Container inactive ignores planes") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, 0.0f, 18.0f, 18.0f);
+    engine.setContainerActive(false);
+    engine.setContainerPlanes({0.0f, 1.0f, 0.0f, 0.0f});
+    engine.addDie(6, 0.0f, 2.0f, 0.0f);
+    for (int i = 0; i < 240; ++i) {
+        engine.step(1.0f / 60.0f);
+    }
+    const auto& xf = engine.buildTransformBuffer();
+    REQUIRE(!xf.empty());
+    CHECK(xf[1] < 1.5f);
+}
+
 TEST_CASE("Serialize round-trip preserves state") {
     DicePhysicsEngine engine;
     engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
@@ -204,6 +242,83 @@ TEST_CASE("Determinism: same seed yields identical serialize output") {
     runDeterministicScenario(a, seed);
     runDeterministicScenario(b, seed);
     CHECK(a.serializeState() == b.serializeState());
+}
+
+TEST_CASE("Open cylinder: die falls in and settles inside walls") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    PolyHull cube = makeUnitCubeHull();
+    auto cubeFlat = flattenHull(cube);
+
+    const float cx = 0.0f;
+    const float cy = -1.5f;
+    const float cz = 0.0f;
+    const float radius = 2.0f;
+    const float halfHeight = 1.5f;
+    CHECK(engine.addStaticOpenCylinder(1, cx, cy, cz, radius, halfHeight, 16, true, 3) == 1);
+
+    const int id = engine.addDie(6, cx, cy + halfHeight - 0.35f, cz);
+    engine.setDieHull(id, cubeFlat);
+    engine.applyImpulse(id, 4.0f, -1.0f, 2.5f);
+    engine.applyTorqueImpulse(id, 20.0f, 0.0f, 15.0f);
+
+    for (int frame = 0; frame < 720; ++frame) {
+        engine.step(1.0f / 60.0f);
+        CHECK(engine.allBodyStatesFinite());
+    }
+
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    CHECK(engine.getDiePosition(id, x, y, z));
+
+    const float dx = x - cx;
+    const float dz = z - cz;
+    const float radial = std::sqrt(dx * dx + dz * dz);
+    CHECK(radial < radius * 0.92f);
+    CHECK(y >= cy - halfHeight + 0.15f);
+    CHECK(y <= cy + halfHeight + 1.5f);
+    CHECK(engine.areAllSettled());
+}
+
+TEST_CASE("Broadphase grid matches brute-force pair set and serialize state") {
+    PolyHull cube = makeUnitCubeHull();
+    auto cubeFlat = flattenHull(cube);
+
+    auto setupEngine = [&]() {
+        DicePhysicsEngine engine;
+        engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+        for (int i = 0; i < 20; ++i) {
+            const float x = static_cast<float>((i % 5) - 2) * 1.1f;
+            const float y = 2.5f + static_cast<float>(i) * 0.08f;
+            const float z = static_cast<float>((i / 5) % 4 - 2) * 1.1f;
+            const int id = engine.addDie(6, x, y, z);
+            engine.setDieHull(id, cubeFlat);
+            engine.applyImpulse(id, 4.0f, 1.5f, -2.0f);
+            engine.applyTorqueImpulse(id, 8.0f, 0.0f, 6.0f);
+        }
+        return engine;
+    };
+
+    DicePhysicsEngine pairEngine = setupEngine();
+    const auto gridPairs = pairEngine.collectDiePairsForTesting(true);
+    const auto brutePairs = pairEngine.collectDiePairsForTesting(false);
+    CHECK(gridPairs.size() == brutePairs.size());
+    CHECK(std::equal(gridPairs.begin(), gridPairs.end(), brutePairs.begin()));
+
+    auto runScenario = [&](bool useBroadphase) {
+        DicePhysicsEngine engine = setupEngine();
+        engine.setBroadphaseForTesting(useBroadphase);
+        for (int frame = 0; frame < 120; ++frame) {
+            engine.step(1.0f / 60.0f);
+        }
+        return engine.serializeState();
+    };
+
+    const auto gridState = runScenario(true);
+    const auto bruteState = runScenario(false);
+    CHECK(gridState.size() == bruteState.size());
+    CHECK(std::memcmp(gridState.data(), bruteState.data(), gridState.size()) == 0);
 }
 
 TEST_CASE("Fuzz: random scenarios preserve invariants and settle") {
@@ -297,10 +412,93 @@ int dumpSerializeHex(uint64_t seed) {
     return 0;
 }
 
+int dumpSerializeParityHex() {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    int id0 = engine.addDie(6, 0, 4, 0);
+    int id1 = engine.addDie(20, 1.5f, 5, -1.0f);
+    engine.applyImpulse(id0, 5, 2, -3);
+    engine.applyTorqueImpulse(id1, 0, 10, 0);
+    for (int i = 0; i < 30; ++i) engine.step(1.0f / 60.0f);
+    const auto bytes = engine.serializeState();
+    for (uint8_t b : bytes) {
+        std::cout << std::hex << (b >> 4) << (b & 0xF);
+    }
+    std::cout << std::dec << '\n';
+    return 0;
+}
+
+int runBench(int dieCount, int steps, int warmup) {
+    if (dieCount < 1) dieCount = 50;
+    if (steps < 1) steps = 600;
+    if (warmup < 0) warmup = 60;
+
+    PolyHull cube = makeUnitCubeHull();
+    auto cubeFlat = flattenHull(cube);
+
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+
+    for (int i = 0; i < dieCount; ++i) {
+        const float x = static_cast<float>((i % 10) - 5) * 0.4f;
+        const float y = 3.0f + static_cast<float>(i) * 0.05f;
+        const float z = static_cast<float>((i / 10) % 10 - 5) * 0.4f;
+        const int id = engine.addDie(6, x, y, z);
+        if (id >= 0) engine.setDieHull(id, cubeFlat);
+        engine.applyImpulse(id, 5.0f, 2.0f, -3.0f);
+        engine.applyTorqueImpulse(id, 10.0f, 0.0f, 5.0f);
+    }
+
+    const float dt = 1.0f / 60.0f;
+    for (int w = 0; w < warmup; ++w) {
+        engine.step(dt);
+    }
+
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int s = 0; s < steps; ++s) {
+        engine.step(dt);
+    }
+    const auto t1 = std::chrono::steady_clock::now();
+    const double totalMs =
+        std::chrono::duration<double, std::milli>(t1 - t0).count();
+    const double msPerStep = totalMs / static_cast<double>(steps);
+    const double usPerStep = msPerStep * 1000.0;
+
+    std::cout << "bench dice=" << dieCount << " steps=" << steps
+              << " warmup=" << warmup
+              << " total_ms=" << totalMs
+              << " ms_per_step=" << msPerStep << '\n';
+    std::cout << "bench_json {\"profile\":\"native-scalar\",\"dice\":" << dieCount
+              << ",\"steps\":" << steps
+              << ",\"warmup\":" << warmup
+              << ",\"total_ms\":" << totalMs
+              << ",\"ms_per_step\":" << msPerStep
+              << ",\"us_per_step\":" << usPerStep << "}\n";
+    return 0;
+}
+
 int main(int argc, char** argv) {
+    if (argc >= 2 && std::strcmp(argv[1], "--dump-serialize-parity") == 0) {
+        return dumpSerializeParityHex();
+    }
     if (argc >= 3 && std::strcmp(argv[1], "--dump-serialize") == 0) {
         uint64_t seed = std::strtoull(argv[2], nullptr, 0);
         return dumpSerializeHex(seed);
+    }
+    if (argc >= 2 && std::strcmp(argv[1], "--bench") == 0) {
+        int dieCount = 50;
+        int steps = 600;
+        int warmup = 60;
+        for (int i = 2; i < argc; ++i) {
+            if (std::strncmp(argv[i], "--dice=", 7) == 0) {
+                dieCount = std::atoi(argv[i] + 7);
+            } else if (std::strncmp(argv[i], "--steps=", 8) == 0) {
+                steps = std::atoi(argv[i] + 8);
+            } else if (std::strncmp(argv[i], "--warmup=", 9) == 0) {
+                warmup = std::atoi(argv[i] + 9);
+            }
+        }
+        return runBench(dieCount, steps, warmup);
     }
     doctest::Context ctx;
     ctx.applyCommandLine(argc, argv);

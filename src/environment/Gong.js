@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 import { playPropImpact } from '../audio/DiceCollisionAudio.js';
 
-export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z: -15 }, rotationY = Math.PI / 4) {
+export function createGong(
+    scene,
+    physicsWorld,
+    position = { x: -15, y: -7.5, z: -15 },
+    rotationY = Math.PI / 4
+) {
     const group = new THREE.Group();
     group.name = 'Gong';
 
@@ -12,13 +17,13 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
         roughness: 0.3,
         metalness: 0.8,
         emissive: 0x221100,
-        emissiveIntensity: 0.1
+        emissiveIntensity: 0.1,
     });
 
     const woodMat = new THREE.MeshStandardMaterial({
         color: 0x5c4033, // Dark wood
         roughness: 0.8,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // --- Geometry ---
@@ -59,7 +64,7 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
     const postHeight = 4.0;
     const postSize = 0.25;
     const postGeo = new THREE.BoxGeometry(postSize, postHeight, postSize);
-    
+
     const leftPost = new THREE.Mesh(postGeo, woodMat);
     leftPost.position.set(-1.5, 0, 0);
     leftPost.castShadow = true;
@@ -86,7 +91,7 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
     // 6. Hanging Ropes (Visual - thin cylinders)
     const ropeGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8);
     const ropeMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
-    
+
     const leftRope = new THREE.Mesh(ropeGeo, ropeMat);
     leftRope.position.set(-0.9, 1.6, 0);
     group.add(leftRope);
@@ -98,11 +103,11 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
     // 7. Mallet (resting on the side)
     const malletHandleGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.2, 8);
     const malletHeadGeo = new THREE.SphereGeometry(0.15, 16, 16);
-    
+
     const malletHandle = new THREE.Mesh(malletHandleGeo, woodMat);
     const malletHead = new THREE.Mesh(malletHeadGeo, brassMat);
     malletHead.position.y = 0.6;
-    
+
     const mallet = new THREE.Group();
     mallet.add(malletHandle);
     mallet.add(malletHead);
@@ -121,10 +126,12 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
     // --- Physics ---
     if (physicsWorld && getAmmo()) {
         const ammo = getAmmo();
-        
+
         // Box shape for the wooden frame
         if (ammo && physicsWorld) {
-            const frameShape = new ammo.btBoxShape(new ammo.btVector3(baseWidth / 2, postHeight / 2, baseDepth / 2));
+            const frameShape = new ammo.btBoxShape(
+                new ammo.btVector3(baseWidth / 2, postHeight / 2, baseDepth / 2)
+            );
             const framePhysMesh = new THREE.Mesh(
                 new THREE.BoxGeometry(baseWidth, postHeight, baseDepth),
                 new THREE.MeshBasicMaterial({ visible: false })
@@ -142,15 +149,17 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
         gongPhysMesh.position.set(position.x, position.y, position.z);
         gongPhysMesh.rotation.z = Math.PI / 2;
         scene.add(gongPhysMesh);
-        
+
         if (ammo && physicsWorld) {
-            const gongShape = new ammo.btCylinderShape(new ammo.btVector3(gongRadius, gongThickness / 2, gongRadius));
+            const gongShape = new ammo.btCylinderShape(
+                new ammo.btVector3(gongRadius, gongThickness / 2, gongRadius)
+            );
             createStaticBody(physicsWorld, gongPhysMesh, gongShape);
         }
     }
 
     // --- Interactive Effects ---
-    
+
     // Sound wave rings
     const rings = [];
     const maxRings = 3;
@@ -160,7 +169,7 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
         transparent: true,
         opacity: 0,
         side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending
+        blending: THREE.AdditiveBlending,
     });
 
     for (let i = 0; i < maxRings; i++) {
@@ -172,7 +181,7 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
             mesh: ring,
             active: false,
             startTime: 0,
-            delay: i * 0.15 // Staggered start
+            delay: i * 0.15, // Staggered start
         });
     }
 
@@ -188,11 +197,16 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
     const shakeDuration = 0.5;
 
     const triggerGong = () => {
-        // Big shimmering metal strike to match the visual flash.
-        playPropImpact({ surface: 'gong', volume: 0.85 });
+        const impactPos = new THREE.Vector3();
+        group.getWorldPosition(impactPos);
+        playPropImpact({
+            surface: 'gong',
+            volume: 0.85,
+            position: { x: impactPos.x, y: impactPos.y, z: impactPos.z },
+        });
         // Activate rings
         const now = performance.now() / 1000;
-        rings.forEach((ring, i) => {
+        rings.forEach((ring, _i) => {
             ring.active = true;
             ring.startTime = now + ring.delay;
             ring.mesh.visible = true;
@@ -211,11 +225,11 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
         flashIntensity = 0.3;
     };
 
-    const update = (deltaTime, elapsedTime) => {
+    const update = (deltaTime, _elapsedTime) => {
         const now = performance.now() / 1000;
 
         // Update rings
-        rings.forEach(ring => {
+        rings.forEach((ring) => {
             if (!ring.active) return;
 
             const age = now - ring.startTime;
@@ -245,7 +259,7 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
         if (isShaking) {
             const shakeAge = now - shakeStartTime;
             if (shakeAge < shakeDuration) {
-                const intensity = 1 - (shakeAge / shakeDuration);
+                const intensity = 1 - shakeAge / shakeDuration;
                 const shakeX = (Math.random() - 0.5) * 0.05 * intensity;
                 const shakeY = (Math.random() - 0.5) * 0.05 * intensity;
                 gongMesh.position.x = shakeX;
@@ -272,6 +286,6 @@ export function createGong(scene, physicsWorld, position = { x: -15, y: -7.5, z:
         group,
         interact: triggerGong,
         update,
-        getFlashIntensity
+        getFlashIntensity,
     };
 }

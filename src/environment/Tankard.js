@@ -5,7 +5,12 @@ import { createStaticBody, getAmmo } from '../physics.js';
  * Creates a detailed drinking tankard with pewter body, wooden handle,
  * and animated froth on top.
  */
-export function createTankard(scene, physicsWorld, position = { x: 5, y: -2.75, z: 4 }, rotation = 0) {
+export function createTankard(
+    scene,
+    physicsWorld,
+    position = { x: 5, y: -2.75, z: 4 },
+    rotation = 0
+) {
     const group = new THREE.Group();
     group.name = 'Tankard';
 
@@ -16,27 +21,27 @@ export function createTankard(scene, physicsWorld, position = { x: 5, y: -2.75, 
     const wallThickness = 0.08;
 
     // ========== MATERIALS ==========
-    
+
     // Pewter/Metal material - tarnished silver look
     const pewterMaterial = new THREE.MeshStandardMaterial({
-        color: 0x8a8a8a,        // Base pewter gray
-        roughness: 0.35,        // Slightly polished but aged
-        metalness: 0.85,        // High metalness for pewter
-        envMapIntensity: 1.0
+        color: 0x8a8a8a, // Base pewter gray
+        roughness: 0.35, // Slightly polished but aged
+        metalness: 0.85, // High metalness for pewter
+        envMapIntensity: 1.0,
     });
 
     // Darker pewter for inside (less reflective)
     const innerPewterMaterial = new THREE.MeshStandardMaterial({
         color: 0x5a5a5a,
         roughness: 0.7,
-        metalness: 0.6
+        metalness: 0.6,
     });
 
     // Wood material for handle - warm oak
     const woodMaterial = new THREE.MeshStandardMaterial({
         color: 0x5c3a21,
         roughness: 0.85,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // Dark wood grain lines (using bump map via canvas)
@@ -46,21 +51,21 @@ export function createTankard(scene, physicsWorld, position = { x: 5, y: -2.75, 
 
     // Ale/Liquid material - amber beer
     const aleMaterial = new THREE.MeshPhysicalMaterial({
-        color: 0xc4741c,        // Amber ale color
+        color: 0xc4741c, // Amber ale color
         roughness: 0.1,
         metalness: 0.0,
-        transmission: 0.4,      // Slight transparency
+        transmission: 0.4, // Slight transparency
         thickness: 0.5,
-        ior: 1.33               // Water/alcohol IOR
+        ior: 1.33, // Water/alcohol IOR
     });
 
     // Froth/Foam material - creamy white
     const frothMaterial = new THREE.MeshStandardMaterial({
-        color: 0xf5f0e1,        // Creamy off-white
-        roughness: 0.9,         // Very rough for foam texture
+        color: 0xf5f0e1, // Creamy off-white
+        roughness: 0.9, // Very rough for foam texture
         metalness: 0.0,
         emissive: 0x1a1510,
-        emissiveIntensity: 0.1
+        emissiveIntensity: 0.1,
     });
 
     // ========== GEOMETRY ==========
@@ -96,7 +101,7 @@ export function createTankard(scene, physicsWorld, position = { x: 5, y: -2.75, 
         new THREE.Vector3(bodyRadius + 0.4, bodyHeight * 0.7, 0),
         new THREE.Vector3(bodyRadius + 0.5, bodyHeight * 0.4, 0),
         new THREE.Vector3(bodyRadius + 0.45, bodyHeight * 0.15, 0),
-        new THREE.Vector3(bodyRadius - 0.05, bodyHeight * 0.2, 0)
+        new THREE.Vector3(bodyRadius - 0.05, bodyHeight * 0.2, 0),
     ]);
 
     const handleGeo = new THREE.TubeGeometry(handleCurve, 24, 0.1, 12, false);
@@ -107,7 +112,7 @@ export function createTankard(scene, physicsWorld, position = { x: 5, y: -2.75, 
 
     // Handle connectors (metal bands where handle meets body)
     const connectorGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.08, 16);
-    
+
     const topConnector = new THREE.Mesh(connectorGeo, pewterMaterial);
     topConnector.rotation.z = Math.PI / 2;
     topConnector.position.set(bodyRadius, bodyHeight * 0.75, 0);
@@ -128,10 +133,7 @@ export function createTankard(scene, physicsWorld, position = { x: 5, y: -2.75, 
         const r = (bodyRadius - wallThickness - 0.02) * 0.95;
         alePoints.push(new THREE.Vector2(Math.cos(angle) * r, Math.sin(angle) * r));
     }
-    const aleGeo = new THREE.CircleGeometry(
-        (bodyRadius - wallThickness - 0.02) * 0.95, 
-        32
-    );
+    const aleGeo = new THREE.CircleGeometry((bodyRadius - wallThickness - 0.02) * 0.95, 32);
     const aleMesh = new THREE.Mesh(aleGeo, aleMaterial);
     aleMesh.rotation.x = -Math.PI / 2;
     aleMesh.position.y = aleLevel;
@@ -146,50 +148,43 @@ export function createTankard(scene, physicsWorld, position = { x: 5, y: -2.75, 
     for (let i = 0; i <= 32; i++) {
         const angle = (i / 32) * Math.PI * 2;
         const radius = (bodyRadius - wallThickness) * (0.9 + Math.random() * 0.15);
-        frothPoints.push(new THREE.Vector3(
-            Math.cos(angle) * radius,
-            Math.random() * 0.08,
-            Math.sin(angle) * radius
-        ))
+        frothPoints.push(
+            new THREE.Vector3(
+                Math.cos(angle) * radius,
+                Math.random() * 0.08,
+                Math.sin(angle) * radius
+            )
+        );
     }
 
     // Create foam bubbles/irregularities using multiple small spheres
     const bubbleCount = 15;
     const bubbles = [];
-    
+
     for (let i = 0; i < bubbleCount; i++) {
         const angle = Math.random() * Math.PI * 2;
         const r = Math.random() * (bodyRadius - wallThickness - 0.1) * 0.8;
         const bubbleSize = 0.08 + Math.random() * 0.12;
-        
+
         const bubbleGeo = new THREE.SphereGeometry(bubbleSize, 12, 10);
         // Flatten the bubble
         bubbleGeo.scale(1, 0.4, 1);
-        
+
         const bubble = new THREE.Mesh(bubbleGeo, frothMaterial);
-        bubble.position.set(
-            Math.cos(angle) * r,
-            Math.random() * 0.05,
-            Math.sin(angle) * r
-        );
-        
+        bubble.position.set(Math.cos(angle) * r, Math.random() * 0.05, Math.sin(angle) * r);
+
         // Store original Y for animation
         bubble.userData.originalY = bubble.position.y;
         bubble.userData.phase = Math.random() * Math.PI * 2;
         bubble.userData.speed = 0.5 + Math.random() * 1.0;
-        
+
         bubble.castShadow = true;
         frothGroup.add(bubble);
         bubbles.push(bubble);
     }
 
     // Add a rim of foam around the edge
-    const rimFrothGeo = new THREE.TorusGeometry(
-        (bodyRadius - wallThickness) * 0.92, 
-        0.06, 
-        8, 
-        32
-    );
+    const rimFrothGeo = new THREE.TorusGeometry((bodyRadius - wallThickness) * 0.92, 0.06, 8, 32);
     const rimFroth = new THREE.Mesh(rimFrothGeo, frothMaterial);
     rimFroth.rotation.x = Math.PI / 2;
     rimFroth.position.y = 0.02;
@@ -206,7 +201,7 @@ export function createTankard(scene, physicsWorld, position = { x: 5, y: -2.75, 
     group.add(baseRing);
 
     // ========== POSITIONING ==========
-    
+
     // Calculate correct Y position
     // Table top is at -2.75, tankard sits on its base at local y=0
     group.position.set(position.x, position.y, position.z);
@@ -215,7 +210,7 @@ export function createTankard(scene, physicsWorld, position = { x: 5, y: -2.75, 
     scene.add(group);
 
     // ========== PHYSICS ==========
-    
+
     const Ammo = getAmmo();
     if (Ammo && physicsWorld) {
         // Use a cylinder shape for the main body
@@ -223,38 +218,38 @@ export function createTankard(scene, physicsWorld, position = { x: 5, y: -2.75, 
             const shape = new Ammo.btCylinderShape(
                 new Ammo.btVector3(bodyRadius + 0.1, bodyHeight / 2, bodyRadius + 0.1)
             );
-            
+
             // Create a proxy for physics positioning (center of mass)
             const proxy = new THREE.Object3D();
             proxy.position.copy(group.position);
             proxy.position.y += bodyHeight / 2;
             proxy.quaternion.copy(group.quaternion);
-            
+
             createStaticBody(physicsWorld, proxy, shape);
         }
     }
 
     // ========== ANIMATION ==========
-    
+
     // Update function for froth animation
     function update(time) {
-        bubbles.forEach((bubble, i) => {
+        bubbles.forEach((bubble, _i) => {
             // Subtle bubbling animation
             const offset = Math.sin(time * bubble.userData.speed + bubble.userData.phase) * 0.015;
             bubble.position.y = bubble.userData.originalY + offset;
-            
+
             // Slight scale pulsing
             const scalePulse = 1 + Math.sin(time * 2 + bubble.userData.phase) * 0.05;
             bubble.scale.set(scalePulse, 0.4, scalePulse);
         });
-        
+
         // Subtle froth group movement
         frothGroup.position.y = aleLevel + 0.01 + Math.sin(time * 0.8) * 0.005;
     }
 
-    return { 
+    return {
         group,
-        update
+        update,
     };
 }
 
@@ -274,18 +269,18 @@ function generateWoodGrainTexture() {
     // Draw grain lines
     ctx.strokeStyle = '#3d2616';
     ctx.lineWidth = 2;
-    
+
     for (let i = 0; i < 20; i++) {
         ctx.beginPath();
         const x = Math.random() * canvas.width;
         ctx.moveTo(x, 0);
-        
+
         // Wavy grain
         for (let y = 0; y < canvas.height; y += 20) {
             const waveX = x + Math.sin(y * 0.05) * 5 + (Math.random() - 0.5) * 3;
             ctx.lineTo(waveX, y);
         }
-        
+
         ctx.globalAlpha = 0.3 + Math.random() * 0.3;
         ctx.stroke();
     }

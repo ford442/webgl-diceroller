@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createCrossbow(scene, physicsWorld, position = { x: 5, y: -2.75, z: 8 }, rotationY = Math.PI / 3) {
+export function createCrossbow(
+    scene,
+    physicsWorld,
+    position = { x: 5, y: -2.75, z: 8 },
+    rotationY = Math.PI / 3
+) {
     const group = new THREE.Group();
     group.name = 'Crossbow';
 
@@ -9,19 +14,19 @@ export function createCrossbow(scene, physicsWorld, position = { x: 5, y: -2.75,
     const woodMaterial = new THREE.MeshStandardMaterial({
         color: 0x3e2723, // Dark oak
         roughness: 0.8,
-        metalness: 0.05
+        metalness: 0.05,
     });
 
     const ironMaterial = new THREE.MeshStandardMaterial({
         color: 0x4a4a4a, // Wrought iron
         metalness: 0.8,
-        roughness: 0.4
+        roughness: 0.4,
     });
 
     const stringMaterial = new THREE.MeshStandardMaterial({
         color: 0xdddddd,
         roughness: 0.9,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // 1. Main Stock (Tiller)
@@ -116,18 +121,18 @@ export function createCrossbow(scene, physicsWorld, position = { x: 5, y: -2.75,
         // A box for the stock is sufficient to prevent dice clipping
         if (Ammo && physicsWorld) {
             const stockShape = new Ammo.btBoxShape(new Ammo.btVector3(0.4, 0.3, 3.0));
-    
+
             // Compound shape to include the bow arms
             if (Ammo && physicsWorld) {
                 const compoundShape = new Ammo.btCompoundShape();
-        
+
                 // Stock transform
                 if (Ammo && physicsWorld) {
                     const stockTrans = new Ammo.btTransform();
                     stockTrans.setIdentity();
                     stockTrans.setOrigin(new Ammo.btVector3(0, 0.3, 0));
                     compoundShape.addChildShape(stockTrans, stockShape);
-            
+
                     // Arm box
                     if (Ammo && physicsWorld) {
                         const armShape = new Ammo.btBoxShape(new Ammo.btVector3(3.2, 0.1, 0.2));
@@ -136,7 +141,7 @@ export function createCrossbow(scene, physicsWorld, position = { x: 5, y: -2.75,
                             armTrans.setIdentity();
                             armTrans.setOrigin(new Ammo.btVector3(0, 0.3, 2.0));
                             compoundShape.addChildShape(armTrans, armShape);
-                    
+
                             createStaticBody(physicsWorld, group, compoundShape);
                         }
                     }

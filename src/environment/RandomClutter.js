@@ -1,10 +1,30 @@
-import { createMug, createCoins, createBook, createMiniature, createD20Holder, createGemstone, createPotionBottle, createPencil } from './clutter/TabletopItems.js';
-import { createParchment, createTarotCards, createWantedPoster, createDMScreen } from './clutter/DocumentsAndCards.js';
-import { createCandle, createKey, createQuill, createPipe, createSpyglass } from './clutter/ToolsAndGear.js';
+import {
+    createMug,
+    createCoins,
+    createBook,
+    createMiniature,
+    createD20Holder,
+    createGemstone,
+    createPotionBottle,
+    createPencil,
+} from './clutter/TabletopItems.js';
+import {
+    createParchment,
+    createTarotCards,
+    createWantedPoster,
+    createDMScreen,
+} from './clutter/DocumentsAndCards.js';
+import {
+    createCandle,
+    createKey,
+    createQuill,
+    createPipe,
+    createSpyglass,
+} from './clutter/ToolsAndGear.js';
 import {
     createSeededRng,
     generateClutterSlots,
-    shuffleWithRng
+    shuffleWithRng,
 } from './clutter/ClutterPlacement.js';
 import { LAYOUT_THEMES } from '../core/TableLayoutConfig.js';
 import { disposeObject3D } from './PropLifecycle.js';
@@ -29,7 +49,15 @@ export const CLUTTER_REGISTRY = [
     { id: 'tarotCards', create: createTarotCards, weight: 1 },
     { id: 'gemstone', create: createGemstone, weight: 0.35, rare: true, minCount: 6 },
     { id: 'miniature', create: createMiniature, weight: 0.3, rare: true, minCount: 7 },
-    { id: 'dmScreen', create: createDMScreen, weight: 0.2, rare: true, minCount: 8, fixed: true, seedGate: 0x07 }
+    {
+        id: 'dmScreen',
+        create: createDMScreen,
+        weight: 0.2,
+        rare: true,
+        minCount: 8,
+        fixed: true,
+        seedGate: 0x07,
+    },
 ];
 
 function getThemeWeight(entry, themeId) {
@@ -48,7 +76,7 @@ function buildWeightedPool(count, seed, theme, rng) {
         if (entry.seedGate !== undefined && (seed & entry.seedGate) !== 0) continue;
         pool.push({
             ...entry,
-            roll: rng() / ((entry.weight ?? 1) * getThemeWeight(entry, theme))
+            roll: rng() / ((entry.weight ?? 1) * getThemeWeight(entry, theme)),
         });
     }
 
@@ -107,7 +135,7 @@ export function createRandomClutter(scene, physicsWorld, options = {}) {
         count: selected.length,
         selectedIds: selected.map((entry) => entry.id),
         handles,
-        mergeStats
+        mergeStats,
     };
 }
 

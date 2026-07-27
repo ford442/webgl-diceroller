@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createGoblet(scene, physicsWorld, position = { x: 5, y: -2.75, z: 12 }, rotationY = 0) {
+export function createGoblet(
+    scene,
+    physicsWorld,
+    position = { x: 5, y: -2.75, z: 12 },
+    rotationY = 0
+) {
     const group = new THREE.Group();
     group.name = 'Goblet';
 
@@ -10,7 +15,7 @@ export function createGoblet(scene, physicsWorld, position = { x: 5, y: -2.75, z
         color: 0xc0c0c0,
         metalness: 0.9,
         roughness: 0.2,
-        envMapIntensity: 1.0
+        envMapIntensity: 1.0,
     });
 
     // Outer and Inner Lathe Profile
@@ -52,7 +57,7 @@ export function createGoblet(scene, physicsWorld, position = { x: 5, y: -2.75, z
     const ringMat = new THREE.MeshStandardMaterial({
         color: 0xffd700, // Gold trim
         metalness: 1.0,
-        roughness: 0.3
+        roughness: 0.3,
     });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.position.y = 1.0;
@@ -75,12 +80,12 @@ export function createGoblet(scene, physicsWorld, position = { x: 5, y: -2.75, z
         // Physics shape is centered, so we need to offset the position
         if (Ammo && physicsWorld) {
             const shape = new Ammo.btCylinderShape(new Ammo.btVector3(radius, height / 2, radius));
-    
+
             const proxy = new THREE.Object3D();
             proxy.position.copy(group.position);
             proxy.position.y += height / 2; // Move up by half height since group origin is at bottom
             proxy.quaternion.copy(group.quaternion);
-    
+
             createStaticBody(physicsWorld, proxy, shape);
         }
     }

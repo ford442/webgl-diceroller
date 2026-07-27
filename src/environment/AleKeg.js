@@ -23,7 +23,7 @@ export function createAleKeg(scene, physicsWorld, position, rotationY) {
     const ironMaterial = new THREE.MeshStandardMaterial({
         color: 0x111111,
         metalness: 0.8,
-        roughness: 0.4
+        roughness: 0.4,
     });
 
     // Keg dimensions
@@ -57,7 +57,7 @@ export function createAleKeg(scene, physicsWorld, position, rotationY) {
 
     // Iron bands
     const bandOffsets = [-height * 0.35, -height * 0.15, height * 0.15, height * 0.35];
-    bandOffsets.forEach(yOffset => {
+    bandOffsets.forEach((yOffset) => {
         const yNorm = yOffset / (height / 2);
         const bulge = 1 - Math.abs(yNorm) * 0.5;
         const scale = 1 + (radiusMiddle / radiusTop - 1) * bulge;

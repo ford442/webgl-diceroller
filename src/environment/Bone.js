@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createBone(scene, physicsWorld, position = { x: 5, y: -2.75, z: 5 }, rotationY = 0) {
+export function createBone(
+    scene,
+    physicsWorld,
+    position = { x: 5, y: -2.75, z: 5 },
+    rotationY = 0
+) {
     const group = new THREE.Group();
     group.name = 'Bone';
 
@@ -13,9 +18,9 @@ export function createBone(scene, physicsWorld, position = { x: 5, y: -2.75, z: 
     // Bone Material (dusty off-white PBR)
     const boneMaterial = new THREE.MeshStandardMaterial({
         color: 0xe6e3d8, // Dusty off-white
-        roughness: 0.9,  // Very rough, matte
+        roughness: 0.9, // Very rough, matte
         metalness: 0.0,
-        bumpScale: 0.05
+        bumpScale: 0.05,
     });
 
     // --- Geometries ---
@@ -82,7 +87,7 @@ export function createBone(scene, physicsWorld, position = { x: 5, y: -2.75, z: 
 
         if (Ammo && physicsWorld) {
             const shape = new Ammo.btBoxShape(new Ammo.btVector3(halfX, halfY, halfZ));
-    
+
             // Use group as proxy for the static body
             createStaticBody(physicsWorld, group, shape);
         }

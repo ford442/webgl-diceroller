@@ -3,27 +3,32 @@ import { getAmmo, createStaticBody } from '../physics.js';
 
 // Orb modes with colors and particle types
 export const OrbMode = {
-    ICE: 0,     // Blue - ice particles
-    FIRE: 1,    // Red - ember particles
-    NATURE: 2,  // Green - leaf particles
-    ARCANE: 3   // Purple - magic sparkles
+    ICE: 0, // Blue - ice particles
+    FIRE: 1, // Red - ember particles
+    NATURE: 2, // Green - leaf particles
+    ARCANE: 3, // Purple - magic sparkles
 };
 
 const MODE_COLORS = {
     [OrbMode.ICE]: { color: 0x44aaff, emissive: 0x1166cc, light: 0x4488ff },
     [OrbMode.FIRE]: { color: 0xff4422, emissive: 0xff1100, light: 0xff6622 },
     [OrbMode.NATURE]: { color: 0x44ff44, emissive: 0x22aa22, light: 0x66ff66 },
-    [OrbMode.ARCANE]: { color: 0xaa44ff, emissive: 0x6600cc, light: 0xcc66ff }
+    [OrbMode.ARCANE]: { color: 0xaa44ff, emissive: 0x6600cc, light: 0xcc66ff },
 };
 
 const MODE_NAMES = {
     [OrbMode.ICE]: 'Ice',
     [OrbMode.FIRE]: 'Fire',
     [OrbMode.NATURE]: 'Nature',
-    [OrbMode.ARCANE]: 'Arcane'
+    [OrbMode.ARCANE]: 'Arcane',
 };
 
-export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.75, z: 4 }, rotationY = 0) {
+export function createMysticOrb(
+    scene,
+    physicsWorld,
+    position = { x: 12, y: -2.75, z: 4 },
+    rotationY = 0
+) {
     const group = new THREE.Group();
     group.name = 'MysticOrb';
 
@@ -31,13 +36,13 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
     const stoneMat = new THREE.MeshStandardMaterial({
         color: 0x444444,
         roughness: 0.9,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     const goldMat = new THREE.MeshStandardMaterial({
         color: 0xffd700,
         roughness: 0.3,
-        metalness: 0.9
+        metalness: 0.9,
     });
 
     // Crystal material - will be updated with mode colors
@@ -51,7 +56,7 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
         emissive: MODE_COLORS[OrbMode.ICE].emissive,
         emissiveIntensity: 0.5,
         transparent: true,
-        opacity: 0.9
+        opacity: 0.9,
     });
 
     // --- Pedestal Geometry ---
@@ -63,7 +68,12 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
     const pedestalTopHeight = 0.15;
 
     // Base
-    const baseGeo = new THREE.CylinderGeometry(pedestalBaseRadius, pedestalBaseRadius * 1.2, pedestalBaseHeight, 16);
+    const baseGeo = new THREE.CylinderGeometry(
+        pedestalBaseRadius,
+        pedestalBaseRadius * 1.2,
+        pedestalBaseHeight,
+        16
+    );
     const base = new THREE.Mesh(baseGeo, stoneMat);
     base.position.y = pedestalBaseHeight / 2;
     base.castShadow = true;
@@ -71,7 +81,12 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
     group.add(base);
 
     // Stem
-    const stemGeo = new THREE.CylinderGeometry(pedestalStemRadius, pedestalStemRadius * 0.8, pedestalStemHeight, 12);
+    const stemGeo = new THREE.CylinderGeometry(
+        pedestalStemRadius,
+        pedestalStemRadius * 0.8,
+        pedestalStemHeight,
+        12
+    );
     const stem = new THREE.Mesh(stemGeo, stoneMat);
     stem.position.y = pedestalBaseHeight + pedestalStemHeight / 2;
     stem.castShadow = true;
@@ -91,7 +106,12 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
     group.add(ring2);
 
     // Top platform
-    const topGeo = new THREE.CylinderGeometry(pedestalTopRadius, pedestalStemRadius, pedestalTopHeight, 16);
+    const topGeo = new THREE.CylinderGeometry(
+        pedestalTopRadius,
+        pedestalStemRadius,
+        pedestalTopHeight,
+        16
+    );
     const top = new THREE.Mesh(topGeo, stoneMat);
     top.position.y = pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight / 2;
     top.castShadow = true;
@@ -109,7 +129,8 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
     const orbRadius = 0.35;
     const orbGeo = new THREE.IcosahedronGeometry(orbRadius, 2);
     const orbMesh = new THREE.Mesh(orbGeo, crystalMat);
-    orbMesh.position.y = pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight + orbRadius + 0.3;
+    orbMesh.position.y =
+        pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight + orbRadius + 0.3;
     orbMesh.castShadow = true;
     group.add(orbMesh);
 
@@ -119,7 +140,7 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
         color: MODE_COLORS[OrbMode.ICE].light,
         transparent: true,
         opacity: 0.6,
-        blending: THREE.AdditiveBlending
+        blending: THREE.AdditiveBlending,
     });
     const coreMesh = new THREE.Mesh(coreGeo, coreMat);
     coreMesh.position.copy(orbMesh.position);
@@ -141,17 +162,30 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
     // --- Physics ---
     if (physicsWorld && getAmmo()) {
         const ammo = getAmmo();
-        
+
         // Cylinder shape for the pedestal
         if (ammo && physicsWorld) {
             const pedestalShape = new ammo.btCylinderShape(
-                new ammo.btVector3(pedestalBaseRadius, pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight, pedestalBaseRadius)
+                new ammo.btVector3(
+                    pedestalBaseRadius,
+                    pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight,
+                    pedestalBaseRadius
+                )
             );
             const pedestalPhysMesh = new THREE.Mesh(
-                new THREE.CylinderGeometry(pedestalBaseRadius, pedestalBaseRadius, pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight, 16),
+                new THREE.CylinderGeometry(
+                    pedestalBaseRadius,
+                    pedestalBaseRadius,
+                    pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight,
+                    16
+                ),
                 new THREE.MeshBasicMaterial({ visible: false })
             );
-            pedestalPhysMesh.position.set(position.x, position.y + (pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight) / 2, position.z);
+            pedestalPhysMesh.position.set(
+                position.x,
+                position.y + (pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight) / 2,
+                position.z
+            );
             scene.add(pedestalPhysMesh);
             createStaticBody(physicsWorld, pedestalPhysMesh, pedestalShape);
         }
@@ -171,9 +205,9 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
     // Create particle geometries for different modes
     const particleGeos = {
         [OrbMode.ICE]: new THREE.OctahedronGeometry(0.03, 0), // Crystal shards
-        [OrbMode.FIRE]: new THREE.SphereGeometry(0.04, 6, 6),  // Ember spheres
+        [OrbMode.FIRE]: new THREE.SphereGeometry(0.04, 6, 6), // Ember spheres
         [OrbMode.NATURE]: new THREE.PlaneGeometry(0.06, 0.06), // Leaves
-        [OrbMode.ARCANE]: new THREE.TetrahedronGeometry(0.03, 0) // Sparkles
+        [OrbMode.ARCANE]: new THREE.TetrahedronGeometry(0.03, 0), // Sparkles
     };
 
     // Initialize particles
@@ -184,7 +218,7 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
             life: Math.random(),
             maxLife: 1 + Math.random() * 2,
             size: 0.5 + Math.random() * 0.5,
-            mesh: null
+            mesh: null,
         };
         particles.push(particle);
     }
@@ -201,13 +235,13 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
         const geo = particleGeos[currentMode];
         const color = MODE_COLORS[currentMode].light;
 
-        particles.forEach(p => {
+        particles.forEach((p) => {
             const mat = new THREE.MeshBasicMaterial({
                 color: color,
                 transparent: true,
                 opacity: 0.8,
                 blending: THREE.AdditiveBlending,
-                side: THREE.DoubleSide
+                side: THREE.DoubleSide,
             });
             p.mesh = new THREE.Mesh(geo, mat);
             p.mesh.visible = false;
@@ -232,7 +266,7 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
         createParticleMeshes();
 
         // Burst effect - spawn particles immediately
-        particles.forEach(p => {
+        particles.forEach((p) => {
             p.life = p.maxLife;
             resetParticle(p, true);
         });
@@ -246,11 +280,7 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
         const radius = 0.3 + Math.random() * 0.2;
         const height = orbMesh.position.y + (Math.random() - 0.5) * 0.3;
 
-        p.position.set(
-            Math.cos(angle) * radius,
-            height,
-            Math.sin(angle) * radius
-        );
+        p.position.set(Math.cos(angle) * radius, height, Math.sin(angle) * radius);
 
         // Velocity based on mode
         switch (currentMode) {
@@ -293,7 +323,7 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
     };
 
     const updateParticles = (deltaTime) => {
-        particles.forEach(p => {
+        particles.forEach((p) => {
             if (!p.mesh) return;
 
             if (p.life <= 0) {
@@ -328,7 +358,8 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
         // Float the orb
         orbFloatOffset += deltaTime;
         const floatY = Math.sin(orbFloatOffset * 1.5) * 0.05;
-        orbMesh.position.y = pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight + orbRadius + 0.3 + floatY;
+        orbMesh.position.y =
+            pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight + orbRadius + 0.3 + floatY;
         coreMesh.position.copy(orbMesh.position);
         orbLight.position.copy(orbMesh.position);
 
@@ -350,6 +381,6 @@ export function createMysticOrb(scene, physicsWorld, position = { x: 12, y: -2.7
         update,
         getMode,
         getModeName,
-        OrbMode
+        OrbMode,
     };
 }

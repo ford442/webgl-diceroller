@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createHelmet(scene, physicsWorld, position = { x: -16, y: -2.75, z: 8 }, rotationY = 0) {
+export function createHelmet(
+    scene,
+    physicsWorld,
+    position = { x: -16, y: -2.75, z: 8 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'IronHelmet';
@@ -26,13 +31,13 @@ export function createHelmet(scene, physicsWorld, position = { x: -16, y: -2.75,
     const boneMat = new THREE.MeshStandardMaterial({
         color: 0xddddcc,
         roughness: 0.8,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     const goldMat = new THREE.MeshStandardMaterial({
         color: 0xffd700,
         metalness: 0.9,
-        roughness: 0.3
+        roughness: 0.3,
     });
 
     // 1. Dome (Top half of the helmet)
@@ -125,20 +130,22 @@ export function createHelmet(scene, physicsWorld, position = { x: -16, y: -2.75,
     const physRadius = helmetRadius + 0.05; // Slightly larger to encompass details
 
     if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(physRadius, physHeight / 2, physRadius));
-    
+        const shape = new ammo.btCylinderShape(
+            new ammo.btVector3(physRadius, physHeight / 2, physRadius)
+        );
+
         // Shift visual meshes down relative to group, and move group up.
         group.position.y = position.y + physHeight / 2;
-    
+
         const childrenToMove = [...group.children];
-        childrenToMove.forEach(child => {
+        childrenToMove.forEach((child) => {
             child.position.y -= physHeight / 2;
         });
-    
+
         createStaticBody(physicsWorld, group, shape);
     }
 
     return {
-        group
+        group,
     };
 }

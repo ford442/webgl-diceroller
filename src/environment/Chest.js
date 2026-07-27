@@ -14,17 +14,17 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     group.name = 'EnhancedChest';
 
     // Dimensions
-    const width = 1.6;  // X axis
-    const depth = 1.0;  // Z axis
+    const width = 1.6; // X axis
+    const depth = 1.0; // Z axis
     const baseHeight = 0.8; // Y axis
-    const lidHeight = 0.5; // Radius of cylinder part approx
+    const _lidHeight = 0.5; // Radius of cylinder part approx
 
     // ========== ENHANCED MATERIALS ==========
-    
+
     let woodDiffuse, woodBump, woodRoughness;
     try {
         ({ diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } = getWoodTextures());
-    } catch (e) {
+    } catch (_e) {
         console.warn('Could not load wood textures, using procedural fallback');
     }
 
@@ -37,7 +37,7 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
         color: 0x5c4033, // Dark Wood
         roughness: 0.75,
         metalness: 0.05,
-        envMapIntensity: 0.6
+        envMapIntensity: 0.6,
     });
 
     // Enhanced iron material - dark, weathered metal
@@ -45,7 +45,7 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
         color: 0x1a1a1a,
         metalness: 0.9,
         roughness: 0.55, // Slightly rough for weathered iron
-        envMapIntensity: 0.8
+        envMapIntensity: 0.8,
     });
 
     // Gold lock material with emissive for magical treasure feel
@@ -55,7 +55,7 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
         roughness: 0.25,
         emissive: 0xffaa00,
         emissiveIntensity: 0.1,
-        envMapIntensity: 1.2
+        envMapIntensity: 1.2,
     });
 
     // Hasp material - slightly darker iron
@@ -63,7 +63,7 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
         color: 0x2a2a2a,
         metalness: 0.85,
         roughness: 0.6,
-        envMapIntensity: 0.7
+        envMapIntensity: 0.7,
     });
 
     // ========== GEOMETRY ==========
@@ -79,7 +79,16 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
 
     // 2. Lid (Rounded Top)
     const lidRadius = depth / 2;
-    const lidGeo = new THREE.CylinderGeometry(lidRadius, lidRadius, width, 24, 1, false, 0, Math.PI);
+    const lidGeo = new THREE.CylinderGeometry(
+        lidRadius,
+        lidRadius,
+        width,
+        24,
+        1,
+        false,
+        0,
+        Math.PI
+    );
     const lidMesh = new THREE.Mesh(lidGeo, woodMat);
 
     // Rotate to create dome shape
@@ -96,26 +105,26 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     const bandWidth = 0.18;
     const bandThickness = 0.06;
 
-    const bandXOffsets = [-width/3, width/3];
+    const bandXOffsets = [-width / 3, width / 3];
 
-    bandXOffsets.forEach(x => {
+    bandXOffsets.forEach((x) => {
         // Base Band - slightly larger than chest
         const bandBaseGeo = new THREE.BoxGeometry(bandWidth, baseHeight, depth + bandThickness);
         const bandBase = new THREE.Mesh(bandBaseGeo, ironMat);
-        bandBase.position.set(x, baseHeight/2, 0);
+        bandBase.position.set(x, baseHeight / 2, 0);
         bandBase.receiveShadow = true;
         bandBase.castShadow = true;
         group.add(bandBase);
 
         // Lid Band (Curved to match lid)
         const bandLidGeo = new THREE.CylinderGeometry(
-            lidRadius + bandThickness/2, 
-            lidRadius + bandThickness/2, 
-            bandWidth, 
-            24, 
-            1, 
-            false, 
-            0, 
+            lidRadius + bandThickness / 2,
+            lidRadius + bandThickness / 2,
+            bandWidth,
+            24,
+            1,
+            false,
+            0,
             Math.PI
         );
         const bandLid = new THREE.Mesh(bandLidGeo, ironMat);
@@ -125,15 +134,15 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
         bandLid.castShadow = true;
         bandLid.receiveShadow = true;
         group.add(bandLid);
-        
+
         // Band rivets
         for (let i = 0; i < 3; i++) {
             const rivetGeo = new THREE.SphereGeometry(0.03, 8, 8);
             const rivet = new THREE.Mesh(rivetGeo, ironMat);
             rivet.position.set(
-                x, 
-                baseHeight * (0.3 + i * 0.35), 
-                depth/2 + bandThickness/2 + 0.02
+                x,
+                baseHeight * (0.3 + i * 0.35),
+                depth / 2 + bandThickness / 2 + 0.02
             );
             group.add(rivet);
         }
@@ -141,14 +150,14 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
 
     // 4. Lock (Front Center)
     const lockGroup = new THREE.Group();
-    
+
     // Main lock body
     const lockGeo = new THREE.BoxGeometry(0.25, 0.3, 0.12);
     const lock = new THREE.Mesh(lockGeo, lockMat);
     lock.castShadow = true;
     lock.receiveShadow = true;
     lockGroup.add(lock);
-    
+
     // Keyhole
     const keyholeGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.02, 8);
     const keyholeMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
@@ -156,7 +165,7 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     keyhole.rotation.x = Math.PI / 2;
     keyhole.position.set(0, -0.05, 0.061);
     lockGroup.add(keyhole);
-    
+
     // Keyhole slit
     const slitGeo = new THREE.BoxGeometry(0.02, 0.08, 0.02);
     const slit = new THREE.Mesh(slitGeo, keyholeMat);
@@ -164,17 +173,17 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     lockGroup.add(slit);
 
     // Position: Front face of base, near top.
-    lockGroup.position.set(0, baseHeight - 0.22, depth/2 + 0.04);
+    lockGroup.position.set(0, baseHeight - 0.22, depth / 2 + 0.04);
     group.add(lockGroup);
 
     // 5. Lock Hasp (Lid part)
     const haspGroup = new THREE.Group();
-    
+
     // Hasp plate
     const haspPlateGeo = new THREE.BoxGeometry(0.18, 0.25, 0.05);
     const haspPlate = new THREE.Mesh(haspPlateGeo, haspMat);
     haspGroup.add(haspPlate);
-    
+
     // Hasp loop (goes over lock)
     const haspLoopGeo = new THREE.TorusGeometry(0.08, 0.025, 8, 16, Math.PI);
     const haspLoop = new THREE.Mesh(haspLoopGeo, haspMat);
@@ -182,19 +191,19 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     haspGroup.add(haspLoop);
 
     // Position: Bottom of lid front.
-    haspGroup.position.set(0, baseHeight + 0.08, depth/2 + 0.02);
+    haspGroup.position.set(0, baseHeight + 0.08, depth / 2 + 0.02);
     group.add(haspGroup);
 
     // 6. Decorative corner protectors
     const cornerSize = 0.15;
     const cornerPositions = [
-        { x: -width/2 + 0.05, z: -depth/2 + 0.05 },
-        { x: width/2 - 0.05, z: -depth/2 + 0.05 },
-        { x: -width/2 + 0.05, z: depth/2 - 0.05 },
-        { x: width/2 - 0.05, z: depth/2 - 0.05 }
+        { x: -width / 2 + 0.05, z: -depth / 2 + 0.05 },
+        { x: width / 2 - 0.05, z: -depth / 2 + 0.05 },
+        { x: -width / 2 + 0.05, z: depth / 2 - 0.05 },
+        { x: width / 2 - 0.05, z: depth / 2 - 0.05 },
     ];
 
-    cornerPositions.forEach(pos => {
+    cornerPositions.forEach((pos) => {
         const cornerGeo = new THREE.BoxGeometry(cornerSize, baseHeight * 0.8, cornerSize);
         const corner = new THREE.Mesh(cornerGeo, ironMat);
         corner.position.set(pos.x, baseHeight * 0.5, pos.z);
@@ -217,30 +226,32 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
 
         const totalHeight = baseHeight + lidRadius;
         if (ammo && physicsWorld) {
-            const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, totalHeight/2, depth/2));
-    
+            const shape = new ammo.btBoxShape(
+                new ammo.btVector3(width / 2, totalHeight / 2, depth / 2)
+            );
+
             // Create a proxy object for physics positioning (center of mass)
             const proxy = new THREE.Object3D();
-            const offset = new THREE.Vector3(0, totalHeight/2, 0);
-    
+            const offset = new THREE.Vector3(0, totalHeight / 2, 0);
+
             proxy.position.copy(group.position).add(offset);
             proxy.quaternion.copy(group.quaternion);
-    
+
             createStaticBody(physicsWorld, proxy, shape);
         }
     }
 
     // ========== ANIMATION ==========
-    
+
     function update(time) {
         // Subtle pulsing glow on the lock
         const pulse = 0.1 + Math.sin(time * 1.5) * 0.05;
         lockMat.emissiveIntensity = pulse;
     }
 
-    return { 
+    return {
         group,
-        update
+        update,
     };
 }
 
@@ -260,17 +271,17 @@ function generateWoodTexture() {
     // Draw grain lines
     ctx.strokeStyle = '#4a3328';
     ctx.lineWidth = 1;
-    
+
     for (let i = 0; i < 30; i++) {
         ctx.beginPath();
         const x = Math.random() * 256;
         ctx.moveTo(x, 0);
-        
+
         for (let y = 0; y < 256; y += 10) {
             const waveX = x + Math.sin(y * 0.02) * 5;
             ctx.lineTo(waveX, y);
         }
-        
+
         ctx.globalAlpha = 0.3;
         ctx.stroke();
     }

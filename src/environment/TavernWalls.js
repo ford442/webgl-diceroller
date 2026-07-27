@@ -6,7 +6,11 @@ import { CAMERA_LOOK_AT_Y } from '../core/SceneMetrics.js';
 import { getBrickTextures, getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createTavernWalls(scene, physicsWorld) {
-    const { diffuse: brickDiffuse, bump: brickBump, roughness: brickRoughness } = getBrickTextures();
+    const {
+        diffuse: brickDiffuse,
+        bump: brickBump,
+        roughness: brickRoughness,
+    } = getBrickTextures();
     brickDiffuse.repeat.set(4, 3);
     brickBump.repeat.set(4, 3);
     brickRoughness.repeat.set(4, 3);
@@ -16,7 +20,7 @@ export function createTavernWalls(scene, physicsWorld) {
         bumpMap: brickBump,
         bumpScale: 0.2,
         roughnessMap: brickRoughness,
-        color: 0xaaaaaa // Slight dim, but let texture show
+        color: 0xaaaaaa, // Slight dim, but let texture show
     });
 
     const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } = getWoodTextures();
@@ -30,7 +34,7 @@ export function createTavernWalls(scene, physicsWorld) {
         bumpScale: 0.1,
         roughnessMap: woodRoughness,
         color: 0xffffff,
-        roughness: 0.8
+        roughness: 0.8,
     });
 
     const roomGroup = new THREE.Group();
@@ -54,7 +58,7 @@ export function createTavernWalls(scene, physicsWorld) {
     const Ammo = getAmmo();
     if (Ammo) {
         if (Ammo && physicsWorld) {
-            const shape = new Ammo.btBoxShape(new Ammo.btVector3(width/2, 0.5, depth/2));
+            const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, 0.5, depth / 2));
             createStaticBody(physicsWorld, floorMesh, shape);
         }
     }
@@ -64,35 +68,55 @@ export function createTavernWalls(scene, physicsWorld) {
 
     // Back Wall
     const backWall = new THREE.Mesh(new THREE.BoxGeometry(width, height, thickness), wallMaterial);
-    backWall.position.set(0, wallCenterY, -depth/2 - thickness/2);
+    backWall.position.set(0, wallCenterY, -depth / 2 - thickness / 2);
     backWall.receiveShadow = true;
     roomGroup.add(backWall);
     // Physics
     if (Ammo && physicsWorld) {
-        if (Ammo) createStaticBody(physicsWorld, backWall, new Ammo.btBoxShape(new Ammo.btVector3(width/2, height/2, thickness/2)));
+        if (Ammo)
+            createStaticBody(
+                physicsWorld,
+                backWall,
+                new Ammo.btBoxShape(new Ammo.btVector3(width / 2, height / 2, thickness / 2))
+            );
     }
 
     // Front Wall (Behind Camera)
     const frontWall = new THREE.Mesh(new THREE.BoxGeometry(width, height, thickness), wallMaterial);
-    frontWall.position.set(0, wallCenterY, depth/2 + thickness/2);
+    frontWall.position.set(0, wallCenterY, depth / 2 + thickness / 2);
     frontWall.receiveShadow = true;
     roomGroup.add(frontWall);
     // Physics
     if (Ammo && physicsWorld) {
-        if (Ammo) createStaticBody(physicsWorld, frontWall, new Ammo.btBoxShape(new Ammo.btVector3(width/2, height/2, thickness/2)));
+        if (Ammo)
+            createStaticBody(
+                physicsWorld,
+                frontWall,
+                new Ammo.btBoxShape(new Ammo.btVector3(width / 2, height / 2, thickness / 2))
+            );
     }
 
     // Right Wall (Solid)
-    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(thickness, height, depth + thickness*2), wallMaterial);
-    rightWall.position.set(width/2 + thickness/2, wallCenterY, 0);
+    const rightWall = new THREE.Mesh(
+        new THREE.BoxGeometry(thickness, height, depth + thickness * 2),
+        wallMaterial
+    );
+    rightWall.position.set(width / 2 + thickness / 2, wallCenterY, 0);
     rightWall.receiveShadow = true;
     roomGroup.add(rightWall);
     if (Ammo && physicsWorld) {
-        if (Ammo) createStaticBody(physicsWorld, rightWall, new Ammo.btBoxShape(new Ammo.btVector3(thickness/2, height/2, depth/2 + thickness)));
+        if (Ammo)
+            createStaticBody(
+                physicsWorld,
+                rightWall,
+                new Ammo.btBoxShape(
+                    new Ammo.btVector3(thickness / 2, height / 2, depth / 2 + thickness)
+                )
+            );
     }
 
     // Left Wall (Windowed)
-    const leftWallX = -width/2 - thickness/2;
+    const leftWallX = -width / 2 - thickness / 2;
     const godRayUpdate = createWindowedWall(
         roomGroup,
         physicsWorld,
@@ -108,21 +132,26 @@ export function createTavernWalls(scene, physicsWorld) {
         scene.userData.godRayMaterialFactory ?? null
     );
 
-
     // Beams / Decorations
     const beamThick = 1;
     // Top Beam (at top of walls)
     // Wall Top = -10 + 30 = 20.
-    const topBeamY = floorY + height;
+    const _topBeamY = floorY + height;
 
     // Horizontal Beam Back
-    const beamBack = new THREE.Mesh(new THREE.BoxGeometry(width, beamThick, beamThick), woodMaterial);
-    beamBack.position.set(0, 10, -depth/2 + beamThick/2); // Mid-height beam
+    const beamBack = new THREE.Mesh(
+        new THREE.BoxGeometry(width, beamThick, beamThick),
+        woodMaterial
+    );
+    beamBack.position.set(0, 10, -depth / 2 + beamThick / 2); // Mid-height beam
     roomGroup.add(beamBack);
 
     // Horizontal Beam Front
-    const beamFront = new THREE.Mesh(new THREE.BoxGeometry(width, beamThick, beamThick), woodMaterial);
-    beamFront.position.set(0, 10, depth/2 - beamThick/2);
+    const beamFront = new THREE.Mesh(
+        new THREE.BoxGeometry(width, beamThick, beamThick),
+        woodMaterial
+    );
+    beamFront.position.set(0, 10, depth / 2 - beamThick / 2);
     roomGroup.add(beamFront);
 
     // Vertical Columns in corners
@@ -130,27 +159,36 @@ export function createTavernWalls(scene, physicsWorld) {
 
     // Back Corners
     const col1 = new THREE.Mesh(colGeo, woodMaterial);
-    col1.position.set(-width/2 + beamThick/2, wallCenterY, -depth/2 + beamThick/2);
+    col1.position.set(-width / 2 + beamThick / 2, wallCenterY, -depth / 2 + beamThick / 2);
     roomGroup.add(col1);
 
     const col2 = new THREE.Mesh(colGeo, woodMaterial);
-    col2.position.set(width/2 - beamThick/2, wallCenterY, -depth/2 + beamThick/2);
+    col2.position.set(width / 2 - beamThick / 2, wallCenterY, -depth / 2 + beamThick / 2);
     roomGroup.add(col2);
 
     // Front Corners
     const col3 = new THREE.Mesh(colGeo, woodMaterial);
-    col3.position.set(-width/2 + beamThick/2, wallCenterY, depth/2 - beamThick/2);
+    col3.position.set(-width / 2 + beamThick / 2, wallCenterY, depth / 2 - beamThick / 2);
     roomGroup.add(col3);
 
     const col4 = new THREE.Mesh(colGeo, woodMaterial);
-    col4.position.set(width/2 - beamThick/2, wallCenterY, depth/2 - beamThick/2);
+    col4.position.set(width / 2 - beamThick / 2, wallCenterY, depth / 2 - beamThick / 2);
     roomGroup.add(col4);
 
     // Fireplace (New)
     const fireplaceData = createFireplace(roomGroup, physicsWorld, Ammo, wallMaterial);
 
     // Ceiling & Rafters (New)
-    createCeiling(roomGroup, physicsWorld, Ammo, wallMaterial, woodMaterial, width, depth, floorY + height);
+    createCeiling(
+        roomGroup,
+        physicsWorld,
+        Ammo,
+        wallMaterial,
+        woodMaterial,
+        width,
+        depth,
+        floorY + height
+    );
 
     scene.add(roomGroup);
 
@@ -159,7 +197,7 @@ export function createTavernWalls(scene, physicsWorld) {
         update: (deltaTime, time) => {
             if (fireplaceData.update) fireplaceData.update(deltaTime);
             if (godRayUpdate) godRayUpdate(time);
-        }
+        },
     };
 }
 
@@ -177,7 +215,9 @@ function createCeiling(group, physicsWorld, Ammo, wallMat, woodMat, width, depth
     // Physics
     if (Ammo) {
         if (Ammo && physicsWorld) {
-            const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, thickness / 2, depth / 2));
+            const shape = new Ammo.btBoxShape(
+                new Ammo.btVector3(width / 2, thickness / 2, depth / 2)
+            );
             createStaticBody(physicsWorld, ceilMesh, shape);
         }
     }
@@ -201,39 +241,52 @@ function createCeiling(group, physicsWorld, Ammo, wallMat, woodMat, width, depth
     }
 }
 
-function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight, wallDepth, thickness, wallMat, woodMat, godRaysEnabled = true, godRayMaterialFactory = null) {
+function createWindowedWall(
+    group,
+    physicsWorld,
+    Ammo,
+    xPos,
+    floorY,
+    wallHeight,
+    wallDepth,
+    thickness,
+    wallMat,
+    woodMat,
+    godRaysEnabled = true,
+    godRayMaterialFactory = null
+) {
     // Window Parameters
     const winWidth = 6;
     const winHeight = 10;
     const winZ = -5; // Centered at Z = -5
-    const winY = 4;  // Centered at Y = 4 (approx 1.4m above table)
+    const winY = 4; // Centered at Y = 4 (approx 1.4m above table)
 
     // Wall Limits
     const zStart = -wallDepth / 2; // -20
-    const zEnd = wallDepth / 2;    // 20
-    const yStart = floorY;         // -10
+    const zEnd = wallDepth / 2; // 20
+    const yStart = floorY; // -10
     const yEnd = floorY + wallHeight; // 20
 
     // Window Hole Bounds
     const winZStart = winZ - winWidth / 2; // -8
-    const winZEnd = winZ + winWidth / 2;   // -2
+    const winZEnd = winZ + winWidth / 2; // -2
     const winYStart = winY - winHeight / 2; // -1
-    const winYEnd = winY + winHeight / 2;   // 9
+    const winYEnd = winY + winHeight / 2; // 9
 
     // Segments
     // 1. Bottom (Full Depth, below window)
     const botHeight = winYStart - yStart; // -1 - (-10) = 9
-    const botGeo = new THREE.BoxGeometry(thickness, botHeight, wallDepth + thickness*2);
+    const botGeo = new THREE.BoxGeometry(thickness, botHeight, wallDepth + thickness * 2);
     const botMesh = new THREE.Mesh(botGeo, wallMat);
-    botMesh.position.set(xPos, yStart + botHeight/2, 0);
+    botMesh.position.set(xPos, yStart + botHeight / 2, 0);
     botMesh.receiveShadow = true;
     group.add(botMesh);
 
     // 2. Top (Full Depth, above window)
     const topHeight = yEnd - winYEnd; // 20 - 9 = 11
-    const topGeo = new THREE.BoxGeometry(thickness, topHeight, wallDepth + thickness*2);
+    const topGeo = new THREE.BoxGeometry(thickness, topHeight, wallDepth + thickness * 2);
     const topMesh = new THREE.Mesh(topGeo, wallMat);
-    topMesh.position.set(xPos, winYEnd + topHeight/2, 0);
+    topMesh.position.set(xPos, winYEnd + topHeight / 2, 0);
     topMesh.receiveShadow = true;
     group.add(topMesh);
 
@@ -242,7 +295,7 @@ function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight,
     const midHeight = winHeight;
     const frontGeo = new THREE.BoxGeometry(thickness, midHeight, frontLength + thickness); // Extend slightly
     const frontMesh = new THREE.Mesh(frontGeo, wallMat);
-    const frontZ = winZEnd + frontLength/2; // -2 + 11 = 9
+    const frontZ = winZEnd + frontLength / 2; // -2 + 11 = 9
     frontMesh.position.set(xPos, winY, frontZ);
     frontMesh.receiveShadow = true;
     group.add(frontMesh);
@@ -251,14 +304,14 @@ function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight,
     const backLength = winZStart - zStart; // -8 - (-20) = 12
     const backGeo = new THREE.BoxGeometry(thickness, midHeight, backLength + thickness);
     const backMesh = new THREE.Mesh(backGeo, wallMat);
-    const backZ = zStart + backLength/2; // -20 + 6 = -14
+    const backZ = zStart + backLength / 2; // -20 + 6 = -14
     backMesh.position.set(xPos, winY, backZ);
     backMesh.receiveShadow = true;
     group.add(backMesh);
 
     // --- Window Frame ---
     const frameThick = 0.5;
-    const frameDepth = 0.5;
+    const _frameDepth = 0.5;
     const frameMat = woodMat;
     const frameGroup = new THREE.Group();
     frameGroup.position.set(xPos, winY, winZ);
@@ -266,21 +319,21 @@ function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight,
     // Top/Bot Frame
     const tbGeo = new THREE.BoxGeometry(thickness + 0.2, frameThick, winWidth);
     const topFrame = new THREE.Mesh(tbGeo, frameMat);
-    topFrame.position.y = winHeight/2 - frameThick/2;
+    topFrame.position.y = winHeight / 2 - frameThick / 2;
     frameGroup.add(topFrame);
 
     const botFrame = new THREE.Mesh(tbGeo, frameMat);
-    botFrame.position.y = -winHeight/2 + frameThick/2;
+    botFrame.position.y = -winHeight / 2 + frameThick / 2;
     frameGroup.add(botFrame);
 
     // Side Frames
     const lrGeo = new THREE.BoxGeometry(thickness + 0.2, winHeight, frameThick);
     const leftFrame = new THREE.Mesh(lrGeo, frameMat);
-    leftFrame.position.z = -winWidth/2 + frameThick/2;
+    leftFrame.position.z = -winWidth / 2 + frameThick / 2;
     frameGroup.add(leftFrame);
 
     const rightFrame = new THREE.Mesh(lrGeo, frameMat);
-    rightFrame.position.z = winWidth/2 - frameThick/2;
+    rightFrame.position.z = winWidth / 2 - frameThick / 2;
     frameGroup.add(rightFrame);
 
     // Cross Bars (Gothic Style - Simple Cross)
@@ -294,8 +347,9 @@ function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight,
     group.add(frameGroup);
 
     // --- God Rays ---
-    const godRayUpdate = godRaysEnabled ? createGodRays(group, xPos, winY, winZ, godRayMaterialFactory) : null;
-
+    const godRayUpdate = godRaysEnabled
+        ? createGodRays(group, xPos, winY, winZ, godRayMaterialFactory)
+        : null;
 
     // --- Physics ---
     // Single invisible wall for collision
@@ -303,18 +357,20 @@ function createWindowedWall(group, physicsWorld, Ammo, xPos, floorY, wallHeight,
         // Invisible mesh for debug/logic (optional, strict physics body doesn't need mesh)
         // But we need a transform.
         const physHeight = wallHeight;
-        const physDepth = wallDepth + thickness*2;
+        const physDepth = wallDepth + thickness * 2;
 
         // We can just reuse the shape logic without a mesh if we had a helper,
         // but createStaticBody expects a mesh to get position/quat.
         // We'll create a dummy mesh.
         const dummyGeo = new THREE.BoxGeometry(thickness, physHeight, physDepth);
         const dummyMesh = new THREE.Mesh(dummyGeo, new THREE.MeshBasicMaterial({ visible: false }));
-        dummyMesh.position.set(xPos, floorY + physHeight/2, 0);
+        dummyMesh.position.set(xPos, floorY + physHeight / 2, 0);
         group.add(dummyMesh);
 
         if (Ammo && physicsWorld) {
-            const shape = new Ammo.btBoxShape(new Ammo.btVector3(thickness/2, physHeight/2, physDepth/2));
+            const shape = new Ammo.btBoxShape(
+                new Ammo.btVector3(thickness / 2, physHeight / 2, physDepth / 2)
+            );
             createStaticBody(physicsWorld, dummyMesh, shape);
         }
     }
@@ -336,7 +392,7 @@ function createGodRays(group, x, y, z, nodeMaterialFactory = null) {
         const built = nodeMaterialFactory({
             noiseTexture,
             color: new THREE.Color(0xddeeff),
-            speed: 0.1
+            speed: 0.1,
         });
         material = built.material;
         setTime = built.setTime;
@@ -346,21 +402,23 @@ function createGodRays(group, x, y, z, nodeMaterialFactory = null) {
                 uTime: { value: 0.0 },
                 tNoise: { value: noiseTexture },
                 uColor: { value: new THREE.Color(0xddeeff) },
-                uSpeed: { value: 0.1 }
+                uSpeed: { value: 0.1 },
             },
             vertexShader: GodRayShader.vertexShader,
             fragmentShader: GodRayShader.fragmentShader,
             transparent: true,
             side: THREE.DoubleSide,
             depthWrite: false,
-            blending: THREE.AdditiveBlending
+            blending: THREE.AdditiveBlending,
         });
-        setTime = (time) => { material.uniforms.uTime.value = time; };
+        setTime = (time) => {
+            material.uniforms.uTime.value = time;
+        };
     }
 
     // Geometry: Cone/Cylinder
     const length = 40;
-    const radiusTop = 3;   // Window size approx
+    const radiusTop = 3; // Window size approx
     const radiusBottom = 8; // Spread (Wider at bottom for atmosphere)
     const geometry = new THREE.CylinderGeometry(radiusTop, radiusBottom, length, 32, 1, true);
 
@@ -373,7 +431,7 @@ function createGodRays(group, x, y, z, nodeMaterialFactory = null) {
     mesh.rotateX(-Math.PI / 2); // Rotate cylinder to align with look vector
 
     // Shift geometry so Top is at window
-    mesh.translateY(-length/2 + 2);
+    mesh.translateY(-length / 2 + 2);
 
     group.add(mesh);
 
@@ -433,7 +491,7 @@ function createFireplace(group, physicsWorld, Ammo, wallMat) {
     // Floor = -10. Hearth Y = -10 + heightY/2 = -7.5.
     const hX = 18.5;
     const hY = -7.5;
-    const hZ = 0;
+    const _hZ = 0;
 
     // Construct Hearth with Pillars and Lintel for visuals
     const pillWidth = 1.5;
@@ -469,7 +527,7 @@ function createFireplace(group, physicsWorld, Ammo, wallMat) {
         scale: 2.0,
         color: 0xff4400,
         particleCount: 60,
-        spread: 0.8
+        spread: 0.8,
     });
     // Y = Floor -10 + 0.5 = -9.5 (sitting on floor)
     fire.mesh.position.set(hX, -9.5, 0);
@@ -487,7 +545,9 @@ function createFireplace(group, physicsWorld, Ammo, wallMat) {
     // Simple Box Shape for the whole hearth to prevent dice entering (simplifies collision)
     if (Ammo) {
         if (Ammo && physicsWorld) {
-            const shape = new Ammo.btBoxShape(new Ammo.btVector3(depthX/2, heightY/2, widthZ/2));
+            const shape = new Ammo.btBoxShape(
+                new Ammo.btVector3(depthX / 2, heightY / 2, widthZ / 2)
+            );
             const pMesh = new THREE.Mesh(new THREE.BoxGeometry(depthX, heightY, widthZ));
             pMesh.position.set(hX, hY, 0);
             pMesh.visible = false;
@@ -510,6 +570,6 @@ function createFireplace(group, physicsWorld, Ammo, wallMat) {
 
     return {
         light: light,
-        update: fire.update
+        update: fire.update,
     };
 }

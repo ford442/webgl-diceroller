@@ -35,4 +35,11 @@ else
     echo "[test:solver] Skipping WASM parity (public/wasm/dice_physics.wasm not present)."
 fi
 
+if [ "${BENCH_SOLVER:-}" = "1" ]; then
+    echo "[test:solver] Running step-time benchmarks (native, scalar path)..."
+    for N in 10 50 100 200; do
+        "${BIN}" --bench --dice="${N}" --steps=600 --warmup=60
+    done
+fi
+
 echo "[test:solver] All solver tests passed."

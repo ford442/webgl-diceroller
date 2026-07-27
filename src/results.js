@@ -9,29 +9,38 @@
  *   hideResults()            — hide the overlay (call before each new roll)
  */
 
+/** @typedef {import('./types/roll').EvaluatedRoll} EvaluatedRoll */
+/** @typedef {import('./types/dice').DiceReadValue} DiceReadValue */
+
 import { formatDieLabel } from './roll/Notation.js';
-import { prefersReducedMotion, resultCardStaggerMs, resultCardTransitionSec } from './core/AccessibilityPrefs.js';
+import {
+    prefersReducedMotion,
+    resultCardStaggerMs,
+    resultCardTransitionSec,
+} from './core/AccessibilityPrefs.js';
 
 const MAX_HISTORY = 20;
 
-let rollHistory   = [];
+let rollHistory = [];
 let resultsOverlay = null;
-let diceHudPanel   = null;
-let diceHudRow     = null;
-let liveRegion     = null;
+let diceHudPanel = null;
+let diceHudRow = null;
+let liveRegion = null;
+let historyPanel = null;
+let historyList = null;
 let lastLiveAnnouncement = '';
 
 // ---------------------------------------------------------------------------
 // Tavern theme tokens
 // ---------------------------------------------------------------------------
 const FONT = "'Palatino Linotype', 'Book Antiqua', Palatino, serif";
-const GOLD       = '#ffd700';
-const GOLD_DIM   = '#e8c882';
-const GOLD_DARK  = '#8B6914';
-const BG_PANEL   = 'rgba(20, 10, 0, 0.88)';
-const BG_CARD    = 'rgba(20, 10, 0, 0.92)';
-const BG_SCRIM   = 'rgba(8, 4, 0, 0.82)';
-const BORDER     = '2px solid #8B6914';
+const GOLD = '#ffd700';
+const GOLD_DIM = '#e8c882';
+const GOLD_DARK = '#8B6914';
+const BG_PANEL = 'rgba(20, 10, 0, 0.88)';
+const BG_CARD = 'rgba(20, 10, 0, 0.92)';
+const BG_SCRIM = 'rgba(8, 4, 0, 0.82)';
+const BORDER = '2px solid #8B6914';
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -45,6 +54,10 @@ export function initResultsUI() {
 /**
  * Always-visible HUD showing the current value of each die on the table.
  * @param {Array<{type: string, value: number|null}>} diceResults
+ * @param {{ rolling?: boolean }} [options]
+ */
+/**
+ * @param {DiceReadValue[]} diceResults
  * @param {{ rolling?: boolean }} [options]
  */
 export function updateDiceHud(diceResults, options = {}) {
@@ -95,10 +108,11 @@ export function updateDiceHud(diceResults, options = {}) {
  * Show animated result cards for a completed roll.
  * @param {Array<{type: string, value: number|null}>} diceResults
  */
+/** @param {DiceReadValue[]} diceResults */
 export function showResults(diceResults) {
     if (!resultsOverlay) return;
 
-    const valid = diceResults.filter(r => r.value !== null && r.value !== undefined);
+    const valid = diceResults.filter((r) => r.value !== null && r.value !== undefined);
     if (valid.length === 0) return;
 
     const total = valid.reduce((s, r) => s + r.value, 0);
@@ -106,7 +120,9 @@ export function showResults(diceResults) {
     const staggerMs = resultCardStaggerMs();
     const transitionSec = resultCardTransitionSec();
 
-    _announceIfChanged(`Rolled ${valid.length} dice: ${_formatDiceList(valid)}. Total ${total}.`, { force: true });
+    _announceIfChanged(`Rolled ${valid.length} dice: ${_formatDiceList(valid)}. Total ${total}.`, {
+        force: true,
+    });
 
     // Build card row
     resultsOverlay.innerHTML = '';
@@ -128,8 +144,8 @@ export function showResults(diceResults) {
         if (!reducedMotion) {
             card.style.opacity = '0';
             card.style.transform = 'translateY(18px) scale(0.8)';
-            card.style.transition = `opacity ${transitionSec}s ease ${i * staggerMs / 1000}s,
-                                  transform ${transitionSec}s ease ${i * staggerMs / 1000}s`;
+            card.style.transition = `opacity ${transitionSec}s ease ${(i * staggerMs) / 1000}s,
+                                  transform ${transitionSec}s ease ${(i * staggerMs) / 1000}s`;
         }
         row.appendChild(card);
 
@@ -157,11 +173,15 @@ export function showResults(diceResults) {
             font-family: ${FONT};
             font-size: 15px;
             letter-spacing: 1px;
-            ${reducedMotion ? '' : `
+            ${
+                reducedMotion
+                    ? ''
+                    : `
             opacity: 0;
             transform: scale(0.85);
             transition: opacity 0.35s ease ${delay}ms,
-                        transform 0.35s ease ${delay}ms;`}
+                        transform 0.35s ease ${delay}ms;`
+            }
         `;
         totalEl.innerHTML = `⚔ Total: <span style="color:${GOLD};font-size:20px;">${total}</span>`;
         scrim.appendChild(totalEl);
@@ -182,6 +202,7 @@ export function showResults(diceResults) {
  * Show notation roll breakdown with kept/dropped highlighting.
  * @param {import('./roll/Notation.js').EvaluatedRoll} evaluated
  */
+/** @param {EvaluatedRoll} evaluated */
 export function showNotationResults(evaluated) {
     if (!resultsOverlay || !evaluated) return;
 
@@ -220,24 +241,30 @@ export function showNotationResults(evaluated) {
     `;
 
     displayDice.forEach((die, i) => {
-        const card = _makeResultCard({
-            type: formatDieLabel(die.type, die.role),
-            value: die.displayValue ?? die.value
-        }, {
-            kept: die.kept !== false,
-            dropped: die.dropped === true
-        });
+        const card = _makeResultCard(
+            {
+                type: formatDieLabel(die.type, die.role),
+                value: die.displayValue ?? die.value,
+            },
+            {
+                kept: die.kept !== false,
+                dropped: die.dropped === true,
+            }
+        );
         if (!reducedMotion) {
             card.style.opacity = '0';
             card.style.transform = 'translateY(18px) scale(0.8)';
-            card.style.transition = `opacity ${transitionSec}s ease ${i * staggerMs / 1000}s, transform ${transitionSec}s ease ${i * staggerMs / 1000}s`;
+            card.style.transition = `opacity ${transitionSec}s ease ${(i * staggerMs) / 1000}s, transform ${transitionSec}s ease ${(i * staggerMs) / 1000}s`;
         }
         row.appendChild(card);
         if (!reducedMotion) {
-            setTimeout(() => {
-                card.style.opacity = die.dropped ? '0.45' : '1';
-                card.style.transform = 'translateY(0) scale(1)';
-            }, i * staggerMs + 30);
+            setTimeout(
+                () => {
+                    card.style.opacity = die.dropped ? '0.45' : '1';
+                    card.style.transform = 'translateY(0) scale(1)';
+                },
+                i * staggerMs + 30
+            );
         }
     });
 
@@ -255,10 +282,14 @@ export function showNotationResults(evaluated) {
         font-size: 13px;
         letter-spacing: 0.5px;
         text-align: center;
-        ${reducedMotion ? '' : `
+        ${
+            reducedMotion
+                ? ''
+                : `
         opacity: 0;
         transform: scale(0.85);
-        transition: opacity 0.35s ease ${delay}ms, transform 0.35s ease ${delay}ms;`}
+        transition: opacity 0.35s ease ${delay}ms, transform 0.35s ease ${delay}ms;`
+        }
     `;
 
     const groupLines = evaluated.groupSubtotals.map((g) => `${g.label}: ${g.subtotal}`).join(' · ');
@@ -285,7 +316,10 @@ export function showNotationResults(evaluated) {
     if (evaluated.flags?.miss) flagBits.push('MISS');
     if (flagBits.length) totalLine += `  ·  ${flagBits.join(' ')}`;
 
-    breakdown.innerHTML = totalLine.replace(String(evaluated.total), `<span style="color:${GOLD};font-size:18px;font-weight:bold;">${evaluated.total}</span>`);
+    breakdown.innerHTML = totalLine.replace(
+        String(evaluated.total),
+        `<span style="color:${GOLD};font-size:18px;font-weight:bold;">${evaluated.total}</span>`
+    );
     scrim.appendChild(breakdown);
 
     if (!reducedMotion) {
@@ -295,14 +329,18 @@ export function showNotationResults(evaluated) {
         }, delay + 30);
     }
 
-    const diceList = displayDice.map((d) => `${formatDieLabel(d.type, d.role)} = ${d.displayValue ?? d.value}`).join(', ');
+    const diceList = displayDice
+        .map((d) => `${formatDieLabel(d.type, d.role)} = ${d.displayValue ?? d.value}`)
+        .join(', ');
     let announce = `Rolled ${evaluated.expression}: ${diceList}. Total ${evaluated.total}.`;
     if (evaluated.opposed) {
         announce += ` Opposed ${evaluated.opposed.expression} total ${evaluated.opposed.total}, margin ${evaluated.opposed.margin}.`;
     }
     if (evaluated.flags?.crit) announce += ' Critical!';
     if (evaluated.flags?.fumble) announce += ' Fumble!';
-    _announceIfChanged(announce, { force: true });
+    _announceIfChanged(announce, {
+        force: true,
+    });
 
     resultsOverlay.style.opacity = '1';
     resultsOverlay.style.pointerEvents = 'none';
@@ -497,10 +535,17 @@ function _createHistoryPanel() {
     container.appendChild(historyPanel);
 }
 
-function _makeResultCard(result, { compact = false, rolling = false, kept = true, dropped = false } = {}) {
+function _makeResultCard(
+    result,
+    { compact = false, rolling = false, kept = true, dropped = false } = {}
+) {
     const card = document.createElement('div');
-    const borderColor = dropped ? 'rgba(139,105,20,0.35)' : (kept ? GOLD_DARK : 'rgba(139,105,20,0.35)');
-    const valueColor = dropped ? 'rgba(232,200,130,0.45)' : (rolling ? GOLD_DIM : GOLD);
+    const borderColor = dropped
+        ? 'rgba(139,105,20,0.35)'
+        : kept
+          ? GOLD_DARK
+          : 'rgba(139,105,20,0.35)';
+    const valueColor = dropped ? 'rgba(232,200,130,0.45)' : rolling ? GOLD_DIM : GOLD;
     card.style.cssText = `
         background: ${dropped ? 'rgba(20, 10, 0, 0.55)' : BG_CARD};
         border: ${compact ? `1px solid ${borderColor}` : BORDER};
@@ -520,7 +565,9 @@ function _makeResultCard(result, { compact = false, rolling = false, kept = true
     const valueEl = document.createElement('div');
     const displayValue = rolling
         ? '…'
-        : (result.value !== null && result.value !== undefined ? result.value : '—');
+        : result.value !== null && result.value !== undefined
+          ? result.value
+          : '—';
     valueEl.style.cssText = `font-size:${compact ? '20px' : '27px'}; font-weight:bold; color:${valueColor}; line-height:1.1;`;
     valueEl.textContent = displayValue;
 
@@ -534,22 +581,31 @@ const DICE_TYPE_ORDER = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
 
 function _addToHistory(diceResults, total) {
     const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const timeStr = now.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
 
     // Group by die type: { d6: [3,5], d20: [14] }
     const grouped = {};
-    diceResults.forEach(r => {
+    diceResults.forEach((r) => {
         if (!grouped[r.type]) grouped[r.type] = [];
         grouped[r.type].push(r.value);
     });
 
     // Sort by canonical order and format: "2d6: 3, 5  •  1d20: 14"
-    const rollStr = DICE_TYPE_ORDER
-        .filter(type => grouped[type])
-        .map(type => `${grouped[type].length}${type}: ${grouped[type].join(', ')}`)
+    const rollStr = DICE_TYPE_ORDER.filter((type) => grouped[type])
+        .map((type) => `${grouped[type].length}${type}: ${grouped[type].join(', ')}`)
         .join('  •  ');
 
-    rollHistory.unshift({ timeStr, rollStr, total, diceResults: [...diceResults], expression: null });
+    rollHistory.unshift({
+        timeStr,
+        rollStr,
+        total,
+        diceResults: [...diceResults],
+        expression: null,
+    });
     if (rollHistory.length > MAX_HISTORY) rollHistory.pop();
 
     _renderHistory();
@@ -557,7 +613,11 @@ function _addToHistory(diceResults, total) {
 
 function _addNotationToHistory(evaluated) {
     const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const timeStr = now.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
 
     const groupParts = evaluated.groupSubtotals.map((g) => `${g.label}: ${g.subtotal}`);
     let rollStr = evaluated.expression;
@@ -577,14 +637,14 @@ function _addNotationToHistory(evaluated) {
             type: formatDieLabel(d.type, d.role),
             value: d.displayValue ?? d.value,
             kept: d.kept,
-            dropped: d.dropped
+            dropped: d.dropped,
         })),
         expression: evaluated.expression,
         seed: evaluated.seed ?? null,
         flags: evaluated.flags ?? null,
         opposed: evaluated.opposed
             ? { total: evaluated.opposed.total, margin: evaluated.opposed.margin }
-            : null
+            : null,
     });
     if (rollHistory.length > MAX_HISTORY) rollHistory.pop();
 
@@ -656,7 +716,8 @@ function _renderHistory() {
         if (rollHistory.length === 0) return;
         const latest = rollHistory[0];
         const text = `[${latest.timeStr}] ${latest.rollStr} | Total: ${latest.total}`;
-        navigator.clipboard.writeText(text)
+        navigator.clipboard
+            .writeText(text)
             .then(() => {
                 copyBtn.textContent = '✓ Copied!';
                 copyBtn.style.color = GOLD;

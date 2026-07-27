@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createBountyPoster(scene, physicsWorld, position = { x: -10, y: -2.75, z: -4 }, rotationY = -Math.PI / 8) {
+export function createBountyPoster(
+    scene,
+    physicsWorld,
+    position = { x: -10, y: -2.75, z: -4 },
+    rotationY = -Math.PI / 8
+) {
     const width = 3.5;
     const length = 5;
     const thickness = 0.02;
@@ -24,7 +29,8 @@ export function createBountyPoster(scene, physicsWorld, position = { x: -10, y: 
             Math.random() * canvas.width,
             Math.random() * canvas.height,
             Math.random() * 10 + 2,
-            0, Math.PI * 2
+            0,
+            Math.PI * 2
         );
         ctx.fill();
     }
@@ -131,7 +137,6 @@ export function createBountyPoster(scene, physicsWorld, position = { x: -10, y: 
     ctx.font = 'bold 42px serif';
     ctx.fillText('REWARD: 5,000 gp', canvas.width / 2, 650);
 
-
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 4;
@@ -141,7 +146,7 @@ export function createBountyPoster(scene, physicsWorld, position = { x: -10, y: 
         map: texture,
         roughness: 0.9, // Paper is rough
         metalness: 0.0,
-        color: 0xffffff
+        color: 0xffffff,
     });
 
     const geometry = new THREE.BoxGeometry(width, thickness, length);
@@ -149,7 +154,7 @@ export function createBountyPoster(scene, physicsWorld, position = { x: -10, y: 
     mesh.name = 'BountyPoster';
 
     // Position on table (table surface is Y = -2.75)
-    mesh.position.set(position.x, position.y + thickness/2, position.z);
+    mesh.position.set(position.x, position.y + thickness / 2, position.z);
     mesh.rotation.y = rotationY;
 
     mesh.castShadow = true;
@@ -162,7 +167,9 @@ export function createBountyPoster(scene, physicsWorld, position = { x: -10, y: 
     if (Ammo) {
         // Simple box shape for the paper
         if (Ammo && physicsWorld) {
-            const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, thickness / 2, length / 2));
+            const shape = new Ammo.btBoxShape(
+                new Ammo.btVector3(width / 2, thickness / 2, length / 2)
+            );
             createStaticBody(physicsWorld, mesh, shape);
         }
     }

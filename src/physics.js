@@ -1,13 +1,29 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
+/** @typedef {import('./types/ammo').AmmoModule} AmmoModule */
+/** @typedef {import('./types/ammo').AmmoRigidBody} AmmoRigidBody */
+/** @typedef {import('./types/ammo').AmmoWorld} AmmoWorld */
+/** @typedef {import('./types/ammo').BodyAudioMeta} BodyAudioMeta */
+/** @typedef {import('./types/ammo').BodyDragMeta} BodyDragMeta */
+/** @typedef {import('./types/physics').CollisionEvent} CollisionEvent */
+
+/** @type {AmmoModule | null} */
 let AmmoInstance = null;
+/** @type {Promise<AmmoModule> | null} */
 let _ammoLoadPromise = null;
+/** @type {Map<number, BodyAudioMeta>} */
 const ammoBodyAudioMeta = new Map();
+/** @type {Map<string, number>} */
 const ammoCollisionCooldowns = new Map();
+/** @type {Map<number, BodyDragMeta>} */
 const ammoBodyDragMeta = new Map();
 const physicsSearchParams = new URLSearchParams(window.location.search);
 
+/**
+ * @param {AmmoRigidBody | null | undefined} body
+ * @returns {number | null}
+ */
 function getBodyPtr(body) {
     return body?.ptr ?? body?.a ?? null;
 }
@@ -44,6 +60,8 @@ async function loadAmmoModule() {
 /**
  * Whether this session needs the ammo.js fallback/validation path.
  * Call after `loadWasmEngine()` has resolved.
+ * @param {boolean} wasmAvailable
+ * @returns {boolean}
  */
 export function shouldLoadAmmoPhysics(wasmAvailable) {
     if (physicsSearchParams.has('no-wasm')) return true;
@@ -56,6 +74,8 @@ export function shouldLoadAmmoPhysics(wasmAvailable) {
 /**
  * Initialise ammo.js and return a btDiscreteDynamicsWorld, or `null` when the
  * WASM engine is authoritative and no ammo escape hatch is active.
+ * @param {{ requireAmmo?: boolean }} [options]
+ * @returns {Promise<AmmoWorld | null>}
  */
 export const initPhysics = async ({ requireAmmo = true } = {}) => {
     if (!requireAmmo) return null;
@@ -67,41 +87,59 @@ export const initPhysics = async ({ requireAmmo = true } = {}) => {
     const overlappingPairCache = new AmmoInstance.btDbvtBroadphase();
     const solver = new AmmoInstance.btSequentialImpulseConstraintSolver();
     const dynamicsWorld = new AmmoInstance.btDiscreteDynamicsWorld(
-        dispatcher, overlappingPairCache, solver, collisionConfiguration
+        dispatcher,
+        overlappingPairCache,
+        solver,
+        collisionConfiguration
     );
     dynamicsWorld.setGravity(new AmmoInstance.btVector3(0, -15, 0));
 
     return dynamicsWorld;
 };
 
+/** @returns {AmmoModule | null} */
 export const getAmmo = () => {
     return AmmoInstance;
 };
 
+/**
+ * @param {AmmoRigidBody | null | undefined} body
+ * @param {BodyAudioMeta} meta
+ */
 export const registerBodyAudioMeta = (body, meta) => {
     const ptr = getBodyPtr(body);
     if (ptr == null) return;
     ammoBodyAudioMeta.set(ptr, meta);
 };
 
+/**
+ * @param {AmmoRigidBody | null | undefined} body
+ * @param {BodyDragMeta} meta
+ */
 export const registerBodyDragMeta = (body, meta) => {
     const ptr = getBodyPtr(body);
     if (ptr == null) return;
     ammoBodyDragMeta.set(ptr, meta);
 };
 
+/** @param {AmmoRigidBody | null | undefined} body */
 export const unregisterBodyAudioMeta = (body) => {
     const ptr = getBodyPtr(body);
     if (ptr == null) return;
     ammoBodyAudioMeta.delete(ptr);
 };
 
+/** @param {AmmoRigidBody | null | undefined} body */
 export const unregisterBodyDragMeta = (body) => {
     const ptr = getBodyPtr(body);
     if (ptr == null) return;
     ammoBodyDragMeta.delete(ptr);
 };
 
+/**
+ * @param {AmmoWorld | null | undefined} world
+ * @param {number} deltaTime
+ */
 export const stepPhysics = (world, deltaTime) => {
     if (!world || !AmmoInstance) return;
     if (!physicsSearchParams.has('no-drag')) {
@@ -112,6 +150,9 @@ export const stepPhysics = (world, deltaTime) => {
 
 /**
  * Apply velocity-squared air resistance to each registered die.
+ */
+/**
+ * @param {number} deltaTime
  */
 function applyAmmoQuadraticDrag(deltaTime) {
     if (!AmmoInstance?.wrapPointer) return;
@@ -140,6 +181,10 @@ function applyAmmoQuadraticDrag(deltaTime) {
     }
 }
 
+/**
+ * @param {AmmoWorld | null | undefined} world
+ * @returns {Array<CollisionEvent & { surface?: string; otherSurface?: string }>}
+ */
 export const pollAmmoCollisionEvents = (world) => {
     if (!world || !AmmoInstance?.castObject) return [];
 
@@ -173,25 +218,32 @@ export const pollAmmoCollisionEvents = (world) => {
             if (!body || !meta) return -1;
             const linear = body.getLinearVelocity();
             const angular = body.getAngularVelocity();
-            const linearSpeedSq = linear.x() * linear.x() + linear.y() * linear.y() + linear.z() * linear.z();
-            const angularSpeedSq = angular.x() * angular.x() + angular.y() * angular.y() + angular.z() * angular.z();
-            return 0.5 * (meta.mass ?? 5) * linearSpeedSq + 0.5 * (meta.inertiaScalar ?? 0) * angularSpeedSq;
+            const linearSpeedSq =
+                linear.x() * linear.x() + linear.y() * linear.y() + linear.z() * linear.z();
+            const angularSpeedSq =
+                angular.x() * angular.x() + angular.y() * angular.y() + angular.z() * angular.z();
+            return (
+                0.5 * (meta.mass ?? 5) * linearSpeedSq +
+                0.5 * (meta.inertiaScalar ?? 0) * angularSpeedSq
+            );
         };
 
         const energyA = pickEnergy(bodyA, metaA);
         const energyB = pickEnergy(bodyB, metaB);
-        const sourceMeta = !metaB ? metaA : (!metaA ? metaB : (energyA >= energyB ? metaA : metaB));
+        const sourceMeta = !metaB ? metaA : !metaA ? metaB : energyA >= energyB ? metaA : metaB;
         const sourceBody = sourceMeta === metaA ? bodyA : bodyB;
         const otherMeta = sourceMeta === metaA ? metaB : metaA;
 
         const linear = sourceBody.getLinearVelocity();
         const angular = sourceBody.getAngularVelocity();
-        const linearSpeedSq = linear.x() * linear.x() + linear.y() * linear.y() + linear.z() * linear.z();
-        const angularSpeedSq = angular.x() * angular.x() + angular.y() * angular.y() + angular.z() * angular.z();
+        const linearSpeedSq =
+            linear.x() * linear.x() + linear.y() * linear.y() + linear.z() * linear.z();
+        const angularSpeedSq =
+            angular.x() * angular.x() + angular.y() * angular.y() + angular.z() * angular.z();
         const impactSpeed = Math.sqrt(maxImpulse / Math.max(sourceMeta?.mass ?? 5, 0.001));
         const collisionKey = `${sourceMeta?.id ?? 'x'}:${otherMeta?.id ?? 'table'}`;
         const lastAt = ammoCollisionCooldowns.get(collisionKey) ?? 0;
-        if ((now - lastAt) < 45) continue;
+        if (now - lastAt < 45) continue;
         ammoCollisionCooldowns.set(collisionKey, now);
 
         events.push({
@@ -203,28 +255,40 @@ export const pollAmmoCollisionEvents = (world) => {
             linearSpeedSq,
             angularSpeedSq,
             surface: sourceMeta?.surface ?? 'die',
-            otherSurface: otherMeta?.surface ?? (otherMeta ? 'die' : 'table')
+            otherSurface: otherMeta?.surface ?? (otherMeta ? 'die' : 'table'),
         });
     }
 
     return events;
 };
 
+/**
+ * @param {import('three').Scene} scene
+ * @param {AmmoWorld | null | undefined} world
+ * @param {object | null} [tableConfig]
+ */
 export const createFloorAndWalls = (scene, world, tableConfig = null) => {
     if (!AmmoInstance || !world) return;
 
     if (tableConfig && tableConfig.physicsBodies) {
-        console.log('Physics: Creating floor and walls from explicit physicsBodies config', tableConfig.physicsBodies);
-        tableConfig.physicsBodies.forEach(bodyDef => {
+        console.log(
+            'Physics: Creating floor and walls from explicit physicsBodies config',
+            tableConfig.physicsBodies
+        );
+        tableConfig.physicsBodies.forEach((bodyDef) => {
             if (bodyDef.type === 'box') {
                 createPhysicsBox(
                     world,
-                    bodyDef.size.x, bodyDef.size.y, bodyDef.size.z,
-                    bodyDef.position.x, bodyDef.position.y, bodyDef.position.z,
+                    bodyDef.size.x,
+                    bodyDef.size.y,
+                    bodyDef.size.z,
+                    bodyDef.position.x,
+                    bodyDef.position.y,
+                    bodyDef.position.z,
                     bodyDef.mass,
                     {
                         friction: bodyDef.friction,
-                        restitution: bodyDef.restitution
+                        restitution: bodyDef.restitution,
                     }
                 );
             }
@@ -246,8 +310,19 @@ export const createFloorAndWalls = (scene, world, tableConfig = null) => {
         console.log('Physics: Creating floor from config', { floorY, width, depth, thickness });
 
         const velvetVisualOffset = 0.1;
-        console.log(`Creating physics floor at Y=${floorY + velvetVisualOffset} with thickness=${thickness}`);
-        createPhysicsBox(world, width, thickness, depth, tableConfig.position.x, floorY + velvetVisualOffset, tableConfig.position.z, 0);
+        console.log(
+            `Creating physics floor at Y=${floorY + velvetVisualOffset} with thickness=${thickness}`
+        );
+        createPhysicsBox(
+            world,
+            width,
+            thickness,
+            depth,
+            tableConfig.position.x,
+            floorY + velvetVisualOffset,
+            tableConfig.position.z,
+            0
+        );
     } else {
         createBox(scene, world, 25, 1, 25, 0, -5, 0, 0, 0xffffff, 'images/wood.jpg');
     }
@@ -264,20 +339,88 @@ export const createFloorAndWalls = (scene, world, tableConfig = null) => {
 
     const halfWidth = width / 2;
     const halfDepth = depth / 2;
-    const wallY = (tableConfig && tableConfig.walls) ? (floorY + wallOffsetY) : (floorY + wallHeight / 2);
+    const wallY = tableConfig && tableConfig.walls ? floorY + wallOffsetY : floorY + wallHeight / 2;
 
-    console.log(`Creating physics walls at Y=${wallY} with Height=${wallHeight} Thickness=${wallThickness}`);
+    console.log(
+        `Creating physics walls at Y=${wallY} with Height=${wallHeight} Thickness=${wallThickness}`
+    );
 
-    createBox(scene, world, wallThickness, wallHeight, depth, halfWidth + wallThickness/2, wallY, 0, 0, 0x000000, null, true);
-    createBox(scene, world, wallThickness, wallHeight, depth, -halfWidth - wallThickness/2, wallY, 0, 0, 0x000000, null, true);
+    createBox(
+        scene,
+        world,
+        wallThickness,
+        wallHeight,
+        depth,
+        halfWidth + wallThickness / 2,
+        wallY,
+        0,
+        0,
+        0x000000,
+        null,
+        true
+    );
+    createBox(
+        scene,
+        world,
+        wallThickness,
+        wallHeight,
+        depth,
+        -halfWidth - wallThickness / 2,
+        wallY,
+        0,
+        0,
+        0x000000,
+        null,
+        true
+    );
 
     const topBotWidth = width + 2 * wallThickness;
-    createBox(scene, world, topBotWidth, wallHeight, wallThickness, 0, wallY, halfDepth + wallThickness/2, 0, 0x000000, null, true);
-    createBox(scene, world, topBotWidth, wallHeight, wallThickness, 0, wallY, -halfDepth - wallThickness/2, 0, 0x000000, null, true);
+    createBox(
+        scene,
+        world,
+        topBotWidth,
+        wallHeight,
+        wallThickness,
+        0,
+        wallY,
+        halfDepth + wallThickness / 2,
+        0,
+        0x000000,
+        null,
+        true
+    );
+    createBox(
+        scene,
+        world,
+        topBotWidth,
+        wallHeight,
+        wallThickness,
+        0,
+        wallY,
+        -halfDepth - wallThickness / 2,
+        0,
+        0x000000,
+        null,
+        true
+    );
 };
 
+/**
+ * @param {AmmoWorld} world
+ * @param {number} sx
+ * @param {number} sy
+ * @param {number} sz
+ * @param {number} px
+ * @param {number} py
+ * @param {number} pz
+ * @param {number} mass
+ * @param {{ friction?: number; restitution?: number }} [options]
+ */
 const createPhysicsBox = (world, sx, sy, sz, px, py, pz, mass, options = {}) => {
-    const shape = new AmmoInstance.btBoxShape(new AmmoInstance.btVector3(sx * 0.5, sy * 0.5, sz * 0.5));
+    /** @type {import('./types/ammo').AmmoCollisionShape} */
+    const shape = new AmmoInstance.btBoxShape(
+        new AmmoInstance.btVector3(sx * 0.5, sy * 0.5, sz * 0.5)
+    );
     const transform = new AmmoInstance.btTransform();
     transform.setIdentity();
     transform.setOrigin(new AmmoInstance.btVector3(px, py, pz));
@@ -289,7 +432,12 @@ const createPhysicsBox = (world, sx, sy, sz, px, py, pz, mass, options = {}) => 
         shape.calculateLocalInertia(mass, localInertia);
     }
 
-    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
+    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(
+        mass,
+        motionState,
+        shape,
+        localInertia
+    );
     const body = new AmmoInstance.btRigidBody(rbInfo);
 
     const friction = options.friction !== undefined ? options.friction : 0.6;
@@ -301,7 +449,20 @@ const createPhysicsBox = (world, sx, sy, sz, px, py, pz, mass, options = {}) => 
     world.addRigidBody(body);
 };
 
-const createBox = (scene, world, sx, sy, sz, px, py, pz, mass, color, textureUrl, invisible = false) => {
+const createBox = (
+    scene,
+    world,
+    sx,
+    sy,
+    sz,
+    px,
+    py,
+    pz,
+    mass,
+    color,
+    textureUrl,
+    invisible = false
+) => {
     let material;
     if (textureUrl) {
         const texture = new THREE.TextureLoader().load(textureUrl);
@@ -332,9 +493,18 @@ const DEFAULT_DICE_PHYSICS = {
     rollingFriction: 0.1,
     restitution: 0.2,
     linearDamping: 0.05,
-    angularDamping: 0.1
+    angularDamping: 0.1,
 };
 
+/**
+ * @param {AmmoWorld} world
+ * @param {import('three').Mesh} mesh
+ * @param {import('./types/ammo').AmmoCollisionShape | null | undefined} collisionShape
+ * @param {{ x: number; y: number; z: number }} position
+ * @param {{ x: number; y: number; z: number }} rotation
+ * @param {object} [options]
+ * @returns {AmmoRigidBody | null}
+ */
 export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation, options = {}) => {
     if (!AmmoInstance || !world || !collisionShape) return null;
 
@@ -345,7 +515,7 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
         restitution = DEFAULT_DICE_PHYSICS.restitution,
         linearDamping = DEFAULT_DICE_PHYSICS.linearDamping,
         angularDamping = DEFAULT_DICE_PHYSICS.angularDamping,
-        centerOfMassOffset = null
+        centerOfMassOffset = null,
     } = options;
 
     collisionShape.setMargin(0.01);
@@ -354,10 +524,15 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
     threeQuat.setFromEuler(new THREE.Euler(rotation.x, rotation.y, rotation.z));
 
     const offset = centerOfMassOffset
-        ? new THREE.Vector3(centerOfMassOffset.x || 0, centerOfMassOffset.y || 0, centerOfMassOffset.z || 0)
+        ? new THREE.Vector3(
+              centerOfMassOffset.x || 0,
+              centerOfMassOffset.y || 0,
+              centerOfMassOffset.z || 0
+          )
         : null;
     const hasComOffset = !!offset && offset.lengthSq() > 1e-10;
     let bodyShape = collisionShape;
+    /** @type {import('./types/ammo').AmmoCollisionShape | null} */
     let ownedCollisionShape = null;
 
     if (hasComOffset) {
@@ -394,7 +569,12 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
     const localInertia = new AmmoInstance.btVector3(0, 0, 0);
     bodyShape.calculateLocalInertia(mass, localInertia);
 
-    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, bodyShape, localInertia);
+    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(
+        mass,
+        motionState,
+        bodyShape,
+        localInertia
+    );
     const body = new AmmoInstance.btRigidBody(rbInfo);
     if (hasComOffset) {
         body._centerOfMassOffset = { x: offset.x, y: offset.y, z: offset.z };
@@ -421,6 +601,12 @@ export const spawnDicePhysics = (world, mesh, collisionShape, position, rotation
     return body;
 };
 
+/**
+ * @param {AmmoWorld | null | undefined} world
+ * @param {import('three').Object3D} mesh
+ * @param {unknown} shape
+ * @returns {AmmoRigidBody | null}
+ */
 export const createStaticBody = (world, mesh, shape) => {
     if (!AmmoInstance || !world || !shape) {
         if (mesh) mesh.userData.physicsBody = null;
@@ -430,15 +616,27 @@ export const createStaticBody = (world, mesh, shape) => {
     const mass = 0;
     const transform = new AmmoInstance.btTransform();
     transform.setIdentity();
-    transform.setOrigin(new AmmoInstance.btVector3(mesh.position.x, mesh.position.y, mesh.position.z));
+    transform.setOrigin(
+        new AmmoInstance.btVector3(mesh.position.x, mesh.position.y, mesh.position.z)
+    );
 
-    const q = new AmmoInstance.btQuaternion(mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w);
+    const q = new AmmoInstance.btQuaternion(
+        mesh.quaternion.x,
+        mesh.quaternion.y,
+        mesh.quaternion.z,
+        mesh.quaternion.w
+    );
     transform.setRotation(q);
 
     const motionState = new AmmoInstance.btDefaultMotionState(transform);
     const localInertia = new AmmoInstance.btVector3(0, 0, 0);
 
-    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
+    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(
+        mass,
+        motionState,
+        shape,
+        localInertia
+    );
     const body = new AmmoInstance.btRigidBody(rbInfo);
 
     world.addRigidBody(body);
@@ -450,6 +648,10 @@ export const createStaticBody = (world, mesh, shape) => {
     return body;
 };
 
+/**
+ * @param {import('three').Mesh} mesh
+ * @returns {import('./types/ammo').AmmoCollisionShape | null}
+ */
 export const createConvexHullShape = (mesh) => {
     if (!AmmoInstance) return null;
 
@@ -460,7 +662,7 @@ export const createConvexHullShape = (mesh) => {
 
     const posArr = new Float32Array(originalCount * 3);
     for (let i = 0; i < originalCount; i++) {
-        posArr[i * 3]     = srcPos.getX(i);
+        posArr[i * 3] = srcPos.getX(i);
         posArr[i * 3 + 1] = srcPos.getY(i);
         posArr[i * 3 + 2] = srcPos.getZ(i);
     }
@@ -469,7 +671,9 @@ export const createConvexHullShape = (mesh) => {
     geometry = BufferGeometryUtils.mergeVertices(geometry);
 
     const positionAttribute = geometry.attributes.position;
-    console.log(`Creating convex hull from ${positionAttribute.count} vertices (original: ${originalCount})`);
+    console.log(
+        `Creating convex hull from ${positionAttribute.count} vertices (original: ${originalCount})`
+    );
 
     for (let i = 0; i < positionAttribute.count; i++) {
         const v = new THREE.Vector3();

@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createChalice(scene, physicsWorld, position = { x: 8, y: -2.75, z: -10 }, rotationY = 0) {
+export function createChalice(
+    scene,
+    physicsWorld,
+    position = { x: 8, y: -2.75, z: -10 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Chalice';
@@ -10,7 +15,7 @@ export function createChalice(scene, physicsWorld, position = { x: 8, y: -2.75, 
     const goldMat = new THREE.MeshStandardMaterial({
         color: 0xffaa00, // Gold
         metalness: 1.0,
-        roughness: 0.2
+        roughness: 0.2,
     });
 
     const rubyMat = new THREE.MeshPhysicalMaterial({
@@ -21,7 +26,7 @@ export function createChalice(scene, physicsWorld, position = { x: 8, y: -2.75, 
         transmission: 0.9,
         ior: 1.76,
         thickness: 0.5,
-        transparent: true
+        transparent: true,
     });
 
     // Base
@@ -52,18 +57,18 @@ export function createChalice(scene, physicsWorld, position = { x: 8, y: -2.75, 
     // Use Lathe for a nice goblet shape
     const points = [];
     // From bottom of cup to top lip
-    points.push(new THREE.Vector2(0, 0));       // Center bottom
-    points.push(new THREE.Vector2(0.3, 0.1));     // Curve up and out
+    points.push(new THREE.Vector2(0, 0)); // Center bottom
+    points.push(new THREE.Vector2(0.3, 0.1)); // Curve up and out
     points.push(new THREE.Vector2(0.4, 0.3));
     points.push(new THREE.Vector2(0.45, 0.6));
-    points.push(new THREE.Vector2(0.43, 0.8));    // Slight inward near top
-    points.push(new THREE.Vector2(0.44, 0.82));   // Outer lip
-    points.push(new THREE.Vector2(0.40, 0.82));   // Inner lip
-    points.push(new THREE.Vector2(0.38, 0.8));    // Inner inward
-    points.push(new THREE.Vector2(0.40, 0.6));
+    points.push(new THREE.Vector2(0.43, 0.8)); // Slight inward near top
+    points.push(new THREE.Vector2(0.44, 0.82)); // Outer lip
+    points.push(new THREE.Vector2(0.4, 0.82)); // Inner lip
+    points.push(new THREE.Vector2(0.38, 0.8)); // Inner inward
+    points.push(new THREE.Vector2(0.4, 0.6));
     points.push(new THREE.Vector2(0.35, 0.3));
     points.push(new THREE.Vector2(0.25, 0.15));
-    points.push(new THREE.Vector2(0, 0.05));      // Inner center bottom
+    points.push(new THREE.Vector2(0, 0.05)); // Inner center bottom
 
     const cupGeo = new THREE.LatheGeometry(points, 32);
     const cupMesh = new THREE.Mesh(cupGeo, goldMat);
@@ -79,11 +84,7 @@ export function createChalice(scene, physicsWorld, position = { x: 8, y: -2.75, 
         const gem = new THREE.Mesh(gemGeo, rubyMat);
         const angle = (i / numGems) * Math.PI * 2;
         // Place on the node of the stem
-        gem.position.set(
-            Math.cos(angle) * 0.12,
-            0.35,
-            Math.sin(angle) * 0.12
-        );
+        gem.position.set(Math.cos(angle) * 0.12, 0.35, Math.sin(angle) * 0.12);
         gem.rotation.set(Math.random(), Math.random(), Math.random());
         gem.castShadow = true;
         group.add(gem);
@@ -99,7 +100,7 @@ export function createChalice(scene, physicsWorld, position = { x: 8, y: -2.75, 
         transmission: 0.9,
         ior: 1.33,
         thickness: 0.5,
-        transparent: true
+        transparent: true,
     });
     const liquidMesh = new THREE.Mesh(liquidGeo, liquidMat);
     liquidMesh.position.y = 0.95; // Inside cup
@@ -126,14 +127,18 @@ export function createChalice(scene, physicsWorld, position = { x: 8, y: -2.75, 
     // To fix this without modifying createStaticBody:
     // We add an invisible mesh centered at totalHeight/2, and create the body on that mesh.
 
-    const physMesh = new THREE.Mesh(new THREE.BoxGeometry(maxRadius*2, totalHeight, maxRadius*2));
+    const physMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(maxRadius * 2, totalHeight, maxRadius * 2)
+    );
     physMesh.position.set(position.x, position.y + totalHeight / 2, position.z);
     physMesh.rotation.y = rotationY;
     physMesh.visible = false;
     scene.add(physMesh);
 
     if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(maxRadius, totalHeight/2, maxRadius));
+        const shape = new ammo.btCylinderShape(
+            new ammo.btVector3(maxRadius, totalHeight / 2, maxRadius)
+        );
         createStaticBody(physicsWorld, physMesh, shape);
     }
 }

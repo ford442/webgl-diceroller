@@ -13,7 +13,7 @@ export function createRunecircle(scene) {
     const outerRadius = 6;
     const innerRadius = 4.5;
     const runeCount = 12;
-    
+
     // Magical color palette
     const primaryColor = 0x4488ff; // Mystical blue
     const secondaryColor = 0xaa44ff; // Magical purple
@@ -28,7 +28,7 @@ export function createRunecircle(scene) {
         metalness: 0.8,
         transparent: true,
         opacity: 0.9,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
     });
 
     const runeMaterial = new THREE.MeshStandardMaterial({
@@ -38,7 +38,7 @@ export function createRunecircle(scene) {
         roughness: 0.2,
         metalness: 0.9,
         transparent: true,
-        opacity: 0.95
+        opacity: 0.95,
     });
 
     const innerCircleMaterial = new THREE.MeshStandardMaterial({
@@ -48,7 +48,7 @@ export function createRunecircle(scene) {
         roughness: 0.6,
         metalness: 0.5,
         transparent: true,
-        opacity: 0.8
+        opacity: 0.8,
     });
 
     // --- Main Ring ---
@@ -72,7 +72,7 @@ export function createRunecircle(scene) {
         emissive: primaryColor,
         emissiveIntensity: 0.8,
         transparent: true,
-        opacity: 0.7
+        opacity: 0.7,
     });
     const core = new THREE.Mesh(coreGeo, coreMaterial);
     core.rotation.x = -Math.PI / 2;
@@ -82,11 +82,11 @@ export function createRunecircle(scene) {
     // --- Decorative Pattern Rings ---
     const detailRing1 = new THREE.Mesh(
         new THREE.RingGeometry(outerRadius - 0.2, outerRadius - 0.1, 64),
-        new THREE.MeshBasicMaterial({ 
-            color: glowColor, 
-            transparent: true, 
+        new THREE.MeshBasicMaterial({
+            color: glowColor,
+            transparent: true,
             opacity: 0.5,
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
         })
     );
     detailRing1.rotation.x = -Math.PI / 2;
@@ -95,11 +95,11 @@ export function createRunecircle(scene) {
 
     const detailRing2 = new THREE.Mesh(
         new THREE.RingGeometry(innerRadius + 0.1, innerRadius + 0.2, 64),
-        new THREE.MeshBasicMaterial({ 
-            color: glowColor, 
-            transparent: true, 
+        new THREE.MeshBasicMaterial({
+            color: glowColor,
+            transparent: true,
             opacity: 0.5,
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
         })
     );
     detailRing2.rotation.x = -Math.PI / 2;
@@ -109,7 +109,7 @@ export function createRunecircle(scene) {
     // --- Rotating Runes ---
     const runes = [];
     const runeContainer = new THREE.Group();
-    
+
     // Rune shapes - using various geometric primitives to represent magical symbols
     const runeGeometries = [
         // Rune 1: Diamond
@@ -123,71 +123,71 @@ export function createRunecircle(scene) {
         // Rune 5: Octahedron
         new THREE.OctahedronGeometry(0.2),
         // Rune 6: Icosahedron
-        new THREE.IcosahedronGeometry(0.2)
+        new THREE.IcosahedronGeometry(0.2),
     ];
 
     for (let i = 0; i < runeCount; i++) {
         const angle = (i / runeCount) * Math.PI * 2;
         const radius = (innerRadius + outerRadius) / 2;
-        
+
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
-        
+
         // Select geometry based on position
         const geoIndex = i % runeGeometries.length;
         const runeGeo = runeGeometries[geoIndex];
-        
+
         const rune = new THREE.Mesh(runeGeo, runeMaterial.clone());
-        
+
         // Position around the circle
         rune.position.set(x, 0.3, z);
-        
+
         // Orient to face outward
         rune.lookAt(0, 0.3, 0);
         rune.rotateY(Math.PI); // Face outward
-        
+
         // Add subtle floating animation offset
         rune.userData = {
             baseY: 0.3,
             phase: (i / runeCount) * Math.PI * 2,
             rotationSpeed: 0.5 + Math.random() * 0.5,
-            floatSpeed: 1 + Math.random() * 0.5
+            floatSpeed: 1 + Math.random() * 0.5,
         };
-        
+
         runeContainer.add(rune);
         runes.push(rune);
     }
-    
+
     group.add(runeContainer);
 
     // --- Additional Symbolic Elements ---
-    
+
     // Inner rotating ring of smaller symbols
     const innerRunes = [];
     const innerRuneCount = 8;
     const innerRuneRadius = 2.5;
-    
+
     for (let i = 0; i < innerRuneCount; i++) {
         const angle = (i / innerRuneCount) * Math.PI * 2;
         const x = Math.cos(angle) * innerRuneRadius;
         const z = Math.sin(angle) * innerRuneRadius;
-        
+
         // Small glowing orbs
         const orbGeo = new THREE.SphereGeometry(0.15, 16, 16);
         const orbMat = new THREE.MeshStandardMaterial({
             color: secondaryColor,
             emissive: secondaryColor,
-            emissiveIntensity: 2.0
+            emissiveIntensity: 2.0,
         });
         const orb = new THREE.Mesh(orbGeo, orbMat);
         orb.position.set(x, 0.2, z);
-        
+
         orb.userData = {
             angle: angle,
             radius: innerRuneRadius,
-            speed: -0.3 // Rotate opposite direction
+            speed: -0.3, // Rotate opposite direction
         };
-        
+
         group.add(orb);
         innerRunes.push(orb);
     }
@@ -200,29 +200,29 @@ export function createRunecircle(scene) {
         color: glowColor,
         transparent: true,
         opacity: 0.6,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
     });
 
     for (let i = 0; i < particleCount; i++) {
         const particle = new THREE.Mesh(particleGeo, particleMat.clone());
-        
+
         // Random position within inner circle
         const r = Math.random() * (innerRadius - 0.5);
         const theta = Math.random() * Math.PI * 2;
-        
+
         particle.position.set(
             Math.cos(theta) * r,
             Math.random() * 2, // Start at various heights
             Math.sin(theta) * r
         );
-        
+
         particle.userData = {
             speed: 0.2 + Math.random() * 0.4,
             wobble: Math.random() * Math.PI * 2,
             wobbleSpeed: 1 + Math.random() * 2,
-            maxHeight: 3 + Math.random() * 2
+            maxHeight: 3 + Math.random() * 2,
         };
-        
+
         particle.visible = false;
         group.add(particle);
         particles.push(particle);
@@ -243,45 +243,46 @@ export function createRunecircle(scene) {
     const update = (deltaTime, time) => {
         // Pulsing glow effect
         const pulse = 0.7 + Math.sin(time * 1.5) * 0.3;
-        
+
         // Update main ring emissive intensity
         ringMaterial.emissiveIntensity = 0.3 + pulse * 0.4;
-        
+
         // Update core
         coreMaterial.emissiveIntensity = 0.5 + pulse * 0.5;
-        
+
         // Update ambient light
         ambientGlow.intensity = 0.8 + pulse * 0.7;
-        
+
         // Rotate rune container slowly
         runeContainer.rotation.y = time * 0.1;
-        
+
         // Animate individual runes
         runes.forEach((rune, i) => {
             // Self-rotation
             rune.rotateY(deltaTime * rune.userData.rotationSpeed);
             rune.rotateZ(deltaTime * rune.userData.rotationSpeed * 0.5);
-            
+
             // Floating bob
-            const floatOffset = Math.sin(time * rune.userData.floatSpeed + rune.userData.phase) * 0.1;
+            const floatOffset =
+                Math.sin(time * rune.userData.floatSpeed + rune.userData.phase) * 0.1;
             rune.position.y = rune.userData.baseY + floatOffset;
-            
+
             // Pulsing emissive
             rune.material.emissiveIntensity = 0.8 + Math.sin(time * 2 + i) * 0.4;
         });
-        
+
         // Rotate inner orbits
-        innerRunes.forEach(orb => {
+        innerRunes.forEach((orb) => {
             orb.userData.angle += deltaTime * orb.userData.speed;
             orb.position.x = Math.cos(orb.userData.angle) * orb.userData.radius;
             orb.position.z = Math.sin(orb.userData.angle) * orb.userData.radius;
-            
+
             // Vertical bob
             orb.position.y = 0.2 + Math.sin(time * 2 + orb.userData.angle) * 0.1;
         });
-        
+
         // Animate particles
-        particles.forEach((p, i) => {
+        particles.forEach((p, _i) => {
             if (!p.visible) {
                 // Random activation based on pulse
                 if (Math.random() < 0.02 * pulse) {
@@ -297,24 +298,24 @@ export function createRunecircle(scene) {
             } else {
                 // Rise up
                 p.position.y += p.userData.speed * deltaTime;
-                
+
                 // Spiral motion
                 p.userData.wobble += deltaTime * p.userData.wobbleSpeed;
                 p.position.x += Math.sin(p.userData.wobble) * 0.01;
                 p.position.z += Math.cos(p.userData.wobble) * 0.01;
-                
+
                 // Fade out near top
                 const heightRatio = p.position.y / p.userData.maxHeight;
                 p.material.opacity = 0.6 * (1 - heightRatio);
                 p.rotation.z += deltaTime;
-                
+
                 // Reset if too high or faded
                 if (p.position.y >= p.userData.maxHeight || p.material.opacity <= 0.05) {
                     p.visible = false;
                 }
             }
         });
-        
+
         // Rotate detail rings in opposite directions
         detailRing1.rotation.z = time * 0.05;
         detailRing2.rotation.z = -time * 0.03;
@@ -322,6 +323,6 @@ export function createRunecircle(scene) {
 
     return {
         group,
-        update
+        update,
     };
 }

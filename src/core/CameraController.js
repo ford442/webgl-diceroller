@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { spawnedDice, readDiceValue, areDiceSettled, updateDiceVisuals } from '../dice.js';
-import { shouldDeferAutoResults } from '../roll/RollSession.js';
 import { prefersReducedMotion } from './AccessibilityPrefs.js';
 import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z } from './SceneMetrics.js';
 
@@ -9,7 +8,7 @@ const DiceFocusState = {
     WAITING_FOR_STOP: 'WAITING_FOR_STOP',
     FOCUSING: 'FOCUSING',
     HOLDING: 'HOLDING',
-    RETURNING: 'RETURNING'
+    RETURNING: 'RETURNING',
 };
 
 export { DiceFocusState };
@@ -41,7 +40,7 @@ export function createCameraController(camera) {
     const focusEndRot = new THREE.Quaternion();
     let focusProgress = 0;
 
-    function syncOrbitFromCamera() {
+    function _syncOrbitFromCamera() {
         const offset = camera.position.clone().sub(orbitLookAt);
         orbitDistance = Math.max(minOrbitDistance, Math.min(maxOrbitDistance, offset.length()));
         yaw = Math.atan2(offset.x, offset.z);
@@ -72,7 +71,10 @@ export function createCameraController(camera) {
     function applyTouchZoom(scale) {
         if (diceFocusState !== DiceFocusState.IDLE) return;
         touchOrbitActive = true;
-        orbitDistance = Math.max(minOrbitDistance, Math.min(maxOrbitDistance, orbitDistance * scale));
+        orbitDistance = Math.max(
+            minOrbitDistance,
+            Math.min(maxOrbitDistance, orbitDistance * scale)
+        );
         applyOrbitPose();
     }
 
@@ -106,35 +108,39 @@ export function createCameraController(camera) {
         return allStable;
     }
 
-    function finishRollResults(showResults, onResultsReady) {
+    function finishRollResults(onSettled) {
         updateDiceVisuals();
-        const results = spawnedDice.map(d => ({
+        const results = spawnedDice.map((d) => ({
             type: d.type,
-            value: readDiceValue(d)
+            value: readDiceValue(d),
         }));
-        if (!shouldDeferAutoResults()) {
-            showResults(results);
-        }
-        onResultsReady?.(results);
+        onSettled?.(results);
     }
 
-    function update(deltaTime, time, {
-        keys,
-        cursorPos,
-        isLocked,
-        showResults,
-        hideResults,
-        lampData,
-        LampMode,
-        onResultsReady,
-        touchPrimary = false
-    }) {
+    function update(
+        deltaTime,
+        time,
+        {
+            keys,
+            cursorPos,
+            isLocked,
+            _hideResults,
+            lampData,
+            LampMode,
+            onSettled,
+            /** @deprecated Prefer onSettled — kept for call-site transition */
+            onResultsReady,
+            touchPrimary = false,
+            xrPresenting = false,
+        }
+    ) {
+        const settled = onSettled ?? onResultsReady;
         // Dice Focus State Machine
         if (diceFocusState === DiceFocusState.WAITING_FOR_STOP) {
             if (checkDiceStability(lampData, LampMode)) {
-                if (prefersReducedMotion()) {
+                if (prefersReducedMotion() || xrPresenting) {
                     // Skip camera fly-to / hold / return; announce results immediately.
-                    finishRollResults(showResults, onResultsReady);
+                    finishRollResults(settled);
                     diceFocusState = DiceFocusState.IDLE;
                     return;
                 }
@@ -147,12 +153,12 @@ export function createCameraController(camera) {
 
                 // Calculate center
                 const center = new THREE.Vector3();
-                spawnedDice.forEach(d => center.add(d.mesh.position));
+                spawnedDice.forEach((d) => center.add(d.mesh.position));
                 if (spawnedDice.length > 0) center.divideScalar(spawnedDice.length);
 
                 // Calculate Spread (Standard Deviation-ish) to determine camera distance
                 let maxDist = 0;
-                spawnedDice.forEach(d => {
+                spawnedDice.forEach((d) => {
                     const dist = d.mesh.position.distanceTo(center);
                     if (dist > maxDist) maxDist = dist;
                 });
@@ -161,7 +167,9 @@ export function createCameraController(camera) {
                 // Higher (y) and further back (z) if dice are spread out.
                 // Base offset (0, 8, 4) + spread factor
                 const zoomOut = Math.max(1, maxDist * 0.8);
-                focusTargetPosition.copy(center).add(new THREE.Vector3(0, 8 + zoomOut, 4 + zoomOut));
+                focusTargetPosition
+                    .copy(center)
+                    .add(new THREE.Vector3(0, 8 + zoomOut, 4 + zoomOut));
 
                 // Setup Tween
                 focusStartPos.copy(camera.position);
@@ -186,7 +194,7 @@ export function createCameraController(camera) {
             if (focusProgress === 1) {
                 diceFocusState = DiceFocusState.HOLDING;
                 focusTimer = 2.0; // Hold for 2s
-                finishRollResults(showResults, onResultsReady);
+                finishRollResults(settled);
             }
         } else if (diceFocusState === DiceFocusState.HOLDING) {
             focusTimer -= deltaTime;
@@ -220,7 +228,12 @@ export function createCameraController(camera) {
         }
 
         // Only allow desktop FPS control when IDLE and not on a touch-primary device.
-        if (diceFocusState === DiceFocusState.IDLE && !touchPrimary && !touchOrbitActive) {
+        if (
+            diceFocusState === DiceFocusState.IDLE &&
+            !touchPrimary &&
+            !touchOrbitActive &&
+            !xrPresenting
+        ) {
             // FPS Camera Logic - direct mouse-to-rotation mapping
             const turnSensitivity = 0.002; // Mouse sensitivity
 
@@ -289,7 +302,11 @@ export function createCameraController(camera) {
         applyTouchOrbit,
         applyTouchZoom,
         reframeDefaultDistance,
-        get yaw() { return yaw; },
-        get pitch() { return pitch; }
+        get yaw() {
+            return yaw;
+        },
+        get pitch() {
+            return pitch;
+        },
     };
 }

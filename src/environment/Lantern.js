@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 import { registerInteractiveObject } from '../interaction.js';
 
-export function createLantern(scene, physicsWorld, position = { x: -8, y: -2.75, z: -12 }, rotationY = 0) {
+export function createLantern(
+    scene,
+    physicsWorld,
+    position = { x: -8, y: -2.75, z: -12 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Lantern';
@@ -11,7 +16,7 @@ export function createLantern(scene, physicsWorld, position = { x: -8, y: -2.75,
     const metalMat = new THREE.MeshStandardMaterial({
         color: 0x2a2a2a, // Dark wrought iron
         roughness: 0.8,
-        metalness: 0.9
+        metalness: 0.9,
     });
 
     const glassMat = new THREE.MeshPhysicalMaterial({
@@ -21,12 +26,12 @@ export function createLantern(scene, physicsWorld, position = { x: -8, y: -2.75,
         transmission: 0.9,
         transparent: true,
         ior: 1.5,
-        thickness: 0.05
+        thickness: 0.05,
     });
 
     const candleMat = new THREE.MeshStandardMaterial({
         color: 0xffffdd, // Wax color
-        roughness: 0.6
+        roughness: 0.6,
     });
 
     // --- Geometries ---
@@ -154,7 +159,7 @@ export function createLantern(scene, physicsWorld, position = { x: -8, y: -2.75,
     const halfHeight = totalHeight / 2;
 
     // Adjust children
-    group.children.forEach(child => {
+    group.children.forEach((child) => {
         child.position.y -= halfHeight;
     });
 
@@ -164,7 +169,9 @@ export function createLantern(scene, physicsWorld, position = { x: -8, y: -2.75,
     group.position.set(position.x, position.y + halfHeight, position.z);
 
     if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(bodyRadiusTop + 0.05, halfHeight, bodyRadiusTop + 0.05));
+        const shape = new ammo.btCylinderShape(
+            new ammo.btVector3(bodyRadiusTop + 0.05, halfHeight, bodyRadiusTop + 0.05)
+        );
         createStaticBody(physicsWorld, group, shape);
     }
 
@@ -183,6 +190,6 @@ export function createLantern(scene, physicsWorld, position = { x: -8, y: -2.75,
 
     return {
         group,
-        update
+        update,
     };
 }

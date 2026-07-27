@@ -7,7 +7,7 @@ export function createFire(options = {}) {
     const scale = options.scale || 1.0;
     const color = options.color || 0xff5500; // Orange-red base
     const particleCount = options.particleCount || 50;
-    const height = options.height || 1.0;
+    const _height = options.height || 1.0;
     const spread = options.spread || 0.2;
 
     const geometry = new THREE.BufferGeometry();
@@ -19,7 +19,7 @@ export function createFire(options = {}) {
         // Initial random position at base
         positions.push(
             (Math.random() - 0.5) * spread * scale,
-            (Math.random() * 0.2) * scale, // Start low
+            Math.random() * 0.2 * scale, // Start low
             (Math.random() - 0.5) * spread * scale
         );
 
@@ -29,8 +29,8 @@ export function createFire(options = {}) {
         // Random velocity
         velocities.push(
             (Math.random() - 0.5) * 0.5 * scale, // X drift
-            (1.0 + Math.random()) * scale,       // Y speed
-            (Math.random() - 0.5) * 0.5 * scale  // Z drift
+            (1.0 + Math.random()) * scale, // Y speed
+            (Math.random() - 0.5) * 0.5 * scale // Z drift
         );
     }
 
@@ -41,7 +41,7 @@ export function createFire(options = {}) {
     const particleData = {
         lifetimes: lifetimes,
         velocities: velocities,
-        initialPositions: [...positions] // Clone
+        initialPositions: [...positions], // Clone
     };
 
     const material = new THREE.PointsMaterial({
@@ -51,13 +51,13 @@ export function createFire(options = {}) {
         transparent: true,
         opacity: 0.8,
         depthWrite: false, // Don't occlude other particles
-        blending: THREE.AdditiveBlending
+        blending: THREE.AdditiveBlending,
     });
 
     const mesh = new THREE.Points(geometry, material);
 
     // Update function
-    const update = (deltaTime) => {
+    const _update = (deltaTime) => {
         const positions = geometry.attributes.position.array;
 
         for (let i = 0; i < particleCount; i++) {
@@ -69,9 +69,9 @@ export function createFire(options = {}) {
             if (life > 1.0) {
                 life = 0; // Reset
                 // Reset position to base
-                positions[i*3] = (Math.random() - 0.5) * spread * scale * 0.5;
-                positions[i*3+1] = (Math.random() * 0.1) * scale;
-                positions[i*3+2] = (Math.random() - 0.5) * spread * scale * 0.5;
+                positions[i * 3] = (Math.random() - 0.5) * spread * scale * 0.5;
+                positions[i * 3 + 1] = Math.random() * 0.1 * scale;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * spread * scale * 0.5;
             }
 
             particleData.lifetimes[i] = life;
@@ -80,14 +80,14 @@ export function createFire(options = {}) {
             // Y = Initial + Velocity * Life
             // Add some noise/wiggle based on height
 
-            const vX = particleData.velocities[i*3];
-            const vY = particleData.velocities[i*3+1];
-            const vZ = particleData.velocities[i*3+2];
+            const vX = particleData.velocities[i * 3];
+            const vY = particleData.velocities[i * 3 + 1];
+            const vZ = particleData.velocities[i * 3 + 2];
 
             // Simple integration
-            positions[i*3] += vX * deltaTime;
-            positions[i*3+1] += vY * deltaTime;
-            positions[i*3+2] += vZ * deltaTime;
+            positions[i * 3] += vX * deltaTime;
+            positions[i * 3 + 1] += vY * deltaTime;
+            positions[i * 3 + 2] += vZ * deltaTime;
 
             // Fade/Shrink logic could be done in shader or by updating size/opacity attribute
             // For PointsMaterial, size is uniform. Opacity is uniform.
@@ -105,7 +105,7 @@ export function createFire(options = {}) {
     // Initialize colors
     const colors = [];
     const baseColor = new THREE.Color(color);
-    for(let i=0; i<particleCount; i++) {
+    for (let i = 0; i < particleCount; i++) {
         colors.push(baseColor.r, baseColor.g, baseColor.b);
     }
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -122,21 +122,22 @@ export function createFire(options = {}) {
             if (life > 1.0) {
                 life = 0;
                 // Reset pos
-                positions[i*3] = (Math.random() - 0.5) * spread * scale * 0.5;
-                positions[i*3+1] = (Math.random() * 0.1) * scale;
-                positions[i*3+2] = (Math.random() - 0.5) * spread * scale * 0.5;
+                positions[i * 3] = (Math.random() - 0.5) * spread * scale * 0.5;
+                positions[i * 3 + 1] = Math.random() * 0.1 * scale;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * spread * scale * 0.5;
             }
             particleData.lifetimes[i] = life;
 
             // Move up
-            const speedY = particleData.velocities[i*3+1];
-            positions[i*3+1] += speedY * deltaTime;
+            const speedY = particleData.velocities[i * 3 + 1];
+            positions[i * 3 + 1] += speedY * deltaTime;
 
             // Wiggle (X/Z)
             // Sine wave based on height and time
-            const wiggle = Math.sin(positions[i*3+1] * 5.0 + performance.now() * 0.005) * 0.01 * scale;
-            positions[i*3] += wiggle;
-            positions[i*3+2] += wiggle;
+            const wiggle =
+                Math.sin(positions[i * 3 + 1] * 5.0 + performance.now() * 0.005) * 0.01 * scale;
+            positions[i * 3] += wiggle;
+            positions[i * 3 + 2] += wiggle;
 
             // Color Fade: Yellow -> Red -> Dark
             // Life 0.0 - 0.2: Yellow/White (Hot)
@@ -151,9 +152,9 @@ export function createFire(options = {}) {
             // But we use AdditiveBlending, so Black = Transparent.
             const brightness = 1.0 - Math.pow(life, 2); // Quadratic fade out
 
-            colors[i*3] = r * brightness;
-            colors[i*3+1] = Math.max(0, g * brightness);
-            colors[i*3+2] = Math.max(0, b * brightness);
+            colors[i * 3] = r * brightness;
+            colors[i * 3 + 1] = Math.max(0, g * brightness);
+            colors[i * 3 + 2] = Math.max(0, b * brightness);
         }
 
         geometry.attributes.position.needsUpdate = true;

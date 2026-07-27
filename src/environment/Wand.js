@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 import { registerInteractiveObject } from '../interaction.js';
 
-export function createWand(scene, physicsWorld, position = { x: 8, y: -2.70, z: 4 }, rotationY = Math.PI / 4) {
+export function createWand(
+    scene,
+    physicsWorld,
+    position = { x: 8, y: -2.7, z: 4 },
+    rotationY = Math.PI / 4
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'MagicWand';
@@ -11,14 +16,14 @@ export function createWand(scene, physicsWorld, position = { x: 8, y: -2.70, z: 
     const woodMat = new THREE.MeshStandardMaterial({
         color: 0x2d1a11,
         roughness: 0.8,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     const goldMat = new THREE.MeshStandardMaterial({
         color: 0xd4af37,
         roughness: 0.3,
         metalness: 0.8,
-        envMapIntensity: 1.0
+        envMapIntensity: 1.0,
     });
 
     const crystalMat = new THREE.MeshPhysicalMaterial({
@@ -27,7 +32,7 @@ export function createWand(scene, physicsWorld, position = { x: 8, y: -2.70, z: 
         emissiveIntensity: 0.5,
         roughness: 0.1,
         transmission: 0.9,
-        transparent: true
+        transparent: true,
     });
 
     const yOffset = -0.35; // Center the meshes around the local Y origin for physics alignment
@@ -38,7 +43,7 @@ export function createWand(scene, physicsWorld, position = { x: 8, y: -2.70, z: 
     const shaftRadiusTop = 0.02;
     const shaftGeo = new THREE.CylinderGeometry(shaftRadiusTop, shaftRadiusBottom, shaftLen, 16);
     const shaftMesh = new THREE.Mesh(shaftGeo, woodMat);
-    shaftMesh.position.y = (shaftLen / 2) + yOffset;
+    shaftMesh.position.y = shaftLen / 2 + yOffset;
     shaftMesh.castShadow = true;
     shaftMesh.receiveShadow = true;
     group.add(shaftMesh);
@@ -47,7 +52,7 @@ export function createWand(scene, physicsWorld, position = { x: 8, y: -2.70, z: 
     const handleLen = 0.4;
     const handleGeo = new THREE.CylinderGeometry(0.05, 0.05, handleLen, 16);
     const handleMesh = new THREE.Mesh(handleGeo, woodMat);
-    handleMesh.position.y = (-handleLen / 2) + yOffset;
+    handleMesh.position.y = -handleLen / 2 + yOffset;
     handleMesh.castShadow = true;
     handleMesh.receiveShadow = true;
     group.add(handleMesh);
@@ -104,7 +109,7 @@ export function createWand(scene, physicsWorld, position = { x: 8, y: -2.70, z: 
     // CylinderShape is Y-axis aligned by default. The group rotation will orient it horizontally.
     if (ammo && physicsWorld) {
         const shape = new ammo.btCylinderShape(new ammo.btVector3(0.05, totalLen / 2, 0.05));
-    
+
         // We adjust the physics body to perfectly overlap the visual meshes by centering the body.
         // The visual center of mass is around Y=0 in the group's local space.
         createStaticBody(physicsWorld, group, shape);

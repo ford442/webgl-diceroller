@@ -1,7 +1,24 @@
-import { DENSITY_PRESETS, LAYOUT_THEMES, buildShareableTableUrl } from './core/TableLayoutConfig.js';
+import {
+    DENSITY_PRESETS,
+    LAYOUT_THEMES,
+    buildShareableTableUrl,
+} from './core/TableLayoutConfig.js';
 import { isTouchPrimaryDevice } from './core/DeviceCapabilities.js';
 
-export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHooks = null, rollShareHooks = null) => {
+/**
+ * @param {(counts: Record<string, number>) => void} onUpdateDice
+ * @param {() => void} onRollAll
+ * @param {object | null} [layoutHooks]
+ * @param {{ onNotationRoll?: (expression: string) => void | Promise<void>; presets?: string[] } | null} [notationHooks]
+ * @param {{ hasShareableRoll?: () => boolean; buildShareUrl?: () => string | null } | null} [rollShareHooks]
+ */
+export const initUI = (
+    onUpdateDice,
+    onRollAll,
+    layoutHooks = null,
+    notationHooks = null,
+    rollShareHooks = null
+) => {
     const canvasContainer = document.getElementById('canvas-container') || document.body;
     const touchUi = isTouchPrimaryDevice();
 
@@ -26,14 +43,16 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
     if (touchUi) {
         container.style.maxHeight = '42vh';
         container.style.overflowY = 'auto';
-        container.style.webkitOverflowScrolling = 'touch';
+        /** @type {CSSStyleDeclaration & { webkitOverflowScrolling?: string }} */ (
+            container.style
+        ).webkitOverflowScrolling = 'touch';
     }
 
     const diceTypes = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
     const inputs = {};
     const counts = { d4: 1, d6: 1, d8: 1, d10: 1, d12: 1, d20: 1 };
 
-    diceTypes.forEach(type => {
+    diceTypes.forEach((type) => {
         const row = document.createElement('div');
         row.style.display = 'flex';
         row.style.justifyContent = 'space-between';
@@ -74,7 +93,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         'Single d20': { d4: 0, d6: 0, d8: 0, d10: 0, d12: 0, d20: 1 },
         "Bard's Luck": { d4: 1, d6: 1, d8: 0, d10: 0, d12: 0, d20: 2 },
         'Fistful of d6': { d4: 0, d6: 5, d8: 0, d10: 0, d12: 0, d20: 0 },
-        "Wizard's Arsenal": { d4: 2, d6: 2, d8: 2, d10: 1, d12: 1, d20: 1 }
+        "Wizard's Arsenal": { d4: 2, d6: 2, d8: 2, d10: 1, d12: 1, d20: 1 },
     };
 
     const applyPreset = (preset) => {
@@ -157,7 +176,9 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
                 historyIndex = -1;
             } catch (err) {
                 notationInput.style.outline = '1px solid #c44';
-                setTimeout(() => { notationInput.style.outline = ''; }, 1200);
+                setTimeout(() => {
+                    notationInput.style.outline = '';
+                }, 1200);
                 console.warn('[Notation]', err?.message ?? err);
             } finally {
                 notationInput.disabled = false;
@@ -209,7 +230,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
             { id: 'dnd5e', label: 'D&D 5e' },
             { id: 'pbta', label: 'PbtA' },
             { id: 'savage', label: 'Savage Worlds' },
-            { id: 'coc', label: 'Call of Cthulhu' }
+            { id: 'coc', label: 'Call of Cthulhu' },
         ];
         systems.forEach((sys) => {
             const opt = document.createElement('option');
@@ -238,7 +259,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
             { id: 'compound', label: 'Compound !!' },
             { id: 'reroll1', label: 'Reroll 1s' },
             { id: 'percentile', label: 'd100' },
-            { id: 'opposed', label: 'Opposed' }
+            { id: 'opposed', label: 'Opposed' },
         ];
 
         const mechanicRow = document.createElement('div');
@@ -253,7 +274,8 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.textContent = chip.label;
-            btn.style.cssText = 'font-size:10px;padding:4px 8px;min-height:28px;cursor:pointer;border-radius:3px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:white;';
+            btn.style.cssText =
+                'font-size:10px;padding:4px 8px;min-height:28px;cursor:pointer;border-radius:3px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:white;';
             btn.addEventListener('mousedown', (e) => e.stopPropagation());
             btn.addEventListener('click', () => {
                 if (chip.id === 'opposed') {
@@ -263,7 +285,11 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
                     return;
                 }
                 if (notationHooks.applyChip) {
-                    notationInput.value = notationHooks.applyChip(notationInput.value, chip.id, activeSystem);
+                    notationInput.value = notationHooks.applyChip(
+                        notationInput.value,
+                        chip.id,
+                        activeSystem
+                    );
                 }
             });
             mechanicRow.appendChild(btn);
@@ -294,7 +320,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
             '4d6r1',
             '2d6!',
             '1d100',
-            '1d20 vs 1d20'
+            '1d20 vs 1d20',
         ];
 
         const presetChipRow = document.createElement('div');
@@ -307,7 +333,8 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
             const chip = document.createElement('button');
             chip.type = 'button';
             chip.textContent = preset;
-            chip.style.cssText = 'font-size:10px;padding:4px 6px;min-height:28px;cursor:pointer;border-radius:3px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:white;';
+            chip.style.cssText =
+                'font-size:10px;padding:4px 6px;min-height:28px;cursor:pointer;border-radius:3px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:white;';
             chip.addEventListener('mousedown', (e) => e.stopPropagation());
             chip.addEventListener('click', () => {
                 notationInput.value = preset;
@@ -363,7 +390,9 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         shareRollBtn.addEventListener('click', async () => {
             if (rollShareHooks.hasShareableRoll && !rollShareHooks.hasShareableRoll()) {
                 shareRollBtn.textContent = 'Roll first';
-                setTimeout(() => { shareRollBtn.textContent = 'Share Roll'; }, 1500);
+                setTimeout(() => {
+                    shareRollBtn.textContent = 'Share Roll';
+                }, 1500);
                 return;
             }
             const url = rollShareHooks.buildShareUrl();
@@ -371,7 +400,9 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
             try {
                 await navigator.clipboard.writeText(url);
                 shareRollBtn.textContent = 'Copied!';
-                setTimeout(() => { shareRollBtn.textContent = 'Share Roll'; }, 1500);
+                setTimeout(() => {
+                    shareRollBtn.textContent = 'Share Roll';
+                }, 1500);
             } catch {
                 window.prompt('Share this roll:', url);
             }
@@ -515,7 +546,7 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
                 const result = await layoutHooks.onRerollLayout({
                     density: densitySelect.value,
                     theme: themeSelect.value,
-                    newSeed: true
+                    newSeed: true,
                 });
                 updateLayoutStatus(result);
             } finally {
@@ -536,7 +567,9 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
             try {
                 await navigator.clipboard.writeText(url);
                 shareBtn.textContent = 'Copied!';
-                setTimeout(() => { shareBtn.textContent = 'Copy Table Link'; }, 1500);
+                setTimeout(() => {
+                    shareBtn.textContent = 'Copy Table Link';
+                }, 1500);
             } catch {
                 window.prompt('Share this table:', url);
             }
@@ -573,14 +606,16 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         helpContainer.style.bottom = 'max(84px, calc(16px + env(safe-area-inset-bottom)))';
         helpContainer.style.maxWidth = 'min(92vw, 320px)';
     }
-    helpContainer.innerHTML = touchUi ? `
+    helpContainer.innerHTML = touchUi
+        ? `
         <div style="font-weight: bold; margin-bottom: 5px;">Touch Controls:</div>
         <div>👆 <b>Tap table</b> - Roll all dice</div>
         <div>👉 <b>Flick table</b> - Toss dice</div>
         <div>👇 <b>Hold die</b> - Grab and drag</div>
         <div>👆👆 <b>Double-tap die</b> - Levitate</div>
         <div>✌️ <b>Two fingers</b> - Orbit / pinch zoom</div>
-    ` : `
+    `
+        : `
         <div style="font-weight: bold; margin-bottom: 5px;">Controls:</div>
         <div>🖱️ <b>Left Click</b> - Grab/throw dice</div>
         <div>🖱️ <b>Right Click</b> - Enter FPS mode</div>
@@ -588,6 +623,8 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
         <div>⌨️ <b>WASD</b> - Move (FPS mode)</div>
         <div>⌨️ <b>ESC</b> - Exit FPS mode</div>
         <div>⌨️ <b>R</b> - Roll all dice</div>
+        <div>🎲 <b>Dice cup</b> - Click, shake, release to pour (WASM)</div>
+        <div>⌨️ <b>T</b> - Pour while shaking cup</div>
         <div>⌨️ <b>H</b> - Roll history &amp; statistics</div>
         <div>⌨️ <b>Enter</b> - Roll notation expression</div>
         <div>⌨️ <b>Shift+R</b> - New table layout</div>
@@ -597,14 +634,14 @@ export const initUI = (onUpdateDice, onRollAll, layoutHooks = null, notationHook
     return {
         updateCounts: (newCounts) => {
             if (!newCounts || typeof newCounts !== 'object') return;
-            Object.keys(newCounts).forEach(key => {
+            Object.keys(newCounts).forEach((key) => {
                 if (inputs[key]) {
                     inputs[key].value = newCounts[key];
                     counts[key] = newCounts[key];
                 }
             });
         },
-        updateLayoutStatus
+        updateLayoutStatus,
     };
 };
 
@@ -647,6 +684,6 @@ export const createCrosshair = () => {
         },
         setVisible: (visible) => {
             crosshair.style.display = visible ? 'block' : 'none';
-        }
+        },
     };
 };

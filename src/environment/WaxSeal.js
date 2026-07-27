@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createWaxSeal(scene, physicsWorld, position = { x: 10, y: -2.75, z: -8 }, rotationY = 0) {
+export function createWaxSeal(
+    scene,
+    physicsWorld,
+    position = { x: 10, y: -2.75, z: -8 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'WaxSealStamp';
@@ -10,19 +15,19 @@ export function createWaxSeal(scene, physicsWorld, position = { x: 10, y: -2.75,
     const woodMat = new THREE.MeshStandardMaterial({
         color: 0x3e2723, // Dark stained wood
         roughness: 0.7,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     const brassMat = new THREE.MeshStandardMaterial({
         color: 0xb5a642, // Brass
         metalness: 0.9,
-        roughness: 0.3
+        roughness: 0.3,
     });
 
     const waxMat = new THREE.MeshStandardMaterial({
         color: 0x8b0000, // Dark red wax
         roughness: 0.4,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     // 1. Stamp Handle (Wood)
@@ -77,13 +82,14 @@ export function createWaxSeal(scene, physicsWorld, position = { x: 10, y: -2.75,
             const offset = (Math.sin(x * 10) + Math.cos(z * 10)) * 0.05;
 
             // Push outwards mostly, but also slightly up/down
-            const len = Math.sqrt(x*x + z*z);
+            const len = Math.sqrt(x * x + z * z);
             if (len > 0) {
-                positions.setX(i, x + (x/len) * offset);
-                positions.setZ(i, z + (z/len) * offset);
+                positions.setX(i, x + (x / len) * offset);
+                positions.setZ(i, z + (z / len) * offset);
             }
-            if (y > 0) { // Top surface
-                positions.setY(i, y + (Math.random() * 0.02));
+            if (y > 0) {
+                // Top surface
+                positions.setY(i, y + Math.random() * 0.02);
             }
         }
     }
@@ -120,22 +126,24 @@ export function createWaxSeal(scene, physicsWorld, position = { x: 10, y: -2.75,
     // Max radius is baseRadius (0.3).
     // Note: Ammo.btCylinderShape expects half-extents.
     if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius));
-    
+        const shape = new ammo.btCylinderShape(
+            new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius)
+        );
+
         // Since createStaticBody sets the collision shape center at the group's origin,
         // and our group's origin is at the bottom (y=0) while the shape is centered,
         // we need to offset the shape center.
         // It's easier to move the group's logical center and visually offset the children down.
-    
+
         // Move group center up by totalHeight/2:
         group.position.y = position.y + totalHeight / 2;
-    
+
         // Move all children down by totalHeight/2 to keep them visually at Y=-2.75:
         handleMesh.position.y -= totalHeight / 2;
         baseMesh.position.y -= totalHeight / 2;
         waxMesh.position.y -= totalHeight / 2;
         dripMesh.position.y -= totalHeight / 2;
-    
+
         createStaticBody(physicsWorld, group, shape);
     }
 

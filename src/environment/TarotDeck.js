@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 import { toCurrentTabletopY } from '../core/SceneMetrics.js';
 
-export function createTarotDeck(scene, physicsWorld, position = { x: -6, y: -2.74, z: -3 }, rotationY = Math.PI / 6) {
+export function createTarotDeck(
+    scene,
+    physicsWorld,
+    position = { x: -6, y: -2.74, z: -3 },
+    rotationY = Math.PI / 6
+) {
     position = toCurrentTabletopY(position);
     const ammo = getAmmo();
     const group = new THREE.Group();
@@ -26,20 +31,20 @@ export function createTarotDeck(scene, physicsWorld, position = { x: -6, y: -2.7
         map: backTexture,
         roughness: 0.8,
         metalness: 0.1,
-        color: 0xffffff
+        color: 0xffffff,
     });
 
     const faceMaterial = new THREE.MeshStandardMaterial({
         map: faceTexture,
         roughness: 0.8,
         metalness: 0.1,
-        color: 0xffffff
+        color: 0xffffff,
     });
 
     const edgeMaterial = new THREE.MeshStandardMaterial({
         color: edgeColor,
         roughness: 0.9,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // Materials array for BoxGeometry
@@ -56,7 +61,7 @@ export function createTarotDeck(scene, physicsWorld, position = { x: -6, y: -2.7
         backMaterial, // Top
         edgeMaterial, // Bottom
         edgeMaterial, // Front
-        edgeMaterial  // Back
+        edgeMaterial, // Back
     ];
 
     const deckMesh = new THREE.Mesh(deckGeometry, deckMaterials);
@@ -69,20 +74,22 @@ export function createTarotDeck(scene, physicsWorld, position = { x: -6, y: -2.7
     // Physics for Deck
     if (physicsWorld && getAmmo()) {
         if (ammo && physicsWorld) {
-            const deckShape = new ammo.btBoxShape(new ammo.btVector3(cardWidth / 2, deckThickness / 2, cardHeight / 2));
-    
+            const deckShape = new ammo.btBoxShape(
+                new ammo.btVector3(cardWidth / 2, deckThickness / 2, cardHeight / 2)
+            );
+
             // createStaticBody expects the object to have the world transform.
             // We'll create a dummy mesh with the world transform of the deckMesh
             const deckDummy = new THREE.Mesh();
-    
+
             // Calculate world position
             const deckWorldPos = new THREE.Vector3(0, deckThickness / 2, 0);
             deckWorldPos.applyMatrix4(new THREE.Matrix4().makeRotationY(rotationY));
             deckWorldPos.add(new THREE.Vector3(position.x, position.y, position.z));
-    
+
             deckDummy.position.copy(deckWorldPos);
             deckDummy.quaternion.copy(group.quaternion);
-    
+
             createStaticBody(physicsWorld, deckDummy, deckShape);
         }
     }
@@ -96,7 +103,7 @@ export function createTarotDeck(scene, physicsWorld, position = { x: -6, y: -2.7
         faceMaterial, // Top (Face up)
         backMaterial, // Bottom
         edgeMaterial, // Front
-        edgeMaterial  // Back
+        edgeMaterial, // Back
     ];
 
     const card1 = new THREE.Mesh(cardGeometry, faceUpMaterials);
@@ -110,21 +117,23 @@ export function createTarotDeck(scene, physicsWorld, position = { x: -6, y: -2.7
     // Physics for Card 1
     if (physicsWorld && getAmmo()) {
         if (ammo && physicsWorld) {
-            const cardShape = new ammo.btBoxShape(new ammo.btVector3(cardWidth / 2, cardThickness / 2, cardHeight / 2));
-    
+            const cardShape = new ammo.btBoxShape(
+                new ammo.btVector3(cardWidth / 2, cardThickness / 2, cardHeight / 2)
+            );
+
             const cardDummy = new THREE.Mesh();
             const cardWorldPos = new THREE.Vector3(2.0, cardThickness / 2, 0.5);
-    
+
             // Apply group rotation
             cardWorldPos.applyMatrix4(new THREE.Matrix4().makeRotationY(rotationY));
             cardWorldPos.add(new THREE.Vector3(position.x, position.y, position.z));
-    
+
             cardDummy.position.copy(cardWorldPos);
-    
+
             // Combine group rotation and local card rotation
             const euler = new THREE.Euler(0, rotationY - Math.PI / 8, 0, 'YXZ');
             cardDummy.quaternion.setFromEuler(euler);
-    
+
             createStaticBody(physicsWorld, cardDummy, cardShape);
         }
     }
@@ -136,7 +145,7 @@ export function createTarotDeck(scene, physicsWorld, position = { x: -6, y: -2.7
         backMaterial, // Top (Face down)
         faceMaterial, // Bottom
         edgeMaterial, // Front
-        edgeMaterial  // Back
+        edgeMaterial, // Back
     ];
 
     const card2 = new THREE.Mesh(cardGeometry, faceDownMaterials);
@@ -150,20 +159,22 @@ export function createTarotDeck(scene, physicsWorld, position = { x: -6, y: -2.7
     // Physics for Card 2
     if (physicsWorld && getAmmo()) {
         if (ammo && physicsWorld) {
-            const cardShape = new ammo.btBoxShape(new ammo.btVector3(cardWidth / 2, cardThickness / 2, cardHeight / 2));
-    
+            const cardShape = new ammo.btBoxShape(
+                new ammo.btVector3(cardWidth / 2, cardThickness / 2, cardHeight / 2)
+            );
+
             const cardDummy = new THREE.Mesh();
             const cardWorldPos = new THREE.Vector3(1.0, cardThickness / 2, -1.5);
-    
+
             // Apply group rotation
             cardWorldPos.applyMatrix4(new THREE.Matrix4().makeRotationY(rotationY));
             cardWorldPos.add(new THREE.Vector3(position.x, position.y, position.z));
-    
+
             cardDummy.position.copy(cardWorldPos);
-    
+
             const euler = new THREE.Euler(0, rotationY + Math.PI / 12, 0, 'YXZ');
             cardDummy.quaternion.setFromEuler(euler);
-    
+
             createStaticBody(physicsWorld, cardDummy, cardShape);
         }
     }
@@ -171,7 +182,7 @@ export function createTarotDeck(scene, physicsWorld, position = { x: -6, y: -2.7
     scene.add(group);
 
     return {
-        group
+        group,
     };
 }
 
@@ -213,7 +224,7 @@ function generateCardBackTexture() {
     // Star/Rays
     ctx.beginPath();
     for (let i = 0; i < 8; i++) {
-        const angle = (Math.PI * 2 / 8) * i;
+        const angle = ((Math.PI * 2) / 8) * i;
         ctx.moveTo(cx + Math.cos(angle) * 40, cy + Math.sin(angle) * 40);
         ctx.lineTo(cx + Math.cos(angle) * 80, cy + Math.sin(angle) * 80);
     }
@@ -232,7 +243,13 @@ function generateCardBackTexture() {
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     for (let i = 0; i < 100; i++) {
         ctx.beginPath();
-        ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 3, 0, Math.PI * 2);
+        ctx.arc(
+            Math.random() * canvas.width,
+            Math.random() * canvas.height,
+            Math.random() * 3,
+            0,
+            Math.PI * 2
+        );
         ctx.fill();
     }
 
@@ -332,7 +349,13 @@ function generateTheFoolTexture() {
     ctx.fillStyle = 'rgba(139, 69, 19, 0.1)';
     for (let i = 0; i < 50; i++) {
         ctx.beginPath();
-        ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 20 + 5, 0, Math.PI * 2);
+        ctx.arc(
+            Math.random() * canvas.width,
+            Math.random() * canvas.height,
+            Math.random() * 20 + 5,
+            0,
+            Math.PI * 2
+        );
         ctx.fill();
     }
 

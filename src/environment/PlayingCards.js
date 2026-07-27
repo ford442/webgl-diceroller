@@ -7,11 +7,16 @@ const SUITS = [
     { suit: '♠', color: '#000000' },
     { suit: '♥', color: '#cc0000' },
     { suit: '♣', color: '#000000' },
-    { suit: '♦', color: '#cc0000' }
+    { suit: '♦', color: '#cc0000' },
 ];
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
-export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -2.75, z: -8 }, rotationY = 0) {
+export function createPlayingCards(
+    scene,
+    physicsWorld,
+    position = { x: -8, y: -2.75, z: -8 },
+    _rotationY = 0
+) {
     const group = new THREE.Group();
     group.name = 'PlayingCards';
 
@@ -32,7 +37,7 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
         { suit: '♣', rank: '7', color: '#000000', angle: 0.4, dx: -0.6, dz: 0.5 },
         { suit: '♦', rank: 'Q', color: '#cc0000', angle: -0.4, dx: 0.2, dz: 0.8 },
         { isBack: true, angle: 0.1, dx: -0.3, dz: -0.8 }, // Face down card
-        { isBack: true, angle: -0.2, dx: 1.0, dz: 0.5 } // Another face down card
+        { isBack: true, angle: -0.2, dx: 1.0, dz: 0.5 }, // Another face down card
     ];
 
     // Base position on the table
@@ -45,7 +50,7 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
     const backMaterial = new THREE.MeshStandardMaterial({
         map: backTexture,
         roughness: 0.6,
-        metalness: 0.05
+        metalness: 0.05,
     });
 
     cardsData.forEach((card, i) => {
@@ -57,7 +62,7 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
             frontMaterial = new THREE.MeshStandardMaterial({
                 map: frontTexture,
                 roughness: 0.6,
-                metalness: 0.05
+                metalness: 0.05,
             });
         }
 
@@ -66,9 +71,23 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
 
         let materials;
         if (card.isBack) {
-            materials = [edgeMaterial, edgeMaterial, backMaterial, backMaterial, edgeMaterial, edgeMaterial];
+            materials = [
+                edgeMaterial,
+                edgeMaterial,
+                backMaterial,
+                backMaterial,
+                edgeMaterial,
+                edgeMaterial,
+            ];
         } else {
-            materials = [edgeMaterial, edgeMaterial, frontMaterial, backMaterial, edgeMaterial, edgeMaterial];
+            materials = [
+                edgeMaterial,
+                edgeMaterial,
+                frontMaterial,
+                backMaterial,
+                edgeMaterial,
+                edgeMaterial,
+            ];
         }
 
         const mesh = new THREE.Mesh(geometry, materials);
@@ -77,7 +96,7 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
 
         const x = baseX + card.dx;
         const z = baseZ + card.dz;
-        const y = -2.745 + (i * 0.002); // Stack slightly to avoid z-fighting
+        const y = -2.745 + i * 0.002; // Stack slightly to avoid z-fighting
 
         mesh.position.set(x, y, z);
         mesh.rotation.y = card.angle;
@@ -87,7 +106,9 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
 
         // Physics for each card
         if (ammo && physicsWorld) {
-            const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, thickness/2, height/2));
+            const shape = new ammo.btBoxShape(
+                new ammo.btVector3(width / 2, thickness / 2, height / 2)
+            );
             createStaticBody(physicsWorld, mesh, shape);
         }
     });
@@ -114,10 +135,17 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
 
     const deckEdgeMaterial = new THREE.MeshStandardMaterial({
         map: deckEdgeTexture,
-        roughness: 0.9
+        roughness: 0.9,
     });
 
-    const deckMaterials = [deckEdgeMaterial, deckEdgeMaterial, backMaterial, backMaterial, deckEdgeMaterial, deckEdgeMaterial];
+    const deckMaterials = [
+        deckEdgeMaterial,
+        deckEdgeMaterial,
+        backMaterial,
+        backMaterial,
+        deckEdgeMaterial,
+        deckEdgeMaterial,
+    ];
     const deckMesh = new THREE.Mesh(deckGeo, deckMaterials);
     deckMesh.castShadow = true;
     deckMesh.receiveShadow = true;
@@ -125,13 +153,15 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
     // Deck position
     const deckX = baseX - 1.5;
     const deckZ = baseZ + 0.5;
-    const deckY = -2.75 + deckHeight/2;
+    const deckY = -2.75 + deckHeight / 2;
     deckMesh.position.set(deckX, deckY, deckZ);
     deckMesh.rotation.y = -0.3;
 
     group.add(deckMesh);
     if (ammo && physicsWorld) {
-        const deckShape = new ammo.btBoxShape(new ammo.btVector3(width/2, deckHeight/2, height/2));
+        const deckShape = new ammo.btBoxShape(
+            new ammo.btVector3(width / 2, deckHeight / 2, height / 2)
+        );
         createStaticBody(physicsWorld, deckMesh, deckShape);
     }
 
@@ -162,11 +192,18 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
             revealed = drawRandom();
             lastCard = revealed;
             const tex = generateCardFrontTexture(revealed.suit, revealed.rank, revealed.color);
-            const newFront = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, metalness: 0.05 });
+            const newFront = new THREE.MeshStandardMaterial({
+                map: tex,
+                roughness: 0.6,
+                metalness: 0.05,
+            });
             const mats = entry.mesh.material;
             const old = mats[2];
             mats[2] = newFront;
-            if (old && old.map && old !== mats[3]) { old.map.dispose?.(); old.dispose?.(); }
+            if (old && old.map && old !== mats[3]) {
+                old.map.dispose?.();
+                old.dispose?.();
+            }
         }
 
         const from = entry.mesh.rotation.x;
@@ -183,7 +220,7 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
                 entry.mesh.position.y = baseY;
                 entry.flipped = !entry.flipped;
                 animating.delete(entry);
-            }
+            },
         });
         return revealed;
     };
@@ -199,13 +236,15 @@ export function createPlayingCards(scene, physicsWorld, position = { x: -8, y: -
     registerInteractable('playingCards', {
         trigger: interact,
         flip: (index) => flipCard(cards[index]),
-        getState: () => ({ draws, lastCard, cardCount: cards.length })
+        getState: () => ({ draws, lastCard, cardCount: cards.length }),
     });
 
     return {
         group,
         interact,
-        dispose: () => { /* interactable handle is shared/overwritten across spawns */ }
+        dispose: () => {
+            /* interactable handle is shared/overwritten across spawns */
+        },
     };
 }
 

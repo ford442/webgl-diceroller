@@ -10,7 +10,7 @@ const DEFAULT_ARGS = [
     '--enable-unsafe-swiftshader',
 ];
 
-const url = 'http://localhost:4173/?webgl&no-post&fair-dice';
+const url = 'http://localhost:4173/?webgl&no-post&fair-dice&test';
 
 (async () => {
     const browser = await chromium.launch({ headless: true, args: DEFAULT_ARGS });
@@ -21,7 +21,11 @@ const url = 'http://localhost:4173/?webgl&no-post&fair-dice';
 
     try {
         await page.goto(url, { waitUntil: 'load', timeout: 60000 });
-        await page.waitForFunction(() => window.sceneReady === true, null, { timeout: 150000 });
+        await page.waitForFunction(
+            () => (window.__app?.ready ?? window.sceneReady) === true,
+            null,
+            { timeout: 150000 }
+        );
 
         const liveRegion = await page.$('#dice-results-live');
         if (!liveRegion) {
@@ -31,7 +35,7 @@ const url = 'http://localhost:4173/?webgl&no-post&fair-dice';
 
         const liveAttrs = await liveRegion.evaluate((el) => ({
             ariaLive: el.getAttribute('aria-live'),
-            role: el.getAttribute('role')
+            role: el.getAttribute('role'),
         }));
         if (liveAttrs.ariaLive !== 'polite' || liveAttrs.role !== 'status') {
             console.error('FAILURE: aria-live region has wrong attributes', liveAttrs);
@@ -46,7 +50,10 @@ const url = 'http://localhost:4173/?webgl&no-post&fair-dice';
             return { panel: true, count: items.length };
         });
         if (!focusables.panel || focusables.count < 3) {
-            console.error('FAILURE: dice controls panel missing or too few focusable elements', focusables);
+            console.error(
+                'FAILURE: dice controls panel missing or too few focusable elements',
+                focusables
+            );
             process.exit(1);
         }
         console.log(`✓ ${focusables.count} focusable dice controls`);
@@ -59,7 +66,9 @@ const url = 'http://localhost:4173/?webgl&no-post&fair-dice';
             .disableRules(['color-contrast'])
             .analyze();
 
-        const violations = axeResults.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious');
+        const violations = axeResults.violations.filter(
+            (v) => v.impact === 'critical' || v.impact === 'serious'
+        );
         if (violations.length > 0) {
             console.error('FAILURE: axe violations on DOM UI');
             for (const v of violations) {
@@ -70,7 +79,9 @@ const url = 'http://localhost:4173/?webgl&no-post&fair-dice';
             }
             process.exit(1);
         }
-        console.log(`✓ axe scan passed (${axeResults.passes.length} rules; color-contrast excluded — scrim work tracked separately)`);
+        console.log(
+            `✓ axe scan passed (${axeResults.passes.length} rules; color-contrast excluded — scrim work tracked separately)`
+        );
 
         if (errors.length > 0) {
             console.error('FAILURE: browser console errors during load');
@@ -86,4 +97,3 @@ const url = 'http://localhost:4173/?webgl&no-post&fair-dice';
         await browser.close();
     }
 })();
-

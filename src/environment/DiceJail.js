@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
 
-export function createDiceJail(scene, physicsWorld, position = { x: -12, y: -2.75, z: 5 }, rotationY = Math.PI / 4) {
+export function createDiceJail(
+    scene,
+    physicsWorld,
+    position = { x: -12, y: -2.75, z: 5 },
+    rotationY = Math.PI / 4
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'DiceJail';
@@ -16,13 +21,13 @@ export function createDiceJail(scene, physicsWorld, position = { x: -12, y: -2.7
         bumpScale: 0.1,
         roughnessMap: woodRoughness,
         color: 0x5c4033, // Darker wood
-        roughness: 0.8
+        roughness: 0.8,
     });
 
     const metalMat = new THREE.MeshStandardMaterial({
         color: 0x444444,
         metalness: 0.8,
-        roughness: 0.4
+        roughness: 0.4,
     });
 
     const signMat = createSignMaterial();
@@ -55,8 +60,8 @@ export function createDiceJail(scene, physicsWorld, position = { x: -12, y: -2.7
     // Let's do 2 bars per side evenly spaced.
     // Corners are posts.
     const postRadius = 0.1;
-    const postGeo = new THREE.CylinderGeometry(postRadius, postRadius, height - 2*thickness, 8);
-    const barGeo = new THREE.CylinderGeometry(barRadius, barRadius, height - 2*thickness, 8);
+    const postGeo = new THREE.CylinderGeometry(postRadius, postRadius, height - 2 * thickness, 8);
+    const barGeo = new THREE.CylinderGeometry(barRadius, barRadius, height - 2 * thickness, 8);
 
     const barY = height / 2;
     const halfSize = size / 2;
@@ -66,10 +71,10 @@ export function createDiceJail(scene, physicsWorld, position = { x: -12, y: -2.7
         { x: -halfSize + postRadius, z: -halfSize + postRadius },
         { x: halfSize - postRadius, z: -halfSize + postRadius },
         { x: -halfSize + postRadius, z: halfSize - postRadius },
-        { x: halfSize - postRadius, z: halfSize - postRadius }
+        { x: halfSize - postRadius, z: halfSize - postRadius },
     ];
 
-    corners.forEach(pos => {
+    corners.forEach((pos) => {
         const post = new THREE.Mesh(postGeo, woodMat);
         post.position.set(pos.x, barY, pos.z);
         post.castShadow = true;
@@ -87,7 +92,7 @@ export function createDiceJail(scene, physicsWorld, position = { x: -12, y: -2.7
     const step = innerSpace / 3;
 
     // Front/Back (Z fixed)
-    [-1, 1].forEach(side => {
+    [-1, 1].forEach((side) => {
         const z = side * (halfSize - postRadius);
         for (let i = 1; i <= 2; i++) {
             const x = -halfSize + postRadius + i * step;
@@ -100,7 +105,7 @@ export function createDiceJail(scene, physicsWorld, position = { x: -12, y: -2.7
     });
 
     // Left/Right (X fixed)
-    [-1, 1].forEach(side => {
+    [-1, 1].forEach((side) => {
         const x = side * (halfSize - postRadius);
         for (let i = 1; i <= 2; i++) {
             const z = -halfSize + postRadius + i * step;
@@ -118,55 +123,62 @@ export function createDiceJail(scene, physicsWorld, position = { x: -12, y: -2.7
     const signGeo = new THREE.BoxGeometry(0.8, 0.4, 0.05);
     const signMesh = new THREE.Mesh(signGeo, signMat);
     // Center of Front Face: Z = halfSize. Y = height - thickness/2.
-    signMesh.position.set(0, height - thickness/2, halfSize + 0.03);
+    signMesh.position.set(0, height - thickness / 2, halfSize + 0.03);
     // Tilt slightly
     signMesh.rotation.x = -0.1;
     group.add(signMesh);
-
 
     // --- Physics (Compound Shape) ---
     // Hollow box to allow dice inside (theoretically)
     if (ammo) {
         if (ammo && physicsWorld) {
             const compoundShape = new ammo.btCompoundShape();
-    
+
             // Helper
-            function addShape(s, px, py, pz) {
+            function _addShape(s, px, py, pz) {
                 if (ammo && physicsWorld) {
                     const transform = new ammo.btTransform();
                     transform.setIdentity();
                     transform.setOrigin(new ammo.btVector3(px, py, pz));
                     compoundShape.addChildShape(transform, s);
                 }
-        
+
                 // Base
                 if (ammo && physicsWorld) {
-                    const baseShape = new ammo.btBoxShape(new ammo.btVector3(size/2, thickness/2, size/2));
-                    addShape(baseShape, 0, thickness/2, 0);
-            
+                    const baseShape = new ammo.btBoxShape(
+                        new ammo.btVector3(size / 2, thickness / 2, size / 2)
+                    );
+                    _addShape(baseShape, 0, thickness / 2, 0);
+
                     // Top
                     if (ammo && physicsWorld) {
-                        const topShape = new ammo.btBoxShape(new ammo.btVector3(size/2, thickness/2, size/2));
-                        addShape(topShape, 0, height - thickness/2, 0);
-                
+                        const topShape = new ammo.btBoxShape(
+                            new ammo.btVector3(size / 2, thickness / 2, size / 2)
+                        );
+                        _addShape(topShape, 0, height - thickness / 2, 0);
+
                         // Walls (Invisible colliders)
                         // Thickness 0.1
                         const wallThick = 0.1;
-                        const wallH = height - 2*thickness;
+                        const wallH = height - 2 * thickness;
                         if (ammo && physicsWorld) {
-                            const wallShapeFB = new ammo.btBoxShape(new ammo.btVector3(size/2, wallH/2, wallThick/2));
+                            const wallShapeFB = new ammo.btBoxShape(
+                                new ammo.btVector3(size / 2, wallH / 2, wallThick / 2)
+                            );
                             if (ammo && physicsWorld) {
-                                const wallShapeLR = new ammo.btBoxShape(new ammo.btVector3(wallThick/2, wallH/2, size/2));
-                        
+                                const wallShapeLR = new ammo.btBoxShape(
+                                    new ammo.btVector3(wallThick / 2, wallH / 2, size / 2)
+                                );
+
                                 // Front (Z+)
-                                addShape(wallShapeFB, 0, height/2, halfSize - wallThick/2);
+                                _addShape(wallShapeFB, 0, height / 2, halfSize - wallThick / 2);
                                 // Back (Z-)
-                                addShape(wallShapeFB, 0, height/2, -halfSize + wallThick/2);
+                                _addShape(wallShapeFB, 0, height / 2, -halfSize + wallThick / 2);
                                 // Left (X-)
-                                addShape(wallShapeLR, -halfSize + wallThick/2, height/2, 0);
+                                _addShape(wallShapeLR, -halfSize + wallThick / 2, height / 2, 0);
                                 // Right (X+)
-                                addShape(wallShapeLR, halfSize - wallThick/2, height/2, 0);
-                        
+                                _addShape(wallShapeLR, halfSize - wallThick / 2, height / 2, 0);
+
                                 // Position on Table
                                 // Table Top -2.75.
                                 // Group Origin is at Bottom Corner (0,0,0) of the cage local space.
@@ -174,14 +186,14 @@ export function createDiceJail(scene, physicsWorld, position = { x: -12, y: -2.7
                                 // So Group Y should be -2.75.
                                 group.position.set(position.x, position.y, position.z);
                                 group.rotation.y = rotationY;
-                        
+
                                 scene.add(group);
                                 createStaticBody(physicsWorld, group, compoundShape);
                             }
                         }
                     }
                 }
-                }
+            }
         }
     }
 
@@ -212,12 +224,12 @@ function createSignMaterial() {
 
     // Grunge
     ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    for(let i=0; i<20; i++) {
+    for (let i = 0; i < 20; i++) {
         const x = Math.random() * 256;
         const y = Math.random() * 128;
         const r = Math.random() * 10;
         ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI*2);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
     }
 
@@ -227,6 +239,6 @@ function createSignMaterial() {
     return new THREE.MeshStandardMaterial({
         map: texture,
         roughness: 0.9,
-        color: 0xffffff
+        color: 0xffffff,
     });
 }

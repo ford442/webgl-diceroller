@@ -10,9 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distAssets = resolve(__dirname, '../dist/assets');
-const budgets = JSON.parse(
-    await readFile(resolve(__dirname, 'bundle-budgets.json'), 'utf8')
-);
+const budgets = JSON.parse(await readFile(resolve(__dirname, 'bundle-budgets.json'), 'utf8'));
 
 function gzipSize(buffer) {
     return new Promise((resolveSize, reject) => {
@@ -25,9 +23,7 @@ function gzipSize(buffer) {
     });
 }
 
-const files = (await readdir(distAssets))
-    .filter((name) => name.endsWith('.js'))
-    .sort();
+const files = (await readdir(distAssets)).filter((name) => name.endsWith('.js')).sort();
 
 let failed = 0;
 let totalGzip = 0;
@@ -42,10 +38,14 @@ for (const file of files) {
 
 console.log('Production JS bundle sizes:\n');
 for (const { file, raw, gzip } of rows) {
-    console.log(`  ${file.padEnd(42)} ${(raw / 1024).toFixed(1).padStart(7)} KB raw  ${(gzip / 1024).toFixed(1).padStart(6)} KB gzip`);
+    console.log(
+        `  ${file.padEnd(42)} ${(raw / 1024).toFixed(1).padStart(7)} KB raw  ${(gzip / 1024).toFixed(1).padStart(6)} KB gzip`
+    );
 }
 
-console.log(`\n  ${'TOTAL'.padEnd(42)} ${' '.repeat(7)}        ${(totalGzip / 1024).toFixed(1).padStart(6)} KB gzip`);
+console.log(
+    `\n  ${'TOTAL'.padEnd(42)} ${' '.repeat(7)}        ${(totalGzip / 1024).toFixed(1).padStart(6)} KB gzip`
+);
 
 for (const [name, budget] of Object.entries(budgets.chunks)) {
     const match = rows.find(({ file }) => new RegExp(budget.pattern).test(`assets/${file}`));

@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo } from '../physics.js';
 
-export function createSpyglass(scene, physicsWorld, position = { x: 5, y: -2.75, z: 7 }, rotationY = Math.PI / 6) {
+export function createSpyglass(
+    scene,
+    physicsWorld,
+    position = { x: 5, y: -2.75, z: 7 },
+    rotationY = Math.PI / 6
+) {
     const group = new THREE.Group();
     group.name = 'Spyglass';
 
@@ -10,14 +15,14 @@ export function createSpyglass(scene, physicsWorld, position = { x: 5, y: -2.75,
     const brassMaterial = new THREE.MeshStandardMaterial({
         color: 0xb5a642,
         metalness: 0.8,
-        roughness: 0.3
+        roughness: 0.3,
     });
 
     // Dark leather wrap for the main body
     const leatherMaterial = new THREE.MeshStandardMaterial({
         color: 0x3d2314,
         roughness: 0.9,
-        bumpScale: 0.05
+        bumpScale: 0.05,
     });
 
     // Glass for the lens
@@ -28,7 +33,7 @@ export function createSpyglass(scene, physicsWorld, position = { x: 5, y: -2.75,
         transmission: 0.9, // glass-like transparency
         thickness: 0.5,
         transparent: true,
-        opacity: 0.8
+        opacity: 0.8,
     });
 
     // Dimensions for the tubes (collapsible segments)
@@ -37,10 +42,10 @@ export function createSpyglass(scene, physicsWorld, position = { x: 5, y: -2.75,
     const segments = [
         { radius: 0.3, length: 1.5, z: 1.0, material: leatherMaterial }, // Main body (front)
         { radius: 0.25, length: 1.2, z: -0.1, material: brassMaterial }, // Middle tube
-        { radius: 0.2, length: 1.0, z: -1.0, material: brassMaterial }   // Eyepiece tube
+        { radius: 0.2, length: 1.0, z: -1.0, material: brassMaterial }, // Eyepiece tube
     ];
 
-    segments.forEach(seg => {
+    segments.forEach((seg) => {
         // CylinderGeometry(radiusTop, radiusBottom, height, radialSegments)
         // Default orientation for cylinder is along Y axis. We need to rotate it to lie flat.
         const geo = new THREE.CylinderGeometry(seg.radius, seg.radius, seg.length, 16);
@@ -97,7 +102,9 @@ export function createSpyglass(scene, physicsWorld, position = { x: 5, y: -2.75,
         const Ammo = getAmmo();
         const transform = new Ammo.btTransform();
         transform.setIdentity();
-        transform.setOrigin(new Ammo.btVector3(group.position.x, group.position.y, group.position.z));
+        transform.setOrigin(
+            new Ammo.btVector3(group.position.x, group.position.y, group.position.z)
+        );
 
         // Note: btCylinderShape expects a vector indicating half-extents.
         // And it is oriented along the Y axis by default.

@@ -52,11 +52,14 @@ export async function run() {
 `;
 
 async function startVite() {
-    const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'],
-        { stdio: ['ignore', 'pipe', 'pipe'] });
+    const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
     for (let i = 0; i < 60; i++) {
         await sleep(500);
-        try { if ((await fetch(`${BASE}/`)).ok) return proc; } catch {}
+        try {
+            if ((await fetch(`${BASE}/`)).ok) return proc;
+        } catch {}
     }
     proc.kill('SIGKILL');
     throw new Error('vite timeout');
@@ -71,14 +74,18 @@ console.log('[verify] browser launched');
 try {
     const page = await browser.newPage();
     const errors = [];
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    page.on('console', (m) => {
+        if (m.type() === 'error') errors.push(m.text());
+    });
     page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
     await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
     const result = await page.evaluate(async () => {
         try {
             const m = await import('/src/__godray_test.js');
             return await m.run();
-        } catch (e) { return { ok: false, reason: String(e && e.stack || e) }; }
+        } catch (e) {
+            return { ok: false, reason: String((e && e.stack) || e) };
+        }
     });
     console.log('RESULT:', JSON.stringify(result));
     console.log('ERRORS:', JSON.stringify(errors));

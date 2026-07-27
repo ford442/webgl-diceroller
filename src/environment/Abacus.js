@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createAbacus(scene, physicsWorld, position = { x: -3, y: -2.75, z: 2 }, rotationY = Math.PI / 4) {
+export function createAbacus(
+    scene,
+    physicsWorld,
+    position = { x: -3, y: -2.75, z: 2 },
+    rotationY = Math.PI / 4
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.position.set(position.x, position.y, position.z);
@@ -12,21 +17,21 @@ export function createAbacus(scene, physicsWorld, position = { x: -3, y: -2.75, 
     const woodMat = new THREE.MeshStandardMaterial({
         color: 0x4a2e15, // Dark reddish brown wood
         roughness: 0.7,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     const brassMat = new THREE.MeshStandardMaterial({
         color: 0xb5a642, // Brass rails
         metalness: 0.9,
         roughness: 0.3,
-        envMapIntensity: 1.2
+        envMapIntensity: 1.2,
     });
 
     const beadMat = new THREE.MeshStandardMaterial({
         color: 0xd4af37, // Gold/Brass beads
         metalness: 0.8,
         roughness: 0.4,
-        envMapIntensity: 1.0
+        envMapIntensity: 1.0,
     });
 
     // Dimensions
@@ -69,7 +74,12 @@ export function createAbacus(scene, physicsWorld, position = { x: -3, y: -2.75, 
     group.add(rightFrame);
 
     // Rails and Beads
-    const railGeo = new THREE.CylinderGeometry(railRadius, railRadius, frameHeight - frameThickness * 2, 8);
+    const railGeo = new THREE.CylinderGeometry(
+        railRadius,
+        railRadius,
+        frameHeight - frameThickness * 2,
+        8
+    );
     const beadGeo = new THREE.TorusGeometry(beadOuterRadius, beadInnerRadius, 8, 16);
 
     for (let i = 0; i < railCount; i++) {
@@ -84,7 +94,7 @@ export function createAbacus(scene, physicsWorld, position = { x: -3, y: -2.75, 
         // Beads
         // Beads are positioned randomly along the rail
         const railLength = frameHeight - frameThickness * 2;
-        const availableSpace = railLength - (beadOuterRadius * 2 * beadCountPerRail);
+        const availableSpace = railLength - beadOuterRadius * 2 * beadCountPerRail;
         let currentY = -(railLength / 2) + beadOuterRadius;
 
         for (let j = 0; j < beadCountPerRail; j++) {
@@ -123,8 +133,10 @@ export function createAbacus(scene, physicsWorld, position = { x: -3, y: -2.75, 
     if (physicsWorld && getAmmo()) {
         // Simple bounding box for the whole abacus
         if (ammo && physicsWorld) {
-            const shape = new ammo.btBoxShape(new ammo.btVector3(frameWidth / 2, frameHeight / 2, frameThickness / 2));
-    
+            const shape = new ammo.btBoxShape(
+                new ammo.btVector3(frameWidth / 2, frameHeight / 2, frameThickness / 2)
+            );
+
             // createStaticBody uses group.position and group.quaternion
             // Wait, the bounding box was built assuming the abacus is standing up.
             // btBoxShape dimensions match the visual dimensions before the group rotation.
@@ -136,6 +148,6 @@ export function createAbacus(scene, physicsWorld, position = { x: -3, y: -2.75, 
     }
 
     return {
-        group
+        group,
     };
 }

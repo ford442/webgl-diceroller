@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { createStaticBody, getAmmo } from '../physics.js';
 
-export function createRunestones(scene, physicsWorld, position = { x: 10, y: -2.75, z: -10 }, rotationY = 0) {
+export function createRunestones(
+    scene,
+    physicsWorld,
+    position = { x: 10, y: -2.75, z: -10 },
+    _rotationY = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Runestones';
@@ -19,7 +24,7 @@ export function createRunestones(scene, physicsWorld, position = { x: 10, y: -2.
         '#ff00ff', // Magenta
         '#ffff00', // Yellow
         '#00ff00', // Green
-        '#ff8800'  // Orange
+        '#ff8800', // Orange
     ];
 
     // Base position on the table (Table Y is approx -2.75)
@@ -36,7 +41,7 @@ export function createRunestones(scene, physicsWorld, position = { x: 10, y: -2.
         const stoneMat = new THREE.MeshStandardMaterial({
             color: 0x333333,
             roughness: 0.8,
-            metalness: 0.1
+            metalness: 0.1,
         });
 
         // Glowing rune material (for the top face)
@@ -47,7 +52,7 @@ export function createRunestones(scene, physicsWorld, position = { x: 10, y: -2.
             emissiveIntensity: 1.5,
             color: 0x333333,
             roughness: 0.6,
-            metalness: 0.2
+            metalness: 0.2,
         });
 
         // CylinderGeometry (radiusTop, radiusBottom, height, radialSegments)
@@ -67,7 +72,7 @@ export function createRunestones(scene, physicsWorld, position = { x: 10, y: -2.
         const offsetZ = (Math.random() - 0.5) * 1.5;
 
         // Add a slight stack/overlap offset to avoid z-fighting if they touch
-        const yPos = baseY + (i * 0.001);
+        const yPos = baseY + i * 0.001;
 
         mesh.position.set(baseX + offsetX, yPos, baseZ + offsetZ);
 
@@ -80,7 +85,9 @@ export function createRunestones(scene, physicsWorld, position = { x: 10, y: -2.
         // btCylinderShape expects a vector of (radius, height/2, radius)
         if (ammo) {
             if (ammo && physicsWorld) {
-                const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
+                const shape = new ammo.btCylinderShape(
+                    new ammo.btVector3(radius, height / 2, radius)
+                );
                 createStaticBody(physicsWorld, mesh, shape);
             }
         }

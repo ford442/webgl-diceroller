@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createMap(scene, physicsWorld, position = { x: -8, y: -2.75, z: 12 }, rotationY = 0) {
+export function createMap(
+    scene,
+    physicsWorld,
+    position = { x: -8, y: -2.75, z: 12 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'WorldMap';
@@ -19,7 +24,7 @@ export function createMap(scene, physicsWorld, position = { x: -8, y: -2.75, z: 
         map: texture,
         roughness: 0.8,
         metalness: 0.1,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
     });
 
     // --- Mesh ---
@@ -34,19 +39,19 @@ export function createMap(scene, physicsWorld, position = { x: -8, y: -2.75, z: 
     const weightMat = new THREE.MeshStandardMaterial({
         color: 0x333333, // Dark stone/metal
         roughness: 0.6,
-        metalness: 0.5
+        metalness: 0.5,
     });
 
     const weightPositions = [
-        { x: -width/2 + 0.5, z: -depth/2 + 0.5 },
-        { x: width/2 - 0.5, z: -depth/2 + 0.5 },
-        { x: -width/2 + 0.5, z: depth/2 - 0.5 },
-        { x: width/2 - 0.5, z: depth/2 - 0.5 }
+        { x: -width / 2 + 0.5, z: -depth / 2 + 0.5 },
+        { x: width / 2 - 0.5, z: -depth / 2 + 0.5 },
+        { x: -width / 2 + 0.5, z: depth / 2 - 0.5 },
+        { x: width / 2 - 0.5, z: depth / 2 - 0.5 },
     ];
 
-    weightPositions.forEach(pos => {
+    weightPositions.forEach((pos) => {
         const weight = new THREE.Mesh(weightGeo, weightMat);
-        weight.position.set(pos.x, thickness/2 + 0.2, pos.z);
+        weight.position.set(pos.x, thickness / 2 + 0.2, pos.z);
         weight.castShadow = true;
         weight.receiveShadow = true;
         group.add(weight);
@@ -55,7 +60,7 @@ export function createMap(scene, physicsWorld, position = { x: -8, y: -2.75, z: 
     // --- Position on Table ---
     // Table surface is at Y = -2.75.
     // Map center Y = -2.75 + thickness/2 = -2.725.
-    const posY = position.y + thickness/2;
+    const posY = position.y + thickness / 2;
     group.position.set(position.x, posY, position.z);
     group.rotation.y = rotationY;
 
@@ -64,7 +69,7 @@ export function createMap(scene, physicsWorld, position = { x: -8, y: -2.75, z: 
     // --- Physics ---
     // Map Body
     if (ammo && physicsWorld) {
-        const shape = new ammo.btBoxShape(new ammo.btVector3(width/2, thickness/2, depth/2));
+        const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, depth / 2));
         createStaticBody(physicsWorld, group, shape);
     }
 
@@ -76,25 +81,29 @@ export function createMap(scene, physicsWorld, position = { x: -8, y: -2.75, z: 
     // Or, we can create separate static bodies for them if needed.
     // Let's create separate static bodies for weights to be safe.
 
-    weightPositions.forEach(pos => {
+    weightPositions.forEach((pos) => {
         if (ammo && physicsWorld) {
             const wShape = new ammo.btCylinderShape(new ammo.btVector3(0.3, 0.2, 0.3)); // Height 0.4 / 2 = 0.2
             // We need to transform the local position to world position for createStaticBody if we pass a mesh.
             // But createStaticBody uses mesh.position/quaternion.
             // The weights are children of 'group'.
             // So their world position depends on group.
-    
+
             // Option: Make weights separate objects in scene? No, keep hierarchy clean.
             // Option: Add child shapes to compound shape? Yes, that's better.
             // But createStaticBody is simple.
-    
+
             // Let's just create individual invisible physics bodies for weights at world coords.
             // We can use a dummy object for position calculation.
-    
+
             const dummy = new THREE.Object3D();
-            dummy.position.copy(group.position).add(new THREE.Vector3(pos.x, thickness/2 + 0.2, pos.z).applyEuler(group.rotation));
+            dummy.position
+                .copy(group.position)
+                .add(
+                    new THREE.Vector3(pos.x, thickness / 2 + 0.2, pos.z).applyEuler(group.rotation)
+                );
             dummy.quaternion.copy(group.quaternion);
-    
+
             // Since createStaticBody expects a mesh (with .position and .quaternion), dummy works.
             createStaticBody(physicsWorld, dummy, wShape);
         }
@@ -115,13 +124,13 @@ function generateMapTexture() {
     ctx.strokeStyle = 'rgba(0,0,0,0.1)';
     ctx.lineWidth = 1;
     const gridSize = 64;
-    for(let x=0; x<canvas.width; x+=gridSize) {
+    for (let x = 0; x < canvas.width; x += gridSize) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, canvas.height);
         ctx.stroke();
     }
-    for(let y=0; y<canvas.height; y+=gridSize) {
+    for (let y = 0; y < canvas.height; y += gridSize) {
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(canvas.width, y);
@@ -134,7 +143,7 @@ function generateMapTexture() {
     ctx.moveTo(0, 0);
     ctx.lineTo(300, 0);
     // Wiggly line down
-    for(let y=0; y<=canvas.height; y+=20) {
+    for (let y = 0; y <= canvas.height; y += 20) {
         const x = 300 + Math.sin(y * 0.01) * 50 + Math.random() * 20;
         ctx.lineTo(x, y);
     }
@@ -143,20 +152,20 @@ function generateMapTexture() {
 
     // 4. Mountains (Triangles)
     ctx.fillStyle = '#8b4513';
-    for(let i=0; i<20; i++) {
+    for (let i = 0; i < 20; i++) {
         const x = 400 + Math.random() * 400;
         const y = 100 + Math.random() * 200;
         const s = 30 + Math.random() * 30;
         ctx.beginPath();
         ctx.moveTo(x, y);
-        ctx.lineTo(x + s/2, y - s);
+        ctx.lineTo(x + s / 2, y - s);
         ctx.lineTo(x + s, y);
         ctx.fill();
     }
 
     // 5. Forest (Green Circles)
     ctx.fillStyle = '#228b22';
-    for(let i=0; i<50; i++) {
+    for (let i = 0; i < 50; i++) {
         const x = 600 + Math.random() * 300;
         const y = 400 + Math.random() * 300;
         const r = 10 + Math.random() * 10;
@@ -173,7 +182,7 @@ function generateMapTexture() {
     // Wiggle to sea
     let cx = 500;
     let cy = 200;
-    while(cx > 300) {
+    while (cx > 300) {
         cx -= 10;
         cy += (Math.random() - 0.3) * 20;
         ctx.lineTo(cx, cy);
@@ -187,7 +196,7 @@ function generateMapTexture() {
 
     ctx.font = 'italic 24px serif';
     ctx.fillText('The Whispering Woods', 650, 600);
-    ctx.fillText('Dragon\'s Teeth', 500, 150);
+    ctx.fillText("Dragon's Teeth", 500, 150);
 
     // 8. Red X (Treasure)
     ctx.strokeStyle = '#ff0000';

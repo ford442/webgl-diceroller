@@ -1,25 +1,30 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createSword(scene, physicsWorld, position = { x: -8, y: -2.45, z: 8 }, rotationY = -Math.PI / 4) {
+export function createSword(
+    scene,
+    physicsWorld,
+    position = { x: -8, y: -2.45, z: 8 },
+    rotationY = -Math.PI / 4
+) {
     const group = new THREE.Group();
 
     // Materials
     const steelMaterial = new THREE.MeshStandardMaterial({
         color: 0xaaaaaa,
         metalness: 0.9,
-        roughness: 0.2
+        roughness: 0.2,
     });
 
     const goldMaterial = new THREE.MeshStandardMaterial({
         color: 0xffd700,
         metalness: 0.8,
-        roughness: 0.3
+        roughness: 0.3,
     });
 
     const leatherMaterial = new THREE.MeshStandardMaterial({
         color: 0x3a2c21,
-        roughness: 0.95
+        roughness: 0.95,
     });
 
     // Adjust all Z positions so the center of the bounding box is around Z = 0
@@ -79,7 +84,7 @@ export function createSword(scene, physicsWorld, position = { x: -8, y: -2.45, z
         // Half extents
         if (Ammo && physicsWorld) {
             const shape = new Ammo.btBoxShape(new Ammo.btVector3(2.0, 0.3, 8.0));
-    
+
             createStaticBody(physicsWorld, group, shape);
         }
     }

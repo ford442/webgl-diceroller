@@ -41,8 +41,9 @@ async function collectScripts(page, path) {
     // Tier 0 completes before the full decorative pass; that's enough for renderer
     // and physics lazy chunks to have been requested.
     await page.waitForFunction(
-        () => window.sceneReady === true
-            || document.getElementById('loading-text')?.textContent?.includes('Error'),
+        () =>
+            (window.__app?.ready ?? window.sceneReady) === true ||
+            document.getElementById('loading-text')?.textContent?.includes('Error'),
         null,
         { timeout: 240000 }
     );
@@ -55,13 +56,13 @@ let failed = 0;
 
 try {
     const browser = await chromium.launch({
-        args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']
+        args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
     });
 
     // WebGL baseline: no three.webgpu chunk
     {
         const page = await browser.newPage();
-        const urls = await collectScripts(page, '/?webgl&no-post&fair-dice&no-wasm');
+        const urls = await collectScripts(page, '/?webgl&no-post&fair-dice&test&no-wasm');
         const webgpu = scriptRequests(urls, /three\.webgpu/i);
         if (webgpu.length) {
             failed += 1;
@@ -75,8 +76,10 @@ try {
     // WASM authoritative (default when wasm is active): no ammo physics chunk
     {
         const page = await browser.newPage();
-        const urls = await collectScripts(page, '/?webgl&no-post&fair-dice');
-        const wasmActive = await page.evaluate(() => window.physicsWorld == null);
+        const urls = await collectScripts(page, '/?webgl&no-post&fair-dice&test');
+        const wasmActive = await page.evaluate(
+            () => (window.__app?.physicsWorld ?? window.physicsWorld) == null
+        );
         const physics = scriptRequests(urls, /\/physics-[^/]+\.js/i);
         if (!wasmActive) {
             console.log('skip: WASM engine inactive in this build — ammo physics chunk expected');
@@ -92,7 +95,7 @@ try {
     // Explicit ammo fallback still loads physics
     {
         const page = await browser.newPage();
-        const urls = await collectScripts(page, '/?webgl&no-post&fair-dice&no-wasm');
+        const urls = await collectScripts(page, '/?webgl&no-post&fair-dice&test&no-wasm');
         const physics = scriptRequests(urls, /\/physics-[^/]+\.js/i);
         if (!physics.length) {
             failed += 1;

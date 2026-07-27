@@ -10,7 +10,7 @@ import {
     getInstancedMetalMaterial,
     getPewterMaterial,
     getSilverMaterial,
-    getWoodMaterial
+    getWoodMaterial,
 } from '../../core/MaterialPalette.js';
 import { resolvePlacement } from './ClutterPlacement.js';
 
@@ -65,7 +65,7 @@ export function createCoins(scene, physicsWorld, options = {}) {
     const coinColors = [
         new THREE.Color(0xffd700),
         new THREE.Color(0xc0c0c0),
-        new THREE.Color(0xb87333)
+        new THREE.Color(0xb87333),
     ];
     const instanceMaterial = getInstancedMetalMaterial();
 
@@ -84,35 +84,35 @@ export function createCoins(scene, physicsWorld, options = {}) {
         const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, thickness / 2, radius));
         // Track the per-coin static bodies so disposeObject3D can free them on reroll.
         coins.userData.physicsBodies = [];
-    
+
         for (let i = 0; i < count; i++) {
             // Preserve the original per-coin random sequence for seeded reproducibility.
             coins.setColorAt(i, coinColors[Math.floor(randomUnit(options) * coinColors.length)]);
-    
+
             const angle = randomUnit(options) * Math.PI * 2;
             const dist = randomUnit(options) * 1.5;
             const x = centerX + Math.cos(angle) * dist;
             const z = centerZ + Math.sin(angle) * dist;
-    
+
             let y = baseY + thickness / 2;
             if (i > 5) y += thickness;
             if (i > 10) y += thickness;
-    
+
             dummy.position.set(x, y, z);
             dummy.rotation.set(0, randomUnit(options) * Math.PI * 2, 0);
-    
+
             if (randomUnit(options) > 0.8) {
                 dummy.rotation.x = (randomUnit(options) - 0.5) * 0.5;
                 dummy.rotation.z = (randomUnit(options) - 0.5) * 0.5;
                 dummy.position.y += 0.05;
             }
-    
+
             dummy.updateMatrix();
             coins.setMatrixAt(i, dummy.matrix);
-    
+
             // One static physics body per coin (cheap; matches prior collision feel).
             coins.userData.physicsBodies.push(createStaticBody(physicsWorld, dummy, shape));
-    }
+        }
     }
 
     coins.instanceMatrix.needsUpdate = true;
@@ -192,7 +192,9 @@ export function createMiniature(scene, physicsWorld, options = {}) {
     options.track?.(group);
 
     if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius));
+        const shape = new ammo.btCylinderShape(
+            new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius)
+        );
         createStaticBody(physicsWorld, group, shape);
     }
 }
@@ -248,7 +250,7 @@ export function createGemstone(scene, physicsWorld, options = {}) {
         ior: 1.76,
         clearcoat: 1.0,
         clearcoatRoughness: 0.0,
-        transparent: true
+        transparent: true,
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -296,7 +298,7 @@ export function createPotionBottle(scene, physicsWorld, options = {}) {
         ior: 1.5,
         transparent: true,
         opacity: 1.0,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
     });
 
     const bottleMesh = new THREE.Mesh(bottleGeo, glassMat);
@@ -318,13 +320,13 @@ export function createPotionBottle(scene, physicsWorld, options = {}) {
         metalness: 0.1,
         roughness: 0.2,
         transmission: 0.6,
-        transparent: true
+        transparent: true,
     });
     const liquidMesh = new THREE.Mesh(liquidGeo, liquidMat);
     bottleGroup.add(liquidMesh);
 
     const corkGeo = new THREE.CylinderGeometry(0.18, 0.15, 0.3, 16);
-    const corkMesh = new THREE.Mesh(corkGeo, getWoodMaterial(0x8B4513));
+    const corkMesh = new THREE.Mesh(corkGeo, getWoodMaterial(0x8b4513));
     corkMesh.position.y = 0.85;
     bottleMesh.add(corkMesh);
 
@@ -353,18 +355,18 @@ export function createPencil(scene, physicsWorld, options = {}) {
     const yellowMat = new THREE.MeshStandardMaterial({
         color: 0xffbd2e,
         roughness: 0.5,
-        metalness: 0.0
+        metalness: 0.0,
     });
     const woodMat = new THREE.MeshStandardMaterial({
         color: 0xd2b48c,
         roughness: 0.7,
-        metalness: 0.0
+        metalness: 0.0,
     });
     const metalMat = getSilverMaterial();
     const pinkMat = new THREE.MeshStandardMaterial({
         color: 0xff69b4,
         roughness: 0.8,
-        metalness: 0.0
+        metalness: 0.0,
     });
     const blackMat = getBlackAccentMaterial();
 

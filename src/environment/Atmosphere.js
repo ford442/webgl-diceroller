@@ -35,7 +35,7 @@ export function createAtmosphere(scene) {
         opacity: 0.4,
         alphaTest: 0.01,
         depthWrite: false, // Don't occlude
-        blending: THREE.AdditiveBlending
+        blending: THREE.AdditiveBlending,
     });
 
     dustParticles = new THREE.Points(geometry, material);
@@ -59,24 +59,24 @@ export function updateAtmosphere(time) {
 
         // Organic movement using Sine waves
         // Use velocities (random seeds) to offset phases
-        const v1 = velocities[i*3];
-        const v2 = velocities[i*3+1];
-        const v3 = velocities[i*3+2];
+        const v1 = velocities[i * 3];
+        const v2 = velocities[i * 3 + 1];
+        const v3 = velocities[i * 3 + 2];
 
         // X: Gentle drift
         positions[i3] += Math.sin(time * 0.2 + v1 * 10) * 0.005;
 
         // Y: Slight updraft (heat) + float
-        positions[i3+1] += Math.cos(time * 0.1 + v2 * 10) * 0.005 + 0.002;
+        positions[i3 + 1] += Math.cos(time * 0.1 + v2 * 10) * 0.005 + 0.002;
 
         // Z: Gentle drift
-        positions[i3+2] += Math.sin(time * 0.15 + v3 * 10) * 0.005;
+        positions[i3 + 2] += Math.sin(time * 0.15 + v3 * 10) * 0.005;
 
         // Wrap around bounds
         // If it goes too high, reset to bottom
-        if (positions[i3+1] > 12) positions[i3+1] = -12;
+        if (positions[i3 + 1] > 12) positions[i3 + 1] = -12;
         // If it goes too low (rare), reset to top
-        if (positions[i3+1] < -12) positions[i3+1] = 12;
+        if (positions[i3 + 1] < -12) positions[i3 + 1] = 12;
     }
 
     dustParticles.geometry.attributes.position.needsUpdate = true;

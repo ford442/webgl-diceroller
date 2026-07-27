@@ -2,7 +2,11 @@ import * as THREE from 'three';
 import { getBrickTextures } from '../core/TexturePipeline.js';
 
 export function createRoom(scene) {
-    const { diffuse: brickDiffuse, bump: brickBump, roughness: brickRoughness } = getBrickTextures();
+    const {
+        diffuse: brickDiffuse,
+        bump: brickBump,
+        roughness: brickRoughness,
+    } = getBrickTextures();
     brickDiffuse.repeat.set(4, 4);
     brickBump.repeat.set(4, 4);
     brickRoughness.repeat.set(4, 4);
@@ -13,7 +17,7 @@ export function createRoom(scene) {
         bumpMap: brickBump,
         bumpScale: 0.1,
         roughnessMap: brickRoughness,
-        side: THREE.BackSide // Render inside of the box
+        side: THREE.BackSide, // Render inside of the box
     });
 
     // Room Geometry (ENLARGED for bigger table)
@@ -39,6 +43,6 @@ export function createRoom(scene) {
     // but for now the box covers everything.
 
     return {
-        mesh: roomMesh
+        mesh: roomMesh,
     };
 }

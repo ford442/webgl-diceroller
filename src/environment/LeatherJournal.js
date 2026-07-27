@@ -12,9 +12,9 @@ export function createLeatherJournal(
     const ammo = getAmmo();
 
     // Dimensions (feature branch values kept for realism)
-    const width = 2.5;   // X - book width when closed
-    const height = 0.6;  // Y - book thickness
-    const depth = 3.5;   // Z - book length/height
+    const width = 2.5; // X - book width when closed
+    const height = 0.6; // Y - book thickness
+    const depth = 3.5; // Z - book length/height
 
     // --- Materials ---
     // Leather Cover (dark worn leather)
@@ -22,21 +22,21 @@ export function createLeatherJournal(
         color: 0x4a2e15,
         roughness: 0.8,
         metalness: 0.05,
-        bumpScale: 0.02
+        bumpScale: 0.02,
     });
 
     // Parchment Pages (aged paper look from feature branch)
     const pagesMat = new THREE.MeshStandardMaterial({
         color: 0xeeddcc,
         roughness: 0.9,
-        metalness: 0.0
+        metalness: 0.0,
     });
 
     // Ribbon Bookmark (dark red)
     const ribbonMat = new THREE.MeshStandardMaterial({
         color: 0x8b0000,
         roughness: 0.7,
-        metalness: 0.1
+        metalness: 0.1,
     });
 
     // --- Visuals (detailed model from feature branch) ---
@@ -85,11 +85,7 @@ export function createLeatherJournal(
     const ribbonLength = 1.0;
     const ribbonGeo = new THREE.BoxGeometry(ribbonWidth, ribbonThickness, ribbonLength);
     const ribbonMesh = new THREE.Mesh(ribbonGeo, ribbonMat);
-    ribbonMesh.position.set(
-        0.5,
-        -height / 2 + 0.05,
-        depth / 2 + ribbonLength / 2 - 0.1
-    );
+    ribbonMesh.position.set(0.5, -height / 2 + 0.05, depth / 2 + ribbonLength / 2 - 0.1);
     ribbonMesh.rotation.x = -0.2; // Slight natural curve downward
     ribbonMesh.castShadow = true;
     ribbonMesh.receiveShadow = true;
@@ -107,9 +103,7 @@ export function createLeatherJournal(
     // --- Physics (conditional + simple box from main branch) ---
     if (physicsWorld && getAmmo()) {
         if (ammo && physicsWorld) {
-            const shape = new ammo.btBoxShape(
-                new ammo.btVector3(width / 2, height / 2, depth / 2)
-            );
+            const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
             createStaticBody(physicsWorld, group, shape);
         }
     }

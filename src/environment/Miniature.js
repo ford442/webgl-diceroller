@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { getAmmo, createStaticBody } from '../physics.js';
 
-export function createMiniature(scene, physicsWorld, position = { x: 10, y: -2.75, z: -8 }, rotationY = 0) {
+export function createMiniature(
+    scene,
+    physicsWorld,
+    position = { x: 10, y: -2.75, z: -8 },
+    rotationY = 0
+) {
     const ammo = getAmmo();
     const group = new THREE.Group();
     group.name = 'Miniature';
@@ -63,8 +68,10 @@ export function createMiniature(scene, physicsWorld, position = { x: 10, y: -2.7
     const totalHeight = baseHeight + bodyHeight + headRadius * 2;
     // For Ammo.btCylinderShape, Y axis is the height. The argument is half-extents.
     if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius));
-    
+        const shape = new ammo.btCylinderShape(
+            new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius)
+        );
+
         // Wait, the group's position is the *bottom* of the miniature.
         // Ammo's createStaticBody sets the physics body's origin to the group's position.
         // A btCylinderShape is centered at its origin. So if we attach it to the group,
@@ -76,17 +83,17 @@ export function createMiniature(scene, physicsWorld, position = { x: 10, y: -2.7
         // unless we pass world coords. Wait, src/physics.js createStaticBody does:
         // transform.setOrigin(new AmmoInstance.btVector3(mesh.position.x, mesh.position.y, mesh.position.z));
         // It assumes `mesh.position` is world space. So we must pass an object that is in world space.
-    
+
         // Let's create an invisible dummy Mesh directly in the scene, just for physics.
         const dummyGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
         const dummyMat = new THREE.MeshBasicMaterial({ visible: false });
         const physMesh = new THREE.Mesh(dummyGeo, dummyMat);
-    
+
         // Set physMesh world position to the center of the miniature.
         physMesh.position.set(position.x, position.y + totalHeight / 2, position.z);
         physMesh.rotation.y = rotationY;
         scene.add(physMesh);
-    
+
         createStaticBody(physicsWorld, physMesh, shape);
     }
 }
