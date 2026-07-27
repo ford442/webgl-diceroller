@@ -98,10 +98,9 @@ npm run format:check        # Prettier check (CI)
 ```
 
 - `npm run dev` still works without compiled WASM artifacts; the bridge falls back to ammo.js automatically.
-- `?no-wasm` forces the ammo fallback path even if `public/wasm/` exists.
-- **Default WASM sessions** do not load the ammo.js chunk or spawn ammo dice bodies. Dice simulation, drag, and levitation run entirely in the WASM worker.
-- `?dual-physics` steps ammo and WASM in parallel for validation/debugging (`?dual-physics` still steps ammo every frame for side-by-side free-flight validation).
-- `?ammo-drag` opts back into the legacy ammo constraint path for drag/levitation. The historical `?wasm-drag` flag is a no-op alias (WASM drag is the default).
+- `?no-wasm` is the **only** physics escape hatch: it forces the full ammo fallback even if `public/wasm/` exists.
+- **Every other session** (including the default) never loads the ammo.js chunk and never creates an ammo rigid body for a die. Dice simulation, drag, levitation, and flicks run entirely in the WASM worker.
+- The `?dual-physics`, `?ammo-drag`, and `?wasm-drag` flags were removed with the Phase 5 cut-over; there is no dual-authority sync left in `src/dice/`.
 - `?worker-physics` (experimental) runs the WASM engine inside a Web Worker.
 - `?no-drag` disables quadratic air resistance on both ammo.js and WASM paths.
 - `?fair-dice` disables the pipping COM bias.
@@ -145,7 +144,7 @@ npm run format:check        # Prettier check (CI)
 - WebGL post pipeline: `RenderPass` → `UnrealBloomPass` → `ShaderPass(VignetteShader)` → `OutputPass`.
 - WebGPU post pipeline: TSL `PostProcessing` scene pass with bloom, vignette, and a subtle chromatic aberration pass in high quality mode.
 - Loads a PMREM environment map from `TavernEnvironment.js` for PBR reflections.
-- Loads `src/wasm/WasmPhysicsBridge.js` asynchronously. When WASM is available (default), the custom engine is authoritative for dice simulation, drag, and levitation. The ammo.js chunk loads only for `?no-wasm`, `?dual-physics`, or `?ammo-drag` via `shouldLoadAmmoPhysics()` and the lazy `src/dice/AmmoDiceBackend.js` module.
+- Loads `src/wasm/WasmPhysicsBridge.js` asynchronously. When WASM is available (default), the custom engine is authoritative for dice simulation, drag, and levitation. The ammo.js chunk loads only for `?no-wasm` (or when WASM artifacts are missing) via `shouldLoadAmmoPhysics()` and the lazy `src/dice/AmmoDiceBackend.js` module.
 - Implements **tiered async loading** with a loading overlay and progress bar:
     - **Tier 0 (Critical, 10–40%):** Physics engine, core environment (walls, room, table, candle), dice models, UI, interaction. Rendering starts immediately after this tier.
     - **Tier 1 (Important, 55–70%):** Furniture and background props (bookshelf, chairs, chest, rug, atmosphere, billiard lamp, floating candles, runecircle).
@@ -162,10 +161,10 @@ npm run format:check        # Prettier check (CI)
 ### `src/dice.js` (barrel) and `src/dice/`
 
 - Public API re-exported from focused modules: `DiceModels.js` (load/pool), `DiceSpawn.js`, `DiceThrow.js`, `DiceResults.js`, `DiceSync.js`, `DicePhysicsPresets.js`.
-- Ammo dice bodies live in `AmmoDiceBackend.js`, dynamically imported only when `needsAmmoDiceBackend()` (`?no-wasm`, `?dual-physics`, or `?ammo-drag`).
+- Ammo dice bodies live in `AmmoDiceBackend.js`, dynamically imported only when `needsAmmoDiceBackend()` — i.e. when the WASM engine is not live (`?no-wasm` or missing artifacts).
 - Loads Draco-compressed glTF (`.glb`) dice models from `public/images/dice/` using `GLTFLoader` + `DRACOLoader`.
-- `spawnObjects(scene, world, config)` — spawns WASM dice bodies by default; ammo bodies only on fallback/validation paths.
-- `updateDiceVisuals()` — reads WASM transform buffer; ammo transform reads go through `AmmoDiceBackend` when active.
+- `spawnObjects(scene, world, config)` — spawns WASM dice; an ammo body is created only on the `?no-wasm` fallback.
+- `updateDiceVisuals()` — reads the WASM transform buffer; on the ammo fallback it reads ammo transforms through `AmmoDiceBackend`. There is no per-die `physicsAuthority` any more: the backend is a whole-session choice.
 - `throwDice(scene, world, seed)` — WASM-authoritative throws; seeded replay uses the WASM PRNG/worker path.
 - `clearDice(scene, world)` — removes dice and tears down WASM ids; ammo heap cleanup via `AmmoDiceBackend` when loaded.
 
@@ -185,7 +184,7 @@ npm run format:check        # Prettier check (CI)
 - `createConvexHullShape(mesh)` — clones geometry, merges vertices with `BufferGeometryUtils.mergeVertices`, iterates positions to build an `Ammo.btConvexHullShape`.
 - `createStaticBody(world, mesh, shape)` — creates a mass-0 static rigid body from a mesh transform.
 - All temporary Ammo.js objects (`btVector3`, `btTransform`, `btRigidBodyConstructionInfo`, etc.) are explicitly destroyed after use to prevent WASM heap leaks.
-- Exports `getAmmo()` for other modules to access the initialized Ammo instance.
+- Exports `getAmmo()` for other modules to access the initialized Ammo instance. Prop modules must not call it directly — they go through `src/environment/PropPhysics.js` (`getPropAmmo` / `createPropStaticBody`), the single ammo seam for props.
 
 ### `src/interaction.js`
 
@@ -193,7 +192,7 @@ npm run format:check        # Prettier check (CI)
 - `registerInteractiveObject(mesh, callback)` — API for static props (e.g., lamp, skull, gong) to receive click events.
 - Left-click on a die starts WASM kinematic drag by default (`setDieKinematic` + `setDieVelocity` toward the cursor). Mouse movement updates the die inside the WASM worker.
 - Double-clicking a die (within 300ms) triggers **levitation** in WASM: the die rises with a blue glow (`0x0088ff` PointLight), spins, then is released with a random throw after 1.5s.
-- **`?ammo-drag` (legacy escape hatch):** routes drag + levitation through ammo.js `btPoint2PointConstraint` / kinematic flags instead of WASM. Requires ammo to be loaded (`shouldLoadAmmoPhysics()`). The historical `?wasm-drag` flag is a no-op alias.
+- **Ammo fallback (`?no-wasm` only):** drag + levitation route through ammo.js `btPoint2PointConstraint` / kinematic flags. Unreachable whenever the WASM engine is live.
 - **Dice cup (`DiceCup` prop):** WASM-only scoop/shake/pour ritual. Click the cup to scoop nearby dice, hold and wiggle to rattle (interior container planes + muffled leather audio), release or press `T` to pour onto the velvet zone. Cup pours use `seed = null` and are excluded from share URLs. Test hook: `window.__app.interactables.diceCup` (shim `window.__interactables.diceCup`).
 - The WASM control primitives live in `src/dice.js`: `driveDieWasmTransform`, `setDieWasmVelocity`, `getDieWasmTransform` (alongside `applyWasmImpulseForDie`).
 - `getHoveredDie(camera, normX, normY)` — returns the die under the cursor for hover cursor changes.
@@ -219,7 +218,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 - Props that need per-frame animation provide an `update(deltaTime, elapsedTime)` function.
 - `LoadingTiers.js` wires these into `FrameScheduler` through the prop registry; do not add ad-hoc per-frame calls in `main.js`.
 - Interactive props return callbacks (e.g., `interact`, `toggleGlow`) that are registered in the prop entry’s `afterCreate` hook.
-- Physics-enabled props often use `createStaticBody()` from `physics.js` for invisible collision meshes.
+- Legacy physics-enabled props build invisible collision meshes with `createPropStaticBody()` / `getPropAmmo()` from [`PropPhysics.js`](src/environment/PropPhysics.js). Those colliders exist only when ammo is loaded (`?no-wasm`); otherwise the prop is visual-only. New props use `StaticColliderBridge` collider specs instead, which prefer WASM.
 - Shadows are aggressively optimized: small decorative props are listed in `SHADOW_DISABLED_PROP_NAMES` in `src/environment/PropRegistry.js`.
 
 ### Rendering Notes
@@ -319,7 +318,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 1. Create `src/environment/PropName.js` using `createProp` from [`src/environment/propKit.js`](src/environment/propKit.js).
 2. Export a factory: `(scene, physicsWorld?, position?, rotation?)`.
 3. Build geometry inside the `build({ group, materials, mesh })` callback; use `materials.*` from the kit (backed by [`MaterialPalette.js`](src/core/MaterialPalette.js)) instead of inline `MeshStandardMaterial`.
-4. Declare colliders as a spec array — routed through [`StaticColliderBridge.js`](src/core/StaticColliderBridge.js), not direct `getAmmo` / `createStaticBody` calls.
+4. Declare colliders as a spec array — routed through [`StaticColliderBridge.js`](src/core/StaticColliderBridge.js), not direct `getPropAmmo` / `createPropStaticBody` calls.
 5. Return `{ group }` plus optional `update`, `interact`, `body`, etc.
 6. Register in the appropriate tier in [`PropRegistry.js`](src/environment/PropRegistry.js).
 7. Wire `afterCreate` for per-frame updates or click handlers.
@@ -386,7 +385,7 @@ export function createHorseshoe(
 
 - **New props:** `propKit` + `materials.*` + `StaticColliderBridge` collider specs (required).
 - **Existing props:** convert when you edit them for other reasons; no mass migration pass.
-- **Do not** import `getAmmo`, `btBoxShape`, or `createStaticBody` directly in new or migrated prop modules.
+- **Do not** import `getPropAmmo`, `btBoxShape`, or `createPropStaticBody` in new or migrated prop modules (and never import `physics.js` from a prop).
 
 #### Registry checklist (unchanged)
 
@@ -431,6 +430,8 @@ node test_dicecup.js          # DiceCup interactable (root; needs WASM for avail
 # Physics / renderer harnesses (scripts/)
 npm run test:solver                 # Native C++ unit + fuzz (see docs/WASM_ENGINE.md)
 node scripts/verify-wasm-primitives.mjs
+npm run verify:wasm-interaction     # drag + levitation on the WASM-only path (needs a build)
+npm run verify:bundle-loading       # no ammo chunk / no ammo dice bodies by default
 node scripts/verify-renderer-factory.mjs
 npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when baselines exist)
 ```

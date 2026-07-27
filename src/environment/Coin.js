@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { getInstancedMetalMaterial } from '../core/MaterialPalette.js';
 
 export function createCoin(
@@ -8,7 +8,7 @@ export function createCoin(
     position = { x: 8, y: -2.75, z: -2 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
 
     const coinGroup = new THREE.Group();
     coinGroup.name = 'Coin';
@@ -47,7 +47,7 @@ export function createCoin(
             );
             dummy.updateMatrix();
             coins.setMatrixAt(i, dummy.matrix);
-            coins.userData.physicsBodies.push(createStaticBody(physicsWorld, dummy, shape));
+            coins.userData.physicsBodies.push(createPropStaticBody(physicsWorld, dummy, shape));
         }
     } else {
         for (let i = 0; i < numCoins; i++) {

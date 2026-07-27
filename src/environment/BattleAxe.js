@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createBattleAxe(
     scene,
@@ -157,12 +157,12 @@ export function createBattleAxe(
     // Group pivot is at base (0,0,0).
     // Handle visual center (0, 4, 0).
     // Physics Shape center must be at (0, 4, 0) relative to Body (0,0,0).
-    // But createStaticBody uses mesh.position for Body Origin.
+    // But createPropStaticBody uses mesh.position for Body Origin.
     // Body Origin = Group Origin = Base.
     // Shape is centered on Body Origin by default unless we offset it.
-    // createStaticBody assumes Mesh Center == Body Center.
+    // createPropStaticBody assumes Mesh Center == Body Center.
     // Here Group Center != Visual Center.
-    // If we use createStaticBody(group), Body is at Group.position.
+    // If we use createPropStaticBody(group), Body is at Group.position.
     // Shape is at (0,0,0) relative to Body.
     // Visual handle is at (0, 4, 0).
     // We need Shape at (0, 4, 0).
@@ -173,7 +173,7 @@ export function createBattleAxe(
     // If we move group origin to center:
     // Group.position = Midpoint(Base, Tip).
     // Visual handle.position = 0.
-    // Then createStaticBody works.
+    // Then createPropStaticBody works.
 
     // Let's adjust Group Pivot.
     // Center of axe is at handleLen/2 = 4.
@@ -203,11 +203,11 @@ export function createBattleAxe(
     // Re-add to scene (it was added before pos update, which is fine, but good to be clean)
 
     // Now create physics
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo && physicsWorld) {
         const physicsShape = new Ammo.btCylinderShape(
             new Ammo.btVector3(handleRad, handleLen / 2, handleRad)
         );
-        createStaticBody(physicsWorld, group, physicsShape);
+        createPropStaticBody(physicsWorld, group, physicsShape);
     }
 }

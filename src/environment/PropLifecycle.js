@@ -1,4 +1,4 @@
-import { getAmmo } from '../physics.js';
+import { getPropAmmo } from './PropPhysics.js';
 
 import { isPaletteMaterial } from '../core/MaterialPalette.js';
 
@@ -11,7 +11,7 @@ function resolveRootObject(result) {
 
 export function destroyPhysicsBody(physicsWorld, body) {
     if (!body || !physicsWorld) return;
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     if (!ammo) return;
 
     physicsWorld.removeRigidBody(body);

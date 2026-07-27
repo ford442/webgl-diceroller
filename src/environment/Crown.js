@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createCrown(
     scene,
@@ -7,7 +7,7 @@ export function createCrown(
     position = { x: -14, y: -2.75, z: 6 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'KingsCrown';
 
@@ -165,7 +165,7 @@ export function createCrown(
             child.position.y -= height / 2;
         });
 
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 
     return {

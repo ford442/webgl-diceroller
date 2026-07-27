@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createWritingSet(
     scene,
@@ -7,7 +7,7 @@ export function createWritingSet(
     position = { x: 4, y: -2.75, z: 4 },
     rotation = -Math.PI / 6
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'WritingSet';
 
@@ -255,7 +255,7 @@ export function createWritingSet(
         const inkwellDummy = new THREE.Object3D();
         inkwellDummy.position.copy(group.position);
         inkwellDummy.quaternion.copy(group.quaternion);
-        createStaticBody(physicsWorld, inkwellDummy, inkwellShape);
+        createPropStaticBody(physicsWorld, inkwellDummy, inkwellShape);
     }
 
     // Parchment papers physics (approximated as flat boxes)
@@ -266,7 +266,7 @@ export function createWritingSet(
             .copy(group.position)
             .add(new THREE.Vector3(-0.3, 0, -0.8).applyEuler(group.rotation));
         paperDummy.rotation.y = rotation + 0.1;
-        createStaticBody(physicsWorld, paperDummy, paperShape);
+        createPropStaticBody(physicsWorld, paperDummy, paperShape);
     }
 
     // Stamp physics
@@ -277,7 +277,7 @@ export function createWritingSet(
             .copy(group.position)
             .add(new THREE.Vector3(1.0, 0.1, 0.8).applyEuler(group.rotation));
         stampDummy.rotation.set(Math.PI / 2, 0, rotation + Math.PI / 4);
-        createStaticBody(physicsWorld, stampDummy, stampShape);
+        createPropStaticBody(physicsWorld, stampDummy, stampShape);
     }
 
     return { group, update: updateInk };

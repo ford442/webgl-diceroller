@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createHourglass(
     scene,
@@ -132,11 +132,11 @@ export function createHourglass(
     scene.add(group);
 
     // Physics
-    if (physicsWorld && getAmmo()) {
-        const ammo = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const ammo = getPropAmmo();
         if (ammo && physicsWorld) {
             const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
-            createStaticBody(physicsWorld, group, shape);
+            createPropStaticBody(physicsWorld, group, shape);
         }
     }
 

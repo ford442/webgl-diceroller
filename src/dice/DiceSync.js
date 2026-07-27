@@ -61,23 +61,6 @@ export const updateDiceVisuals = () => {
             typeof getWasmEngine().getDieIds === 'function' ? getWasmEngine().getDieIds() : null;
 
         spawnedDice.forEach((die) => {
-            if (die.mesh.userData.physicsAuthority === 'ammo' && ammoBackend) {
-                const transform = ammoBackend.getAmmoTransform(die);
-                if (!transform) return;
-                const origin = transform.getOrigin();
-                const rotation = transform.getRotation();
-                const quaternion = new THREE.Quaternion(
-                    rotation.x(),
-                    rotation.y(),
-                    rotation.z(),
-                    rotation.w()
-                );
-                const position = getGeometryPositionFromBodyTransform(die, origin, quaternion);
-                die.mesh.position.set(position.x, position.y, position.z);
-                die.mesh.quaternion.copy(quaternion);
-                return;
-            }
-
             if (die.wasmId == null) return;
 
             let offset = -1;
@@ -129,18 +112,16 @@ export const updateDiceVisuals = () => {
     });
 };
 
-export const setDiePhysicsAuthority = (mesh, authority) => {
-    const die = findSpawnedDieByMesh(mesh);
-    if (!die) return;
-    die.mesh.userData.physicsAuthority = authority;
-};
-
+/**
+ * Push the current mesh transform into the die's ammo body before an ammo-side
+ * interaction (drag / levitation). Only reachable on the `?no-wasm` fallback —
+ * WASM sessions have no ammo body to prepare.
+ */
 export const prepareDieForAmmoInteraction = (mesh) => {
     const die = findSpawnedDieByMesh(mesh);
     const ammoBackend = getAmmoDiceBackend();
     if (!die?.body || !ammoBackend) return;
     ammoBackend.syncBodyTransformFromMesh(die, true);
-    die.mesh.userData.physicsAuthority = 'ammo';
 };
 
 export const syncDieBodyStateToWasm = (mesh) => {
@@ -175,12 +156,34 @@ export const driveDieWasmTransform = (mesh, position, quaternion) => {
     syncWasmTransformForDie(die, { position, quaternion });
 };
 
+let _warnedMissingKinematic = false;
+
+/**
+ * Hold/release a die as a kinematic body in the WASM engine.
+ *
+ * Every live bridge (worker + main-thread WASM) implements `setDieKinematic`.
+ * If an older WASM artifact is loaded without it, fall back to zeroing the
+ * die's velocity so a held die does not accelerate away while the caller keeps
+ * driving its transform each frame.
+ */
 export const setDieWasmKinematic = (mesh, kinematic) => {
     const die = findSpawnedDieByMesh(mesh);
     if (!isUsingWasmPhysics() || !die || die.wasmId == null) return;
     const engine = getWasmEngine();
     if (typeof engine.setDieKinematic === 'function') {
         engine.setDieKinematic(die.wasmId, kinematic);
+        return;
+    }
+
+    if (!_warnedMissingKinematic) {
+        _warnedMissingKinematic = true;
+        console.warn(
+            '[DiceSync] WASM engine lacks setDieKinematic — rebuild with `npm run build:wasm`. ' +
+                'Falling back to velocity clamping for held dice.'
+        );
+    }
+    if (kinematic) {
+        engine.setDieVelocity(die.wasmId, 0, 0, 0, 0, 0, 0);
     }
 };
 

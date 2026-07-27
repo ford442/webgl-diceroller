@@ -34,7 +34,7 @@ export function getWasmTransformForDie(wasmId) {
 }
 
 export function getDieQuaternion(die) {
-    if (die?.mesh?.userData?.physicsAuthority === 'ammo' && die.body) {
+    if (!isUsingWasmPhysics() && die?.body) {
         const transform = getAmmoDiceBackend()?.getAmmoTransform(die);
         if (transform) {
             const rotation = transform.getRotation();

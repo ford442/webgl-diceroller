@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 import { playPropImpact } from '../audio/DiceCollisionAudio.js';
 
 export function createSkull(
@@ -138,12 +138,12 @@ export function createSkull(
     scene.add(group);
 
     // --- Physics ---
-    if (physicsWorld && getAmmo()) {
-        const ammo = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const ammo = getPropAmmo();
         // Sphere shape covers cranium well enough for rolling/static collision
         if (ammo && physicsWorld) {
             const shape = new ammo.btSphereShape(0.4);
-            createStaticBody(physicsWorld, group, shape);
+            createPropStaticBody(physicsWorld, group, shape);
         }
     }
 

@@ -27,9 +27,11 @@ Renderer / post flags (work on both paths unless noted):
 ## WASM Physics Engine
 
 The custom C++ `DicePhysicsEngine` (compiled to WebAssembly) is the **authoritative dice
-simulator** when built artifacts are present. Default WASM sessions do not load the ammo.js
-chunk or spawn ammo dice bodies. `ammo.js` remains the fallback (`?no-wasm`) and still
-powers static prop colliders; drag/levitation use WASM by default (`?ammo-drag` opts out).
+simulator** when built artifacts are present. Default sessions do not load the ammo.js
+chunk and never create an ammo rigid body for a die — dice simulation, drag, levitation, and
+flicks all run on WASM. `ammo.js` is loaded only by the `?no-wasm` fallback, where it also
+powers hand-built static prop colliders (`src/environment/PropPhysics.js`); without it props
+are visual-only.
 
 See [docs/WASM_ENGINE.md](docs/WASM_ENGINE.md) for build instructions, API reference, and
 status. Architecture overview: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Agent/contributor
@@ -45,6 +47,6 @@ npm run dev          # development server (WASM stub used if binary absent)
 
 Runtime flags:
 
-- `?no-wasm` forces the ammo.js fallback path even if `public/wasm/` artifacts exist.
-- `?dual-physics` steps ammo and WASM in parallel for validation/debugging.
-- `?ammo-drag` keeps drag/levitation on the legacy ammo constraint path (WASM is the default).
+- `?no-wasm` — the sole physics escape hatch: loads the ammo.js chunk and runs the full
+  ammo fallback (dice bodies, drag, levitation) even if `public/wasm/` artifacts exist.
+  The former `?dual-physics`, `?ammo-drag`, and `?wasm-drag` flags have been removed.

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createCompass(
     scene,
@@ -7,7 +7,7 @@ export function createCompass(
     position = { x: 8, y: -2.65, z: -8 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Compass';
 
@@ -128,7 +128,7 @@ export function createCompass(
     // Simple cylinder collision shape for the compass
     if (ammo && physicsWorld) {
         const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 
     return group;

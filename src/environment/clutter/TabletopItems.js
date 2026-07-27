@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../../physics.js';
+import { getPropAmmo, createPropStaticBody } from '../PropPhysics.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
 import {
     getCeramicMaterial,
@@ -18,7 +18,7 @@ const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
 const randomUnit = (options) => (options?.rng ?? Math.random)();
 
 export function createMug(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const mugGroup = new THREE.Group();
 
     // Cup body
@@ -51,12 +51,12 @@ export function createMug(scene, physicsWorld, options = {}) {
 
     if (ammo && physicsWorld) {
         const shape = new ammo.btCylinderShape(new ammo.btVector3(0.5, 0.5, 0.5));
-        createStaticBody(physicsWorld, mugGroup, shape);
+        createPropStaticBody(physicsWorld, mugGroup, shape);
     }
 }
 
 export function createCoins(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const radius = 0.3;
     const thickness = 0.05;
     const geometry = new THREE.CylinderGeometry(radius, radius, thickness, 32);
@@ -111,7 +111,7 @@ export function createCoins(scene, physicsWorld, options = {}) {
             coins.setMatrixAt(i, dummy.matrix);
 
             // One static physics body per coin (cheap; matches prior collision feel).
-            coins.userData.physicsBodies.push(createStaticBody(physicsWorld, dummy, shape));
+            coins.userData.physicsBodies.push(createPropStaticBody(physicsWorld, dummy, shape));
         }
     }
 
@@ -123,7 +123,7 @@ export function createCoins(scene, physicsWorld, options = {}) {
 }
 
 export function createBook(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const width = 3;
     const height = 0.5;
     const depth = 4;
@@ -140,12 +140,12 @@ export function createBook(scene, physicsWorld, options = {}) {
 
     if (ammo && physicsWorld) {
         const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
-        createStaticBody(physicsWorld, mesh, shape);
+        createPropStaticBody(physicsWorld, mesh, shape);
     }
 }
 
 export function createMiniature(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'MiniaturePawn';
 
@@ -195,12 +195,12 @@ export function createMiniature(scene, physicsWorld, options = {}) {
         const shape = new ammo.btCylinderShape(
             new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius)
         );
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 }
 
 export function createD20Holder(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const holderGroup = new THREE.Group();
 
     const material = getDarkLeatherMaterial();
@@ -227,12 +227,12 @@ export function createD20Holder(scene, physicsWorld, options = {}) {
 
     if (ammo && physicsWorld) {
         const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
-        createStaticBody(physicsWorld, holderGroup, shape);
+        createPropStaticBody(physicsWorld, holderGroup, shape);
     }
 }
 
 export function createGemstone(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'RubyGem';
 
@@ -267,12 +267,12 @@ export function createGemstone(scene, physicsWorld, options = {}) {
 
     if (ammo && physicsWorld) {
         const shape = new ammo.btSphereShape(radius * 0.8);
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 }
 
 export function createPotionBottle(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const bottleGroup = new THREE.Group();
     bottleGroup.name = 'PotionBottle';
 
@@ -338,12 +338,12 @@ export function createPotionBottle(scene, physicsWorld, options = {}) {
 
     if (ammo && physicsWorld) {
         const shape = new ammo.btCylinderShape(new ammo.btVector3(0.6, 0.8, 0.6));
-        createStaticBody(physicsWorld, bottleGroup, shape);
+        createPropStaticBody(physicsWorld, bottleGroup, shape);
     }
 }
 
 export function createPencil(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const pencilGroup = new THREE.Group();
 
     const radius = 0.04;
@@ -415,6 +415,6 @@ export function createPencil(scene, physicsWorld, options = {}) {
     const totalLen = bodyLen + ferruleLen + eraserLen + tipLen + leadLen;
     if (ammo && physicsWorld) {
         const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, totalLen / 2, radius));
-        createStaticBody(physicsWorld, pencilGroup, shape);
+        createPropStaticBody(physicsWorld, pencilGroup, shape);
     }
 }

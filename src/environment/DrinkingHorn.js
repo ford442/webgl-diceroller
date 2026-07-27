@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createDrinkingHorn(
     scene,
@@ -7,7 +7,7 @@ export function createDrinkingHorn(
     position = { x: 0, y: -2.75, z: 0 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'DrinkingHorn';
 
@@ -244,14 +244,14 @@ export function createDrinkingHorn(
 
         // Because the group's center is at the base ring (Y = -0.5), we need to shift the physical shape up
         // to match the visual mass
-        // But createStaticBody just uses the group's transform. To offset the shape, we can create a proxy mesh.
+        // But createPropStaticBody just uses the group's transform. To offset the shape, we can create a proxy mesh.
 
         const proxyMesh = new THREE.Mesh();
         proxyMesh.position.copy(group.position);
         proxyMesh.position.y += height / 2 - 0.5; // Shift center of mass up
         proxyMesh.rotation.copy(group.rotation);
 
-        createStaticBody(physicsWorld, proxyMesh, shape);
+        createPropStaticBody(physicsWorld, proxyMesh, shape);
     }
 
     return group;

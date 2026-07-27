@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createWaxSeal(
     scene,
@@ -7,7 +7,7 @@ export function createWaxSeal(
     position = { x: 10, y: -2.75, z: -8 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'WaxSealStamp';
 
@@ -130,7 +130,7 @@ export function createWaxSeal(
             new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius)
         );
 
-        // Since createStaticBody sets the collision shape center at the group's origin,
+        // Since createPropStaticBody sets the collision shape center at the group's origin,
         // and our group's origin is at the bottom (y=0) while the shape is centered,
         // we need to offset the shape center.
         // It's easier to move the group's logical center and visually offset the children down.
@@ -144,7 +144,7 @@ export function createWaxSeal(
         waxMesh.position.y -= totalHeight / 2;
         dripMesh.position.y -= totalHeight / 2;
 
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 
     // Puddle is flat enough not to need its own physics body unless dice really need to bump it.

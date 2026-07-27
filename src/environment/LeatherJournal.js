@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createLeatherJournal(
     scene,
@@ -9,7 +9,7 @@ export function createLeatherJournal(
 ) {
     const group = new THREE.Group();
     group.name = 'LeatherJournal';
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
 
     // Dimensions (feature branch values kept for realism)
     const width = 2.5; // X - book width when closed
@@ -101,10 +101,10 @@ export function createLeatherJournal(
     scene.add(group);
 
     // --- Physics (conditional + simple box from main branch) ---
-    if (physicsWorld && getAmmo()) {
+    if (physicsWorld && getPropAmmo()) {
         if (ammo && physicsWorld) {
             const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
-            createStaticBody(physicsWorld, group, shape);
+            createPropStaticBody(physicsWorld, group, shape);
         }
     }
 

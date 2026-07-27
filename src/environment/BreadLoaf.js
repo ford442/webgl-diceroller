@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 export function createBreadLoaf(
     scene,
@@ -41,7 +41,7 @@ export function createBreadLoaf(
 
     scene.add(group);
 
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo && physicsWorld) {
         // Use a static btBoxShape for the physics collider
         const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, height / 2, depth / 2));
@@ -52,7 +52,7 @@ export function createBreadLoaf(
         dummy.position.y += height / 2;
         dummy.quaternion.copy(group.quaternion);
 
-        createStaticBody(physicsWorld, dummy, shape);
+        createPropStaticBody(physicsWorld, dummy, shape);
 
         // Expose for interactions if needed, though mostly visual
         group.userData.physicsBody = dummy.userData.physicsBody;

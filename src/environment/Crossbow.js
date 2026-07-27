@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 export function createCrossbow(
     scene,
@@ -115,7 +115,7 @@ export function createCrossbow(
     scene.add(group);
 
     // Physics
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo && physicsWorld) {
         // We'll use a compound shape or a simple box that covers the main body
         // A box for the stock is sufficient to prevent dice clipping
@@ -142,7 +142,7 @@ export function createCrossbow(
                             armTrans.setOrigin(new Ammo.btVector3(0, 0.3, 2.0));
                             compoundShape.addChildShape(armTrans, armShape);
 
-                            createStaticBody(physicsWorld, group, compoundShape);
+                            createPropStaticBody(physicsWorld, group, compoundShape);
                         }
                     }
                 }

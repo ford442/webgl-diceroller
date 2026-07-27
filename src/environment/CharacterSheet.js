@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 export function createCharacterSheet(
     scene,
@@ -81,14 +81,14 @@ export function createCharacterSheet(
     scene.add(mesh);
 
     // Physics
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo) {
         // Simple box shape for the paper
         if (Ammo && physicsWorld) {
             const shape = new Ammo.btBoxShape(
                 new Ammo.btVector3(width / 2, thickness / 2, length / 2)
             );
-            createStaticBody(physicsWorld, mesh, shape);
+            createPropStaticBody(physicsWorld, mesh, shape);
         }
     }
 

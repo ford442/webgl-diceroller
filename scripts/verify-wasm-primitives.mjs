@@ -1,5 +1,5 @@
 // Confirms the compiled WASM engine exposes the kinematic-control primitives
-// that the ?wasm-drag interaction path relies on, and that a setTransform +
+// that the WASM drag/levitation interaction path relies on, and that a setTransform +
 // setVelocity + step + read round-trips without throwing.
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
@@ -29,7 +29,7 @@ export async function run() {
 
     const id = e.addDie(6, 0, 5, 0);
 
-    // Mimics the ?wasm-drag control approach exactly:
+    // Mimics the WASM drag control approach exactly:
     // 1) Kinematic hold via setDieTransform each frame (wakes + pins position).
     for (let i = 0; i < 30; i++) {
         e.setDieTransform(id, 1, 3, 2, 0, 0, 0, 1);

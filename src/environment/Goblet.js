@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 export function createGoblet(
     scene,
@@ -71,7 +71,7 @@ export function createGoblet(
     scene.add(group);
 
     // Physics
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo && physicsWorld) {
         // Use a cylinder shape for the goblet
         const radius = 1.3 * 0.6; // Max radius * scale
@@ -86,7 +86,7 @@ export function createGoblet(
             proxy.position.y += height / 2; // Move up by half height since group origin is at bottom
             proxy.quaternion.copy(group.quaternion);
 
-            createStaticBody(physicsWorld, proxy, shape);
+            createPropStaticBody(physicsWorld, proxy, shape);
         }
     }
 

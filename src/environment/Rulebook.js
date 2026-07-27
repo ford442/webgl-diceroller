@@ -1,7 +1,12 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
-export function createRulebook(scene, physicsWorld, position = { x: -8, y: -2.75, z: -8 }, rotationY = Math.PI / 5) {
+export function createRulebook(
+    scene,
+    physicsWorld,
+    position = { x: -8, y: -2.75, z: -8 },
+    rotationY = Math.PI / 5
+) {
     const group = new THREE.Group();
     group.name = 'Rulebook';
 
@@ -13,13 +18,13 @@ export function createRulebook(scene, physicsWorld, position = { x: -8, y: -2.75
     const coverMat = new THREE.MeshStandardMaterial({
         color: 0x3a0c0c, // Dark red leather
         roughness: 0.7,
-        bumpScale: 0.02
+        bumpScale: 0.02,
     });
 
     // Pages material
     const pagesMat = new THREE.MeshStandardMaterial({
         color: 0xf4e5c2, // Aged paper
-        roughness: 0.9
+        roughness: 0.9,
     });
 
     // Main body (pages)
@@ -57,7 +62,7 @@ export function createRulebook(scene, physicsWorld, position = { x: -8, y: -2.75
     const trimMat = new THREE.MeshStandardMaterial({
         color: 0xd4af37, // Gold
         roughness: 0.3,
-        metalness: 0.8
+        metalness: 0.8,
     });
     const trim = new THREE.Mesh(trimGeo, trimMat);
     trim.position.y = thickness / 2 - coverThick / 2;
@@ -73,10 +78,10 @@ export function createRulebook(scene, physicsWorld, position = { x: -8, y: -2.75
     scene.add(group);
 
     // Physics
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     if (ammo && physicsWorld) {
         const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, length / 2));
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 
     return { group };

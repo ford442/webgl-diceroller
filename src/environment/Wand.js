@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { registerInteractiveObject } from '../interaction.js';
 
 export function createWand(
@@ -8,7 +8,7 @@ export function createWand(
     position = { x: 8, y: -2.7, z: 4 },
     rotationY = Math.PI / 4
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'MagicWand';
 
@@ -112,7 +112,7 @@ export function createWand(
 
         // We adjust the physics body to perfectly overlap the visual meshes by centering the body.
         // The visual center of mass is around Y=0 in the group's local space.
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 
     return { group, toggleGlow };

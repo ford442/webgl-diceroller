@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createWaterskin(
     scene,
@@ -7,7 +7,7 @@ export function createWaterskin(
     position = { x: 5, y: -2.75, z: 5 },
     rotation = Math.PI / 4
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Waterskin';
 
@@ -83,7 +83,7 @@ export function createWaterskin(
 
         if (ammo && physicsWorld) {
             const shape = new ammo.btBoxShape(new ammo.btVector3(sx * 0.5, sy * 0.5, sz * 0.5));
-            body = createStaticBody(physicsWorld, group, shape);
+            body = createPropStaticBody(physicsWorld, group, shape);
         }
     }
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createDiceTower(
@@ -8,7 +8,7 @@ export function createDiceTower(
     position = { x: 12, y: -3.0, z: -8 },
     rotationY = -Math.PI / 6
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'DiceTower';
 
@@ -80,7 +80,7 @@ export function createDiceTower(
     scene.add(group);
 
     if (compoundShape && physicsWorld) {
-        createStaticBody(physicsWorld, group, compoundShape);
+        createPropStaticBody(physicsWorld, group, compoundShape);
     }
 
     return { group };

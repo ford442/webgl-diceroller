@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createMap(
     scene,
@@ -7,7 +7,7 @@ export function createMap(
     position = { x: -8, y: -2.75, z: 12 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'WorldMap';
 
@@ -70,13 +70,13 @@ export function createMap(
     // Map Body
     if (ammo && physicsWorld) {
         const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, depth / 2));
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 
     // Weights Physics (Approximation: integrated into static map body? Or separate?)
     // Since it's static, we can just let dice collide with the map surface.
     // Ideally, weights should have their own shapes added to a compound shape,
-    // but createStaticBody currently takes a single shape.
+    // but createPropStaticBody currently takes a single shape.
     // For simplicity, we'll skip physics for the small weights (dice will just roll through them or bounce off map).
     // Or, we can create separate static bodies for them if needed.
     // Let's create separate static bodies for weights to be safe.
@@ -84,14 +84,14 @@ export function createMap(
     weightPositions.forEach((pos) => {
         if (ammo && physicsWorld) {
             const wShape = new ammo.btCylinderShape(new ammo.btVector3(0.3, 0.2, 0.3)); // Height 0.4 / 2 = 0.2
-            // We need to transform the local position to world position for createStaticBody if we pass a mesh.
-            // But createStaticBody uses mesh.position/quaternion.
+            // We need to transform the local position to world position for createPropStaticBody if we pass a mesh.
+            // But createPropStaticBody uses mesh.position/quaternion.
             // The weights are children of 'group'.
             // So their world position depends on group.
 
             // Option: Make weights separate objects in scene? No, keep hierarchy clean.
             // Option: Add child shapes to compound shape? Yes, that's better.
-            // But createStaticBody is simple.
+            // But createPropStaticBody is simple.
 
             // Let's just create individual invisible physics bodies for weights at world coords.
             // We can use a dummy object for position calculation.
@@ -104,8 +104,8 @@ export function createMap(
                 );
             dummy.quaternion.copy(group.quaternion);
 
-            // Since createStaticBody expects a mesh (with .position and .quaternion), dummy works.
-            createStaticBody(physicsWorld, dummy, wShape);
+            // Since createPropStaticBody expects a mesh (with .position and .quaternion), dummy works.
+            createPropStaticBody(physicsWorld, dummy, wShape);
         }
     });
 }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 export function createPocketWatch(
     scene,
@@ -7,7 +7,7 @@ export function createPocketWatch(
     position = { x: 6, y: -2.65, z: 6 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'PocketWatch';
 
@@ -153,7 +153,7 @@ export function createPocketWatch(
             const shape = new ammo.btCylinderShape(
                 new ammo.btVector3(radius, thickness / 2, radius)
             );
-            createStaticBody(physicsWorld, group, shape);
+            createPropStaticBody(physicsWorld, group, shape);
         }
     }
 }

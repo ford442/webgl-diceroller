@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 export function createBone(
     scene,
@@ -72,7 +72,7 @@ export function createBone(
     scene.add(group);
 
     // --- Physics ---
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo && physicsWorld) {
         // Approximate the entire bone with a btBoxShape to act as a static collider
         // Half-extents:
@@ -89,7 +89,7 @@ export function createBone(
             const shape = new Ammo.btBoxShape(new Ammo.btVector3(halfX, halfY, halfZ));
 
             // Use group as proxy for the static body
-            createStaticBody(physicsWorld, group, shape);
+            createPropStaticBody(physicsWorld, group, shape);
         }
     }
 

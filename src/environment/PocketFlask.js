@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 export function createPocketFlask(
     scene,
@@ -88,14 +88,14 @@ export function createPocketFlask(
     scene.add(group);
 
     // Physics
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo && physicsWorld) {
         // We'll use a BoxShape for the body that is centered at the group origin
         // Half extents
         if (Ammo && physicsWorld) {
             const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, height / 2, depth / 2));
 
-            createStaticBody(physicsWorld, group, shape);
+            createPropStaticBody(physicsWorld, group, shape);
         }
     }
 

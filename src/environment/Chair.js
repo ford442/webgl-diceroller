@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo } from '../physics.js';
+import { getPropAmmo } from './PropPhysics.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }, rotationY = 0) {
@@ -86,8 +86,8 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
 
     // Physics
     // Simple Box Collider for the whole chair approx
-    if (physicsWorld && getAmmo()) {
-        const Ammo = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const Ammo = getPropAmmo();
         const transform = new Ammo.btTransform();
         transform.setIdentity();
         // Center the collider vertically based on total height

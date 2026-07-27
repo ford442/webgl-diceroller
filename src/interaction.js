@@ -4,7 +4,6 @@ import { isWasmAvailable, isWasmInitialized } from './wasm/PhysicsBridge.js';
 import {
     spawnedDice,
     prepareDieForAmmoInteraction,
-    setDiePhysicsAuthority,
     syncDieBodyStateToWasm,
     syncDieMeshStateToWasm,
     applyWasmImpulseForDie,
@@ -63,9 +62,11 @@ let draggedItem = null;
 /** @type {AmmoPoint2PointConstraint | null} */
 let dragConstraint = null;
 
-const _interactionParams = new URLSearchParams(window.location.search);
-const _ammoDragRequested = _interactionParams.has('ammo-drag');
-const isWasmInteractionMode = () => !_ammoDragRequested && isWasmInitialized() && isWasmAvailable();
+/**
+ * Drag / levitation run on the WASM engine whenever it is live. The ammo
+ * constraint path below is reachable only on the `?no-wasm` fallback.
+ */
+const isWasmInteractionMode = () => isWasmInitialized() && isWasmAvailable();
 
 const wasmGrab = createWasmDieGrabState();
 
@@ -279,7 +280,6 @@ function onPointerUp(physicsWorld, hooks = {}) {
         const Ammo = getAmmo();
         if (Ammo && physicsWorld) {
             syncDieBodyStateToWasm(draggedItem);
-            setDiePhysicsAuthority(draggedItem, 'wasm');
             physicsWorld.removeConstraint?.(dragConstraint);
             Ammo.destroy(dragConstraint);
         }
@@ -348,9 +348,6 @@ export const updateInteraction = (deltaTime = 1 / 60) => {
 export const isDragging = () => draggedItem !== null;
 export const hasActiveDiceInteraction = () => draggedItem !== null || levitatingDice.length > 0;
 
-export const interactionNeedsAmmoStep = () =>
-    !isWasmInteractionMode() && hasActiveDiceInteraction();
-
 /**
  * @param {import('three').Camera} camera
  * @param {number} normX
@@ -408,7 +405,6 @@ function triggerLevitation(object, scene, physicsWorld, hooks = {}) {
     const body = /** @type {AmmoRigidBody | null | undefined} */ (object.userData.body);
 
     if (wasmMode) {
-        setDiePhysicsAuthority(object, 'wasm');
         setDieWasmKinematic(object, true);
     } else if (body) {
         prepareDieForAmmoInteraction(object);
@@ -439,7 +435,6 @@ function triggerLevitation(object, scene, physicsWorld, hooks = {}) {
         state: 'lifting',
     });
 
-    if (!wasmMode) setDiePhysicsAuthority(object, 'ammo');
     hooks.onMotionActivityChange?.(true, 'levitation');
 }
 
@@ -521,7 +516,6 @@ function updateLevitation() {
                     { x: forceX, y: forceY, z: forceZ },
                     { x: spinX, y: spinY, z: spinZ }
                 );
-                setDiePhysicsAuthority(item.object, 'wasm');
             } else if (item.body && Ammo) {
                 item.body.setCollisionFlags?.((item.body.getCollisionFlags?.() ?? 0) & ~2);
                 item.body.setActivationState?.(1);
@@ -532,7 +526,6 @@ function updateLevitation() {
                     { x: forceX, y: forceY, z: forceZ },
                     { x: spinX, y: spinY, z: spinZ }
                 );
-                setDiePhysicsAuthority(item.object, 'wasm');
 
                 item.body.applyCentralImpulse?.(new Ammo.btVector3(forceX, forceY, forceZ));
                 item.body.applyTorqueImpulse?.(new Ammo.btVector3(spinX, spinY, spinZ));

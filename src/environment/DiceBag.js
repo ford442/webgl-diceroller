@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createDiceBag(
@@ -66,7 +66,7 @@ export function createDiceBag(
     scene.add(group);
 
     // Physics
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     if (ammo) {
         // Approximate with a Cylinder or Sphere
         // Sphere is easier for dice to roll off
@@ -79,7 +79,7 @@ export function createDiceBag(
             // So the sphere will be centered at -2.75.
             // But our visual sphere is centered at -2.75 + 0.8 = -1.95.
             // We need to offset the shape or the body?
-            // createStaticBody uses mesh.position.
+            // createPropStaticBody uses mesh.position.
             // If we pass 'group', it uses group.position (-6, -2.75, 2).
             // The shape will be centered there.
             // The visual sphere center is at Y=0.8 relative to that.
@@ -91,7 +91,7 @@ export function createDiceBag(
             // We want physics sphere to match visual.
             // Physics center should be at local Y=0.8.
 
-            // createStaticBody implementation:
+            // createPropStaticBody implementation:
             // transform.setOrigin(mesh.position)
             // It doesn't support offset shape.
 
@@ -99,7 +99,7 @@ export function createDiceBag(
             // If we use bodyMesh, we need its world position.
             // bodyMesh.position is local (0, 0.8, 0).
             // World position is group.position + local.
-            // But createStaticBody reads mesh.position. If mesh is child, mesh.position is local.
+            // But createPropStaticBody reads mesh.position. If mesh is child, mesh.position is local.
             // We should calculate world position.
 
             // Let's use a workaround: Create a hidden mesh for physics that is centered correctly.
@@ -115,7 +115,7 @@ export function createDiceBag(
             // To sit on table (-2.75), Group Y must be -2.75 + 0.8 = -1.95.
             group.position.set(position.x, -1.95, position.z);
 
-            createStaticBody(physicsWorld, group, shape);
+            createPropStaticBody(physicsWorld, group, shape);
         }
     }
 

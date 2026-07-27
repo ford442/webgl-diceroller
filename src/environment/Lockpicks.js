@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 /**
  * Creates a "Lockpicks and Pouch" prop for the tabletop environment.
@@ -97,13 +97,13 @@ export function createLockpicks(
     scene.add(group);
 
     // Physics
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo && physicsWorld) {
         // Use a simple BoxShape for the entire pouch+picks area
         const shape = new Ammo.btBoxShape(
             new Ammo.btVector3(pouchWidth / 2, pouchThickness / 2, pouchLength / 2)
         );
-        const body = createStaticBody(physicsWorld, group, shape);
+        const body = createPropStaticBody(physicsWorld, group, shape);
         group.userData.body = body;
     }
 

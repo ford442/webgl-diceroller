@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 /**
  * Enhanced Mug with:
@@ -110,10 +110,10 @@ export function createMug(
 
     // ========== PHYSICS ==========
 
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo && physicsWorld) {
         const shape = new Ammo.btCylinderShape(new Ammo.btVector3(radius, height / 2, radius));
-        const body = createStaticBody(physicsWorld, mugGroup, shape);
+        const body = createPropStaticBody(physicsWorld, mugGroup, shape);
         mugGroup.userData.body = body;
     }
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 import { playPropImpact } from '../audio/DiceCollisionAudio.js';
 
 export function createCauldron(
@@ -8,7 +8,7 @@ export function createCauldron(
     position = { x: 12, y: -2.75, z: -4 },
     rotation = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Cauldron';
 
@@ -185,7 +185,7 @@ export function createCauldron(
             dummy.position.y += totalHeight / 2;
             dummy.quaternion.copy(group.quaternion);
 
-            createStaticBody(physicsWorld, dummy, shape);
+            createPropStaticBody(physicsWorld, dummy, shape);
         }
     }
 

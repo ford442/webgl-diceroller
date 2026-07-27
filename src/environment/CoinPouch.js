@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 export function createCoinPouch(
     scene,
@@ -10,7 +10,7 @@ export function createCoinPouch(
     const group = new THREE.Group();
     group.name = 'CoinPouch';
 
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
 
     // Material: Leather
     const leatherMat = new THREE.MeshStandardMaterial({
@@ -88,7 +88,7 @@ export function createCoinPouch(
 
     // Physics center needs to be at the center of the cylinder.
     // Since the group's origin is at the bottom (y=0), we should ideally offset the body
-    // but createStaticBody uses the group's position for the center of mass.
+    // but createPropStaticBody uses the group's position for the center of mass.
     // A quick way is to offset the visual meshes so the group is centered,
     // but the bag sits fine if we just use a slightly taller shape or shift the mesh down inside the group.
 
@@ -101,6 +101,6 @@ export function createCoinPouch(
 
     if (ammo && physicsWorld) {
         const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 }

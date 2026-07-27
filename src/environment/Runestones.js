@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 export function createRunestones(
     scene,
@@ -7,7 +7,7 @@ export function createRunestones(
     position = { x: 10, y: -2.75, z: -10 },
     _rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Runestones';
 
@@ -88,7 +88,7 @@ export function createRunestones(
                 const shape = new ammo.btCylinderShape(
                     new ammo.btVector3(radius, height / 2, radius)
                 );
-                createStaticBody(physicsWorld, mesh, shape);
+                createPropStaticBody(physicsWorld, mesh, shape);
             }
         }
     }

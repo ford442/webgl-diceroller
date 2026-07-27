@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createAleKeg(scene, physicsWorld, position, rotationY) {
@@ -90,7 +90,7 @@ export function createAleKeg(scene, physicsWorld, position, rotationY) {
     scene.add(group);
 
     // Physics
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     let body = null;
     if (Ammo && physicsWorld) {
         const halfExtents = new Ammo.btVector3(radiusMiddle, height / 2, radiusMiddle);
@@ -104,7 +104,7 @@ export function createAleKeg(scene, physicsWorld, position, rotationY) {
         spigotGroup.position.y -= height / 2;
         spigotGroup.position.y += height * 0.2;
 
-        body = createStaticBody(physicsWorld, group, shape);
+        body = createPropStaticBody(physicsWorld, group, shape);
         Ammo.destroy(halfExtents);
     }
 

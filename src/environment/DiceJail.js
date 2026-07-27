@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createDiceJail(
@@ -8,7 +8,7 @@ export function createDiceJail(
     position = { x: -12, y: -2.75, z: 5 },
     rotationY = Math.PI / 4
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'DiceJail';
 
@@ -188,7 +188,7 @@ export function createDiceJail(
                                 group.rotation.y = rotationY;
 
                                 scene.add(group);
-                                createStaticBody(physicsWorld, group, compoundShape);
+                                createPropStaticBody(physicsWorld, group, compoundShape);
                             }
                         }
                     }

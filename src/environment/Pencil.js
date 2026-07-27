@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 export function createPencil(
     scene,
@@ -123,7 +123,7 @@ export function createPencil(
     scene.add(group);
 
     // Physics
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo) {
         // Physics CylinderShape matches the Y-aligned group geometry perfectly.
         // Size: X=radius, Y=halfLength, Z=radius
@@ -131,7 +131,7 @@ export function createPencil(
             const shape = new Ammo.btCylinderShape(
                 new Ammo.btVector3(pencilRadius, totalLength / 2, pencilRadius)
             );
-            createStaticBody(physicsWorld, group, shape);
+            createPropStaticBody(physicsWorld, group, shape);
         }
     }
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createSword(
     scene,
@@ -77,15 +77,15 @@ export function createSword(
 
     // Physics (Static Box)
     // Create a simple box hull for collision
-    if (physicsWorld && getAmmo()) {
-        const Ammo = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const Ammo = getPropAmmo();
 
         // Size: Roughly 16 units long, 4.0 wide (x), 0.6 high (y)
         // Half extents
         if (Ammo && physicsWorld) {
             const shape = new Ammo.btBoxShape(new Ammo.btVector3(2.0, 0.3, 8.0));
 
-            createStaticBody(physicsWorld, group, shape);
+            createPropStaticBody(physicsWorld, group, shape);
         }
     }
 

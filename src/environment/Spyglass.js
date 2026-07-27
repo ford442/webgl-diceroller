@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo } from '../physics.js';
+import { getPropAmmo } from './PropPhysics.js';
 
 export function createSpyglass(
     scene,
@@ -98,8 +98,8 @@ export function createSpyglass(
     scene.add(group);
 
     // Physics
-    if (physicsWorld && getAmmo()) {
-        const Ammo = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const Ammo = getPropAmmo();
         const transform = new Ammo.btTransform();
         transform.setIdentity();
         transform.setOrigin(

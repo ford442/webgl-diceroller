@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { getWasmEngine } from '../wasm/PhysicsBridge.js';
 import { spawnedDice, getAmmoDiceBackend } from './DiceState.js';
-import { isUsingWasmPhysics, needsAmmoDiceBackend, needsAmmoDiceBodies } from './diceAmmoFlags.js';
+import { isUsingWasmPhysics, needsAmmoDiceBackend } from './diceAmmoFlags.js';
 
 const searchParams = new URLSearchParams(window.location.search);
 
-export { isUsingWasmPhysics, needsAmmoDiceBackend, needsAmmoDiceBodies };
+export { isUsingWasmPhysics, needsAmmoDiceBackend };
 
 export const DEFAULT_MASS_BIAS_RATIO = 0.0075;
 

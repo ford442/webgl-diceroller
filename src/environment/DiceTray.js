@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
 
 /**
@@ -22,7 +22,7 @@ export function createDiceTray(
     const thickness = 0.4;
     const floorThickness = 0.2;
 
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
 
     const { diffuse: woodDiffuse, roughness: woodRoughness, bump: woodBump } = getWoodTextures();
 
@@ -118,7 +118,7 @@ export function createDiceTray(
 
         // 1. Floor Physics
         const pFloorGeo = new THREE.BoxGeometry(width, floorThickness, depth);
-        // To use createStaticBody which expects world transform, we need to apply group transform
+        // To use createPropStaticBody which expects world transform, we need to apply group transform
         const floorDummy = new THREE.Mesh(pFloorGeo);
         group.add(floorDummy);
         floorDummy.position.copy(floorMesh.position);
@@ -138,7 +138,7 @@ export function createDiceTray(
             const floorShape = new Ammo.btBoxShape(
                 new Ammo.btVector3(width / 2, floorThickness / 2, depth / 2)
             );
-            createStaticBody(physicsWorld, floorProxy, floorShape);
+            createPropStaticBody(physicsWorld, floorProxy, floorShape);
         }
 
         // Helper function for walls
@@ -159,7 +159,7 @@ export function createDiceTray(
 
             if (Ammo && physicsWorld) {
                 const shape = new Ammo.btBoxShape(new Ammo.btVector3(w / 2, h / 2, d / 2));
-                createStaticBody(physicsWorld, proxy, shape);
+                createPropStaticBody(physicsWorld, proxy, shape);
             }
             group.remove(dummy);
         };

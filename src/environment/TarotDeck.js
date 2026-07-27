@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { toCurrentTabletopY } from '../core/SceneMetrics.js';
 
 export function createTarotDeck(
@@ -9,7 +9,7 @@ export function createTarotDeck(
     rotationY = Math.PI / 6
 ) {
     position = toCurrentTabletopY(position);
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.position.set(position.x, position.y, position.z);
     group.rotation.y = rotationY;
@@ -72,13 +72,13 @@ export function createTarotDeck(
     group.add(deckMesh);
 
     // Physics for Deck
-    if (physicsWorld && getAmmo()) {
+    if (physicsWorld && getPropAmmo()) {
         if (ammo && physicsWorld) {
             const deckShape = new ammo.btBoxShape(
                 new ammo.btVector3(cardWidth / 2, deckThickness / 2, cardHeight / 2)
             );
 
-            // createStaticBody expects the object to have the world transform.
+            // createPropStaticBody expects the object to have the world transform.
             // We'll create a dummy mesh with the world transform of the deckMesh
             const deckDummy = new THREE.Mesh();
 
@@ -90,7 +90,7 @@ export function createTarotDeck(
             deckDummy.position.copy(deckWorldPos);
             deckDummy.quaternion.copy(group.quaternion);
 
-            createStaticBody(physicsWorld, deckDummy, deckShape);
+            createPropStaticBody(physicsWorld, deckDummy, deckShape);
         }
     }
 
@@ -115,7 +115,7 @@ export function createTarotDeck(
     group.add(card1);
 
     // Physics for Card 1
-    if (physicsWorld && getAmmo()) {
+    if (physicsWorld && getPropAmmo()) {
         if (ammo && physicsWorld) {
             const cardShape = new ammo.btBoxShape(
                 new ammo.btVector3(cardWidth / 2, cardThickness / 2, cardHeight / 2)
@@ -134,7 +134,7 @@ export function createTarotDeck(
             const euler = new THREE.Euler(0, rotationY - Math.PI / 8, 0, 'YXZ');
             cardDummy.quaternion.setFromEuler(euler);
 
-            createStaticBody(physicsWorld, cardDummy, cardShape);
+            createPropStaticBody(physicsWorld, cardDummy, cardShape);
         }
     }
 
@@ -157,7 +157,7 @@ export function createTarotDeck(
     group.add(card2);
 
     // Physics for Card 2
-    if (physicsWorld && getAmmo()) {
+    if (physicsWorld && getPropAmmo()) {
         if (ammo && physicsWorld) {
             const cardShape = new ammo.btBoxShape(
                 new ammo.btVector3(cardWidth / 2, cardThickness / 2, cardHeight / 2)
@@ -175,7 +175,7 @@ export function createTarotDeck(
             const euler = new THREE.Euler(0, rotationY + Math.PI / 12, 0, 'YXZ');
             cardDummy.quaternion.setFromEuler(euler);
 
-            createStaticBody(physicsWorld, cardDummy, cardShape);
+            createPropStaticBody(physicsWorld, cardDummy, cardShape);
         }
     }
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 // Orb modes with colors and particle types
 export const OrbMode = {
@@ -160,8 +160,8 @@ export function createMysticOrb(
     scene.add(group);
 
     // --- Physics ---
-    if (physicsWorld && getAmmo()) {
-        const ammo = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const ammo = getPropAmmo();
 
         // Cylinder shape for the pedestal
         if (ammo && physicsWorld) {
@@ -187,7 +187,7 @@ export function createMysticOrb(
                 position.z
             );
             scene.add(pedestalPhysMesh);
-            createStaticBody(physicsWorld, pedestalPhysMesh, pedestalShape);
+            createPropStaticBody(physicsWorld, pedestalPhysMesh, pedestalShape);
         }
     }
 

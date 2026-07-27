@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Verify lazy chunks: ?webgl must not fetch three.webgpu; WASM path must not
- * fetch the ammo physics chunk unless ?no-wasm / dual-physics / ?ammo-drag.
+ * Verify lazy chunks: ?webgl must not fetch three.webgpu; the default WASM path
+ * must not fetch the ammo physics chunk. `?no-wasm` is the only escape hatch
+ * that pulls ammo back in.
  */
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
@@ -73,7 +74,8 @@ try {
         await page.close();
     }
 
-    // WASM authoritative (default when wasm is active): no ammo physics chunk
+    // WASM authoritative (default when wasm is active): no ammo physics chunk,
+    // and no ammo rigid body behind any die.
     {
         const page = await browser.newPage();
         const urls = await collectScripts(page, '/?webgl&no-post&fair-dice&test');
@@ -88,6 +90,22 @@ try {
             console.error('FAIL: WASM path fetched ammo physics chunk:', physics);
         } else {
             console.log('ok: WASM path did not fetch ammo physics chunk');
+        }
+
+        if (wasmActive) {
+            const ammoDiceBodies = await page.evaluate(() => {
+                let count = 0;
+                window.__app?.scene?.traverse((object) => {
+                    if (object.userData?.isDie && object.userData.body != null) count += 1;
+                });
+                return count;
+            });
+            if (ammoDiceBodies > 0) {
+                failed += 1;
+                console.error(`FAIL: WASM path created ${ammoDiceBodies} ammo dice body/bodies`);
+            } else {
+                console.log('ok: WASM path created no ammo dice bodies');
+            }
         }
         await page.close();
     }

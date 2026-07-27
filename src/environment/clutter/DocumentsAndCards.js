@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../../physics.js';
+import { getPropAmmo, createPropStaticBody } from '../PropPhysics.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
 import { getWoodMaterial } from '../../core/MaterialPalette.js';
 import { resolvePlacement } from './ClutterPlacement.js';
@@ -59,7 +59,7 @@ function generateCharacterSheetTexture() {
 }
 
 export function createParchment(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const width = 5;
     const depth = 7;
     const thickness = 0.02;
@@ -84,7 +84,7 @@ export function createParchment(scene, physicsWorld, options = {}) {
 
     if (ammo && physicsWorld) {
         const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, depth / 2));
-        createStaticBody(physicsWorld, mesh, shape);
+        createPropStaticBody(physicsWorld, mesh, shape);
     }
 }
 
@@ -130,7 +130,7 @@ function generateTarotTexture(name, number, color) {
 }
 
 export function createTarotCards(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'TarotCards';
 
@@ -171,7 +171,7 @@ export function createTarotCards(scene, physicsWorld, options = {}) {
 
         group.add(mesh);
         if (ammo && physicsWorld) {
-            createStaticBody(
+            createPropStaticBody(
                 physicsWorld,
                 mesh,
                 new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, height / 2))
@@ -230,7 +230,7 @@ function generateWantedPosterTexture() {
 }
 
 export function createWantedPoster(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const width = 2.5;
     const height = 3.5;
     const thickness = 0.02;
@@ -256,7 +256,7 @@ export function createWantedPoster(scene, physicsWorld, options = {}) {
 
     if (ammo && physicsWorld) {
         const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, height / 2));
-        createStaticBody(physicsWorld, mesh, shape);
+        createPropStaticBody(physicsWorld, mesh, shape);
     }
 }
 
@@ -303,7 +303,7 @@ function generateDMChartsTexture() {
 }
 
 export function createDMScreen(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const centerWidth = 8;
     const wingWidth = 4;
     const height = 3;
@@ -340,7 +340,7 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
         const centerShape = new ammo.btBoxShape(
             new ammo.btVector3(centerWidth / 2, height / 2, thickness / 2)
         );
-        createStaticBody(physicsWorld, centerMesh, centerShape);
+        createPropStaticBody(physicsWorld, centerMesh, centerShape);
     }
 
     const angleRad = Math.PI / 6;
@@ -357,7 +357,7 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
         const leftShape = new ammo.btBoxShape(
             new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2)
         );
-        createStaticBody(physicsWorld, leftWingMesh, leftShape);
+        createPropStaticBody(physicsWorld, leftWingMesh, leftShape);
     }
 
     const rightWingMesh = new THREE.Mesh(wingGeo, materials);
@@ -372,6 +372,6 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
         const rightShape = new ammo.btBoxShape(
             new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2)
         );
-        createStaticBody(physicsWorld, rightWingMesh, rightShape);
+        createPropStaticBody(physicsWorld, rightWingMesh, rightShape);
     }
 }

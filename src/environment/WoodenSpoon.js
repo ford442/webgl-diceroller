@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createWoodenSpoon(
     scene,
@@ -7,7 +7,7 @@ export function createWoodenSpoon(
     position = { x: -6, y: -2.75, z: 6 },
     rotationY = Math.PI / 4
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'WoodenSpoon';
 
@@ -66,7 +66,7 @@ export function createWoodenSpoon(
         proxyMesh.position.add(localOffset);
         proxyMesh.rotation.y = rotationY;
 
-        createStaticBody(physicsWorld, proxyMesh, boxShape);
+        createPropStaticBody(physicsWorld, proxyMesh, boxShape);
     }
 
     return { group };

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { registerInteractiveObject } from '../interaction.js';
 
 export function createLantern(
@@ -8,7 +8,7 @@ export function createLantern(
     position = { x: -8, y: -2.75, z: -12 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Lantern';
 
@@ -150,7 +150,7 @@ export function createLantern(
     // --- Physics ---
     const totalHeight = baseHeight + bodyHeight + capHeight + ventHeight + 0.4; // +0.4 for handle roughly
     // Cylinder shape centered at origin, but group origin is at bottom visually.
-    // So we offset the group visual components up, or let createStaticBody use group's position
+    // So we offset the group visual components up, or let createPropStaticBody use group's position
     // and assume center of mass is at group origin.
     // Wait, the meshes are placed positively on Y axis.
     // If we want the physics shape to match, it needs to be centered at Y = totalHeight / 2.
@@ -172,7 +172,7 @@ export function createLantern(
         const shape = new ammo.btCylinderShape(
             new ammo.btVector3(bodyRadiusTop + 0.05, halfHeight, bodyRadiusTop + 0.05)
         );
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 
     // Flicker update function
