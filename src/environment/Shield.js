@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createShield(
     scene,
@@ -118,7 +118,7 @@ export function createShield(
     // So Physics Shape needs Rot X 90 relative to Y-up Cylinder?
     // Or just use a Box shape which is easier to orient?
     // Let's use Cylinder but rotate the local transform?
-    // createStaticBody uses mesh.position/quaternion for the Body transform.
+    // createPropStaticBody uses mesh.position/quaternion for the Body transform.
     // The Body center is at Group Origin.
     // The Shape is centered at Body Origin.
     // We need the Shape (Cylinder Y) to be rotated X 90 to match Visual (Cylinder Z).
@@ -138,10 +138,10 @@ export function createShield(
     // Box(Width, Height, Depth) -> (2r, 2r, h).
     // This matches.
 
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo && physicsWorld) {
         const shape = new Ammo.btBoxShape(new Ammo.btVector3(radius, radius, thickness / 2 + 0.1)); // Extra depth for rim/boss
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 }
 

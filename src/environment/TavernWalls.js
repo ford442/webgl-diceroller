@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 import { createFire } from './Fire.js';
 import { GodRayShader } from '../shaders/GodRayShader.js';
 import { CAMERA_LOOK_AT_Y } from '../core/SceneMetrics.js';
@@ -55,11 +55,11 @@ export function createTavernWalls(scene, physicsWorld) {
     roomGroup.add(floorMesh);
 
     // Physics for floor
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo) {
         if (Ammo && physicsWorld) {
             const shape = new Ammo.btBoxShape(new Ammo.btVector3(width / 2, 0.5, depth / 2));
-            createStaticBody(physicsWorld, floorMesh, shape);
+            createPropStaticBody(physicsWorld, floorMesh, shape);
         }
     }
 
@@ -74,7 +74,7 @@ export function createTavernWalls(scene, physicsWorld) {
     // Physics
     if (Ammo && physicsWorld) {
         if (Ammo)
-            createStaticBody(
+            createPropStaticBody(
                 physicsWorld,
                 backWall,
                 new Ammo.btBoxShape(new Ammo.btVector3(width / 2, height / 2, thickness / 2))
@@ -89,7 +89,7 @@ export function createTavernWalls(scene, physicsWorld) {
     // Physics
     if (Ammo && physicsWorld) {
         if (Ammo)
-            createStaticBody(
+            createPropStaticBody(
                 physicsWorld,
                 frontWall,
                 new Ammo.btBoxShape(new Ammo.btVector3(width / 2, height / 2, thickness / 2))
@@ -106,7 +106,7 @@ export function createTavernWalls(scene, physicsWorld) {
     roomGroup.add(rightWall);
     if (Ammo && physicsWorld) {
         if (Ammo)
-            createStaticBody(
+            createPropStaticBody(
                 physicsWorld,
                 rightWall,
                 new Ammo.btBoxShape(
@@ -218,7 +218,7 @@ function createCeiling(group, physicsWorld, Ammo, wallMat, woodMat, width, depth
             const shape = new Ammo.btBoxShape(
                 new Ammo.btVector3(width / 2, thickness / 2, depth / 2)
             );
-            createStaticBody(physicsWorld, ceilMesh, shape);
+            createPropStaticBody(physicsWorld, ceilMesh, shape);
         }
     }
 
@@ -360,7 +360,7 @@ function createWindowedWall(
         const physDepth = wallDepth + thickness * 2;
 
         // We can just reuse the shape logic without a mesh if we had a helper,
-        // but createStaticBody expects a mesh to get position/quat.
+        // but createPropStaticBody expects a mesh to get position/quat.
         // We'll create a dummy mesh.
         const dummyGeo = new THREE.BoxGeometry(thickness, physHeight, physDepth);
         const dummyMesh = new THREE.Mesh(dummyGeo, new THREE.MeshBasicMaterial({ visible: false }));
@@ -371,7 +371,7 @@ function createWindowedWall(
             const shape = new Ammo.btBoxShape(
                 new Ammo.btVector3(thickness / 2, physHeight / 2, physDepth / 2)
             );
-            createStaticBody(physicsWorld, dummyMesh, shape);
+            createPropStaticBody(physicsWorld, dummyMesh, shape);
         }
     }
 
@@ -552,7 +552,7 @@ function createFireplace(group, physicsWorld, Ammo, wallMat) {
             pMesh.position.set(hX, hY, 0);
             pMesh.visible = false;
             group.add(pMesh);
-            createStaticBody(physicsWorld, pMesh, shape);
+            createPropStaticBody(physicsWorld, pMesh, shape);
         }
     }
 

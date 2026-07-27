@@ -89,12 +89,16 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 
 ### Integration Model
 
-The WASM engine owns ordinary dice simulation when the compiled module is
-available. `ammo.js` still exists for three reasons:
+The WASM engine owns **all** dice simulation when the compiled module is
+available — including drag, levitation, and flicks. `ammo.js` still exists for
+two reasons:
 
-- Browser/build fallback when the WASM artifacts are absent or `?no-wasm` is set.
-- Drag constraints and levitation handoff (temporary until mirrored into WASM).
-- Optional `?dual-physics` validation runs where both engines step in parallel.
+- Browser/build fallback when the WASM artifacts are absent or `?no-wasm` is
+  set. That fallback is complete: ammo dice bodies, ammo drag constraints, and
+  ammo levitation.
+- Hand-built static prop colliders, behind `src/environment/PropPhysics.js`.
+  These only exist when ammo is loaded; on the default path props are
+  visual-only (declarative specs go to WASM via `StaticColliderBridge`).
 
 ### Worker topology (Phase 4 default)
 
@@ -253,12 +257,13 @@ Source layout:
   transport when the page is cross-origin isolated (COOP/COEP set).
 - `?no-worker` (or `?worker-physics=off`) runs the WASM engine **in-process** on
   the main thread (the legacy `WasmPhysicsBridge` path).
-- `?no-wasm` forces the JS/ammo fallback path even if `public/wasm/` is present.
-- `?dual-physics` steps ammo and WASM in parallel for divergence checks
-  (implies the in-process path; dual validation needs both engines main-thread).
+- `?no-wasm` is the sole physics escape hatch: it forces the JS/ammo fallback
+  path (dice bodies, drag, levitation) even if `public/wasm/` is present.
 - `?worker-physics` is the explicit opt-in alias for the now-default worker path.
-- `?ammo-drag` keeps drag/levitation on the legacy ammo constraint path; by
-  default interactions are driven kinematically inside the WASM world.
+
+The `?dual-physics`, `?ammo-drag`, and `?wasm-drag` flags were removed in the
+Phase 5 cut-over. All interactions are driven kinematically inside the WASM
+world whenever the engine is live.
 
 ### Cross-origin isolation (required for the fast path)
 
@@ -572,7 +577,7 @@ const t2 = window.getWasmEngine().getTransforms();
 - [x] Synchronous worker proxy via a mirrored monotonic id counter, so
       `WorkerPhysicsBridge` is a drop-in for `WasmPhysicsBridge`.
 - [x] `PhysicsBridge` facade selects worker → main-thread → stub with fallback.
-- [x] Worker-driven drag/levitation by default (`?ammo-drag` opts out).
+- [x] Worker-driven drag/levitation (the only path while WASM is live).
 - [x] COOP/COEP on dev **and** preview servers.
 - [x] Post-deploy isolation verifier (`npm run verify:production-isolation`).
 - [x] Render-regression baselines enforced for `?webgl` / `?webgl&no-post`.
@@ -605,12 +610,15 @@ const t2 = window.getWasmEngine().getTransforms();
   (both the in-process bridge and the worker init payload). The C++ constructor
   no longer touches `window`.
 
-### Phase 5 (Dice ammo retirement — in progress)
+### Phase 5 (Dice ammo retirement)
 
-- [x] WASM worker is the default dice simulator; drag/levitation use WASM kinematic control (`setDieKinematic` in C++/embind/worker).
-- [x] `shouldLoadAmmoPhysics()` skips the ammo chunk when WASM is available (unless `?no-wasm`, `?dual-physics`, or `?ammo-drag`).
+- [x] WASM worker is the default dice simulator; drag/levitation use WASM kinematic control (`setDieKinematic` in C++/embind/worker, with a velocity-clamp fallback if an older artifact lacks the binding).
+- [x] `shouldLoadAmmoPhysics()` skips the ammo chunk unless `?no-wasm` is set or the WASM artifacts are missing.
 - [x] Dice ammo helpers consolidated in `src/dice/AmmoDiceBackend.js` (dynamic import; not on the default critical path).
-- [x] Default WASM sessions spawn WASM dice bodies only (`needsAmmoDiceBackend()` gates ammo bodies to fallback/validation flags).
+- [x] Ammo dice bodies exist only on the fallback path (`needsAmmoDiceBackend() === !isUsingWasmPhysics()`); the dual `physicsAuthority` sync is gone.
+- [x] `?dual-physics` / `?ammo-drag` / `?wasm-drag` removed; `?no-wasm` is the only escape hatch.
+- [x] Prop ammo usage funnelled through `src/environment/PropPhysics.js`; no prop imports `physics.js` directly.
+- [x] `npm run verify:wasm-interaction` covers drag + levitation on the WASM-only path; `npm run verify:bundle-loading` asserts no ammo chunk and no ammo dice bodies by default.
 - [ ] Static prop colliders still use ammo when loaded — see [issue #237](https://github.com/ford442/webgl-diceroller/issues/237).
 - [x] SIMD optimisation (`-msimd128`) for SAT axis projections (`projectHullOntoAxis` in `dice_physics_engine.hpp`).
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { registerInteractable } from '../interactables/InteractableRegistry.js';
 import { tween } from '../interactables/tween.js';
 
@@ -20,7 +20,7 @@ export function createPlayingCards(
     const group = new THREE.Group();
     group.name = 'PlayingCards';
 
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const cards = []; // interactive scattered cards, populated below
 
     // Dimensions for a standard playing card
@@ -109,7 +109,7 @@ export function createPlayingCards(
             const shape = new ammo.btBoxShape(
                 new ammo.btVector3(width / 2, thickness / 2, height / 2)
             );
-            createStaticBody(physicsWorld, mesh, shape);
+            createPropStaticBody(physicsWorld, mesh, shape);
         }
     });
 
@@ -162,7 +162,7 @@ export function createPlayingCards(
         const deckShape = new ammo.btBoxShape(
             new ammo.btVector3(width / 2, deckHeight / 2, height / 2)
         );
-        createStaticBody(physicsWorld, deckMesh, deckShape);
+        createPropStaticBody(physicsWorld, deckMesh, deckShape);
     }
 
     scene.add(group);

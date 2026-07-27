@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 export function createSpectacles(
     scene,
@@ -144,7 +144,7 @@ export function createSpectacles(
     // Total width is roughly 2 * lensRadius + bridgeWidth + 2 * frameTube.
     // Height (when laying flat) is just the frame thickness/arm thickness, so ~0.05.
     // Depth is the lens diameter, ~ 2 * lensRadius.
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     if (ammo) {
         if (ammo && physicsWorld) {
             const shape = new ammo.btBoxShape(
@@ -154,7 +154,7 @@ export function createSpectacles(
                     (lensRadius * 2) / 2 + 0.1
                 )
             );
-            createStaticBody(physicsWorld, group, shape);
+            createPropStaticBody(physicsWorld, group, shape);
         }
     }
 }

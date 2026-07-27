@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createAmulet(
     scene,
@@ -101,8 +101,8 @@ export function createAmulet(
     scene.add(group);
 
     // Physics
-    if (physicsWorld && getAmmo()) {
-        const AmmoInstance = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const AmmoInstance = getPropAmmo();
 
         // Use a simple flat cylinder shape for the main amulet body
         const shapeRadius = radius + thickness; // encompass the ring
@@ -114,8 +114,8 @@ export function createAmulet(
             new AmmoInstance.btVector3(shapeRadius, shapeHeight / 2, shapeRadius)
         );
 
-        // createStaticBody handles position/rotation from the group
-        createStaticBody(physicsWorld, group, shape);
+        // createPropStaticBody handles position/rotation from the group
+        createPropStaticBody(physicsWorld, group, shape);
     }
 
     return { group };

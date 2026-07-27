@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../../physics.js';
+import { getPropAmmo, createPropStaticBody } from '../PropPhysics.js';
 import { createFire } from '../Fire.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
 import {
@@ -17,7 +17,7 @@ const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
 const randomUnit = (options) => (options?.rng ?? Math.random)();
 
 export function createCandle(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const candleGroup = new THREE.Group();
 
     const radius = 0.4;
@@ -84,7 +84,7 @@ export function createCandle(scene, physicsWorld, options = {}) {
 
     if (ammo && physicsWorld) {
         const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
-        createStaticBody(physicsWorld, candleGroup, shape);
+        createPropStaticBody(physicsWorld, candleGroup, shape);
     }
 
     const flameWorldPos = new THREE.Vector3(posX, posY + height / 2 + wickHeight + 0.05, posZ);
@@ -121,7 +121,7 @@ export function createCandle(scene, physicsWorld, options = {}) {
 }
 
 export function createKey(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const keyGroup = new THREE.Group();
     keyGroup.name = 'IronKey';
 
@@ -174,12 +174,12 @@ export function createKey(scene, physicsWorld, options = {}) {
 
     if (ammo && physicsWorld) {
         const shape = new ammo.btBoxShape(new ammo.btVector3(0.3, 0.06, 0.7));
-        createStaticBody(physicsWorld, keyGroup, shape);
+        createPropStaticBody(physicsWorld, keyGroup, shape);
     }
 }
 
 export function createQuill(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Quill';
 
@@ -259,12 +259,12 @@ export function createQuill(scene, physicsWorld, options = {}) {
         const shape = new ammo.btCylinderShape(
             new ammo.btVector3(potRadiusBot, potHeight / 2, potRadiusBot)
         );
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 }
 
 export function createPipe(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'SmokingPipe';
 
@@ -342,12 +342,12 @@ export function createPipe(scene, physicsWorld, options = {}) {
 
     if (ammo && physicsWorld) {
         const bowlShape = new ammo.btCylinderShape(new ammo.btVector3(0.35, 0.3, 0.35));
-        createStaticBody(physicsWorld, group, bowlShape);
+        createPropStaticBody(physicsWorld, group, bowlShape);
     }
 }
 
 export function createSpyglass(scene, physicsWorld, options = {}) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Spyglass';
 
@@ -410,6 +410,6 @@ export function createSpyglass(scene, physicsWorld, options = {}) {
     const totalLen = mainLen + drawLen - 0.3;
     if (ammo && physicsWorld) {
         const shape = new ammo.btCylinderShape(new ammo.btVector3(mainRad, totalLen / 2, mainRad));
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 }

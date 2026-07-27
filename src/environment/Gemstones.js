@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createGemstones(
     scene,
@@ -8,7 +8,7 @@ export function createGemstones(
     position = { x: 6, y: -2.75, z: -5 },
     rotation = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Gemstones';
 
@@ -60,7 +60,7 @@ export function createGemstones(
             dummy.position.copy(gem.position).applyEuler(group.rotation).add(group.position);
             dummy.rotation.copy(gem.rotation);
             dummy.position.y = group.position.y + config.size * 0.4;
-            createStaticBody(physicsWorld, dummy, shape);
+            createPropStaticBody(physicsWorld, dummy, shape);
         }
     });
 

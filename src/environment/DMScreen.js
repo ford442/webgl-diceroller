@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo } from '../physics.js';
+import { getPropAmmo } from './PropPhysics.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createDMScreen(
@@ -8,7 +8,7 @@ export function createDMScreen(
     position = { x: 0, y: -2.75, z: -7 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
 
     // Group to hold the screen
     const group = new THREE.Group();

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createTavernMeal(
     scene,
@@ -7,7 +7,7 @@ export function createTavernMeal(
     position = { x: 10, y: -2.75, z: 10 },
     rotationY = Math.PI / 4
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
 
     // 1. Tankard of Ale
     createTankard(scene, physicsWorld, ammo, position, rotationY);
@@ -97,7 +97,7 @@ function createTankard(scene, physicsWorld, ammo, basePosition, baseRotation) {
     // Physics
     if (ammo && physicsWorld) {
         const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 }
 
@@ -161,6 +161,6 @@ function createFoodPlate(scene, physicsWorld, ammo, basePosition, baseRotation) 
         const shape = new ammo.btCylinderShape(
             new ammo.btVector3(plateRadius, plateHeight / 2, plateRadius)
         );
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 }

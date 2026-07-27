@@ -1,10 +1,5 @@
 import * as THREE from 'three';
-import {
-    setDiePhysicsAuthority,
-    applyWasmImpulseForDie,
-    driveDieWasmTransform,
-    setDieWasmKinematic,
-} from '../dice.js';
+import { applyWasmImpulseForDie, driveDieWasmTransform, setDieWasmKinematic } from '../dice.js';
 
 /** Max release linear speed (scene units / s), shared by mouse + XR grab. */
 export const MAX_DRAG_SPEED = 60;
@@ -40,7 +35,6 @@ export function createWasmDieGrabState() {
  * @param {import('three').Vector3} point
  */
 export function startWasmDieGrab(state, mesh, point) {
-    setDiePhysicsAuthority(mesh, 'wasm');
     setDieWasmKinematic(mesh, true);
     state.mesh = mesh;
     state.active = true;

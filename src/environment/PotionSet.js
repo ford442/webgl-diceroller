@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createPotionSet(
     scene,
@@ -7,7 +7,7 @@ export function createPotionSet(
     position = { x: 12, y: -2.75, z: -6 },
     rotationY = -Math.PI / 6
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'PotionSet';
 
@@ -89,7 +89,7 @@ export function createPotionSet(
                 dummy.translateY(offsetY);
             }
 
-            createStaticBody(physicsWorld, dummy, shape);
+            createPropStaticBody(physicsWorld, dummy, shape);
         }
 
         addBodyForMesh(botStep, botShape);

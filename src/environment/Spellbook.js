@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createSpellbook(
     scene,
@@ -7,7 +7,7 @@ export function createSpellbook(
     position = { x: -10, y: -2.35, z: 8 },
     rotationY = Math.PI / 4
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Spellbook';
 
@@ -108,7 +108,7 @@ export function createSpellbook(
     // Simple box shape for the book
     if (ammo && physicsWorld) {
         const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 
     return { group };

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createPadlock(
     scene,
@@ -7,7 +7,7 @@ export function createPadlock(
     position = { x: 0, y: -2.75, z: 0 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
 
     // Group
     const padlockGroup = new THREE.Group();
@@ -154,8 +154,8 @@ export function createPadlock(
             proxyMesh.position.set(0, physHeight / 2, zOffset);
             padlockGroup.add(proxyMesh);
 
-            // createStaticBody handles world position/rotation of the mesh
-            createStaticBody(physicsWorld, proxyMesh, shape);
+            // createPropStaticBody handles world position/rotation of the mesh
+            createPropStaticBody(physicsWorld, proxyMesh, shape);
         }
     }
 }

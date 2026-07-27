@@ -131,11 +131,11 @@ Post flags (`?no-post`, `?low-post`, `?no-bloom`, `?no-godrays`) apply to both p
 | Backend                      | Role                                                                                   |
 | ---------------------------- | -------------------------------------------------------------------------------------- |
 | **WASM `DicePhysicsEngine`** | Authoritative dice simulation when `public/wasm/` is built and `?no-wasm` is absent    |
-| **ammo.js**                  | Fallback when WASM unavailable (`?no-wasm`); static prop colliders; optional `?ammo-drag` / `?dual-physics` dice validation |
+| **ammo.js**                  | Full fallback when WASM is unavailable (`?no-wasm`): dice bodies, drag, levitation. Also backs hand-built static prop colliders via `environment/PropPhysics.js` when loaded |
 
-Bridges: [`WasmPhysicsBridge.js`](../src/wasm/WasmPhysicsBridge.js), [`WorkerPhysicsBridge.js`](../src/wasm/WorkerPhysicsBridge.js). Dice ammo helpers: [`AmmoDiceBackend.js`](../src/dice/AmmoDiceBackend.js) (lazy-loaded). Flags: `?no-wasm`, `?dual-physics`, `?ammo-drag` (legacy drag), `?worker-physics` — see AGENTS.md and WASM_ENGINE.md.
+Bridges: [`WasmPhysicsBridge.js`](../src/wasm/WasmPhysicsBridge.js), [`WorkerPhysicsBridge.js`](../src/wasm/WorkerPhysicsBridge.js). Dice ammo helpers: [`AmmoDiceBackend.js`](../src/dice/AmmoDiceBackend.js) (lazy-loaded). Flags: `?no-wasm` (sole physics escape hatch), `?worker-physics` — see AGENTS.md and WASM_ENGINE.md.
 
-Static scene colliders today go through ammo (`createStaticBody` / `StaticColliderBridge`). Moving them into WASM is tracked in [issue #237](https://github.com/ford442/webgl-diceroller/issues/237).
+Declarative static colliders go through `StaticColliderBridge` (WASM when available, ammo otherwise); the remaining hand-built prop shapes go through `environment/PropPhysics.js` and exist only when ammo is loaded. Moving them into WASM is tracked in [issue #237](https://github.com/ford442/webgl-diceroller/issues/237).
 
 ## Key directories
 

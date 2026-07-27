@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import {
     getWoodTexturedMaterial,
     getBookCoverMaterials,
@@ -22,7 +22,7 @@ export function createBookshelf(
     rotationY = 0
 ) {
     const materials = getMaterials();
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
 
     // Group
     const bookshelfGroup = new THREE.Group();
@@ -117,7 +117,7 @@ export function createBookshelf(
 
             // Adjust center for physics body (created at center of mass)
             // Group is at 'position'. Center of bookshelf logic is at y=height/2 relative to position.
-            // createStaticBody uses mesh position.
+            // createPropStaticBody uses mesh position.
             // We can attach physics to a hidden proxy mesh at the center.
 
             const proxyGeo = new THREE.BoxGeometry(width, height, depth);
@@ -130,7 +130,7 @@ export function createBookshelf(
             // Just add to scene invisibly to track transform
             scene.add(proxyMesh);
 
-            createStaticBody(physicsWorld, proxyMesh, shape);
+            createPropStaticBody(physicsWorld, proxyMesh, shape);
         }
     }
 }

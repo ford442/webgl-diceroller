@@ -79,8 +79,6 @@ export const throwDice = (scene, world, seed = null) => {
     };
 
     spawnedDice.forEach((die, index) => {
-        die.mesh.userData.physicsAuthority = engine ? 'wasm' : 'ammo';
-
         let x;
         let y;
         let z;

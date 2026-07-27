@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createScrollCase(
     scene,
@@ -7,7 +7,7 @@ export function createScrollCase(
     position = { x: 0, y: -2.6, z: 0 },
     rotation = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'ScrollCase';
 
@@ -76,7 +76,7 @@ export function createScrollCase(
     // Physics
     // btCylinderShape expects half-extents. For a cylinder along Y axis (before our rotation),
     // half-extents are (radius, half_height, radius).
-    // Our cylinder is along X axis after rotation. But wait, createStaticBody applies group's transform!
+    // Our cylinder is along X axis after rotation. But wait, createPropStaticBody applies group's transform!
     // So the shape should match the local geometry (cylinder along Y).
     if (ammo && physicsWorld) {
         const halfExtents = new ammo.btVector3(
@@ -87,7 +87,7 @@ export function createScrollCase(
         if (ammo && physicsWorld) {
             const shape = new ammo.btCylinderShape(halfExtents);
 
-            createStaticBody(physicsWorld, group, shape);
+            createPropStaticBody(physicsWorld, group, shape);
         }
     }
 

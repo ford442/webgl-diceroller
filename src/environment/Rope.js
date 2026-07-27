@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 function createRopeTexture() {
     const canvas = document.createElement('canvas');
@@ -150,8 +150,8 @@ export function createRope(scene, physicsWorld, position = { x: 0, y: -2.75, z: 
 
     scene.add(group);
 
-    if (physicsWorld && getAmmo()) {
-        const Ammo = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const Ammo = getPropAmmo();
 
         // Bounding box for the coil
         if (Ammo && physicsWorld) {
@@ -169,7 +169,7 @@ export function createRope(scene, physicsWorld, position = { x: 0, y: -2.75, z: 
                 physTransform.position.y += totalHeight / 2; // Offset to center of mass
                 physTransform.rotation.copy(group.rotation);
 
-                createStaticBody(physicsWorld, physTransform, shape);
+                createPropStaticBody(physicsWorld, physTransform, shape);
             }
         }
     }

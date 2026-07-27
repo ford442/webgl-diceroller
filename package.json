@@ -25,6 +25,7 @@
         "verify:worker-replay": "node scripts/verify-worker-replay.mjs",
         "verify:godrays": "node scripts/verify-godrays.mjs",
         "verify:wasm-primitives": "node scripts/verify-wasm-primitives.mjs",
+        "verify:wasm-interaction": "node scripts/verify-wasm-interaction.mjs",
         "verify:render-regression": "node scripts/render-regression.mjs && node scripts/compare-render-baseline.mjs",
         "verify:renderer-factory": "node scripts/verify-renderer-factory.mjs",
         "typecheck": "tsc --noEmit",

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createHelmet(
     scene,
@@ -7,7 +7,7 @@ export function createHelmet(
     position = { x: -16, y: -2.75, z: 8 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'IronHelmet';
 
@@ -142,7 +142,7 @@ export function createHelmet(
             child.position.y -= physHeight / 2;
         });
 
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 
     return {

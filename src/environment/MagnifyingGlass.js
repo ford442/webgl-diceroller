@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createMagnifyingGlass(
     scene,
@@ -10,7 +10,7 @@ export function createMagnifyingGlass(
     const group = new THREE.Group();
     group.name = 'MagnifyingGlass';
 
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
 
     // --- Materials ---
     const brassMat = new THREE.MeshStandardMaterial({
@@ -122,9 +122,9 @@ export function createMagnifyingGlass(
             new ammo.btVector3(rimOuterRadius, handleRadius, totalLength / 2)
         );
 
-        // Note: createStaticBody assumes the group origin is the center of mass.
+        // Note: createPropStaticBody assumes the group origin is the center of mass.
         // Our zOffset calculation above should have centered the geometry within the group.
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 
     return group;

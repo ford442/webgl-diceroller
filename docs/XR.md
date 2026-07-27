@@ -21,7 +21,7 @@ https://host/path/?xr
 ## Requirements
 
 - **Renderer:** `THREE.WebGLRenderer` with `renderer.xr`. WebGPU + WebXR is deferred.
-- **Physics:** Default WASM path (`driveDieWasmTransform` / `setDieWasmKinematic`). Prefer a build with `public/wasm/` present; `?ammo-drag` is not used for XR grab.
+- **Physics:** Default WASM path (`driveDieWasmTransform` / `setDieWasmKinematic`). Prefer a build with `public/wasm/` present; XR grab has no ammo path.
 - **COOP/COEP:** Already applied by Vite (`same-origin` / `require-corp`) for SharedArrayBuffer worker physics. Quest Browser generally accepts this; if session start fails, check the browser console for isolation errors.
 
 ## How to try it

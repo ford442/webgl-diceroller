@@ -68,6 +68,8 @@ export const spawnObjects = (scene, world, config = null) => {
         const audioBodyId = allocateAudioBodyId();
         const inertiaScalar = estimateInertiaScalar(template.geometry, physicsPreset.mass);
 
+        // Ammo dice bodies exist only in the `?no-wasm` fallback; the default
+        // WASM path never creates a rigid body for a die.
         let body = null;
         if (needsAmmoDiceBackend() && ammoBackend && world) {
             body = ammoBackend.spawnAmmoDieBody(
@@ -84,7 +86,6 @@ export const spawnObjects = (scene, world, config = null) => {
 
         mesh.userData.body = body;
         mesh.userData.isDie = true;
-        mesh.userData.physicsAuthority = isUsingWasmPhysics() ? 'wasm' : 'ammo';
         mesh.userData.physicsPreset = physicsPreset;
 
         let wasmId = null;
@@ -211,9 +212,5 @@ export const syncAllDiceToWasm = () => {
             die.mesh.quaternion.z,
             die.mesh.quaternion.w
         );
-
-        if (die.mesh.userData.physicsAuthority !== 'ammo') {
-            die.mesh.userData.physicsAuthority = 'wasm';
-        }
     });
 };

@@ -36,12 +36,7 @@ import {
     setDiceAppearanceQualityProfile,
 } from './dice.js';
 import { setAmmoDiceBackend } from './dice/DiceState.js';
-import {
-    updateInteraction,
-    interactionNeedsAmmoStep,
-    isDragging,
-    hasActiveDiceInteraction,
-} from './interaction.js';
+import { updateInteraction, isDragging, hasActiveDiceInteraction } from './interaction.js';
 import {
     createDiceCupController,
     registerDiceCupController,
@@ -144,7 +139,6 @@ let _gongFlashIntensity = 0;
 /** @type {ReturnType<typeof import('./interaction.js').initInteraction> | undefined} */
 let interaction;
 const searchParams = new URLSearchParams(window.location.search);
-const dualPhysicsValidation = searchParams.has('dual-physics');
 const debugEnabled = searchParams.has('debug') || searchParams.has('debug-perf');
 const testHooksEnabled = searchParams.has('test') || debugEnabled;
 const scheduler = createFrameScheduler({
@@ -628,9 +622,9 @@ async function init() {
 
         const useWasm = isWasmAvailable();
 
-        // WASM drag/levitation is the default; ammo steps only for ?ammo-drag or ?dual-physics.
-        const shouldStepAmmo =
-            physicsWorld && (!useWasm || dualPhysicsValidation || interactionNeedsAmmoStep());
+        // Dice run on WASM whenever it is live; ammo steps only on the
+        // `?no-wasm` fallback, where physicsWorld is the sole dice simulation.
+        const shouldStepAmmo = Boolean(physicsWorld) && !useWasm;
         applyDiceMassBiases({
             deltaTime,
             applyAmmo: shouldStepAmmo,

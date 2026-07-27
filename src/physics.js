@@ -58,17 +58,21 @@ async function loadAmmoModule() {
 }
 
 /**
- * Whether this session needs the ammo.js fallback/validation path.
+ * Whether this session needs the ammo.js fallback path for dice.
+ * `?no-wasm` (or missing WASM artifacts) is the only remaining escape hatch;
+ * every other configuration runs dice on the WASM engine and never loads the
+ * ammo chunk for them.
+ *
+ * Note: static prop colliders go through `StaticColliderBridge`, which uses
+ * WASM when available and only touches ammo in this same fallback case.
+ *
  * Call after `loadWasmEngine()` has resolved.
  * @param {boolean} wasmAvailable
  * @returns {boolean}
  */
 export function shouldLoadAmmoPhysics(wasmAvailable) {
     if (physicsSearchParams.has('no-wasm')) return true;
-    if (!wasmAvailable) return true;
-    if (physicsSearchParams.has('dual-physics')) return true;
-    if (physicsSearchParams.has('ammo-drag')) return true;
-    return false;
+    return !wasmAvailable;
 }
 
 /**

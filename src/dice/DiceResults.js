@@ -96,17 +96,14 @@ export const getDiceValueDebugSnapshot = () =>
 export const areDiceSettled = () => {
     if (spawnedDice.length === 0) return true;
 
-    const wasmDice = spawnedDice.filter(
-        (die) => die.wasmId != null && die.mesh.userData.physicsAuthority !== 'ammo'
-    );
-
-    if (isUsingWasmPhysics() && wasmDice.length > 0) {
-        if (!getWasmEngine().areAllSettled()) return false;
+    if (isUsingWasmPhysics()) {
+        const wasmDice = spawnedDice.filter((die) => die.wasmId != null);
+        if (wasmDice.length > 0 && !getWasmEngine().areAllSettled()) return false;
+        return true;
     }
 
     let allStable = true;
     spawnedDice.forEach((die) => {
-        if (die.mesh.userData.physicsAuthority === 'wasm' && die.wasmId != null) return;
         if (!die.body) return;
         const linear = die.body.getLinearVelocity();
         const angular = die.body.getAngularVelocity();

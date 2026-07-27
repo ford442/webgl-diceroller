@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { getSteelMaterial, getGoldMaterial, getLeatherMaterial } from '../core/MaterialPalette.js';
 
 export function createDagger(
@@ -61,8 +61,8 @@ export function createDagger(
 
     // Physics (Static Box)
     // Create a simple box hull for collision
-    if (physicsWorld && getAmmo()) {
-        const Ammo = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const Ammo = getPropAmmo();
         if (Ammo && physicsWorld) {
             const transform = new Ammo.btTransform();
             transform.setIdentity();
@@ -79,7 +79,7 @@ export function createDagger(
             if (Ammo && physicsWorld) {
                 const shape = new Ammo.btBoxShape(new Ammo.btVector3(1.25, 0.2, 4.0));
 
-                createStaticBody(physicsWorld, group, shape);
+                createPropStaticBody(physicsWorld, group, shape);
             }
         }
     }

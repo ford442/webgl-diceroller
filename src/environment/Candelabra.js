@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo } from '../physics.js';
+import { getPropAmmo } from './PropPhysics.js';
 import { createFire } from './Fire.js';
 
 export function createCandelabra(
@@ -8,7 +8,7 @@ export function createCandelabra(
     position = { x: 0, y: 0, z: 0 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Candelabra';
 

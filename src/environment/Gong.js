@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { playPropImpact } from '../audio/DiceCollisionAudio.js';
 
 export function createGong(
@@ -124,8 +124,8 @@ export function createGong(
     scene.add(group);
 
     // --- Physics ---
-    if (physicsWorld && getAmmo()) {
-        const ammo = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const ammo = getPropAmmo();
 
         // Box shape for the wooden frame
         if (ammo && physicsWorld) {
@@ -138,7 +138,7 @@ export function createGong(
             );
             framePhysMesh.position.set(position.x, position.y + baseHeight / 2, position.z);
             scene.add(framePhysMesh);
-            createStaticBody(physicsWorld, framePhysMesh, frameShape);
+            createPropStaticBody(physicsWorld, framePhysMesh, frameShape);
         }
 
         // Cylinder shape for the gong disc
@@ -154,7 +154,7 @@ export function createGong(
             const gongShape = new ammo.btCylinderShape(
                 new ammo.btVector3(gongRadius, gongThickness / 2, gongRadius)
             );
-            createStaticBody(physicsWorld, gongPhysMesh, gongShape);
+            createPropStaticBody(physicsWorld, gongPhysMesh, gongShape);
         }
     }
 

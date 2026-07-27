@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 /**
  * Creates a throwing Dart stuck in the table.
@@ -110,7 +110,7 @@ export function createDart(
     scene.add(dartGroup);
 
     // Physics
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo && physicsWorld) {
         // Create a simple box bounding the whole dart
         // Height = tipHeight + barrelHeight + shaftHeight ~ 1.2
@@ -124,7 +124,7 @@ export function createDart(
 
         // Since dartGroup origin is at the tip, we need to offset the physics shape
         // Or we just accept the collision box is a bit off center, or we make the transform.
-        // `createStaticBody` expects the visual mesh center to align with the shape center.
+        // `createPropStaticBody` expects the visual mesh center to align with the shape center.
 
         // To fix this, let's wrap dartGroup inside an outer group
         const wrapperGroup = new THREE.Group();
@@ -137,7 +137,7 @@ export function createDart(
         wrapperGroup.add(dartGroup);
         scene.add(wrapperGroup); // Adding wrapper to scene instead of dartGroup
 
-        const body = createStaticBody(physicsWorld, wrapperGroup, shape);
+        const body = createPropStaticBody(physicsWorld, wrapperGroup, shape);
         wrapperGroup.userData.body = body;
 
         return { group: wrapperGroup };

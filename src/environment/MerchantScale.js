@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createMerchantScale(
     scene,
@@ -112,8 +112,8 @@ export function createMerchantScale(
     scene.add(group);
 
     // --- Physics ---
-    if (physicsWorld && getAmmo()) {
-        const ammo = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const ammo = getPropAmmo();
 
         // Helper to create body at world position
         const createBody = (mesh, shape) => {
@@ -128,7 +128,7 @@ export function createMerchantScale(
             dummy.position.copy(worldPos);
             dummy.quaternion.copy(worldQuat);
 
-            createStaticBody(physicsWorld, dummy, shape);
+            createPropStaticBody(physicsWorld, dummy, shape);
         };
 
         // Base Body

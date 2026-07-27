@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
 
 /**
@@ -217,8 +217,8 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     scene.add(group);
 
     // ========== PHYSICS ==========
-    if (physicsWorld && getAmmo()) {
-        const ammo = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const ammo = getPropAmmo();
         // Static Box Shape enclosing base + lid
         // Total Height = baseHeight + lidRadius (0.8 + 0.5 = 1.3).
         // Center Y (relative to group origin): 1.3 / 2 = 0.65.
@@ -237,7 +237,7 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
             proxy.position.copy(group.position).add(offset);
             proxy.quaternion.copy(group.quaternion);
 
-            createStaticBody(physicsWorld, proxy, shape);
+            createPropStaticBody(physicsWorld, proxy, shape);
         }
     }
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createScroll(
     scene,
@@ -142,16 +142,16 @@ export function createScroll(
     // --- Physics ---
     // Static Body
     // Shape: Y-aligned Cylinder.
-    // createStaticBody uses Group's transform.
+    // createPropStaticBody uses Group's transform.
     // Group is rotated X=90.
     // So Shape will be rotated X=90 (Lying flat).
     // Correct.
 
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     // btCylinderShape(halfExtents)
     if (ammo && physicsWorld) {
         const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, length / 2, radius));
-        createStaticBody(physicsWorld, group, shape);
+        createPropStaticBody(physicsWorld, group, shape);
     }
 }
 

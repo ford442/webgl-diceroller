@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createApple(
     scene,
@@ -7,7 +7,7 @@ export function createApple(
     position = { x: -3, y: -2.75, z: -3 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Apple';
 
@@ -69,7 +69,7 @@ export function createApple(
             proxyMesh.position.y += radius * 0.9; // Shift center of mass up
             proxyMesh.rotation.copy(group.rotation);
 
-            createStaticBody(physicsWorld, proxyMesh, shape);
+            createPropStaticBody(physicsWorld, proxyMesh, shape);
         }
     }
 

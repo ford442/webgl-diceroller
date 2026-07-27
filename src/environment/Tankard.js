@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 
 /**
  * Creates a detailed drinking tankard with pewter body, wooden handle,
@@ -211,7 +211,7 @@ export function createTankard(
 
     // ========== PHYSICS ==========
 
-    const Ammo = getAmmo();
+    const Ammo = getPropAmmo();
     if (Ammo && physicsWorld) {
         // Use a cylinder shape for the main body
         if (Ammo && physicsWorld) {
@@ -225,7 +225,7 @@ export function createTankard(
             proxy.position.y += bodyHeight / 2;
             proxy.quaternion.copy(group.quaternion);
 
-            createStaticBody(physicsWorld, proxy, shape);
+            createPropStaticBody(physicsWorld, proxy, shape);
         }
     }
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createMiniature(
     scene,
@@ -7,7 +7,7 @@ export function createMiniature(
     position = { x: 10, y: -2.75, z: -8 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Miniature';
 
@@ -73,14 +73,14 @@ export function createMiniature(
         );
 
         // Wait, the group's position is the *bottom* of the miniature.
-        // Ammo's createStaticBody sets the physics body's origin to the group's position.
+        // Ammo's createPropStaticBody sets the physics body's origin to the group's position.
         // A btCylinderShape is centered at its origin. So if we attach it to the group,
         // the physics cylinder will be centered at -2.75, and extending down into the table!
         // Let's create a dummy mesh at the center of the miniature for physics, or adjust.
-        // Since createStaticBody expects a mesh/group to grab position/quaternion, we can create
+        // Since createPropStaticBody expects a mesh/group to grab position/quaternion, we can create
         // an invisible dummy mesh inside the group, but wait, if it's inside the group,
-        // its world position is offset. But createStaticBody just reads mesh.position (local)
-        // unless we pass world coords. Wait, src/physics.js createStaticBody does:
+        // its world position is offset. But createPropStaticBody just reads mesh.position (local)
+        // unless we pass world coords. Wait, src/physics.js createPropStaticBody does:
         // transform.setOrigin(new AmmoInstance.btVector3(mesh.position.x, mesh.position.y, mesh.position.z));
         // It assumes `mesh.position` is world space. So we must pass an object that is in world space.
 
@@ -94,6 +94,6 @@ export function createMiniature(
         physMesh.rotation.y = rotationY;
         scene.add(physMesh);
 
-        createStaticBody(physicsWorld, physMesh, shape);
+        createPropStaticBody(physicsWorld, physMesh, shape);
     }
 }

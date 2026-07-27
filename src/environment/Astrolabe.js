@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createAstrolabe(scene, physicsWorld, position, rotationY) {
     const group = new THREE.Group();
@@ -95,8 +95,8 @@ export function createAstrolabe(scene, physicsWorld, position, rotationY) {
 
     // --- Physics ---
     let body = null;
-    if (physicsWorld && getAmmo()) {
-        const Ammo = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const Ammo = getPropAmmo();
 
         // Use a cylinder shape that encompasses the rings
         // Height covers base to top of rings
@@ -114,7 +114,7 @@ export function createAstrolabe(scene, physicsWorld, position, rotationY) {
             proxyMesh.position.y += totalHeight / 2; // Move origin to center of cylinder
             proxyMesh.quaternion.copy(group.quaternion);
 
-            body = createStaticBody(physicsWorld, proxyMesh, shape);
+            body = createPropStaticBody(physicsWorld, proxyMesh, shape);
         }
     }
 

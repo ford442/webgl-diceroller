@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createSmokingPipe(
     scene,
@@ -7,7 +7,7 @@ export function createSmokingPipe(
     position = { x: -6, y: -2.75, z: 5 },
     rotation = Math.PI / 8
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'SmokingPipe';
 
@@ -228,7 +228,7 @@ export function createSmokingPipe(
             .copy(group.position)
             .add(new THREE.Vector3(-0.8, 0.5, 0).applyEuler(group.rotation));
         bowlDummy.quaternion.copy(group.quaternion);
-        createStaticBody(physicsWorld, bowlDummy, bowlShape);
+        createPropStaticBody(physicsWorld, bowlDummy, bowlShape);
     }
 
     // Pipe stem physics (approximated as small box)
@@ -240,7 +240,7 @@ export function createSmokingPipe(
             .add(new THREE.Vector3(0.2, 0.3, 0).applyEuler(group.rotation));
         stemDummy.quaternion.copy(group.quaternion);
         stemDummy.rotation.y = rotation - Math.PI / 6;
-        createStaticBody(physicsWorld, stemDummy, stemShape);
+        createPropStaticBody(physicsWorld, stemDummy, stemShape);
     }
 
     // Pouch physics
@@ -251,7 +251,7 @@ export function createSmokingPipe(
             .copy(group.position)
             .add(new THREE.Vector3(0.6, 0.15, 0.3).applyEuler(group.rotation));
         pouchDummy.quaternion.copy(group.quaternion);
-        createStaticBody(physicsWorld, pouchDummy, pouchShape);
+        createPropStaticBody(physicsWorld, pouchDummy, pouchShape);
     }
 
     return { group, update: group.userData.updateSmoke };

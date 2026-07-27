@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createSundial(
     scene,
@@ -7,7 +7,7 @@ export function createSundial(
     position = { x: 5, y: -2.75, z: 6 },
     rotationY = -Math.PI / 6
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Sundial';
 
@@ -89,7 +89,7 @@ export function createSundial(
             ringMesh.position.set(0, baseHeight / 2 + 0.02, 0);
             gnomonMesh.position.set(-0.2, baseHeight / 2, 0);
 
-            createStaticBody(physicsWorld, group, shape);
+            createPropStaticBody(physicsWorld, group, shape);
         }
     }
 

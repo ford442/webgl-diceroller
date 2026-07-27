@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createCheeseWheel(
     scene,
@@ -69,14 +69,14 @@ export function createCheeseWheel(
     scene.add(group);
 
     // Physics
-    if (physicsWorld && getAmmo()) {
-        const ammo = getAmmo();
+    if (physicsWorld && getPropAmmo()) {
+        const ammo = getPropAmmo();
         // Approximate with a full cylinder shape for physics
         // btCylinderShape expects a vector of half-extents.
         // For a cylinder along Y axis, the half-extents are (radius, height/2, radius).
         if (ammo && physicsWorld) {
             const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
-            createStaticBody(physicsWorld, group, shape);
+            createPropStaticBody(physicsWorld, group, shape);
         }
     }
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createCrystalBall(
     scene,
@@ -104,7 +104,7 @@ export function createCrystalBall(
     scene.add(group);
 
     // Physics - Using main's approach with separate collision shapes for better accuracy
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     if (ammo) {
         // Sphere shape for the ball
         const ballPhysMesh = new THREE.Mesh(
@@ -116,7 +116,7 @@ export function createCrystalBall(
 
         if (ammo && physicsWorld) {
             const ballShape = new ammo.btSphereShape(ballRadius);
-            createStaticBody(physicsWorld, ballPhysMesh, ballShape);
+            createPropStaticBody(physicsWorld, ballPhysMesh, ballShape);
         }
 
         // Cylinder shape for the stand base
@@ -131,7 +131,7 @@ export function createCrystalBall(
             const standShape = new ammo.btCylinderShape(
                 new ammo.btVector3(standRadiusBot, baseHeight / 2, standRadiusBot)
             );
-            createStaticBody(physicsWorld, standPhysMesh, standShape);
+            createPropStaticBody(physicsWorld, standPhysMesh, standShape);
         }
     }
 

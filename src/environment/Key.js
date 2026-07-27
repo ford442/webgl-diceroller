@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { getIronMaterial } from '../core/MaterialPalette.js';
 
 export function createKey(
@@ -8,7 +8,7 @@ export function createKey(
     position = { x: 6, y: -2.75, z: 8 },
     rotationY = Math.PI / 4
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.position.set(position.x, position.y, position.z);
     group.rotation.y = rotationY;
@@ -68,7 +68,7 @@ export function createKey(
     scene.add(group);
 
     // --- Physics ---
-    if (physicsWorld && getAmmo()) {
+    if (physicsWorld && getPropAmmo()) {
         // Calculate bounding box for physics shape
         const box3 = new THREE.Box3().setFromObject(group);
         const size = new THREE.Vector3();
@@ -86,12 +86,12 @@ export function createKey(
 
                 // Since the mesh is created around the origin but offset components,
                 // we'll center the physics body using the visual center.
-                // `createStaticBody` expects a mesh object with position and quaternion.
+                // `createPropStaticBody` expects a mesh object with position and quaternion.
                 const dummyMesh = new THREE.Mesh();
                 dummyMesh.position.copy(center);
                 dummyMesh.quaternion.copy(group.quaternion); // Actually we should use group quaternion
 
-                createStaticBody(physicsWorld, dummyMesh, shape);
+                createPropStaticBody(physicsWorld, dummyMesh, shape);
             }
         }
     }

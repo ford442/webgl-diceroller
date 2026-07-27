@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAmmo, createStaticBody } from '../physics.js';
+import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 
 export function createChalice(
     scene,
@@ -7,7 +7,7 @@ export function createChalice(
     position = { x: 8, y: -2.75, z: -10 },
     rotationY = 0
 ) {
-    const ammo = getAmmo();
+    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'Chalice';
 
@@ -122,9 +122,9 @@ export function createChalice(
     const maxRadius = 0.45;
 
     // Create a body with an offset center so the origin is at the bottom.
-    // However, createStaticBody centers the shape on the group's position (which is at the bottom).
+    // However, createPropStaticBody centers the shape on the group's position (which is at the bottom).
     // So if the shape is symmetric, its center is at group.position.
-    // To fix this without modifying createStaticBody:
+    // To fix this without modifying createPropStaticBody:
     // We add an invisible mesh centered at totalHeight/2, and create the body on that mesh.
 
     const physMesh = new THREE.Mesh(
@@ -139,6 +139,6 @@ export function createChalice(
         const shape = new ammo.btCylinderShape(
             new ammo.btVector3(maxRadius, totalHeight / 2, maxRadius)
         );
-        createStaticBody(physicsWorld, physMesh, shape);
+        createPropStaticBody(physicsWorld, physMesh, shape);
     }
 }
