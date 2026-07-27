@@ -218,6 +218,10 @@ const rollHandlerRef = { roll: null, lastRoll: null };
 /** @type {{ current: ReturnType<typeof createRoomSession> | null }} */
 const multiplayerRef = { current: null };
 
+function isSimulationReady() {
+    return isWasmAvailable() || physicsWorld != null;
+}
+
 function showCupFeedback(message) {
     const el = document.getElementById('loading-text');
     if (!el) return;
@@ -620,8 +624,9 @@ async function init() {
     });
 
     scheduler.register('physicsStep', 'dicePhysics', ({ deltaTime }) => {
+        if (!isSimulationReady()) return;
+
         const useWasm = isWasmAvailable();
-        if (!physicsWorld && !useWasm) return;
 
         // WASM drag/levitation is the default; ammo steps only for ?ammo-drag or ?dual-physics.
         const shouldStepAmmo =
@@ -641,10 +646,13 @@ async function init() {
     });
 
     scheduler.register('postPhysicsSync', 'diceVisualSync', () => {
+        if (!isSimulationReady()) return;
         updateDiceVisuals();
     });
 
     scheduler.register('postPhysicsSync', 'collisionAudio', () => {
+        if (!isSimulationReady()) return;
+
         const events = [...pollPhysicsCollisionEvents()];
         if (physicsWorld) {
             events.push(...pollAmmoCollisionEvents(physicsWorld));
@@ -669,6 +677,7 @@ async function init() {
         'updates',
         'interaction',
         ({ deltaTime }) => {
+            if (!isSimulationReady()) return;
             updateInteraction(deltaTime);
         },
         { priority: -20 }

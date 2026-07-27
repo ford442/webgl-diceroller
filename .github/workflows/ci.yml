@@ -177,6 +177,7 @@ jobs:
                     - test:cauldron
                     - test:flute
                     - test:playingcards
+                    - test:wasm-authoritative
                     - test:a11y
         steps:
             - uses: actions/checkout@v4
