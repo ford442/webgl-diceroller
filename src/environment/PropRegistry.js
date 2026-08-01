@@ -8,6 +8,7 @@ import { createWasmTableBounds, isWasmAvailable } from '../wasm/PhysicsBridge.js
 import './Bone.js';
 import './Cauldron.js';
 import './BreadLoaf.js';
+import './Chalk.js';
 
 const environmentModules = import.meta.glob('./*.js', { eager: true });
 
@@ -50,6 +51,7 @@ const resolveEntryPosition = (entry) =>
         : entry.position;
 
 export const SHADOW_DISABLED_PROP_NAMES = new Set([
+    'Chalk',
     'Dart',
     'Bell',
     'Pencil',
@@ -384,6 +386,11 @@ export const TIER_PROP_DEFINITIONS = {
             randomPool: true,
             position: { x: 8, y: -2.75, z: 4 },
             rotation: Math.PI / 6,
+        }),
+        factoryEntry('Chalk', {
+            randomPool: true,
+            position: { x: -6, y: -2.75, z: 4 },
+            rotation: -Math.PI / 6,
         }),
         factoryEntry('Bone', {
             randomPool: true,
