@@ -49,7 +49,8 @@ async function probe(browser, query, file) {
         .evaluate(() => {
             const app = window.__app;
             const scene = app?.scene ?? window.scene;
-            const stats = app?.stats ?? window.__renderStats;
+            const stats =
+                /** @type {typeof window.__renderStats} */ (app?.stats) ?? window.__renderStats;
             const post = app?.postConfig ?? window.postConfig;
             return {
                 backend:

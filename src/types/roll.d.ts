@@ -6,6 +6,9 @@ export interface DiceGroup {
     drop: 'h' | 'l' | null;
     dropCount: number;
     explode: boolean;
+    compound: boolean;
+    /** Faces <= this are rerolled once. */
+    rerollMax: number | null;
     percentile: boolean;
 }
 
@@ -13,6 +16,7 @@ export interface ParsedRoll {
     groups: DiceGroup[];
     modifier: number;
     raw: string;
+    opposed: { groups: DiceGroup[]; modifier: number; raw: string } | null;
 }
 
 export interface DieOutcome {
@@ -24,16 +28,60 @@ export interface DieOutcome {
     kept?: boolean;
     dropped?: boolean;
     exploded?: boolean;
+    rerolled?: boolean;
+    replacedByReroll?: boolean;
+    originalValue?: number | null;
     /** Percentile display override or explosion slot total. */
     displayValue?: number | null;
+}
+
+export interface RollOutcomeEntry {
+    die: string;
+    faces: number;
+    value: number | null;
+    exploded?: boolean;
+    kept?: boolean;
+    dropped?: boolean;
+    rerolled?: boolean;
+}
+
+export interface RollGroupSubtotal {
+    label: string;
+    subtotal: number;
+    groupIndex?: number;
+}
+
+export interface RollFlags {
+    crit: boolean;
+    fumble: boolean;
+    advantage: boolean;
+    disadvantage: boolean;
+    strongHit?: boolean;
+    weakHit?: boolean;
+    miss?: boolean;
+    opposedWin?: boolean;
+    opposedTie?: boolean;
+    opposedLoss?: boolean;
 }
 
 export interface EvaluatedRoll {
     expression: string;
     dice: DieOutcome[];
-    groupSubtotals: { label: string; subtotal: number; groupIndex?: number }[];
+    rolls: RollOutcomeEntry[];
+    groupSubtotals: RollGroupSubtotal[];
     modifier: number;
     total: number;
+    flags: RollFlags;
+    seed: number | null;
+    opposed: {
+        expression: string;
+        total: number;
+        margin: number;
+        dice: DieOutcome[];
+        groupSubtotals: RollGroupSubtotal[];
+        modifier: number;
+        rolls: RollOutcomeEntry[];
+    } | null;
 }
 
 export interface DieSpec {

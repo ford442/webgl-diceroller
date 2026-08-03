@@ -24,28 +24,28 @@ export const ROLL_SYSTEMS = {
         label: 'D&D 5e',
         critDie: 20,
         critFace: 20,
-        fumbleFace: 1
+        fumbleFace: 1,
     },
     pbta: {
         id: 'pbta',
         label: 'PbtA',
         // 2d6 total bands (not single-face crits)
         strongHit: 10,
-        weakHit: 7
+        weakHit: 7,
     },
     savage: {
         id: 'savage',
         label: 'Savage Worlds',
         // Exploding trait/wild die — UX defaults to appending !
-        preferExplode: true
+        preferExplode: true,
     },
     coc: {
         id: 'coc',
         label: 'Call of Cthulhu',
         // Percentile: extreme ≤ ⅕ skill, hard ≤ ½, fumble 96–100 (simplified)
         percentile: true,
-        fumbleMin: 96
-    }
+        fumbleMin: 96,
+    },
 };
 
 export const DEFAULT_ROLL_SYSTEM = 'dnd5e';
@@ -96,7 +96,9 @@ export function sidesToDieType(sides) {
  * @property {boolean} [dropped]
  * @property {boolean} [exploded]
  * @property {boolean} [rerolled]
+ * @property {boolean} [replacedByReroll]
  * @property {number|null} [originalValue]
+ * @property {number|null} [displayValue]
  */
 
 /**
@@ -108,19 +110,40 @@ export function sidesToDieType(sides) {
  * @property {boolean} [strongHit]
  * @property {boolean} [weakHit]
  * @property {boolean} [miss]
+ * @property {boolean} [opposedWin]
+ * @property {boolean} [opposedTie]
+ * @property {boolean} [opposedLoss]
+ */
+
+/**
+ * @typedef {Object} RollOutcomeEntry
+ * @property {string} die
+ * @property {number} faces
+ * @property {number|null} value
+ * @property {boolean} [exploded]
+ * @property {boolean} [kept]
+ * @property {boolean} [dropped]
+ * @property {boolean} [rerolled]
+ */
+
+/**
+ * @typedef {Object} RollGroupSubtotal
+ * @property {string} label
+ * @property {number} subtotal
+ * @property {number} [groupIndex]
  */
 
 /**
  * @typedef {Object} EvaluatedRoll
  * @property {string} expression
  * @property {DieOutcome[]} dice
- * @property {{ die: string, faces: number, value: number|null, exploded?: boolean, kept?: boolean, dropped?: boolean, rerolled?: boolean }[]} rolls
- * @property {{ label: string, subtotal: number }[]} groupSubtotals
+ * @property {RollOutcomeEntry[]} rolls
+ * @property {RollGroupSubtotal[]} groupSubtotals
  * @property {number} modifier
  * @property {number} total
  * @property {RollFlags} flags
  * @property {number|null} seed
- * @property {{ expression: string, total: number, margin: number, dice: DieOutcome[], groupSubtotals: object[], modifier: number }|null} opposed
+ * @property {{ expression: string, total: number, margin: number, dice: DieOutcome[], groupSubtotals: RollGroupSubtotal[], modifier: number, rolls: RollOutcomeEntry[] }|null} opposed
  */
 
 /**
@@ -140,7 +163,7 @@ export function parseNotation(input) {
             groups: left.groups,
             modifier: left.modifier,
             raw,
-            opposed: { groups: right.groups, modifier: right.modifier, raw: opposedSplit.right }
+            opposed: { groups: right.groups, modifier: right.modifier, raw: opposedSplit.right },
         };
     }
 
@@ -174,7 +197,8 @@ export class NotationError extends Error {
 
 function tokenize(input) {
     // die term: optional sign, count, d(sides|%), optional keep/drop, optional rN, optional ! or !!
-    const re = /([+-]?\d*d(?:%|\d+)(?:kh\d*|kl\d*|dh\d*|dl\d*)?(?:r\d+)?(?:!!|!)?)|([+-]\d+)(?!d)/gi;
+    const re =
+        /([+-]?\d*d(?:%|\d+)(?:kh\d*|kl\d*|dh\d*|dl\d*)?(?:r\d+)?(?:!!|!)?)|([+-]\d+)(?!d)/gi;
     const tokens = [];
     let match;
     let lastIndex = 0;
@@ -256,7 +280,7 @@ class Parser {
         let dropCount = 0;
 
         if (m[4]) {
-            const mode = m[4][1]; // h or l
+            const mode = /** @type {'h'|'l'} */ (m[4][1]); // h or l
             const n = m[5] ? Number.parseInt(m[5], 10) : 1;
             if (n < 1) throw new NotationError(`Invalid keep/drop count in "${tok}"`);
             if (m[4].startsWith('k')) {
@@ -284,7 +308,9 @@ class Parser {
             throw new NotationError('Percentile rolls must be 1d100 or 1d%');
         }
         if (percentile && (keep || drop || explode || rerollMax != null)) {
-            throw new NotationError('Keep/drop/explode/reroll are not supported on percentile rolls');
+            throw new NotationError(
+                'Keep/drop/explode/reroll are not supported on percentile rolls'
+            );
         }
 
         return {
@@ -297,7 +323,7 @@ class Parser {
             explode,
             compound,
             rerollMax,
-            percentile
+            percentile,
         };
     }
 }
@@ -326,7 +352,7 @@ export function buildSpawnSpecsForGroups(groups) {
                 dieIndex: 0,
                 explode: false,
                 sides: 100,
-                rerollMax: null
+                rerollMax: null,
             });
             specs.push({
                 type: 'd10',
@@ -335,7 +361,7 @@ export function buildSpawnSpecsForGroups(groups) {
                 dieIndex: 1,
                 explode: false,
                 sides: 100,
-                rerollMax: null
+                rerollMax: null,
             });
             return;
         }
@@ -349,7 +375,7 @@ export function buildSpawnSpecsForGroups(groups) {
                 dieIndex: i,
                 explode: group.explode,
                 sides: group.sides,
-                rerollMax: group.rerollMax
+                rerollMax: group.rerollMax,
             });
         }
     });
@@ -419,7 +445,7 @@ export function evaluateRoll(parsed, rawDice, options = {}) {
             dice: right.dice,
             groupSubtotals: right.groupSubtotals,
             modifier: right.modifier,
-            rolls: right.rolls
+            rolls: right.rolls,
         };
     }
 
@@ -434,7 +460,7 @@ export function evaluateRoll(parsed, rawDice, options = {}) {
         total: left.total,
         flags,
         seed,
-        opposed
+        opposed,
     };
 }
 
@@ -466,7 +492,7 @@ function evaluateSide(side, rawDice) {
             groupSubtotals.push({
                 label: '1d100',
                 subtotal: composed ?? 0,
-                groupIndex
+                groupIndex,
             });
             return;
         }
@@ -492,9 +518,9 @@ function evaluateSide(side, rawDice) {
             kept = kept.slice(0, n);
         } else if (group.drop) {
             const n = Math.min(group.dropCount, kept.length);
-            const sorted = [...kept].sort((a, b) => (
+            const sorted = [...kept].sort((a, b) =>
                 group.drop === 'l' ? a.value - b.value : b.value - a.value
-            ));
+            );
             const droppedSet = new Set(sorted.slice(0, n).map((v) => v.index));
             kept = kept.filter((v) => !droppedSet.has(v.index));
         }
@@ -526,12 +552,12 @@ function evaluateSide(side, rawDice) {
     const total = groupSubtotals.reduce((s, g) => s + g.subtotal, 0) + modifier;
     const rolls = dice.map((d) => ({
         die: formatDieLabel(d.type, d.role),
-        faces: d.role ? 10 : (Number.parseInt(String(d.type).replace(/\D/g, ''), 10) || 0),
+        faces: d.role ? 10 : Number.parseInt(String(d.type).replace(/\D/g, ''), 10) || 0,
         value: d.displayValue ?? d.value,
         exploded: Boolean(d.exploded),
         kept: d.kept !== false,
         dropped: d.dropped === true,
-        rerolled: Boolean(d.rerolled)
+        rerolled: Boolean(d.rerolled),
     }));
 
     return { dice, rolls, groupSubtotals, modifier, total };
@@ -551,7 +577,7 @@ export function computeFlags(parsed, dice, total, systemId = DEFAULT_ROLL_SYSTEM
         crit: false,
         fumble: false,
         advantage: false,
-        disadvantage: false
+        disadvantage: false,
     };
 
     for (const g of parsed.groups) {
@@ -574,9 +600,9 @@ export function computeFlags(parsed, dice, total, systemId = DEFAULT_ROLL_SYSTEM
         // Nat 20 kept under advantage shouldn't also count a discarded 1 as fumble
         // if the kept die is the crit — still allow both if both kept somehow.
         if (flags.advantage || flags.disadvantage) {
-            const keptD20 = dice.filter((d) => (
-                !d.dropped && !d.replacedByReroll && d.type === 'd20' && d.kept !== false
-            ));
+            const keptD20 = dice.filter(
+                (d) => !d.dropped && !d.replacedByReroll && d.type === 'd20' && d.kept !== false
+            );
             flags.crit = keptD20.some((d) => d.value === critFace);
             flags.fumble = keptD20.some((d) => d.value === fumbleFace);
         }
@@ -588,9 +614,7 @@ export function computeFlags(parsed, dice, total, systemId = DEFAULT_ROLL_SYSTEM
         flags.crit = Boolean(flags.strongHit);
         flags.fumble = Boolean(flags.miss);
     } else if (system.id === 'coc') {
-        const pct = parsed.groups.some((g) => g.percentile)
-            ? total
-            : null;
+        const pct = parsed.groups.some((g) => g.percentile) ? total : null;
         if (pct != null) {
             flags.fumble = pct >= (system.fumbleMin ?? 96);
             flags.crit = pct === 1; // classic "01" critical
@@ -647,7 +671,7 @@ export function getExplodingRespawnSpecs(parsed, dice) {
                     explode: true,
                     sides: group.sides,
                     rerollMax: null,
-                    replacesDieIndex: d.dieIndex
+                    replacesDieIndex: d.dieIndex,
                 });
             }
         });
@@ -665,9 +689,9 @@ export function getRerollRespawnSpecs(parsed, dice) {
     const specs = [];
     parsed.groups.forEach((group, groupIndex) => {
         if (group.rerollMax == null || group.percentile) return;
-        const groupDice = dice.filter((d) => (
-            d.groupIndex === groupIndex && d.role == null && !d.rerolled && !d.exploded
-        ));
+        const groupDice = dice.filter(
+            (d) => d.groupIndex === groupIndex && d.role == null && !d.rerolled && !d.exploded
+        );
         groupDice.forEach((d) => {
             if (d.value != null && d.value <= group.rerollMax) {
                 specs.push({
@@ -679,7 +703,7 @@ export function getRerollRespawnSpecs(parsed, dice) {
                     sides: group.sides,
                     rerollMax: null,
                     replacesDieIndex: d.dieIndex,
-                    isReroll: true
+                    isReroll: true,
                 });
             }
         });
@@ -707,7 +731,7 @@ export function applyExpressionChip(expression, chip, systemId = DEFAULT_ROLL_SY
     if (chip === 'disadvantage') {
         return rewriteD20Pool(trimmed || '1d20', { keep: 'l', count: 2, keepCount: 1 });
     }
-    if (chip === 'explode' || (chip === 'explode' && system.preferExplode)) {
+    if (chip === 'explode') {
         return appendDieSuffix(trimmed || '1d6', '!');
     }
     if (chip === 'compound') {

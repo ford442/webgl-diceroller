@@ -138,7 +138,7 @@ export function createMultiplayerPanel(opts) {
         createBtn.disabled = true;
         try {
             const result = await opts.onCreate();
-            if (result?.code) {
+            if (result && 'code' in result && result.code) {
                 showCode(result.code);
             }
         } catch (err) {

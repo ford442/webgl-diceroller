@@ -141,7 +141,7 @@ export function createRoomSession(deps) {
      */
     async function onChannelMessage(fromPeerId, raw) {
         const decoded = decodeMessage(raw);
-        if (!decoded.ok) {
+        if (decoded.ok === false) {
             if (decoded.error === 'unsupported_version') {
                 setStatus('error', `Protocol mismatch (peer v${decoded.version})`);
             }

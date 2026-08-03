@@ -108,6 +108,9 @@ const REQUEST_TIMEOUT_MS = 15000;
 // ---------------------------------------------------------------------------
 
 class WorkerEngineProxy {
+    /** @type {Int32Array | null} */
+    header = null;
+
     constructor(worker, sab) {
         this.worker = worker;
 
@@ -337,8 +340,13 @@ class WorkerEngineProxy {
         this._send('clearStatics');
     }
 
+    // Structural static-collider commands are fire-and-forget postMessages —
+    // the worker can't report success/id synchronously, so these return the
+    // same "unknown" sentinel the interface uses for a failed synchronous call
+    // (`false` / `-1`) rather than claim a result we don't have.
     removeStatic(userId) {
         this._send('removeStatic', { userId });
+        return false;
     }
 
     addStaticBox(userId, cx, cy, cz, hx, hy, hz, qx, qy, qz, qw, materialTag) {
@@ -356,10 +364,12 @@ class WorkerEngineProxy {
             qw,
             materialTag,
         });
+        return -1;
     }
 
     addStaticPlane(userId, nx, ny, nz, dist, materialTag) {
         this._send('addStaticPlane', { userId, nx, ny, nz, dist, materialTag });
+        return -1;
     }
 
     addStaticConvexHull(userId, cx, cy, cz, qx, qy, qz, qw, flatVerts, materialTag) {
@@ -375,6 +385,7 @@ class WorkerEngineProxy {
             vertices: Array.from(flatVerts),
             materialTag,
         });
+        return -1;
     }
 
     addStaticOpenCylinder(
@@ -399,11 +410,17 @@ class WorkerEngineProxy {
             closedBottom: !!closedBottom,
             materialTag,
         });
+        return -1;
     }
 
     // --- simulation --------------------------------------------------------
     step() {
         /* worker-driven */
+    }
+
+    /** No-op: flags are bundled into init() and applied to the worker's engine there. */
+    setFlags(_flags) {
+        /* sent via init() payload; see `init()` above. */
     }
 
     // --- queries -----------------------------------------------------------
@@ -433,6 +450,19 @@ class WorkerEngineProxy {
     areAllSettled() {
         if (this.header) return Atomics.load(this.header, H_SETTLED) === 1;
         return this._snapSettled;
+    }
+
+    /** Last-step broadphase / collision counters (SAB header, when available). */
+    getLastStepStats() {
+        if (this.header) {
+            return {
+                pairCandidates: Atomics.load(this.header, H_PAIR_CANDIDATES),
+                sphereTests: Atomics.load(this.header, H_SPHERE_TESTS),
+                satTests: Atomics.load(this.header, H_SAT_TESTS),
+                contacts: Atomics.load(this.header, H_CONTACTS),
+            };
+        }
+        return { pairCandidates: 0, sphereTests: 0, satTests: 0, contacts: 0 };
     }
 
     getCollisionEvents() {
@@ -486,6 +516,7 @@ class WorkerEngineProxy {
 // Bridge state
 // ---------------------------------------------------------------------------
 
+/** @type {WorkerEngineProxy | null} */
 let _engine = null;
 let _available = false;
 let _initialized = false;

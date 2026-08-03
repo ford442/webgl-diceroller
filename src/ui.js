@@ -9,7 +9,16 @@ import { isTouchPrimaryDevice } from './core/DeviceCapabilities.js';
  * @param {(counts: Record<string, number>) => void} onUpdateDice
  * @param {() => void} onRollAll
  * @param {object | null} [layoutHooks]
- * @param {{ onNotationRoll?: (expression: string) => void | Promise<void>; presets?: string[] } | null} [notationHooks]
+ * @param {{
+ *   onNotationRoll?: (expression: string, options?: { system?: string }) => void | Promise<void>;
+ *   presets?: string[];
+ *   getSystem?: () => string;
+ *   systems?: { id: string; label: string }[];
+ *   setSystem?: (system: string) => void;
+ *   defaultExpressionForSystem?: (system: string) => string;
+ *   mechanicChips?: { id: string; label: string }[];
+ *   applyChip?: (expression: string, chipId: string, system: string) => string;
+ * } | null} [notationHooks]
  * @param {{ hasShareableRoll?: () => boolean; buildShareUrl?: () => string | null } | null} [rollShareHooks]
  */
 export const initUI = (
