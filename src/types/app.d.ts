@@ -93,6 +93,7 @@ export interface RenderStatsConfig {
     scene: import('three').Scene;
     scheduler: import('../core/FrameScheduler.js').FrameScheduler;
     cullingSystem?: import('../core/CullingSystem.js').CullingSystem | null;
+    getRenderer?: () => import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer | null;
     getRendererState?: () => RendererState | null;
     getPost?: () => PostConfig | null;
     getShadow?: () => Record<string, unknown> | null;

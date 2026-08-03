@@ -39,6 +39,7 @@ function ms(value) {
  * @param {import('three').Scene} config.scene
  * @param {import('../core/FrameScheduler.js').FrameScheduler} config.scheduler
  * @param {import('../core/CullingSystem.js').CullingSystem | null} [config.cullingSystem]
+ * @param {() => import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer | null} [config.getRenderer]
  * @param {() => import('../types/app').RendererState | null} [config.getRendererState]
  * @param {() => import('../types/app').PostConfig | null} [config.getPost]
  * @param {() => Record<string, unknown> | null} [config.getShadow]
@@ -56,6 +57,7 @@ export function createRenderStats({
     scene,
     scheduler,
     cullingSystem = null,
+    getRenderer = () => renderer,
     getRendererState = () => null,
     getPost = () => null,
     getShadow = () => null,
@@ -127,7 +129,7 @@ export function createRenderStats({
     function buildText() {
         const info =
             /** @type {{ render?: Record<string, number>; memory?: Record<string, number>; programs?: { length?: number } }} */ (
-                renderer?.info ?? {}
+                getRenderer()?.info ?? {}
             );
         const render = info.render ?? {};
         const memory = info.memory ?? {};

@@ -4,7 +4,12 @@
  * handling is delegated back to RollWiring, which owns roll state.
  */
 
-import { getSpawnedDiceCounts, getDiceAppearanceConfig, applyDicePresencePayload } from '../dice.js';
+import {
+    getSpawnedDiceCounts,
+    getDiceAppearanceConfig,
+    applyDicePresencePayload,
+    buildDicePresencePayload,
+} from '../dice.js';
 import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
 import { createRoomSession, resolveSignalingUrl } from '../net/RoomSession.js';
 import { createMultiplayerPanel } from '../ui/MultiplayerPanel.js';
@@ -15,7 +20,7 @@ import { isTouchPrimaryDevice } from '../core/DeviceCapabilities.js';
  * @param {object} deps
  */
 export function setupMultiplayer(app, deps) {
-    const { searchParams, appEvents, multiplayerRef, rollWiring, buildDicePresencePayload } = deps;
+    const { searchParams, appEvents, multiplayerRef, rollWiring } = deps;
 
     const signalingUrl = resolveSignalingUrl(searchParams);
     const roomParam = searchParams.get('room');

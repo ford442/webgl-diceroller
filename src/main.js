@@ -190,7 +190,7 @@ async function init() {
     pointLight = sceneSetup.pointLight;
     postConfig = sceneSetup.postConfig;
     spotLight = sceneSetup.spotLight;
-    shadowController = createShadowController(renderer, scene);
+    shadowController = createShadowController(() => renderer, scene);
     console.info(
         `[Renderer] Active backend: ${rendererState?.rendererType ?? 'webgl'}` +
             (rendererState?.fallbackReason ? ` (${rendererState.fallbackReason})` : '')
@@ -252,6 +252,13 @@ async function init() {
             rendererBadge = b;
         },
         getPostConfig: () => postConfig,
+        animate,
+        onRecovered: () => {
+            if (!adaptiveQualityState) return;
+            adaptiveQualityState.renderer = rendererRecoveryDeps.getRenderer();
+            adaptiveQualityState.composer = rendererRecoveryDeps.getComposer();
+            adaptiveQualityState.rendererState = rendererRecoveryDeps.getRendererState();
+        },
     };
 
     ({ renderStats, fairnessMonitor, pixelRatioMonitor, adaptiveQualityState } = bootstrapRendererExtras(

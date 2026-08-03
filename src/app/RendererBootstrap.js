@@ -50,16 +50,19 @@ export function bootstrapRendererExtras(app, deps) {
             scheduler,
             cullingSystem,
             debugPerf: searchParams.has('debug-perf'),
+            getRenderer: () => rendererRecoveryDeps.getRenderer(),
             getRendererState: () => rendererRecoveryDeps.getRendererState(),
             getPost: () => rendererRecoveryDeps.getPostConfig(),
-            getShadow: () => ({
-                autoUpdate:
-                    'autoUpdate' in renderer.shadowMap
-                        ? /** @type {import('three').WebGLShadowMap} */ (renderer.shadowMap)
-                              .autoUpdate
-                        : false,
-                staticRefreshes: getShadowController()?.state.staticShadowRefreshes ?? 0,
-            }),
+            getShadow: () => {
+                const shadowMap = rendererRecoveryDeps.getRenderer()?.shadowMap;
+                return {
+                    autoUpdate:
+                        shadowMap && 'autoUpdate' in shadowMap
+                            ? /** @type {import('three').WebGLShadowMap} */ (shadowMap).autoUpdate
+                            : false,
+                    staticRefreshes: getShadowController()?.state.staticShadowRefreshes ?? 0,
+                };
+            },
             getDice: () => ({ count: spawnedDice.length, settled: areDiceSettled() }),
             getWasm: () => ({
                 available: isWasmAvailable(),

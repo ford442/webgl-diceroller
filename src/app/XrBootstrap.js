@@ -43,7 +43,9 @@ export async function bootstrapXr(deps) {
                 if (presenting && document.pointerLockElement) {
                     document.exitPointerLock();
                 }
-                getCrosshairUI()?.setVisible(false);
+                // Hide while presenting; on exit, restore based on the current
+                // pointer-lock state rather than forcing it hidden forever.
+                getCrosshairUI()?.setVisible(!presenting && document.pointerLockElement != null);
             },
         });
         app.xr = xrSessionApi;

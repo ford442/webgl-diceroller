@@ -14,7 +14,7 @@ import {
 } from '../core/RendererFactory.js';
 import { AppEvent } from '../core/AppEvents.js';
 
-export function createShadowController(rendererRef, sceneRef) {
+export function createShadowController(getRenderer, sceneRef) {
     const state = {
         externalMotionCount: 0,
         settleStartedAtMs: null,
@@ -32,15 +32,19 @@ export function createShadowController(rendererRef, sceneRef) {
 
     const enable = (reason = 'motion') => {
         state.lastReason = reason;
-        rendererRef.shadowMap.autoUpdate = true;
-        rendererRef.shadowMap.needsUpdate = true;
+        const renderer = getRenderer();
+        if (!renderer) return;
+        renderer.shadowMap.autoUpdate = true;
+        renderer.shadowMap.needsUpdate = true;
         markShadowLightsDirty();
     };
 
     const requestStaticRefresh = (reason = 'settled') => {
         state.lastReason = reason;
-        rendererRef.shadowMap.autoUpdate = false;
-        rendererRef.shadowMap.needsUpdate = true;
+        const renderer = getRenderer();
+        if (!renderer) return;
+        renderer.shadowMap.autoUpdate = false;
+        renderer.shadowMap.needsUpdate = true;
         markShadowLightsDirty();
         state.staticShadowRefreshes += 1;
     };
@@ -76,7 +80,7 @@ export function createShadowController(rendererRef, sceneRef) {
                 return;
             }
 
-            if (timeMs - state.settleStartedAtMs >= 500 && rendererRef.shadowMap.autoUpdate) {
+            if (timeMs - state.settleStartedAtMs >= 500 && getRenderer()?.shadowMap.autoUpdate) {
                 requestStaticRefresh('settled');
             }
         },
@@ -264,7 +268,9 @@ export function setupRendererRecovery(container, deps) {
             });
 
             try {
-                const oldCanvas = getRenderer().domElement;
+                const oldRenderer = getRenderer();
+                const oldCanvas = oldRenderer.domElement;
+                oldRenderer.setAnimationLoop(null);
                 const nextState = await recoverRenderer(container, state);
                 oldCanvas?.remove();
 
@@ -280,6 +286,7 @@ export function setupRendererRecovery(container, deps) {
                 app.rendererFallbackReason = nextState?.fallbackReason ?? null;
 
                 container.appendChild(nextState.renderer.domElement);
+                if (deps.animate) nextState.renderer.setAnimationLoop(deps.animate);
                 applyLivePixelRatio(container, nextState.pixelRatio, deps);
 
                 const composer = getComposer();
@@ -292,6 +299,7 @@ export function setupRendererRecovery(container, deps) {
                     postConfig.chromaticAberrationEnabled = false;
                 }
 
+                deps.onRecovered?.(nextState);
                 setupRendererRecovery(container, deps);
                 getRendererBadgeApi()?.update(getRendererState());
                 console.warn('[Renderer] Recovered from GPU loss via WebGL fallback.');

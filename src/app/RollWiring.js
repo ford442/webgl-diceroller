@@ -89,11 +89,12 @@ export function createRollWiring(app, deps) {
         emitRollStarted({ source: 'cup' });
     }
 
-    function beginRoll(seed = null, expression = null) {
+    function beginRoll(seed = null, expression = null, meta = {}) {
         pendingRollMeta = {
             seed: seed ?? null,
             expression: expression ?? null,
             diceSet: captureDiceSet(),
+            ...meta,
         };
         const shadowController = getShadowController();
         shadowController?.pulse('roll');
@@ -251,7 +252,7 @@ export function createRollWiring(app, deps) {
 
     function getLastRollShareUrl() {
         const last = rollHandlerRef.lastRoll;
-        if (!last?.seed) return null;
+        if (last?.seed == null) return null;
         return buildShareableRollUrl(last.seed, last.counts, undefined, getDiceAppearanceConfig(), {
             expression: last.expression ?? null,
             system: last.system ?? null,
@@ -279,7 +280,7 @@ export function createRollWiring(app, deps) {
         if (notation && rollSessionRef.current) {
             await rollSessionRef.current.roll(notation, seed);
         } else {
-            beginRoll(seed, notation);
+            beginRoll(seed, notation, diceCounts ? { source: 'remote', diceSet: diceCounts } : { source: 'remote' });
         }
     }
 
@@ -300,9 +301,9 @@ export function createRollWiring(app, deps) {
                 await rollSessionRef.current.roll(last.notation, last.seed);
             } else if (last.diceCounts) {
                 updateDiceSet(getScene(), getPhysicsWorld(), last.diceCounts);
-                beginRoll(last.seed);
+                beginRoll(last.seed, null, { source: 'remote-sync', diceSet: last.diceCounts });
             } else {
-                beginRoll(last.seed);
+                beginRoll(last.seed, null, { source: 'remote-sync' });
             }
         }
     }
