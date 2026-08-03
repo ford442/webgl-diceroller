@@ -422,6 +422,9 @@ npm run test:flute            # Flute prop in scene graph
 npm run test:lamp             # Lamp prop smoke
 npm run test:cauldron         # Cauldron interactable
 npm run test:mobile-touch     # Touch input smoke
+npm run test:wasm-authoritative  # Visual sync + interaction with physicsWorld === null (#250)
+npm run test:wasm-gameplay-loop  # Full-app: visual sync, drag interaction, collision audio (getStats().played)
+npm run test:share-roll-replay   # Two page loads of the same share URL settle to identical readAllDiceValues()
 npm run test:a11y             # axe accessibility scan
 npm run test:notation         # Roll notation parser (Node, no browser)
 npm run test:share-roll       # Shareable roll encoding (Node)
@@ -431,10 +434,13 @@ node test_dicecup.js          # DiceCup interactable (root; needs WASM for avail
 npm run test:solver                 # Native C++ unit + fuzz (see docs/WASM_ENGINE.md)
 node scripts/verify-wasm-primitives.mjs
 npm run verify:wasm-interaction     # drag + levitation on the WASM-only path (needs a build)
+npm run verify:worker-replay        # Worker-module replay determinism (seededPhysicsThrow) — isolated from the app UI
 npm run verify:bundle-loading       # no ammo chunk / no ammo dice bodies by default
 node scripts/verify-renderer-factory.mjs
 npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when baselines exist)
 ```
+
+- `test:wasm-gameplay-loop`, `test:wasm-authoritative`, and `test:share-roll-replay` all run in CI (`verify-tests` matrix); `verify:worker-replay` runs in the `verify` matrix. All four need the `wasm-artifacts` build (`npm run build:wasm`) to exercise the WASM-authoritative path rather than skipping.
 
 **Automation hooks** (require `?test`, `?debug`, or `?debug-perf`):
 - `window.__app` — stable API (`ready`, `scene`, `camera`, `renderer`, `interactables`, `replayRoll`, …). Prefer this.

@@ -44,6 +44,7 @@
         "test:share-roll": "node tests/share-roll.test.mjs",
         "test:share-roll-replay": "node tests/share-roll-replay.js",
         "test:wasm-authoritative": "node tests/wasm-authoritative.js",
+        "test:wasm-gameplay-loop": "node tests/wasm-gameplay-loop.mjs",
         "test:multiplayer-protocol": "node tests/multiplayer-protocol.test.mjs",
         "test:a11y": "node tests/a11y.js",
         "test:solver": "bash src/wasm/build_solver_test.sh",
