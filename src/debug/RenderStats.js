@@ -176,7 +176,10 @@ export function createRenderStats({
             : '';
         lines.push(`physics ${physicsLabel}  ${diceLabel}`.trimEnd());
         if (debugPerf && wasm?.stepStats) {
-            const s = wasm.stepStats;
+            const s =
+                /** @type {{ pairCandidates: number; satTests: number; contacts: number }} */ (
+                    wasm.stepStats
+                );
             lines.push(`pairs ${s.pairCandidates}  sat ${s.satTests}  contacts ${s.contacts}`);
         }
         if (debugPerf && wasm?.worker) {

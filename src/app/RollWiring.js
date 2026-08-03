@@ -280,7 +280,11 @@ export function createRollWiring(app, deps) {
         if (notation && rollSessionRef.current) {
             await rollSessionRef.current.roll(notation, seed);
         } else {
-            beginRoll(seed, notation, diceCounts ? { source: 'remote', diceSet: diceCounts } : { source: 'remote' });
+            beginRoll(
+                seed,
+                notation,
+                diceCounts ? { source: 'remote', diceSet: diceCounts } : { source: 'remote' }
+            );
         }
     }
 
@@ -315,7 +319,7 @@ export function createRollWiring(app, deps) {
     function replayShareableRoll(searchParams, options = {}) {
         const replayRequest = options.skip ? null : parseShareableRollParams(searchParams);
         if (replayRequest) {
-            if ('error' in replayRequest && replayRequest.error === 'unsupported_version') {
+            if ('error' in replayRequest) {
                 console.warn(
                     `[ShareableRoll] Unsupported replay version v=${replayRequest.version} (need v=${REPLAY_VERSION}); skipping auto-replay.`
                 );
@@ -343,7 +347,9 @@ export function createRollWiring(app, deps) {
                         ?.roll(replayRequest.expression, replayRequest.seed, {
                             system: activeRollSystem,
                         })
-                        ?.catch((err) => console.warn('[ShareableRoll] expression replay failed', err));
+                        ?.catch((err) =>
+                            console.warn('[ShareableRoll] expression replay failed', err)
+                        );
                 } else {
                     rollHandlerRef.roll(replayRequest.seed);
                 }

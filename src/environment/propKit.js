@@ -74,6 +74,15 @@ function applyEuler(target, value) {
 
 /**
  * Create a mesh with default shadow flags for environment props.
+ * @param {THREE.BufferGeometry} geometry
+ * @param {THREE.Material} material
+ * @param {{
+ *   castShadow?: boolean,
+ *   receiveShadow?: boolean,
+ *   position?: { x?: number, y?: number, z?: number } | number[],
+ *   rotation?: { x?: number, y?: number, z?: number } | number[],
+ *   name?: string,
+ * }} [options]
  */
 export function mesh(
     geometry,
@@ -91,6 +100,20 @@ export function mesh(
 
 /**
  * Standard prop factory scaffold: group setup, build callback, colliders, scene add.
+ * @param {THREE.Scene} scene
+ * @param {import('../wasm/physicsTypes').PhysicsEngine | null | undefined} physicsWorld
+ * @param {{
+ *   name?: string,
+ *   position?: { x?: number, y?: number, z?: number },
+ *   rotation?: number,
+ *   footOffsetY?: number,
+ *   build?: (ctx: { group: THREE.Group, materials: typeof materials, mesh: typeof mesh }) => void,
+ *   colliders?: object[],
+ *   update?: (...args: any[]) => void,
+ *   interact?: (...args: any[]) => void,
+ *   dispose?: (...args: any[]) => void,
+ *   [extra: string]: any,
+ * }} [options]
  */
 export function createProp(
     scene,
@@ -125,6 +148,7 @@ export function createProp(
         }
     }
 
+    /** @type {{ group: THREE.Group, body?: unknown, update?: (...args: any[]) => void, interact?: (...args: any[]) => void, dispose?: (...args: any[]) => void, [extra: string]: any }} */
     const propResult = { group, ...extras };
     if (body) propResult.body = body;
     if (update) propResult.update = update;

@@ -25,7 +25,7 @@ export function encodeMessage(msg) {
 
 /**
  * @param {string} raw
- * @returns {{ ok: true, msg: object } | { ok: false, error: string }}
+ * @returns {{ ok: true, msg: object } | { ok: false, error: string, version?: number }}
  */
 export function decodeMessage(raw) {
     let parsed;

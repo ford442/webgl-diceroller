@@ -10,7 +10,7 @@ import {
     getExplodingRespawnSpecs,
     getRerollRespawnSpecs,
     DEFAULT_ROLL_SYSTEM,
-    NotationError
+    NotationError,
 } from './Notation.js';
 
 /**
@@ -58,7 +58,8 @@ export function shouldDeferAutoResults() {
  * @param {RollSessionDeps} deps
  */
 export function createRollSession(deps) {
-    const waitFrame = deps.waitFrame ?? (() => new Promise((r) => requestAnimationFrame(r)));
+    const waitFrame =
+        deps.waitFrame ?? (() => new Promise((r) => requestAnimationFrame(() => r())));
 
     /**
      * @param {string} expression
@@ -71,9 +72,7 @@ export function createRollSession(deps) {
         }
 
         const parsed = parseNotation(expression);
-        const system = options.system
-            ?? deps.getSystem?.()
-            ?? DEFAULT_ROLL_SYSTEM;
+        const system = options.system ?? deps.getSystem?.() ?? DEFAULT_ROLL_SYSTEM;
 
         activeSession = { expression: parsed.raw, seed, system };
         deferAutoResults = true;
@@ -86,7 +85,7 @@ export function createRollSession(deps) {
 
             let opposedDice = null;
             if (parsed.opposed) {
-                const rightSeed = seed != null ? (seed + 0x9E3779B9) >>> 0 : null;
+                const rightSeed = seed != null ? (seed + 0x9e3779b9) >>> 0 : null;
                 opposedDice = await resolveSide(deps, parsed.opposed, rightSeed, waitFrame);
             }
 
@@ -94,7 +93,7 @@ export function createRollSession(deps) {
             const result = evaluateRoll(parsed, leftDice, {
                 opposedDice: opposedDice ?? undefined,
                 seed: seed != null ? seed >>> 0 : null,
-                system
+                system,
             });
             deps.onComplete?.(result);
             return result;
@@ -142,7 +141,7 @@ async function resolveSide(deps, side, seed, waitFrame) {
             value: r.value,
             role: specs[i]?.role ?? r.role ?? null,
             exploded: Boolean(specs[i]?.replacesDieIndex != null && !specs[i]?.isReroll),
-            rerolled: Boolean(specs[i]?.isReroll)
+            rerolled: Boolean(specs[i]?.isReroll),
         }));
 
         if (explosionRound === 0 && !didRerollPass) {
@@ -152,7 +151,11 @@ async function resolveSide(deps, side, seed, waitFrame) {
             roundDice.forEach((d, i) => {
                 const slot = specs[i]?.dieIndex ?? d.dieIndex;
                 accumulatedDice.forEach((prev) => {
-                    if (prev.groupIndex === d.groupIndex && prev.dieIndex === slot && !prev.exploded) {
+                    if (
+                        prev.groupIndex === d.groupIndex &&
+                        prev.dieIndex === slot &&
+                        !prev.exploded
+                    ) {
                         prev.replacedByReroll = true;
                         prev.kept = false;
                         prev.dropped = true;
@@ -163,9 +166,13 @@ async function resolveSide(deps, side, seed, waitFrame) {
                     ...d,
                     dieIndex: slot,
                     rerolled: true,
-                    originalValue: accumulatedDice.find(
-                        (p) => p.groupIndex === d.groupIndex && p.dieIndex === slot && p.replacedByReroll
-                    )?.originalValue ?? null
+                    originalValue:
+                        accumulatedDice.find(
+                            (p) =>
+                                p.groupIndex === d.groupIndex &&
+                                p.dieIndex === slot &&
+                                p.replacedByReroll
+                        )?.originalValue ?? null,
                 });
             });
             didRerollPass = true;
@@ -176,7 +183,7 @@ async function resolveSide(deps, side, seed, waitFrame) {
                 accumulatedDice.push({
                     ...d,
                     dieIndex: slot,
-                    exploded: true
+                    exploded: true,
                 });
             });
         }

@@ -9,7 +9,6 @@
  *   hideResults()            — hide the overlay (call before each new roll)
  */
 
-/** @typedef {import('./types/roll').EvaluatedRoll} EvaluatedRoll */
 /** @typedef {import('./types/dice').DiceReadValue} DiceReadValue */
 
 import { formatDieLabel } from './roll/Notation.js';
@@ -202,7 +201,6 @@ export function showResults(diceResults) {
  * Show notation roll breakdown with kept/dropped highlighting.
  * @param {import('./roll/Notation.js').EvaluatedRoll} evaluated
  */
-/** @param {EvaluatedRoll} evaluated */
 export function showNotationResults(evaluated) {
     if (!resultsOverlay || !evaluated) return;
 
