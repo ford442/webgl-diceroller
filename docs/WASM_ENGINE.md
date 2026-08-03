@@ -219,8 +219,10 @@ After each build, [`build.sh`](src/wasm/build.sh) emits `public/wasm/build-info.
 
 ### Native solver tests (no browser, no Emscripten)
 
-The engine core lives in `dice_physics_engine.hpp` and is compiled natively with
-g++/clang for fast regression coverage:
+The engine core lives in `dice_physics_engine.hpp` (a thin orchestrator that
+declares `DicePhysicsEngine` and pulls in the `dice_physics/` module files for
+math, types, SAT, and the engine's member-function definitions) and is
+compiled natively with g++/clang for fast regression coverage:
 
 ```bash
 # Unit tests (SAT, PRNG, serialize round-trip, determinism) + 2000-seed fuzz loop:
@@ -243,13 +245,21 @@ BENCH_SOLVER=1 npm run test:solver
 
 Source layout:
 
-| File                      | Role                                                        |
-| ------------------------- | ----------------------------------------------------------- |
-| `dice_physics_engine.hpp` | Portable solver (SAT, integration, PRNG, serialize)         |
-| `dice_physics.cpp`        | Emscripten Embind exports for the WASM build                |
-| `solver_tests.cpp`        | doctest unit + fuzz harness (`--dump-serialize`, `--bench`) |
-| `emcc_flags.inc.sh`       | Single source of truth for Emscripten link flags            |
-| `build_solver_test.sh`    | Native compile + run script                                 |
+| File                                                | Role                                                        |
+| ---------------------------------------------------- | ----------------------------------------------------------- |
+| `dice_physics_engine.hpp`                            | Thin orchestrator: `DicePhysicsEngine` class declaration + module includes |
+| `dice_physics/dice_math.hpp`                         | `Vec3`, `Quat`, `Mat3`, `PolyHull`                          |
+| `dice_physics/dice_types.hpp`                        | `RigidBody`, `Contact`, `CollisionEvent`, `StaticBody`, etc. |
+| `dice_physics/dice_sat.hpp`                          | SAT narrowphase helpers + `DeterministicRNG`                |
+| `dice_physics/dice_engine_lifecycle.hpp`             | Engine construction, per-die setters, static-collider registration |
+| `dice_physics/dice_engine_step.hpp`                  | `step()`, buffer builders, serialize/deserialize, invariant helpers |
+| `dice_physics/dice_engine_collision_static.hpp`      | Static-collider + container-plane collision resolution      |
+| `dice_physics/dice_engine_collision_dynamic.hpp`     | Die–die broadphase grid, narrowphase, and contact solver     |
+| `dice_physics/dice_engine_integrate.hpp`             | Per-body integration, table/floor collision, sleep bookkeeping |
+| `dice_physics.cpp`                                   | Emscripten Embind exports for the WASM build                |
+| `solver_tests.cpp`                                   | doctest unit + fuzz harness (`--dump-serialize`, `--bench`) |
+| `emcc_flags.inc.sh`                                  | Single source of truth for Emscripten link flags            |
+| `build_solver_test.sh`                               | Native compile + run script                                 |
 
 ### Runtime flags
 
@@ -620,11 +630,11 @@ const t2 = window.getWasmEngine().getTransforms();
 - [x] Prop ammo usage funnelled through `src/environment/PropPhysics.js`; no prop imports `physics.js` directly.
 - [x] `npm run verify:wasm-interaction` covers drag + levitation on the WASM-only path; `npm run verify:bundle-loading` asserts no ammo chunk and no ammo dice bodies by default.
 - [ ] Static prop colliders still use ammo when loaded — see [issue #237](https://github.com/ford442/webgl-diceroller/issues/237).
-- [x] SIMD optimisation (`-msimd128`) for SAT axis projections (`projectHullOntoAxis` in `dice_physics_engine.hpp`).
+- [x] SIMD optimisation (`-msimd128`) for SAT axis projections (`projectHullOntoAxis` in `dice_physics/dice_sat.hpp`).
 
 ### Phase 6 (Broadphase, SIMD, bench — complete)
 
-- [x] Uniform XZ grid broadphase for die–die pairs (`resolveDieCollisions` in `dice_physics_engine.hpp`); brute-force parity unit test.
+- [x] Uniform XZ grid broadphase for die–die pairs (`resolveDieCollisions` in `dice_physics/dice_engine_collision_dynamic.hpp`); brute-force parity unit test.
 - [x] Skip container/static/table resolution for sleeping bodies.
 - [x] Extended SIMD: `transformHullVerts` (quat→mat3, 4-wide) in `satTest`; scalar fallback via `DICE_FORCE_SCALAR_SAT` / `build.sh --scalar`.
 - [x] `StepStats` + `getLastStepStats()` exposed to JS; worker SAB header slots for `?debug-perf`.
