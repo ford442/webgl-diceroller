@@ -45,6 +45,12 @@ export interface RollOutcomeEntry {
     rerolled?: boolean;
 }
 
+export interface RollGroupSubtotal {
+    label: string;
+    subtotal: number;
+    groupIndex?: number;
+}
+
 export interface RollFlags {
     crit: boolean;
     fumble: boolean;
@@ -54,13 +60,15 @@ export interface RollFlags {
     weakHit?: boolean;
     miss?: boolean;
     opposedWin?: boolean;
+    opposedTie?: boolean;
+    opposedLoss?: boolean;
 }
 
 export interface EvaluatedRoll {
     expression: string;
     dice: DieOutcome[];
     rolls: RollOutcomeEntry[];
-    groupSubtotals: { label: string; subtotal: number; groupIndex?: number }[];
+    groupSubtotals: RollGroupSubtotal[];
     modifier: number;
     total: number;
     flags: RollFlags;
@@ -70,7 +78,7 @@ export interface EvaluatedRoll {
         total: number;
         margin: number;
         dice: DieOutcome[];
-        groupSubtotals: object[];
+        groupSubtotals: RollGroupSubtotal[];
         modifier: number;
         rolls: RollOutcomeEntry[];
     } | null;

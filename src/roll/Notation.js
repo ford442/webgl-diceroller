@@ -110,6 +110,9 @@ export function sidesToDieType(sides) {
  * @property {boolean} [strongHit]
  * @property {boolean} [weakHit]
  * @property {boolean} [miss]
+ * @property {boolean} [opposedWin]
+ * @property {boolean} [opposedTie]
+ * @property {boolean} [opposedLoss]
  */
 
 /**
@@ -124,16 +127,23 @@ export function sidesToDieType(sides) {
  */
 
 /**
+ * @typedef {Object} RollGroupSubtotal
+ * @property {string} label
+ * @property {number} subtotal
+ * @property {number} [groupIndex]
+ */
+
+/**
  * @typedef {Object} EvaluatedRoll
  * @property {string} expression
  * @property {DieOutcome[]} dice
  * @property {RollOutcomeEntry[]} rolls
- * @property {{ label: string, subtotal: number }[]} groupSubtotals
+ * @property {RollGroupSubtotal[]} groupSubtotals
  * @property {number} modifier
  * @property {number} total
  * @property {RollFlags} flags
  * @property {number|null} seed
- * @property {{ expression: string, total: number, margin: number, dice: DieOutcome[], groupSubtotals: object[], modifier: number, rolls: RollOutcomeEntry[] }|null} opposed
+ * @property {{ expression: string, total: number, margin: number, dice: DieOutcome[], groupSubtotals: RollGroupSubtotal[], modifier: number, rolls: RollOutcomeEntry[] }|null} opposed
  */
 
 /**
