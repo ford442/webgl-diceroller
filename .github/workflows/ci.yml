@@ -146,6 +146,7 @@ jobs:
             matrix:
                 script:
                     - verify:worker-physics
+                    - verify:worker-replay
                     - verify:godrays
                     - verify:wasm-primitives
         steps:
@@ -178,6 +179,8 @@ jobs:
                     - test:flute
                     - test:playingcards
                     - test:wasm-authoritative
+                    - test:wasm-gameplay-loop
+                    - test:share-roll-replay
                     - test:a11y
         steps:
             - uses: actions/checkout@v4
