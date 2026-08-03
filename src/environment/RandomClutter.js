@@ -21,11 +21,8 @@ import {
     createPipe,
     createSpyglass,
 } from './clutter/ToolsAndGear.js';
-import {
-    createSeededRng,
-    generateClutterSlots,
-    shuffleWithRng,
-} from './clutter/ClutterPlacement.js';
+import { generateClutterSlots } from './clutter/ClutterPlacement.js';
+import { createSeededRng, shuffleWithRng } from '../core/SeededRng.js';
 import { LAYOUT_THEMES } from '../core/TableLayoutConfig.js';
 import { disposeObject3D } from './PropLifecycle.js';
 import { mergeScatterHandles } from '../core/StaticPropMerger.js';

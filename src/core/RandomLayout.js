@@ -11,7 +11,7 @@ import {
     persistTableLayoutConfig,
     resolveTableLayoutConfig,
 } from './TableLayoutConfig.js';
-import { createSeededRng } from '../environment/clutter/ClutterPlacement.js';
+import { createSeededRng } from './SeededRng.js';
 
 function randomInRange([min, max], rng) {
     return min + Math.floor(rng() * (max - min + 1));

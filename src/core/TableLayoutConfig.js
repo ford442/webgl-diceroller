@@ -1,4 +1,4 @@
-import { createSeededRng } from '../environment/clutter/ClutterPlacement.js';
+import { createSeededRng } from './SeededRng.js';
 
 const STORAGE_KEY = 'dice-roller-layout';
 
