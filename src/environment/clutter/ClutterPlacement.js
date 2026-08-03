@@ -1,4 +1,5 @@
 import { resolveTableLayoutConfig } from '../../core/TableLayoutConfig.js';
+import { shuffleWithRng } from '../../core/SeededRng.js';
 
 /** Half-extent of the velvet dice zone (16×16 table center). */
 export const DICE_ZONE_HALF = 8;
@@ -13,24 +14,6 @@ const RESERVED_ZONES = [
     { x: -2, z: -6, radius: 1.6 }, // candle (always)
     { x: -6, z: -3, radius: 2.2 }, // TarotDeck (tier0, spawned after clutter)
 ];
-
-export function createSeededRng(seed) {
-    let state = seed >>> 0 || 1;
-    return () => {
-        state = (state + 0x6d2b79f5) >>> 0;
-        let t = Math.imul(state ^ (state >>> 15), 1 | state);
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
-
-export function shuffleWithRng(array, rng) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-}
 
 function isReserved(x, z) {
     return RESERVED_ZONES.some((zone) => {
