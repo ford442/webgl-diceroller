@@ -15,7 +15,7 @@ import {
     getRerollRespawnSpecs,
     applyExpressionChip,
     defaultExpressionForSystem,
-    NotationError
+    NotationError,
 } from '../src/roll/Notation.js';
 
 let passed = 0;
@@ -144,7 +144,7 @@ test('evaluateRoll keep highest', () => {
     const parsed = parseNotation('2d20kh1');
     const result = evaluateRoll(parsed, [
         { groupIndex: 0, dieIndex: 0, type: 'd20', value: 8 },
-        { groupIndex: 0, dieIndex: 1, type: 'd20', value: 17 }
+        { groupIndex: 0, dieIndex: 1, type: 'd20', value: 17 },
     ]);
     assert.equal(result.total, 17);
     assert.equal(result.dice[1].kept, true);
@@ -155,7 +155,10 @@ test('evaluateRoll keep highest', () => {
 test('evaluateRoll drop lowest', () => {
     const parsed = parseNotation('4d6dl1');
     const dice = [2, 5, 3, 6].map((value, i) => ({
-        groupIndex: 0, dieIndex: i, type: 'd6', value
+        groupIndex: 0,
+        dieIndex: i,
+        type: 'd6',
+        value,
     }));
     const result = evaluateRoll(parsed, dice);
     assert.equal(result.total, 14); // 5+3+6
@@ -163,19 +166,16 @@ test('evaluateRoll drop lowest', () => {
 
 test('evaluateRoll modifier', () => {
     const parsed = parseNotation('1d6+5');
-    const result = evaluateRoll(parsed, [
-        { groupIndex: 0, dieIndex: 0, type: 'd6', value: 3 }
-    ]);
+    const result = evaluateRoll(parsed, [{ groupIndex: 0, dieIndex: 0, type: 'd6', value: 3 }]);
     assert.equal(result.total, 8);
 });
 
 test('evaluateRoll opposed margin', () => {
     const parsed = parseNotation('1d20+5 vs 1d20+2');
-    const result = evaluateRoll(
-        parsed,
-        [{ groupIndex: 0, dieIndex: 0, type: 'd20', value: 10 }],
-        { opposedDice: [{ groupIndex: 0, dieIndex: 0, type: 'd20', value: 8 }], seed: 99 }
-    );
+    const result = evaluateRoll(parsed, [{ groupIndex: 0, dieIndex: 0, type: 'd20', value: 10 }], {
+        opposedDice: [{ groupIndex: 0, dieIndex: 0, type: 'd20', value: 8 }],
+        seed: 99,
+    });
     assert.equal(result.total, 15);
     assert.equal(result.opposed.total, 10);
     assert.equal(result.opposed.margin, 5);
@@ -184,41 +184,57 @@ test('evaluateRoll opposed margin', () => {
 });
 
 test('evaluateRoll dnd5e crit / fumble flags', () => {
-    const crit = evaluateRoll(parseNotation('1d20'), [
-        { groupIndex: 0, dieIndex: 0, type: 'd20', value: 20 }
-    ], { system: 'dnd5e' });
+    const crit = evaluateRoll(
+        parseNotation('1d20'),
+        [{ groupIndex: 0, dieIndex: 0, type: 'd20', value: 20 }],
+        { system: 'dnd5e' }
+    );
     assert.equal(crit.flags.crit, true);
     assert.equal(crit.flags.fumble, false);
 
-    const fumble = evaluateRoll(parseNotation('1d20'), [
-        { groupIndex: 0, dieIndex: 0, type: 'd20', value: 1 }
-    ], { system: 'dnd5e' });
+    const fumble = evaluateRoll(
+        parseNotation('1d20'),
+        [{ groupIndex: 0, dieIndex: 0, type: 'd20', value: 1 }],
+        { system: 'dnd5e' }
+    );
     assert.equal(fumble.flags.fumble, true);
 });
 
 test('evaluateRoll advantage crit uses kept die only', () => {
-    const result = evaluateRoll(parseNotation('2d20kh1'), [
-        { groupIndex: 0, dieIndex: 0, type: 'd20', value: 1 },
-        { groupIndex: 0, dieIndex: 1, type: 'd20', value: 20 }
-    ], { system: 'dnd5e' });
+    const result = evaluateRoll(
+        parseNotation('2d20kh1'),
+        [
+            { groupIndex: 0, dieIndex: 0, type: 'd20', value: 1 },
+            { groupIndex: 0, dieIndex: 1, type: 'd20', value: 20 },
+        ],
+        { system: 'dnd5e' }
+    );
     assert.equal(result.flags.crit, true);
     assert.equal(result.flags.fumble, false);
     assert.equal(result.flags.advantage, true);
 });
 
 test('evaluateRoll pbta bands map to crit/fumble', () => {
-    const strong = evaluateRoll(parseNotation('2d6'), [
-        { groupIndex: 0, dieIndex: 0, type: 'd6', value: 5 },
-        { groupIndex: 0, dieIndex: 1, type: 'd6', value: 6 }
-    ], { system: 'pbta' });
+    const strong = evaluateRoll(
+        parseNotation('2d6'),
+        [
+            { groupIndex: 0, dieIndex: 0, type: 'd6', value: 5 },
+            { groupIndex: 0, dieIndex: 1, type: 'd6', value: 6 },
+        ],
+        { system: 'pbta' }
+    );
     assert.equal(strong.total, 11);
     assert.equal(strong.flags.strongHit, true);
     assert.equal(strong.flags.crit, true);
 
-    const miss = evaluateRoll(parseNotation('2d6'), [
-        { groupIndex: 0, dieIndex: 0, type: 'd6', value: 1 },
-        { groupIndex: 0, dieIndex: 1, type: 'd6', value: 2 }
-    ], { system: 'pbta' });
+    const miss = evaluateRoll(
+        parseNotation('2d6'),
+        [
+            { groupIndex: 0, dieIndex: 0, type: 'd6', value: 1 },
+            { groupIndex: 0, dieIndex: 1, type: 'd6', value: 2 },
+        ],
+        { system: 'pbta' }
+    );
     assert.equal(miss.flags.miss, true);
     assert.equal(miss.flags.fumble, true);
 });
@@ -227,7 +243,7 @@ test('evaluateRoll reroll prefers replacement value', () => {
     const parsed = parseNotation('1d6r1');
     const result = evaluateRoll(parsed, [
         { groupIndex: 0, dieIndex: 0, type: 'd6', value: 1, replacedByReroll: true },
-        { groupIndex: 0, dieIndex: 0, type: 'd6', value: 4, rerolled: true }
+        { groupIndex: 0, dieIndex: 0, type: 'd6', value: 4, rerolled: true },
     ]);
     assert.equal(result.total, 4);
 });
@@ -235,7 +251,7 @@ test('evaluateRoll reroll prefers replacement value', () => {
 test('getExplodingRespawnSpecs on max roll', () => {
     const parsed = parseNotation('1d6!');
     const specs = getExplodingRespawnSpecs(parsed, [
-        { groupIndex: 0, dieIndex: 0, type: 'd6', value: 6 }
+        { groupIndex: 0, dieIndex: 0, type: 'd6', value: 6 },
     ]);
     assert.equal(specs.length, 1);
 });
@@ -244,7 +260,7 @@ test('getRerollRespawnSpecs on low face', () => {
     const parsed = parseNotation('2d6r1');
     const specs = getRerollRespawnSpecs(parsed, [
         { groupIndex: 0, dieIndex: 0, type: 'd6', value: 1 },
-        { groupIndex: 0, dieIndex: 1, type: 'd6', value: 3 }
+        { groupIndex: 0, dieIndex: 1, type: 'd6', value: 3 },
     ]);
     assert.equal(specs.length, 1);
     assert.equal(specs[0].dieIndex, 0);
@@ -273,9 +289,11 @@ test('defaultExpressionForSystem', () => {
 });
 
 test('result rolls schema includes die/faces/value', () => {
-    const result = evaluateRoll(parseNotation('1d20'), [
-        { groupIndex: 0, dieIndex: 0, type: 'd20', value: 12 }
-    ], { seed: 7 });
+    const result = evaluateRoll(
+        parseNotation('1d20'),
+        [{ groupIndex: 0, dieIndex: 0, type: 'd20', value: 12 }],
+        { seed: 7 }
+    );
     assert.equal(result.rolls.length, 1);
     assert.equal(result.rolls[0].die, 'd20');
     assert.equal(result.rolls[0].faces, 20);
@@ -286,23 +304,31 @@ test('result rolls schema includes die/faces/value', () => {
 
 test('computeFlags coc percentile fumble', () => {
     const parsed = parseNotation('1d100');
-    const dice = [
+    const _dice = [
         { groupIndex: 0, dieIndex: 0, type: 'd10', value: 10, role: 'tens', kept: true },
-        { groupIndex: 0, dieIndex: 1, type: 'd10', value: 8, role: 'ones', kept: true }
+        { groupIndex: 0, dieIndex: 1, type: 'd10', value: 8, role: 'ones', kept: true },
     ];
     // 00 + 8 = 8 — not a fumble; use 90+6 via display path through evaluateRoll
-    const result = evaluateRoll(parsed, [
-        { groupIndex: 0, dieIndex: 0, type: 'd10', value: 10, role: 'tens' },
-        { groupIndex: 0, dieIndex: 1, type: 'd10', value: 6, role: 'ones' }
-    ], { system: 'coc' });
+    const result = evaluateRoll(
+        parsed,
+        [
+            { groupIndex: 0, dieIndex: 0, type: 'd10', value: 10, role: 'tens' },
+            { groupIndex: 0, dieIndex: 1, type: 'd10', value: 6, role: 'ones' },
+        ],
+        { system: 'coc' }
+    );
     // tens 10→0, ones 6→6 => 6, not fumble
     assert.equal(result.total, 6);
     assert.equal(result.flags.fumble, false);
 
-    const fumble = evaluateRoll(parsed, [
-        { groupIndex: 0, dieIndex: 0, type: 'd10', value: 9, role: 'tens' },
-        { groupIndex: 0, dieIndex: 1, type: 'd10', value: 8, role: 'ones' }
-    ], { system: 'coc' });
+    const fumble = evaluateRoll(
+        parsed,
+        [
+            { groupIndex: 0, dieIndex: 0, type: 'd10', value: 9, role: 'tens' },
+            { groupIndex: 0, dieIndex: 1, type: 'd10', value: 8, role: 'ones' },
+        ],
+        { system: 'coc' }
+    );
     assert.equal(fumble.total, 98);
     assert.equal(fumble.flags.fumble, true);
 });
