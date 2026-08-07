@@ -41,7 +41,7 @@ done
 
 # Local dev convenience: activate an emsdk checked out at /root/emsdk if emcc
 # isn't already on PATH (e.g. CI activates its own emsdk via setup-emsdk).
-if ! command -v emcc >/dev/null 2>&1 && [ -f /root/emsdk/emsdk_env.sh ]; then
+if ! command -v em++ >/dev/null 2>&1 && [ -f /root/emsdk/emsdk_env.sh ]; then
     # shellcheck source=/dev/null
     source /root/emsdk/emsdk_env.sh
 fi
@@ -62,14 +62,14 @@ mkdir -p "${OUT_DIR}"
 echo "[build:wasm] Profile: ${PROFILE}"
 echo "[build:wasm] Compiling dice_physics.cpp → ${OUT_DIR}/dice_physics.{js,wasm}"
 
-emcc "${SCRIPT_DIR}/dice_physics.cpp" \
+em++ "${SCRIPT_DIR}/dice_physics.cpp" \
     "${EMCC_FLAGS[@]}" \
     -o "${OUT_DIR}/dice_physics.js"
 
 # ---------------------------------------------------------------------------
 # build-info.json — support metadata (gitignored; included in CI wasm artifact)
 # ---------------------------------------------------------------------------
-EMCC_FULL_VERSION="$(emcc --version 2>/dev/null | head -n1 || echo unknown)"
+EMCC_FULL_VERSION="$(em++ --version 2>/dev/null | head -n1 || echo unknown)"
 EMCC_VERSION="$(echo "${EMCC_FULL_VERSION}" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo unknown)"
 GIT_SHA="$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
