@@ -7,7 +7,8 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     chairGroup.name = 'Chair'; // Name for verification
 
     // Dimensions
-    const seatHeight = 4.0;
+    // Seat ~4u below the playing surface (standard dining ratio vs TABLE_HEIGHT_ABOVE_FLOOR).
+    const seatHeight = 6.5;
     const seatWidth = 3.5;
     const seatDepth = 3.5;
     const legWidth = 0.4;
