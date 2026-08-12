@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
 import { createFire } from './Fire.js';
 import { GodRayShader } from '../shaders/GodRayShader.js';
-import { CAMERA_LOOK_AT_Y } from '../core/SceneMetrics.js';
+import { CAMERA_LOOK_AT_Y, ROOM_FLOOR_Y, ROOM_WALL_HEIGHT } from '../core/SceneMetrics.js';
 import { getBrickTextures, getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createTavernWalls(scene, physicsWorld) {
@@ -42,11 +42,11 @@ export function createTavernWalls(scene, physicsWorld) {
     // Room Dimensions
     const width = 40;
     const depth = 40;
-    const height = 30; // Increased Height for "Room" feel
+    const height = ROOM_WALL_HEIGHT;
     const thickness = 2;
 
-    // Floor (Ground) - Below the table
-    const floorY = -10;
+    // Floor (Ground) - Below the table; aligned with Table.js leg roots.
+    const floorY = ROOM_FLOOR_Y;
 
     const floorGeo = new THREE.BoxGeometry(width, 1, depth);
     const floorMesh = new THREE.Mesh(floorGeo, wallMaterial);
@@ -135,7 +135,7 @@ export function createTavernWalls(scene, physicsWorld) {
     // Beams / Decorations
     const beamThick = 1;
     // Top Beam (at top of walls)
-    // Wall Top = -10 + 30 = 20.
+    // Wall top = ROOM_FLOOR_Y + ROOM_WALL_HEIGHT (= ROOM_CEILING_Y).
     const _topBeamY = floorY + height;
 
     // Horizontal Beam Back

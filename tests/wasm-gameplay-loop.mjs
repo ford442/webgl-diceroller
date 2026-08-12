@@ -28,11 +28,19 @@ runTest(async (page, _errors) => {
         timeout: LOAD_TIMEOUT_MS,
     });
 
-    const wasmAvailable = await page.evaluate(() => window.__app.isWasmAvailable?.() === true);
-    if (!wasmAvailable) {
+    const backend = await page.evaluate(() => ({
+        wasmAvailable: window.__app.isWasmAvailable?.() === true,
+        physicsWorldIsNull: window.__app.physicsWorld === null,
+    }));
+    if (!backend.wasmAvailable) {
         console.error('FAIL: WASM physics is unavailable (build/download public/wasm first)');
         return false;
     }
+    if (!backend.physicsWorldIsNull) {
+        console.error('FAIL: authoritative WASM path unexpectedly initialized Ammo');
+        return false;
+    }
+    console.log('✓ WASM is available with physicsWorld === null');
 
     // Real (trusted) user gesture: unlocks the AudioContext the same way a
     // pointerdown/keydown would in a real browser session (autoplay policy).
@@ -78,11 +86,10 @@ runTest(async (page, _errors) => {
     console.log('✓ die mesh position.y changed across animation frames after roll()');
 
     // 3. Collision audio: with 4 d6 in flight this roll must produce impacts.
-    await page.waitForFunction(
-        () => window.__app.audio?.getStats?.().played > 0,
-        null,
-        { timeout: SETTLE_TIMEOUT_MS, polling: 100 }
-    );
+    await page.waitForFunction(() => window.__app.audio?.getStats?.().played > 0, null, {
+        timeout: SETTLE_TIMEOUT_MS,
+        polling: 100,
+    });
     const audioStats = await page.evaluate(() => window.__app.audio.getStats());
     console.log(`✓ collision audio played ${audioStats.played} impact(s)`);
 
@@ -150,6 +157,8 @@ runTest(async (page, _errors) => {
     }
     console.log('✓ raycast pointer drag moved a held die (interaction reachable)');
 
-    console.log('PASS: WASM gameplay loop — visual sync, interaction, and collision audio all fired');
+    console.log(
+        'PASS: WASM gameplay loop — visual sync, interaction, and collision audio all fired'
+    );
     return true;
 });

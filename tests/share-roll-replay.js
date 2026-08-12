@@ -54,16 +54,16 @@ async function captureReplayValues(page) {
         await page.goto(url, { waitUntil: 'load', timeout: LOAD_TIMEOUT_MS });
         const settleA = await waitForReplaySettled(page);
         if (settleA.skipped) {
-            console.log(`SKIP: ${settleA.reason}`);
-            process.exit(0);
+            console.error(`FAIL: ${settleA.reason}`);
+            process.exit(1);
         }
         const runA = await captureReplayValues(page);
 
         await page.goto(url, { waitUntil: 'load', timeout: LOAD_TIMEOUT_MS });
         const settleB = await waitForReplaySettled(page);
         if (settleB.skipped) {
-            console.log(`SKIP: ${settleB.reason}`);
-            process.exit(0);
+            console.error(`FAIL: ${settleB.reason}`);
+            process.exit(1);
         }
         const runB = await captureReplayValues(page);
 
