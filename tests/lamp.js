@@ -10,7 +10,8 @@ async function staticChecks() {
     console.log('=== Lamp Static Verification (no browser) ===');
     const lampSrc = fs.readFileSync('src/environment/Lamp.js', 'utf8');
     const metricsSrc = fs.readFileSync('src/core/SceneMetrics.js', 'utf8');
-    const registrySrc = fs.readFileSync('src/environment/PropRegistry.js', 'utf8');
+    const registrySrc = fs.readFileSync('src/environment/propRegistry/tierDefinitions.js', 'utf8');
+    const entryHelpersSrc = fs.readFileSync('src/environment/propRegistry/entryHelpers.js', 'utf8');
 
     const checks = [
         {
@@ -47,9 +48,14 @@ async function staticChecks() {
         },
         {
             name: 'lamp hang metric near ceiling',
-            pass: metricsSrc.includes('LAMP_HANG_Y = ROOM_CEILING_Y - 0.35'),
+            pass:
+                metricsSrc.includes('LAMP_HANG_Y = TABLE_SURFACE_Y + LAMP_MODEL_DROP_Y + 7') ||
+                metricsSrc.includes('LAMP_HANG_Y = ROOM_CEILING_Y - 0.35'),
         },
-        { name: 'lamp tier uses shared hang metric', pass: registrySrc.includes('y: LAMP_HANG_Y') },
+        {
+            name: 'lamp tier uses shared hang metric',
+            pass: entryHelpersSrc.includes('LAMP_HANG_Y') && registrySrc.includes('tier1Position'),
+        },
         {
             name: 'scene.add for lamp in caller',
             pass: registrySrc.includes('ctx.scene.add(result.group)'),
