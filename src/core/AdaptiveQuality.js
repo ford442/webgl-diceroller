@@ -27,7 +27,7 @@ export const QUALITY_PROFILES = {
     },
 };
 
-function hasExplicitQualityOverride() {
+export function hasExplicitQualityOverride() {
     const params = new URLSearchParams(window.location.search);
     return (
         params.has('no-post') ||
@@ -107,7 +107,7 @@ export function createFrameProbe(scheduler, { durationMs = 1000 } = {}) {
     };
 }
 
-function setGodRaysVisible(scene, visible) {
+export function setGodRaysVisible(scene, visible) {
     scene.traverse((child) => {
         if (child.userData?.isGodRay) {
             child.visible = visible;
@@ -115,7 +115,7 @@ function setGodRaysVisible(scene, visible) {
     });
 }
 
-function applyShadowLightPolicy(scene, policy) {
+export function applyShadowLightPolicy(scene, policy) {
     scene.traverse((child) => {
         if (!child.isLight || !child.castShadow) return;
         if (policy === 'all') return;
@@ -135,24 +135,35 @@ export function applyQualityProfile({
     postConfig,
     composer,
     spotLight,
+    pointLight,
     profile,
     rendererState,
+    postRuntime,
+    runtimeGovernor,
 }) {
     if (!profile || !postConfig) return profile;
 
     postConfig.quality = profile.postQuality;
     postConfig.bloomEnabled = profile.bloomEnabled;
     postConfig.godRaysEnabled = profile.godRaysEnabled;
+    postConfig.shadowLightsPolicy = profile.shadowLights;
     postConfig.adaptiveProfile = profile.id;
     scene.userData.postConfig = postConfig;
 
-    setGodRaysVisible(scene, profile.godRaysEnabled);
-    applyShadowLightPolicy(scene, profile.shadowLights);
+    if (!postConfig.motionProfileActive) {
+        setGodRaysVisible(scene, profile.godRaysEnabled);
+        applyShadowLightPolicy(scene, profile.shadowLights);
+    }
 
     if (spotLight?.shadow) {
         const mapSize = profile.id === 'high' ? 1024 : 512;
         spotLight.shadow.mapSize.set(mapSize, mapSize);
         spotLight.shadow.needsUpdate = true;
+    }
+
+    if (pointLight?.shadow) {
+        pointLight.shadow.mapSize.set(512, 512);
+        pointLight.shadow.needsUpdate = true;
     }
 
     if (rendererState && !rendererState.pixelRatioForced && profile.pixelRatioCap) {
@@ -173,8 +184,45 @@ export function applyQualityProfile({
         }
     }
 
+    if (postRuntime && !postConfig.motionProfileActive) {
+        postRuntime.restoreBaseline();
+    }
+
+    runtimeGovernor?.refreshBaselineFromProfile?.(profile);
+
     renderer.shadowMap.needsUpdate = true;
     return profile;
+}
+
+/**
+ * Cheaper render path while dice move or external motion is active.
+ */
+export function applyMotionProfile(active, deps) {
+    const { scene, postConfig, postRuntime, appliedProfile, runtimeGovernor, diceGameFeel } = deps;
+
+    if (!postConfig || !postRuntime) return;
+
+    postConfig.motionProfileActive = active;
+
+    if (active) {
+        postRuntime.setBloomBlend(0);
+        postRuntime.setChromaticIntensity(0);
+        setGodRaysVisible(scene, false);
+        diceGameFeel?.setMotionBlurAllowed?.(false);
+        runtimeGovernor?.setDisabled?.(true);
+        return;
+    }
+
+    diceGameFeel?.setMotionBlurAllowed?.(true);
+
+    runtimeGovernor?.setDisabled?.(false);
+    if (appliedProfile) {
+        setGodRaysVisible(scene, appliedProfile.godRaysEnabled);
+        applyShadowLightPolicy(scene, appliedProfile.shadowLights);
+        runtimeGovernor?.refreshBaselineFromProfile?.(appliedProfile);
+    } else {
+        postRuntime.restoreBaseline();
+    }
 }
 
 export function bootstrapAdaptiveQuality({
@@ -183,8 +231,11 @@ export function bootstrapAdaptiveQuality({
     postConfig,
     composer,
     spotLight,
+    pointLight,
     rendererState,
     scheduler,
+    postRuntime,
+    runtimeGovernor,
 }) {
     if (hasExplicitQualityOverride()) {
         postConfig.adaptiveProfile = 'manual';
@@ -198,12 +249,23 @@ export function bootstrapAdaptiveQuality({
         postConfig,
         composer,
         spotLight,
+        pointLight,
         profile: initialProfile,
         rendererState,
+        postRuntime,
+        runtimeGovernor,
     });
 
     const probe = createFrameProbe(scheduler, { durationMs: 1000 });
     return { probe, initialProfile };
+}
+
+export function startPostLoadAdaptiveProbe(state, scheduler) {
+    if (!state || hasExplicitQualityOverride()) return null;
+    const probe = createFrameProbe(scheduler, { durationMs: 1000 });
+    state.probe = probe;
+    state.probeLabel = 'post-load';
+    return probe;
 }
 
 export function updateAdaptiveQualityProbe(probe, context, state) {
@@ -212,7 +274,8 @@ export function updateAdaptiveQualityProbe(probe, context, state) {
     const result = probe.update(context);
     if (!result) return;
 
-    const refined = refineQualityProfileFromProbe(state.initialProfile, result);
+    const baseProfile = state.appliedProfile ?? state.initialProfile;
+    const refined = refineQualityProfileFromProbe(baseProfile, result);
     if (refined.id !== state.appliedProfile?.id) {
         applyQualityProfile({
             scene: state.scene,
@@ -220,13 +283,34 @@ export function updateAdaptiveQualityProbe(probe, context, state) {
             postConfig: state.postConfig,
             composer: state.composer,
             spotLight: state.spotLight,
+            pointLight: state.pointLight,
             profile: refined,
             rendererState: state.rendererState,
+            postRuntime: state.postRuntime,
+            runtimeGovernor: state.runtimeGovernor,
         });
         state.appliedProfile = refined;
+        const label = state.probeLabel ?? 'startup';
         console.info(
-            `[AdaptiveQuality] Profile ${refined.id} after probe ` +
+            `[AdaptiveQuality] Profile ${refined.id} after ${label} probe ` +
                 `(avg ${result.avgFrameMs.toFixed(1)} ms / ${result.sampleCount} frames)`
         );
+        state.probeLabel = null;
     }
+}
+
+/**
+ * @param {object} deps
+ * @param {boolean} deps.diceSettled
+ * @param {number} deps.externalMotionCount
+ * @param {import('../types/app').PostConfig} deps.postConfig
+ * @param {{ setThrottleRefresh?: (enabled: boolean) => void } | null} [deps.shadowController]
+ */
+export function updateMotionProfileState(deps) {
+    const { diceSettled, externalMotionCount, postConfig, shadowController, ...rest } = deps;
+    const motionActive = externalMotionCount > 0 || !diceSettled;
+    if (motionActive === postConfig.motionProfileWasActive) return;
+    postConfig.motionProfileWasActive = motionActive;
+    shadowController?.setThrottleRefresh?.(motionActive);
+    applyMotionProfile(motionActive, rest);
 }

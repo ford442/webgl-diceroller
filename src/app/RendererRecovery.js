@@ -20,6 +20,8 @@ export function createShadowController(getRenderer, sceneRef) {
         settleStartedAtMs: null,
         staticShadowRefreshes: 0,
         lastReason: 'startup',
+        throttleRefresh: false,
+        frameCounter: 0,
     };
 
     const markShadowLightsDirty = () => {
@@ -34,9 +36,13 @@ export function createShadowController(getRenderer, sceneRef) {
         state.lastReason = reason;
         const renderer = getRenderer();
         if (!renderer) return;
+        state.frameCounter += 1;
         renderer.shadowMap.autoUpdate = true;
-        renderer.shadowMap.needsUpdate = true;
-        markShadowLightsDirty();
+        const shouldRefresh = !state.throttleRefresh || state.frameCounter % 2 === 0;
+        if (shouldRefresh) {
+            renderer.shadowMap.needsUpdate = true;
+            markShadowLightsDirty();
+        }
     };
 
     const requestStaticRefresh = (reason = 'settled') => {
@@ -66,6 +72,12 @@ export function createShadowController(getRenderer, sceneRef) {
         },
         forceRefresh(reason = 'manual') {
             requestStaticRefresh(reason);
+        },
+        setThrottleRefresh(enabled) {
+            state.throttleRefresh = enabled;
+            if (!enabled) {
+                state.frameCounter = 0;
+            }
         },
         update(timeMs, diceSettled) {
             const dynamicMotion = state.externalMotionCount > 0 || !diceSettled;

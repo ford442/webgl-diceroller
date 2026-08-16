@@ -20,6 +20,7 @@ import {
 } from './SceneMetrics.js';
 import { guessInitialQualityProfile } from './AdaptiveQuality.js';
 import { prefersReducedMotion } from './AccessibilityPrefs.js';
+import { createPostRuntimeControls } from './PostRuntimeControls.js';
 
 const VIGNETTE_OFFSET = 1.0;
 const VIGNETTE_DARKNESS = 1.0;
@@ -40,18 +41,20 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
     scenePass.setSize(width, height);
 
     const sceneColorNode = scenePass.getTextureNode('output');
-    let colorNode = sceneColorNode;
-    let bloomNode = null;
+    const bloomBlendUniform = uniform(postConfig.bloomEnabled ? 1 : 0);
+    let bloomedColorNode = sceneColorNode;
 
     if (postConfig.bloomEnabled) {
-        bloomNode = bloom(
+        const bloomNode = bloom(
             sceneColorNode,
             postConfig.quality === 'low' ? 0.35 : 0.6,
             postConfig.quality === 'low' ? 0.25 : 0.4,
             0.6
         );
-        colorNode = sceneColorNode.add(bloomNode);
+        bloomedColorNode = mix(sceneColorNode, sceneColorNode.add(bloomNode), bloomBlendUniform);
     }
+
+    const colorNode = bloomedColorNode;
 
     const vignetteStrength = uniform(0.85);
     const vignetteOffset = uniform(VIGNETTE_OFFSET);
@@ -62,15 +65,17 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
         return vec4(mix(colorNode.rgb, vec3(0, 0, 0), vignetteMix), colorNode.a);
     })();
 
+    const chromaticMixUniform = uniform(postConfig.chromaticAberrationEnabled ? 1 : 0);
     let outputNode = vignetteNode;
 
     if (postConfig.chromaticAberrationEnabled) {
-        outputNode = chromaticAberration(
-            outputNode,
+        const chromaticNode = chromaticAberration(
+            vignetteNode,
             /** @type {any} */ (0.2),
             vec2(0.5, 0.5),
             /** @type {any} */ (1.08)
         );
+        outputNode = mix(vignetteNode, chromaticNode, chromaticMixUniform);
     }
 
     if (postConfig.fxaaEnabled) {
@@ -87,6 +92,13 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
         setSize(nextWidth, nextHeight) {
             scenePass.setSize(nextWidth, nextHeight);
             // BloomNode resizes itself in updateBefore() once blur materials exist.
+        },
+        setBloomBlend(value) {
+            bloomBlendUniform.value = Math.max(0, Math.min(1, value));
+        },
+        setChromaticIntensity(value) {
+            const clamped = Math.max(0, Math.min(1, value));
+            chromaticMixUniform.value = clamped > 0 ? 1 : 0;
         },
         dispose() {
             postProcessing.dispose();
@@ -363,6 +375,12 @@ export async function setupScene(container) {
         }
     }
 
+    const postRuntime = createPostRuntimeControls({
+        composer,
+        postPasses,
+        postConfig,
+    });
+
     return {
         scene,
         camera,
@@ -372,6 +390,7 @@ export async function setupScene(container) {
         spotLight,
         postConfig,
         postPasses,
+        postRuntime,
         rendererState,
         initialQuality,
     };

@@ -24,7 +24,7 @@ import {
     createCandleFlickerSystem,
     createFireplaceFlickerSystem,
 } from '../core/LightingSystems.js';
-import { updateAdaptiveQualityProbe } from '../core/AdaptiveQuality.js';
+import { updateAdaptiveQualityProbe, updateMotionProfileState } from '../core/AdaptiveQuality.js';
 import { hideResults, updateDiceHud } from '../results.js';
 import { AppEvent } from '../core/AppEvents.js';
 
@@ -56,8 +56,9 @@ export function registerFrameCallbacks(scheduler, deps) {
         pointLight,
         postConfig,
         getRendererState,
-        pixelRatioMonitor,
         adaptiveQualityState,
+        runtimeGovernor,
+        postRuntime,
         renderStats,
         debugEnabled,
         isLockedRef,
@@ -219,6 +220,20 @@ export function registerFrameCallbacks(scheduler, deps) {
         if (!shadowController) return;
         shadowController.update(time * 1000, areDiceSettled());
     });
+    scheduler.register('preRender', 'motionProfile', () => {
+        if (!postRuntime || !adaptiveQualityState) return;
+        updateMotionProfileState({
+            diceSettled: areDiceSettled(),
+            externalMotionCount: shadowController?.state.externalMotionCount ?? 0,
+            postConfig,
+            shadowController,
+            scene,
+            postRuntime,
+            appliedProfile: adaptiveQualityState.appliedProfile,
+            runtimeGovernor,
+            diceGameFeel: getDiceGameFeel?.(),
+        });
+    });
     // Runs last in preRender (after the camera has moved this frame) so we cull
     // against the up-to-date frustum, right before sceneRender.
     scheduler.register(
@@ -246,12 +261,13 @@ export function registerFrameCallbacks(scheduler, deps) {
         };
         scheduler.stats.post = postConfig;
         scheduler.stats.pixelRatio = rendererState?.pixelRatio;
-        pixelRatioMonitor?.update({ deltaTime });
+        scheduler.stats.runtimeGovernor = runtimeGovernor?.update({ deltaTime });
         if (adaptiveQualityState?.probe) {
             updateAdaptiveQualityProbe(adaptiveQualityState.probe, { time }, adaptiveQualityState);
             if (/** @type {{ done?: boolean }} */ (adaptiveQualityState.probe).done) {
                 app.qualityProfile = postConfig.adaptiveProfile;
                 setDiceAppearanceQualityProfile(postConfig.adaptiveProfile);
+                runtimeGovernor?.refreshBaselineFromProfile?.(adaptiveQualityState.appliedProfile);
                 adaptiveQualityState.probe = null;
             }
         }

@@ -52,6 +52,7 @@ import { createRollWiring } from './app/RollWiring.js';
 import { installDebugGlobals } from './app/DebugGlobals.js';
 import { setupMultiplayer } from './app/MultiplayerWiring.js';
 import { bootstrapPhysics, showLoadFailure } from './app/PhysicsBootstrap.js';
+import { startPostLoadAdaptiveProbe } from './core/AdaptiveQuality.js';
 import { bootstrapRendererExtras } from './app/RendererBootstrap.js';
 import { buildTierLoadOptions } from './app/TierLoadOptions.js';
 import { bootstrapXr } from './app/XrBootstrap.js';
@@ -137,8 +138,10 @@ let tierRenderStats = null;
 let rendererState;
 /** @type {{ el: HTMLElement; update(nextState: unknown, options?: unknown): void; remove(): void } | null} */
 let rendererBadge = null;
-/** @type {ReturnType<typeof import('./core/RendererFactory.js').createPixelRatioMonitor> | null} */
-let pixelRatioMonitor = null;
+/** @type {ReturnType<typeof import('./core/RuntimeQualityGovernor.js').createRuntimeQualityGovernor> | null} */
+let runtimeGovernor = null;
+/** @type {ReturnType<typeof import('./core/PostRuntimeControls.js').createPostRuntimeControls> | null} */
+let postRuntime = null;
 let fairnessMonitor = null;
 let rollHistory = null;
 let rollStats = null;
@@ -190,6 +193,7 @@ async function init() {
     pointLight = sceneSetup.pointLight;
     postConfig = sceneSetup.postConfig;
     spotLight = sceneSetup.spotLight;
+    postRuntime = sceneSetup.postRuntime;
     shadowController = createShadowController(() => renderer, scene);
     console.info(
         `[Renderer] Active backend: ${rendererState?.rendererType ?? 'webgl'}` +
@@ -261,15 +265,15 @@ async function init() {
         },
     };
 
-    ({ renderStats, fairnessMonitor, pixelRatioMonitor, adaptiveQualityState } = bootstrapRendererExtras(
-        app,
-        {
+    ({ renderStats, fairnessMonitor, adaptiveQualityState, runtimeGovernor } =
+        bootstrapRendererExtras(app, {
             scene,
             renderer,
             composer,
             rendererState,
             postConfig,
             spotLight,
+            pointLight,
             scheduler,
             cullingSystem,
             container,
@@ -284,8 +288,9 @@ async function init() {
                 rendererBadge = b;
             },
             rendererRecoveryDeps,
-        }
-    ));
+            postRuntime,
+            getDiceGameFeel: () => diceGameFeel,
+        }));
 
     registerFrameCallbacks(scheduler, {
         app,
@@ -310,8 +315,9 @@ async function init() {
         pointLight,
         postConfig,
         getRendererState: () => rendererState,
-        pixelRatioMonitor,
         adaptiveQualityState,
+        runtimeGovernor,
+        postRuntime,
         renderStats,
         debugEnabled,
         isLockedRef,
@@ -385,6 +391,7 @@ async function init() {
     crosshairUI = tierResult.crosshairUI;
     tierRenderStats = tierResult.tierRenderStats ?? null;
     app.tierRenderStats = tierRenderStats;
+    startPostLoadAdaptiveProbe(adaptiveQualityState, scheduler);
     if (tierResult.fireplaceLight) fireplaceLight = tierResult.fireplaceLight;
     const layoutManager = tierResult.layoutManager;
 

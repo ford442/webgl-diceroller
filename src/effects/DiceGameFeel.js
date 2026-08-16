@@ -164,11 +164,12 @@ function createParticlePool(scene) {
 export function createDiceGameFeelSystem(scene, { postConfig = null, rendererState = null } = {}) {
     const searchParams = new URLSearchParams(window.location.search);
     const disabled = searchParams.has('no-gamefeel');
-    const motionBlurEnabled =
+    const motionBlurBaseEnabled =
         !disabled &&
         !searchParams.has('no-post') &&
         postConfig?.quality === 'high' &&
         rendererState?.usingWebGPU === true;
+    let motionBlurAllowed = motionBlurBaseEnabled;
 
     const particles = createParticlePool(scene);
 
@@ -308,7 +309,7 @@ export function createDiceGameFeelSystem(scene, { postConfig = null, rendererSta
 
     function applyMotionBlur(die, state) {
         die.mesh.scale.set(1, 1, 1);
-        if (!motionBlurEnabled || !state?.velocity) return;
+        if (!motionBlurAllowed || !state?.velocity) return;
 
         const speed = state.speed ?? 0;
         if (speed < MOTION_BLUR_SPEED) return;
@@ -416,5 +417,8 @@ export function createDiceGameFeelSystem(scene, { postConfig = null, rendererSta
         clearRollState,
         dispose,
         getStats: () => stats,
+        setMotionBlurAllowed(allowed) {
+            motionBlurAllowed = motionBlurBaseEnabled && allowed;
+        },
     };
 }

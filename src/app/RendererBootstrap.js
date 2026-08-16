@@ -9,10 +9,23 @@
 import { createRenderStats } from '../debug/RenderStats.js';
 import { createFairnessMonitor } from '../debug/FairnessMonitor.js';
 import { createPixelRatioMonitor } from '../core/RendererFactory.js';
-import { bootstrapAdaptiveQuality } from '../core/AdaptiveQuality.js';
+import {
+    bootstrapAdaptiveQuality,
+    hasExplicitQualityOverride,
+    setGodRaysVisible,
+} from '../core/AdaptiveQuality.js';
+import { createRuntimeQualityGovernor } from '../core/RuntimeQualityGovernor.js';
 import { setDiceAppearanceQualityProfile, spawnedDice, areDiceSettled } from '../dice.js';
-import { getWorkerPhysicsStats, getPhysicsStepStats, isWasmAvailable } from '../wasm/PhysicsBridge.js';
-import { createRendererBadge, applyLivePixelRatio, setupRendererRecovery } from './RendererRecovery.js';
+import {
+    getWorkerPhysicsStats,
+    getPhysicsStepStats,
+    isWasmAvailable,
+} from '../wasm/PhysicsBridge.js';
+import {
+    createRendererBadge,
+    applyLivePixelRatio,
+    setupRendererRecovery,
+} from './RendererRecovery.js';
 
 /**
  * @param {import('../types/app').AppContext} app
@@ -26,6 +39,7 @@ export function bootstrapRendererExtras(app, deps) {
         rendererState,
         postConfig,
         spotLight,
+        pointLight,
         scheduler,
         cullingSystem,
         container,
@@ -38,10 +52,30 @@ export function bootstrapRendererExtras(app, deps) {
         getCollisionTotal,
         setRendererBadge,
         rendererRecoveryDeps,
+        postRuntime,
+        getDiceGameFeel,
     } = deps;
 
     let renderStats = null;
     let fairnessMonitor = null;
+
+    const pixelRatioMonitor = createPixelRatioMonitor(rendererState, {
+        debugPerf: searchParams.has('debug-perf'),
+        onPixelRatioChange: (nextRatio) =>
+            applyLivePixelRatio(container, nextRatio, rendererRecoveryDeps),
+    });
+
+    const runtimeGovernor = createRuntimeQualityGovernor({
+        postConfig,
+        postRuntime,
+        scene,
+        spotLight,
+        pointLight,
+        renderer,
+        pixelRatioMonitor,
+        hasExplicitOverride: hasExplicitQualityOverride,
+        setGodRaysVisible: (visible) => setGodRaysVisible(scene, visible),
+    });
 
     if (debugEnabled) {
         renderStats = createRenderStats({
@@ -53,14 +87,17 @@ export function bootstrapRendererExtras(app, deps) {
             getRenderer: () => rendererRecoveryDeps.getRenderer(),
             getRendererState: () => rendererRecoveryDeps.getRendererState(),
             getPost: () => rendererRecoveryDeps.getPostConfig(),
+            getGovernor: () => scheduler.stats.runtimeGovernor,
             getShadow: () => {
                 const shadowMap = rendererRecoveryDeps.getRenderer()?.shadowMap;
+                const shadowController = getShadowController();
                 return {
                     autoUpdate:
                         shadowMap && 'autoUpdate' in shadowMap
                             ? /** @type {import('three').WebGLShadowMap} */ (shadowMap).autoUpdate
                             : false,
-                    staticRefreshes: getShadowController()?.state.staticShadowRefreshes ?? 0,
+                    staticRefreshes: shadowController?.state.staticShadowRefreshes ?? 0,
+                    throttled: shadowController?.state.throttleRefresh ?? false,
                 };
             },
             getDice: () => ({ count: spawnedDice.length, settled: areDiceSettled() }),
@@ -98,11 +135,6 @@ export function bootstrapRendererExtras(app, deps) {
     }
 
     setupRendererRecovery(container, rendererRecoveryDeps);
-    const pixelRatioMonitor = createPixelRatioMonitor(rendererState, {
-        debugPerf: searchParams.has('debug-perf'),
-        onPixelRatioChange: (nextRatio) =>
-            applyLivePixelRatio(container, nextRatio, rendererRecoveryDeps),
-    });
 
     const adaptiveBootstrap = bootstrapAdaptiveQuality({
         scene,
@@ -110,8 +142,11 @@ export function bootstrapRendererExtras(app, deps) {
         postConfig,
         composer,
         spotLight,
+        pointLight,
         rendererState,
         scheduler,
+        postRuntime,
+        runtimeGovernor,
     });
     const adaptiveQualityState = {
         probe: adaptiveBootstrap.probe,
@@ -122,7 +157,11 @@ export function bootstrapRendererExtras(app, deps) {
         postConfig,
         composer,
         spotLight,
+        pointLight,
         rendererState,
+        postRuntime,
+        runtimeGovernor,
+        getDiceGameFeel,
     };
     app.qualityProfile = postConfig.adaptiveProfile;
     setDiceAppearanceQualityProfile(postConfig.adaptiveProfile);
@@ -135,5 +174,11 @@ export function bootstrapRendererExtras(app, deps) {
         getCollisionAudio()?.setAmbientIntensity(locked ? 1.0 : 0.5);
     });
 
-    return { renderStats, fairnessMonitor, pixelRatioMonitor, adaptiveQualityState };
+    return {
+        renderStats,
+        fairnessMonitor,
+        pixelRatioMonitor,
+        adaptiveQualityState,
+        runtimeGovernor,
+    };
 }

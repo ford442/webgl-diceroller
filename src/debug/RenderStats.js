@@ -42,6 +42,7 @@ function ms(value) {
  * @param {() => import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer | null} [config.getRenderer]
  * @param {() => import('../types/app').RendererState | null} [config.getRendererState]
  * @param {() => import('../types/app').PostConfig | null} [config.getPost]
+ * @param {() => Record<string, unknown> | null} [config.getGovernor]
  * @param {() => Record<string, unknown> | null} [config.getShadow]
  * @param {() => Record<string, unknown> | null} [config.getDice]
  * @param {() => Record<string, unknown> | null} [config.getWasm]
@@ -60,6 +61,7 @@ export function createRenderStats({
     getRenderer = () => renderer,
     getRendererState = () => null,
     getPost = () => null,
+    getGovernor = () => null,
     getShadow = () => null,
     getDice = () => null,
     getWasm = () => null,
@@ -137,6 +139,7 @@ export function createRenderStats({
 
         const state = getRendererState();
         const post = getPost();
+        const governor = getGovernor();
         const shadow = getShadow();
         const dice = getDice();
         const wasm = getWasm();
@@ -227,14 +230,21 @@ export function createRenderStats({
             lines.push(`cull ${cullingSystem.enabled ? `${cs.culled}/${cs.total} hidden` : 'off'}`);
         }
         if (shadow) {
+            const throttled = shadow.throttled ? ' throttled' : '';
             lines.push(
-                `shadows ${shadow.autoUpdate ? 'dynamic' : 'static'}  refresh ${shadow.staticRefreshes ?? 0}`
+                `shadows ${shadow.autoUpdate ? 'dynamic' : 'static'}${throttled}  refresh ${shadow.staticRefreshes ?? 0}`
             );
         }
         if (post) {
             const fxaa = post.fxaaEnabled ? ' +fxaa' : '';
+            const motion = post.motionProfileActive ? ' · motion' : '';
             lines.push(
-                `post ${post.quality}${post.bloomEnabled ? ' +bloom' : ''}${fxaa}${post.chromaticAberrationEnabled ? ' +ca' : ''}`
+                `post ${post.quality}${post.bloomEnabled ? ' +bloom' : ''}${fxaa}${post.chromaticAberrationEnabled ? ' +ca' : ''}${motion}`
+            );
+        }
+        if (governor) {
+            lines.push(
+                `governor step ${governor.stressStep ?? 0} (${governor.stressStepName ?? 'baseline'})  ${Number(governor.frameMsSmoothed ?? 0).toFixed(1)} ms`
             );
         }
 
