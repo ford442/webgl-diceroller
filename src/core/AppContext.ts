@@ -4,16 +4,16 @@
  */
 
 import { createAppEvents } from './AppEvents.js';
+import type { AppContext, AppEvents } from '../types/app';
 
-/**
- * @param {{ events?: import('../types/app').AppEvents }} [options]
- * @returns {import('../types/app').AppContext}
- */
-export function createAppContext(options = {}) {
+export interface CreateAppContextOptions {
+    events?: AppEvents;
+}
+
+export function createAppContext(options: CreateAppContextOptions = {}): AppContext {
     const events = options.events ?? createAppEvents();
 
-    /** @type {import('../types/app').AppContext} */
-    const app = {
+    const app: AppContext = {
         events,
         ready: false,
         scene: null,
@@ -38,7 +38,7 @@ export function createAppContext(options = {}) {
         audio: null,
         rollSession: null,
         ui: null,
-        interactables: Object.create(null),
+        interactables: Object.create(null) as AppContext['interactables'],
         PropRegistry: null,
         qualityProfile: null,
         postConfig: null,

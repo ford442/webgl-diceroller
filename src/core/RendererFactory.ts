@@ -1,10 +1,22 @@
 import * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
+import type { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import type { ComposerLike, RendererState } from '../types/app';
 
 const DEFAULT_PIXEL_RATIO_CAP = 2;
 const FRAME_BUDGET_MS = 32; // ~30 fps — step down when sustained above this
 const SLOW_FRAME_STREAK = 90; // ~1.5 s of slow frames before stepping down
 
-function getRendererPreference(searchParams, { forceWebGl = false } = {}) {
+export type RendererPreference = 'webgl' | 'webgpu';
+
+export interface GetRendererPreferenceOptions {
+    forceWebGl?: boolean;
+}
+
+export function getRendererPreference(
+    searchParams: URLSearchParams,
+    { forceWebGl = false }: GetRendererPreferenceOptions = {}
+): RendererPreference {
     // WebXR spike requires WebGLRenderer.xr; ignore conflicting ?webgpu/?wgpu.
     if (
         forceWebGl ||
@@ -25,20 +37,24 @@ function getRendererPreference(searchParams, { forceWebGl = false } = {}) {
     return 'webgpu';
 }
 
-/** Exported for unit-style verify scripts. */
-export { getRendererPreference };
+export interface PixelRatioConfig {
+    pixelRatio: number;
+    forced: boolean;
+    cap: number;
+    deviceDpr: number;
+}
 
 /**
  * Resolve the render pixel ratio from URL flags and device DPR.
  * `?pr=1` forces 1.0 (MSAA path); `?pr=N` caps at N (clamped to [0.5, 3]).
  */
 export function resolvePixelRatioConfig(
-    searchParams = new URLSearchParams(window.location.search)
-) {
+    searchParams: URLSearchParams = new URLSearchParams(window.location.search)
+): PixelRatioConfig {
     const deviceDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
     if (searchParams.has('pr')) {
-        const forced = Number.parseFloat(searchParams.get('pr'));
+        const forced = Number.parseFloat(searchParams.get('pr') ?? '');
         if (Number.isFinite(forced) && forced > 0) {
             const clamped = Math.min(Math.max(forced, 0.5), 3);
             return {
@@ -60,7 +76,7 @@ export function resolvePixelRatioConfig(
 }
 
 /** MSAA is cheap at DPR 1; at higher DPR rely on post FXAA instead. */
-export function resolveAntialias(pixelRatio) {
+export function resolveAntialias(pixelRatio: number): boolean {
     return pixelRatio <= 1.0;
 }
 
@@ -69,7 +85,7 @@ export function resolveAntialias(pixelRatio) {
  * auto-apply the low-post profile. Uses failIfMajorPerformanceCaveat plus the
  * unmasked renderer string when available.
  */
-export function detectSoftwareWebGL() {
+export function detectSoftwareWebGL(): boolean {
     if (typeof document === 'undefined') return false;
 
     try {
@@ -99,13 +115,23 @@ export function detectSoftwareWebGL() {
     }
 }
 
-export function applyRendererSize(renderer, width, height, pixelRatio) {
+export function applyRendererSize(
+    renderer: THREE.WebGLRenderer | WebGPURenderer,
+    width: number,
+    height: number,
+    pixelRatio: number
+): void {
     renderer.setPixelRatio(pixelRatio);
     renderer.setSize(width, height, false);
 }
 
 /** Keep WebGL EffectComposer render targets aligned with renderer DPR. */
-export function syncComposerPixelRatio(composer, width, height, pixelRatio) {
+export function syncComposerPixelRatio(
+    composer: ComposerLike | EffectComposer | null | undefined,
+    width: number,
+    height: number,
+    pixelRatio: number
+): void {
     if (!composer) return;
     if (typeof composer.setPixelRatio === 'function') {
         composer.setPixelRatio(pixelRatio);
@@ -114,7 +140,12 @@ export function syncComposerPixelRatio(composer, width, height, pixelRatio) {
     composer.setSize?.(width, height);
 }
 
-function applySharedRendererConfig(renderer, width, height, pixelRatio) {
+function applySharedRendererConfig(
+    renderer: THREE.WebGLRenderer | WebGPURenderer,
+    width: number,
+    height: number,
+    pixelRatio: number
+): void {
     applyRendererSize(renderer, width, height, pixelRatio);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -124,6 +155,15 @@ function applySharedRendererConfig(renderer, width, height, pixelRatio) {
     renderer.toneMappingExposure = 1.3;
 }
 
+interface WebGlRendererBundle {
+    renderer: THREE.WebGLRenderer;
+    rendererType: 'webgl';
+    usingWebGPU: false;
+    usingWebGL: true;
+    requestedRenderer: RendererPreference;
+    fallbackReason: string | null;
+}
+
 function createWebGlRenderer({
     antialias,
     width,
@@ -131,7 +171,14 @@ function createWebGlRenderer({
     pixelRatio,
     requestedRenderer,
     fallbackReason,
-}) {
+}: {
+    antialias: boolean;
+    width: number;
+    height: number;
+    pixelRatio: number;
+    requestedRenderer: RendererPreference;
+    fallbackReason: string | null;
+}): WebGlRendererBundle {
     const renderer = new THREE.WebGLRenderer({
         antialias,
         powerPreference: 'high-performance',
@@ -148,48 +195,66 @@ function createWebGlRenderer({
     };
 }
 
-function attachRecoveryHandlers(state, handlers = {}) {
+export interface RendererRecoveryHandlers {
+    onContextLost?: (state: RendererState, message: string) => void;
+    onContextRestored?: (state: RendererState) => void;
+    onDeviceLost?: (state: RendererState, info: unknown) => void;
+}
+
+function attachRecoveryHandlers(
+    state: RendererState,
+    handlers: RendererRecoveryHandlers = {}
+): () => void {
     const { renderer } = state;
     if (!renderer) return () => {};
 
     const canvas = renderer.domElement;
-    const cleanups = [];
+    const cleanups: Array<() => void> = [];
 
-    const notifyLost = (message) => {
+    const notifyLost = (message: string): void => {
         state.contextStatus = 'lost';
         state.contextMessage = message;
         handlers.onContextLost?.(state, message);
     };
 
-    const notifyRestored = () => {
+    const notifyRestored = (): void => {
         state.contextStatus = 'ok';
         state.contextMessage = null;
         handlers.onContextRestored?.(state);
     };
 
-    if (state.usingWebGPU && typeof renderer.onDeviceLost === 'function') {
-        const previous = renderer.onDeviceLost.bind(renderer);
-        renderer.onDeviceLost = (info) => {
-            const message = info?.message ?? 'WebGPU device lost';
+    if (state.usingWebGPU && typeof (renderer as WebGPURenderer).onDeviceLost === 'function') {
+        const webgpuRenderer = renderer as WebGPURenderer & {
+            onDeviceLost?: (info: unknown) => void;
+            _isDeviceLost?: boolean;
+        };
+        const previous = webgpuRenderer.onDeviceLost?.bind(webgpuRenderer);
+        webgpuRenderer.onDeviceLost = (info: unknown) => {
+            const message =
+                info && typeof info === 'object' && 'message' in info
+                    ? String((info as { message?: string }).message ?? 'WebGPU device lost')
+                    : 'WebGPU device lost';
             notifyLost(message);
             handlers.onDeviceLost?.(state, info);
             // Preserve Three.js internal lost-state bookkeeping without surfacing
             // the default console error before our recovery badge runs.
-            if (typeof renderer._isDeviceLost !== 'undefined') {
-                renderer._isDeviceLost = true;
+            if (typeof webgpuRenderer._isDeviceLost !== 'undefined') {
+                webgpuRenderer._isDeviceLost = true;
             }
         };
         cleanups.push(() => {
-            renderer.onDeviceLost = previous;
+            webgpuRenderer.onDeviceLost = previous;
         });
     }
 
     if (canvas) {
-        const onWebGlLost = (event) => {
+        const onWebGlLost = (event: Event): void => {
             event.preventDefault();
-            notifyLost(event.statusMessage || 'WebGL context lost');
+            const statusMessage =
+                event instanceof WebGLContextEvent ? event.statusMessage : undefined;
+            notifyLost(statusMessage || 'WebGL context lost');
         };
-        const onWebGlRestored = () => {
+        const onWebGlRestored = (): void => {
             notifyRestored();
             const container = canvas.parentElement;
             if (container) {
@@ -197,7 +262,7 @@ function attachRecoveryHandlers(state, handlers = {}) {
                     renderer,
                     container.clientWidth,
                     container.clientHeight,
-                    state.pixelRatio
+                    state.pixelRatio ?? 1
                 );
             }
             renderer.shadowMap.needsUpdate = true;
@@ -216,24 +281,30 @@ function attachRecoveryHandlers(state, handlers = {}) {
     };
 }
 
+export interface PixelRatioMonitorOptions {
+    onPixelRatioChange?: (ratio: number) => void;
+    debugPerf?: boolean;
+}
+
+export interface PixelRatioMonitor {
+    update: (frame?: { deltaTime?: number }) => void;
+    readonly steppedDown: boolean;
+}
+
 /**
  * Lightweight frame-time monitor that steps pixel ratio down when sustained
  * frame times exceed the budget. Disabled when `?pr=` forces a ratio.
  */
-/**
- * @param {import('../types/app').RendererState} rendererState
- * @param {{ onPixelRatioChange?: (ratio: number) => void; debugPerf?: boolean }} [options]
- */
 export function createPixelRatioMonitor(
-    rendererState,
-    { onPixelRatioChange, debugPerf = false } = {}
-) {
+    rendererState: RendererState,
+    { onPixelRatioChange, debugPerf = false }: PixelRatioMonitorOptions = {}
+): PixelRatioMonitor {
     let frameMsSmoothed = 16.7;
     let slowFrameStreak = 0;
     let steppedDown = false;
 
-    function update({ deltaTime = 0 } = {}) {
-        if (rendererState.pixelRatioForced || rendererState.pixelRatio <= 1) {
+    function update({ deltaTime = 0 }: { deltaTime?: number } = {}): void {
+        if (rendererState.pixelRatioForced || (rendererState.pixelRatio ?? 1) <= 1) {
             return;
         }
 
@@ -251,7 +322,7 @@ export function createPixelRatioMonitor(
         if (slowFrameStreak < SLOW_FRAME_STREAK) return;
 
         slowFrameStreak = 0;
-        const current = rendererState.pixelRatio;
+        const current = rendererState.pixelRatio ?? 1;
         const next = current <= 1.25 ? 1 : Math.max(1, Math.round((current - 0.5) * 2) / 2);
 
         if (next >= current) return;
@@ -276,7 +347,17 @@ export function createPixelRatioMonitor(
     };
 }
 
-export async function createRenderer(container, options = {}) {
+export interface CreateRendererOptions {
+    forceWebGl?: boolean;
+    pixelRatio?: number;
+    antialias?: boolean;
+    isSoftwareRenderer?: boolean;
+}
+
+export async function createRenderer(
+    container: HTMLElement,
+    options: CreateRendererOptions = {}
+): Promise<RendererState> {
     const width = container.clientWidth;
     const height = container.clientHeight;
     const searchParams = new URLSearchParams(window.location.search);
@@ -297,8 +378,8 @@ export async function createRenderer(container, options = {}) {
         antialias,
         isSoftwareRenderer,
         usePostAA: !antialias && pixelRatio > 1,
-        contextStatus: 'ok',
-        contextMessage: null,
+        contextStatus: 'ok' as const,
+        contextMessage: null as string | null,
     };
 
     if (preferredRenderer === 'webgpu') {
@@ -339,7 +420,8 @@ export async function createRenderer(container, options = {}) {
                 ...sharedMeta,
             };
         } catch (error) {
-            const reason = `WebGPU init failed (${error?.message ?? error}); using WebGLRenderer fallback.`;
+            const message = error instanceof Error ? error.message : String(error);
+            const reason = `WebGPU init failed (${message}); using WebGLRenderer fallback.`;
             console.warn(`[RendererFactory] ${reason}`, error);
             return {
                 ...createWebGlRenderer({
@@ -372,7 +454,10 @@ export async function createRenderer(container, options = {}) {
  * Re-create the renderer after an unrecoverable GPU loss. WebGPU failures fall
  * back to the classic WebGLRenderer path.
  */
-export async function recoverRenderer(container, priorState) {
+export async function recoverRenderer(
+    container: HTMLElement,
+    priorState?: RendererState | null
+): Promise<RendererState> {
     const forceWebGl = priorState?.usingWebGPU === true;
     return createRenderer(container, {
         forceWebGl,
@@ -382,7 +467,10 @@ export async function recoverRenderer(container, priorState) {
     });
 }
 
-export function installRendererRecoveryHandlers(state, handlers = {}) {
+export function installRendererRecoveryHandlers(
+    state: RendererState,
+    handlers: RendererRecoveryHandlers = {}
+): () => void {
     if (state._recoveryCleanup) {
         state._recoveryCleanup();
     }

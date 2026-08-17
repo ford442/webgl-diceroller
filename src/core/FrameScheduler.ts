@@ -1,4 +1,8 @@
-const FRAME_PHASES = [
+import type * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
+import type { ComposerLike } from '../types/app';
+
+export const FRAME_PHASES = [
     'preStep',
     'physicsStep',
     'postPhysicsSync',
@@ -6,17 +10,92 @@ const FRAME_PHASES = [
     'preRender',
     'render',
     'postRender',
-];
+] as const;
 
-function createPhaseBucket() {
+export type FramePhase = (typeof FRAME_PHASES)[number];
+
+export interface FrameBaseContext {
+    deltaTime: number;
+    time: number;
+    renderer?: THREE.WebGLRenderer | WebGPURenderer | null;
+    composer?: ComposerLike | null;
+    scene?: THREE.Scene | null;
+    camera?: THREE.Camera | null;
+    [key: string]: unknown;
+}
+
+export interface FrameContext extends FrameBaseContext {
+    fixedDeltaTime: number;
+    physicsSteps: number;
+    interpolationAlpha: number;
+    frame: number;
+    phase: FramePhase | null;
+    isFixedStep?: boolean;
+    physicsStepIndex?: number;
+}
+
+export type FrameSystemFn = (context: FrameContext) => void;
+
+export interface FrameSchedulerOptions {
+    fixedDeltaTime?: number;
+    maxPhysicsSteps?: number;
+    debugPerf?: boolean;
+}
+
+export interface FrameSystemRegistrationOptions {
+    priority?: number;
+    enabled?: boolean;
+}
+
+export interface FrameSystemHandle {
+    enable: () => void;
+    disable: () => void;
+    dispose: () => void;
+}
+
+interface FrameSystem {
+    phase: FramePhase;
+    name: string;
+    fn: FrameSystemFn;
+    priority: number;
+    enabled: boolean;
+}
+
+export interface FrameSchedulerStats {
+    frame: number;
+    lastDeltaTime: number;
+    physicsSteps: number;
+    interpolationAlpha: number;
+    phaseTimes: Partial<Record<FramePhase, number>>;
+    systemTimes: Record<string, number>;
+    renderer: {
+        render: Record<string, unknown>;
+        memory: Record<string, unknown>;
+    } | null;
+}
+
+type PhaseBucket = Record<FramePhase, FrameSystem[]>;
+
+function createPhaseBucket(): PhaseBucket {
     return FRAME_PHASES.reduce((acc, phase) => {
         acc[phase] = [];
         return acc;
-    }, {});
+    }, {} as PhaseBucket);
 }
 
 export class FrameScheduler {
-    constructor({ fixedDeltaTime = 1 / 60, maxPhysicsSteps = 5, debugPerf = false } = {}) {
+    fixedDeltaTime: number;
+    maxPhysicsSteps: number;
+    debugPerf: boolean;
+    accumulator: number;
+    systems: PhaseBucket;
+    stats: FrameSchedulerStats;
+
+    constructor({
+        fixedDeltaTime = 1 / 60,
+        maxPhysicsSteps = 5,
+        debugPerf = false,
+    }: FrameSchedulerOptions = {}) {
         this.fixedDeltaTime = fixedDeltaTime;
         this.maxPhysicsSteps = maxPhysicsSteps;
         this.debugPerf = debugPerf;
@@ -33,12 +112,17 @@ export class FrameScheduler {
         };
     }
 
-    register(phase, name, fn, { priority = 0, enabled = true } = {}) {
+    register(
+        phase: FramePhase,
+        name: string,
+        fn: FrameSystemFn,
+        { priority = 0, enabled = true }: FrameSystemRegistrationOptions = {}
+    ): FrameSystemHandle {
         if (!this.systems[phase]) {
             throw new Error(`Unknown frame phase "${phase}"`);
         }
 
-        const system = { phase, name, fn, priority, enabled };
+        const system: FrameSystem = { phase, name, fn, priority, enabled };
         this.systems[phase].push(system);
         this.systems[phase].sort((a, b) => a.priority - b.priority);
 
@@ -57,7 +141,7 @@ export class FrameScheduler {
         };
     }
 
-    runFrame(baseContext) {
+    runFrame(baseContext: FrameBaseContext): FrameContext {
         this.stats.frame += 1;
         this.stats.lastDeltaTime = baseContext.deltaTime;
         this.accumulator = Math.min(
@@ -65,7 +149,7 @@ export class FrameScheduler {
             this.fixedDeltaTime * this.maxPhysicsSteps
         );
 
-        const frameContext = {
+        const frameContext: FrameContext = {
             ...baseContext,
             fixedDeltaTime: this.fixedDeltaTime,
             physicsSteps: 0,
@@ -78,7 +162,7 @@ export class FrameScheduler {
 
         let physicsSteps = 0;
         while (this.accumulator >= this.fixedDeltaTime && physicsSteps < this.maxPhysicsSteps) {
-            const stepContext = {
+            const stepContext: FrameContext = {
                 ...frameContext,
                 deltaTime: this.fixedDeltaTime,
                 isFixedStep: true,
@@ -111,7 +195,7 @@ export class FrameScheduler {
         return frameContext;
     }
 
-    #runPhase(phase, context) {
+    #runPhase(phase: FramePhase, context: FrameContext): void {
         const systems = this.systems[phase];
         if (!systems || systems.length === 0) return;
 
@@ -141,4 +225,6 @@ export class FrameScheduler {
     }
 }
 
-export const createFrameScheduler = (options) => new FrameScheduler(options);
+export function createFrameScheduler(options?: FrameSchedulerOptions): FrameScheduler {
+    return new FrameScheduler(options);
+}
