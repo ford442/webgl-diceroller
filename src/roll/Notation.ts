@@ -15,10 +15,56 @@
  *   1d20+5 vs 1d20+2   opposed roll (margin = left − right)
  */
 
+import type {
+    DiceGroup,
+    DieOutcome,
+    DieSpec,
+    EvaluatedRoll,
+    ParsedRoll,
+    RollFlags,
+    RollGroupSubtotal,
+    RollOutcomeEntry,
+} from '../types/roll.js';
+
+export type {
+    DiceGroup,
+    DieOutcome,
+    DieSpec,
+    EvaluatedRoll,
+    ParsedRoll,
+    RollFlags,
+    RollGroupSubtotal,
+    RollOutcomeEntry,
+};
+
+export interface ParsedSide {
+    groups: DiceGroup[];
+    modifier: number;
+    raw: string;
+}
+
+export interface SpawnDieSpec extends DieSpec {
+    rerollMax?: number | null;
+    isReroll?: boolean;
+}
+
+interface RollSystemConfig {
+    id: string;
+    label: string;
+    critDie?: number;
+    critFace?: number;
+    fumbleFace?: number;
+    strongHit?: number;
+    weakHit?: number;
+    preferExplode?: boolean;
+    percentile?: boolean;
+    fumbleMin?: number;
+}
+
 const SUPPORTED_SIDES = new Set([4, 6, 8, 10, 12, 20, 100]);
 
 /** System presets — change crit/fumble defaults only, not a rules engine. */
-export const ROLL_SYSTEMS = {
+export const ROLL_SYSTEMS: Record<string, RollSystemConfig> = {
     dnd5e: {
         id: 'dnd5e',
         label: 'D&D 5e',
@@ -51,107 +97,13 @@ export const ROLL_SYSTEMS = {
 export const DEFAULT_ROLL_SYSTEM = 'dnd5e';
 
 /** Map numeric sides to internal die type strings. */
-export function sidesToDieType(sides) {
+export function sidesToDieType(sides: number): string {
     if (sides === 100) return 'd100';
     return `d${sides}`;
 }
 
-/**
- * @typedef {Object} DiceGroup
- * @property {number} count
- * @property {number} sides
- * @property {'h'|'l'|null} keep
- * @property {number} keepCount
- * @property {'h'|'l'|null} drop
- * @property {number} dropCount
- * @property {boolean} explode
- * @property {boolean} compound
- * @property {number|null} rerollMax  faces ≤ this are rerolled once
- * @property {boolean} percentile
- */
-
-/**
- * @typedef {Object} ParsedSide
- * @property {DiceGroup[]} groups
- * @property {number} modifier
- * @property {string} raw
- */
-
-/**
- * @typedef {Object} ParsedRoll
- * @property {DiceGroup[]} groups
- * @property {number} modifier
- * @property {string} raw
- * @property {ParsedSide|null} opposed
- */
-
-/**
- * @typedef {Object} DieOutcome
- * @property {number} groupIndex
- * @property {number} dieIndex
- * @property {string} type
- * @property {number|null} value
- * @property {'tens'|'ones'|null} [role]
- * @property {boolean} [kept]
- * @property {boolean} [dropped]
- * @property {boolean} [exploded]
- * @property {boolean} [rerolled]
- * @property {boolean} [replacedByReroll]
- * @property {number|null} [originalValue]
- * @property {number|null} [displayValue]
- */
-
-/**
- * @typedef {Object} RollFlags
- * @property {boolean} crit
- * @property {boolean} fumble
- * @property {boolean} advantage
- * @property {boolean} disadvantage
- * @property {boolean} [strongHit]
- * @property {boolean} [weakHit]
- * @property {boolean} [miss]
- * @property {boolean} [opposedWin]
- * @property {boolean} [opposedTie]
- * @property {boolean} [opposedLoss]
- */
-
-/**
- * @typedef {Object} RollOutcomeEntry
- * @property {string} die
- * @property {number} faces
- * @property {number|null} value
- * @property {boolean} [exploded]
- * @property {boolean} [kept]
- * @property {boolean} [dropped]
- * @property {boolean} [rerolled]
- */
-
-/**
- * @typedef {Object} RollGroupSubtotal
- * @property {string} label
- * @property {number} subtotal
- * @property {number} [groupIndex]
- */
-
-/**
- * @typedef {Object} EvaluatedRoll
- * @property {string} expression
- * @property {DieOutcome[]} dice
- * @property {RollOutcomeEntry[]} rolls
- * @property {RollGroupSubtotal[]} groupSubtotals
- * @property {number} modifier
- * @property {number} total
- * @property {RollFlags} flags
- * @property {number|null} seed
- * @property {{ expression: string, total: number, margin: number, dice: DieOutcome[], groupSubtotals: RollGroupSubtotal[], modifier: number, rolls: RollOutcomeEntry[] }|null} opposed
- */
-
-/**
- * Parse a dice notation string into groups and a net modifier.
- * @param {string} input
- * @returns {ParsedRoll}
- */
-export function parseNotation(input) {
+/** Parse a dice notation string into groups and a net modifier. */
+export function parseNotation(input: string): ParsedRoll {
     const raw = String(input ?? '').trim();
     if (!raw) throw new NotationError('Empty notation');
 
@@ -171,7 +123,7 @@ export function parseNotation(input) {
     return { ...side, opposed: null };
 }
 
-function splitOpposed(raw) {
+function splitOpposed(raw: string): { left: string; right: string } | null {
     const m = /\s+vs\.?\s+/i.exec(raw);
     if (!m) return null;
     const left = raw.slice(0, m.index).trim();
@@ -180,7 +132,7 @@ function splitOpposed(raw) {
     return { left, right };
 }
 
-function parseSide(raw) {
+function parseSide(raw: string): ParsedSide {
     const tokens = tokenize(raw);
     const parser = new Parser(tokens, raw);
     const { groups, modifier } = parser.parseExpression();
@@ -189,18 +141,18 @@ function parseSide(raw) {
 }
 
 export class NotationError extends Error {
-    constructor(message) {
+    constructor(message: string) {
         super(message);
         this.name = 'NotationError';
     }
 }
 
-function tokenize(input) {
+function tokenize(input: string): string[] {
     // die term: optional sign, count, d(sides|%), optional keep/drop, optional rN, optional ! or !!
     const re =
         /([+-]?\d*d(?:%|\d+)(?:kh\d*|kl\d*|dh\d*|dl\d*)?(?:r\d+)?(?:!!|!)?)|([+-]\d+)(?!d)/gi;
-    const tokens = [];
-    let match;
+    const tokens: string[] = [];
+    let match: RegExpExecArray | null;
     let lastIndex = 0;
 
     while ((match = re.exec(input)) !== null) {
@@ -220,26 +172,30 @@ function tokenize(input) {
 }
 
 class Parser {
-    constructor(tokens, raw) {
+    private tokens: string[];
+    private pos: number;
+    private raw: string;
+
+    constructor(tokens: string[], raw: string) {
         this.tokens = tokens;
         this.pos = 0;
         this.raw = raw;
     }
 
-    peek() {
+    peek(): string | undefined {
         return this.tokens[this.pos];
     }
 
-    consume() {
+    consume(): string {
         return this.tokens[this.pos++];
     }
 
-    parseExpression() {
-        const groups = [];
+    parseExpression(): { groups: DiceGroup[]; modifier: number } {
+        const groups: DiceGroup[] = [];
         let modifier = 0;
 
         while (this.pos < this.tokens.length) {
-            const tok = this.peek();
+            const tok = this.peek()!;
             const diceTok = tok.replace(/^\+/, '');
 
             if (diceTok.startsWith('d') || /^\d+d/i.test(diceTok)) {
@@ -259,7 +215,7 @@ class Parser {
         return { groups, modifier };
     }
 
-    parseDiceToken(tok) {
+    parseDiceToken(tok: string): DiceGroup {
         this.consume();
         const normalized = tok.replace(/^\+/, '');
         const m = /^(\d*)d(%|\d+)((kh|kl|dh|dl)(\d+)?)?(r(\d+))?(!!|!)?$/i.exec(normalized);
@@ -274,13 +230,13 @@ class Parser {
             throw new NotationError(`Unsupported die d${sidesRaw}`);
         }
 
-        let keep = null;
+        let keep: 'h' | 'l' | null = null;
         let keepCount = 0;
-        let drop = null;
+        let drop: 'h' | 'l' | null = null;
         let dropCount = 0;
 
         if (m[4]) {
-            const mode = /** @type {'h'|'l'} */ (m[4][1]); // h or l
+            const mode = m[4][1] as 'h' | 'l';
             const n = m[5] ? Number.parseInt(m[5], 10) : 1;
             if (n < 1) throw new NotationError(`Invalid keep/drop count in "${tok}"`);
             if (m[4].startsWith('k')) {
@@ -328,20 +284,13 @@ class Parser {
     }
 }
 
-/**
- * Build spawn specifications from a parsed roll (attacker / left side only).
- * @param {ParsedRoll|ParsedSide} parsed
- * @returns {import('./RollSession.js').DieSpec[]}
- */
-export function buildSpawnSpecs(parsed) {
+/** Build spawn specifications from a parsed roll (attacker / left side only). */
+export function buildSpawnSpecs(parsed: ParsedRoll | ParsedSide): SpawnDieSpec[] {
     return buildSpawnSpecsForGroups(parsed.groups);
 }
 
-/**
- * @param {DiceGroup[]} groups
- */
-export function buildSpawnSpecsForGroups(groups) {
-    const specs = [];
+export function buildSpawnSpecsForGroups(groups: DiceGroup[]): SpawnDieSpec[] {
+    const specs: SpawnDieSpec[] = [];
 
     groups.forEach((group, groupIndex) => {
         if (group.percentile) {
@@ -383,12 +332,11 @@ export function buildSpawnSpecsForGroups(groups) {
     return specs;
 }
 
-/**
- * Convert a physical d10 face read (1–10) to percentile component.
- * @param {number} raw
- * @param {'tens'|'ones'} role
- */
-export function mapPercentileComponent(raw, role) {
+/** Convert a physical d10 face read (1–10) to percentile component. */
+export function mapPercentileComponent(
+    raw: number | null | undefined,
+    role: 'tens' | 'ones'
+): number | null {
     if (raw == null || Number.isNaN(raw)) return null;
     if (role === 'tens') {
         const digit = raw === 10 ? 0 : raw;
@@ -397,35 +345,32 @@ export function mapPercentileComponent(raw, role) {
     return raw === 10 ? 0 : raw;
 }
 
-/**
- * Compose tens + ones into a d100 result (1–100).
- */
-export function composePercentile(tens, ones) {
+/** Compose tens + ones into a d100 result (1–100). */
+export function composePercentile(tens: number | null, ones: number | null): number | null {
     if (tens == null || ones == null) return null;
     if (tens === 0 && ones === 0) return 100;
     return tens + ones;
 }
 
-/**
- * Format a die's display label for HUD/overlay.
- */
-export function formatDieLabel(type, role) {
+/** Format a die's display label for HUD/overlay. */
+export function formatDieLabel(type: string, role: 'tens' | 'ones' | null): string {
     if (role === 'tens') return 'd10₀₀';
     if (role === 'ones') return 'd10₁';
     return type;
 }
 
-/**
- * Evaluate raw die readings against parsed notation.
- * @param {ParsedRoll} parsed
- * @param {DieOutcome[]} rawDice — one entry per physical die, in spawn order (left side)
- * @param {object} [options]
- * @param {DieOutcome[]} [options.opposedDice]
- * @param {number|null} [options.seed]
- * @param {string} [options.system]
- * @returns {EvaluatedRoll}
- */
-export function evaluateRoll(parsed, rawDice, options = {}) {
+export interface EvaluateRollOptions {
+    opposedDice?: DieOutcome[];
+    seed?: number | null;
+    system?: string;
+}
+
+/** Evaluate raw die readings against parsed notation. */
+export function evaluateRoll(
+    parsed: ParsedRoll,
+    rawDice: DieOutcome[],
+    options: EvaluateRollOptions = {}
+): EvaluatedRoll {
     const seed = options.seed ?? null;
     const systemId = options.system ?? DEFAULT_ROLL_SYSTEM;
 
@@ -434,7 +379,7 @@ export function evaluateRoll(parsed, rawDice, options = {}) {
         rawDice
     );
 
-    let opposed = null;
+    let opposed: EvaluatedRoll['opposed'] = null;
     if (parsed.opposed) {
         const rightDice = options.opposedDice ?? [];
         const right = evaluateSide(parsed.opposed, rightDice);
@@ -464,13 +409,17 @@ export function evaluateRoll(parsed, rawDice, options = {}) {
     };
 }
 
-/**
- * @param {ParsedSide} side
- * @param {DieOutcome[]} rawDice
- */
-function evaluateSide(side, rawDice) {
+interface EvaluatedSide {
+    dice: DieOutcome[];
+    rolls: RollOutcomeEntry[];
+    groupSubtotals: RollGroupSubtotal[];
+    modifier: number;
+    total: number;
+}
+
+function evaluateSide(side: ParsedSide, rawDice: DieOutcome[]): EvaluatedSide {
     const dice = rawDice.map((d) => ({ ...d }));
-    const groupSubtotals = [];
+    const groupSubtotals: RollGroupSubtotal[] = [];
 
     side.groups.forEach((group, groupIndex) => {
         const groupDice = dice.filter((d) => d.groupIndex === groupIndex);
@@ -498,7 +447,7 @@ function evaluateSide(side, rawDice) {
         }
 
         // Prefer final value after a one-shot reroll when present.
-        const slotTotals = new Map();
+        const slotTotals = new Map<number, number>();
         groupDice.forEach((d) => {
             if (d.value == null) return;
             if (d.replacedByReroll) return; // discarded pre-reroll face
@@ -550,8 +499,8 @@ function evaluateSide(side, rawDice) {
 
     const modifier = side.modifier;
     const total = groupSubtotals.reduce((s, g) => s + g.subtotal, 0) + modifier;
-    const rolls = dice.map((d) => ({
-        die: formatDieLabel(d.type, d.role),
+    const rolls: RollOutcomeEntry[] = dice.map((d) => ({
+        die: formatDieLabel(d.type, d.role ?? null),
         faces: d.role ? 10 : Number.parseInt(String(d.type).replace(/\D/g, ''), 10) || 0,
         value: d.displayValue ?? d.value,
         exploded: Boolean(d.exploded),
@@ -563,17 +512,15 @@ function evaluateSide(side, rawDice) {
     return { dice, rolls, groupSubtotals, modifier, total };
 }
 
-/**
- * @param {ParsedRoll} parsed
- * @param {DieOutcome[]} dice
- * @param {number} total
- * @param {string} systemId
- * @param {object|null} opposed
- * @returns {RollFlags}
- */
-export function computeFlags(parsed, dice, total, systemId = DEFAULT_ROLL_SYSTEM, opposed = null) {
+export function computeFlags(
+    parsed: ParsedRoll,
+    dice: DieOutcome[],
+    total: number,
+    systemId: string = DEFAULT_ROLL_SYSTEM,
+    opposed: EvaluatedRoll['opposed'] = null
+): RollFlags {
     const system = ROLL_SYSTEMS[systemId] ?? ROLL_SYSTEMS[DEFAULT_ROLL_SYSTEM];
-    const flags = {
+    const flags: RollFlags = {
         crit: false,
         fumble: false,
         advantage: false,
@@ -633,10 +580,7 @@ export function computeFlags(parsed, dice, total, systemId = DEFAULT_ROLL_SYSTEM
     return flags;
 }
 
-/**
- * @param {DiceGroup} group
- */
-export function formatGroupLabel(group) {
+export function formatGroupLabel(group: DiceGroup): string {
     let label = `${group.count}d${group.percentile ? '100' : group.sides}`;
     if (group.keep) label += `k${group.keep}${group.keepCount}`;
     if (group.drop) label += `d${group.drop}${group.dropCount}`;
@@ -646,13 +590,12 @@ export function formatGroupLabel(group) {
     return label;
 }
 
-/**
- * Dice that exploded (rolled max) and need an extra throw.
- * @param {ParsedRoll|ParsedSide} parsed
- * @param {DieOutcome[]} dice
- */
-export function getExplodingRespawnSpecs(parsed, dice) {
-    const specs = [];
+/** Dice that exploded (rolled max) and need an extra throw. */
+export function getExplodingRespawnSpecs(
+    parsed: ParsedRoll | ParsedSide,
+    dice: DieOutcome[]
+): SpawnDieSpec[] {
+    const specs: SpawnDieSpec[] = [];
     const groups = parsed.groups;
 
     groups.forEach((group, groupIndex) => {
@@ -680,20 +623,19 @@ export function getExplodingRespawnSpecs(parsed, dice) {
     return specs;
 }
 
-/**
- * Dice that need a one-shot reroll (value ≤ rerollMax, not already rerolled).
- * @param {ParsedRoll|ParsedSide} parsed
- * @param {DieOutcome[]} dice
- */
-export function getRerollRespawnSpecs(parsed, dice) {
-    const specs = [];
+/** Dice that need a one-shot reroll (value ≤ rerollMax, not already rerolled). */
+export function getRerollRespawnSpecs(
+    parsed: ParsedRoll | ParsedSide,
+    dice: DieOutcome[]
+): SpawnDieSpec[] {
+    const specs: SpawnDieSpec[] = [];
     parsed.groups.forEach((group, groupIndex) => {
         if (group.rerollMax == null || group.percentile) return;
         const groupDice = dice.filter(
             (d) => d.groupIndex === groupIndex && d.role == null && !d.rerolled && !d.exploded
         );
         groupDice.forEach((d) => {
-            if (d.value != null && d.value <= group.rerollMax) {
+            if (d.value != null && d.value <= group.rerollMax!) {
                 specs.push({
                     type: sidesToDieType(group.sides),
                     role: null,
@@ -711,13 +653,23 @@ export function getRerollRespawnSpecs(parsed, dice) {
     return specs;
 }
 
+export type ExpressionChip =
+    | 'advantage'
+    | 'disadvantage'
+    | 'explode'
+    | 'compound'
+    | 'reroll1'
+    | 'percentile'
+    | 'clear';
+
 /**
  * Rewrite helpers for mobile-friendly UI chips (no raw typing required).
- * @param {string} expression
- * @param {'advantage'|'disadvantage'|'explode'|'compound'|'reroll1'|'percentile'|'clear'} chip
- * @param {string} [systemId]
  */
-export function applyExpressionChip(expression, chip, systemId = DEFAULT_ROLL_SYSTEM) {
+export function applyExpressionChip(
+    expression: string,
+    chip: ExpressionChip,
+    systemId: string = DEFAULT_ROLL_SYSTEM
+): string {
     const system = ROLL_SYSTEMS[systemId] ?? ROLL_SYSTEMS.dnd5e;
     const trimmed = String(expression ?? '').trim();
 
@@ -746,11 +698,8 @@ export function applyExpressionChip(expression, chip, systemId = DEFAULT_ROLL_SY
     return trimmed;
 }
 
-/**
- * Default expression for a system preset chip.
- * @param {string} systemId
- */
-export function defaultExpressionForSystem(systemId) {
+/** Default expression for a system preset chip. */
+export function defaultExpressionForSystem(systemId: string): string {
     const system = ROLL_SYSTEMS[systemId];
     if (!system) return '1d20';
     if (system.id === 'pbta') return '2d6';
@@ -759,7 +708,10 @@ export function defaultExpressionForSystem(systemId) {
     return '1d20';
 }
 
-function rewriteD20Pool(expr, { keep, count, keepCount }) {
+function rewriteD20Pool(
+    expr: string,
+    { keep, count, keepCount }: { keep: 'h' | 'l'; count: number; keepCount: number }
+): string {
     // Strip opposed side for chip rewrite of the left expression only.
     const vs = /\s+vs\.?\s+/i.exec(expr);
     const left = vs ? expr.slice(0, vs.index).trim() : expr;
@@ -784,7 +736,7 @@ function rewriteD20Pool(expr, { keep, count, keepCount }) {
     return right ? `${next}${right.startsWith(' ') ? '' : ' '}${right}` : next;
 }
 
-function appendDieSuffix(expr, suffix) {
+function appendDieSuffix(expr: string, suffix: string): string {
     const vs = /\s+vs\.?\s+/i.exec(expr);
     const left = vs ? expr.slice(0, vs.index).trim() : expr;
     const right = vs ? expr.slice(vs.index) : '';
@@ -804,11 +756,8 @@ function appendDieSuffix(expr, suffix) {
     return right ? `${replaced}${right}` : replaced;
 }
 
-/**
- * Format evaluated roll as a compact history string.
- * @param {EvaluatedRoll} result
- */
-export function formatResultSummary(result) {
+/** Format evaluated roll as a compact history string. */
+export function formatResultSummary(result: EvaluatedRoll): string {
     const groupParts = result.groupSubtotals.map((g) => `${g.label} → ${g.subtotal}`);
     let summary = groupParts.join('  •  ');
     if (result.modifier) {

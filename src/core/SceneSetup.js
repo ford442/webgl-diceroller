@@ -132,6 +132,10 @@ async function compilePmremSceneShader(pmremGenerator) {
  *   initialQuality: unknown;
  * }>}
  */
+/**
+ * @param {HTMLElement} container
+ * @returns {Promise<import('../types/app').SceneSetupResult>}
+ */
 export async function setupScene(container) {
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;

@@ -1,4 +1,6 @@
-const DIE_SIDES = {
+import type { RollDieStats } from '../types/roll.js';
+
+const DIE_SIDES: Record<string, number> = {
     d4: 4,
     d6: 6,
     d8: 8,
@@ -7,10 +9,12 @@ const DIE_SIDES = {
     d20: 20,
 };
 
-const DIE_ORDER = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+const DIE_ORDER = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'] as const;
+
+type DieType = (typeof DIE_ORDER)[number];
 
 // Chi-squared critical values for alpha=0.05, df = sides - 1.
-const CHI_SQUARED_CRITICAL_95 = {
+const CHI_SQUARED_CRITICAL_95: Partial<Record<number, number>> = {
     4: 7.815,
     6: 11.07,
     8: 14.067,
@@ -22,8 +26,38 @@ const CHI_SQUARED_CRITICAL_95 = {
 const DEFAULT_MIN_SAMPLE_SIZE = 100;
 const STORAGE_KEY = 'dice-roller-roll-stats';
 
-function createEmptyEntry(sides) {
-    const counts = new Map();
+interface DieStatsEntry {
+    sides: number;
+    totalRolls: number;
+    counts: Map<number, number>;
+}
+
+interface SerializedDieStatsEntry {
+    sides: number;
+    totalRolls: number;
+    counts: Record<string | number, number>;
+}
+
+interface DiceResult {
+    type: string;
+    value: number;
+}
+
+export interface RollStatsOptions {
+    minSampleSize?: number;
+    storageKey?: string;
+    persist?: boolean;
+}
+
+export interface RollStats {
+    recordResults: (diceResults: DiceResult[] | null | undefined) => void;
+    reset: () => void;
+    getStats: () => RollDieStats[];
+    minSampleSize: number;
+}
+
+function createEmptyEntry(sides: number): DieStatsEntry {
+    const counts = new Map<number, number>();
     for (let face = 1; face <= sides; face++) {
         counts.set(face, 0);
     }
@@ -34,7 +68,7 @@ function createEmptyEntry(sides) {
     };
 }
 
-function ensureEntry(store, dieType) {
+function ensureEntry(store: Map<string, DieStatsEntry>, dieType: string): DieStatsEntry | null {
     const sides = DIE_SIDES[dieType];
     if (!sides) return null;
 
@@ -42,10 +76,10 @@ function ensureEntry(store, dieType) {
         store.set(dieType, createEmptyEntry(sides));
     }
 
-    return store.get(dieType);
+    return store.get(dieType)!;
 }
 
-export function computeChiSquared(observedCounts, sides) {
+export function computeChiSquared(observedCounts: number[], sides: number): number {
     const total = observedCounts.reduce((sum, count) => sum + count, 0);
     if (total === 0 || sides <= 0) return 0;
 
@@ -55,8 +89,8 @@ export function computeChiSquared(observedCounts, sides) {
     return observedCounts.reduce((sum, count) => sum + (count - expected) ** 2 / expected, 0);
 }
 
-function serializeStore(store) {
-    const payload = {};
+function serializeStore(store: Map<string, DieStatsEntry>): Record<string, SerializedDieStatsEntry> {
+    const payload: Record<string, SerializedDieStatsEntry> = {};
     for (const [dieType, entry] of store.entries()) {
         payload[dieType] = {
             sides: entry.sides,
@@ -67,12 +101,13 @@ function serializeStore(store) {
     return payload;
 }
 
-function deserializeStore(payload) {
-    const store = new Map();
+function deserializeStore(payload: unknown): Map<string, DieStatsEntry> {
+    const store = new Map<string, DieStatsEntry>();
     if (!payload || typeof payload !== 'object') return store;
 
+    const record = payload as Record<string, SerializedDieStatsEntry | undefined>;
     for (const dieType of DIE_ORDER) {
-        const raw = payload[dieType];
+        const raw = record[dieType];
         if (!raw || typeof raw !== 'object') continue;
 
         const sides = DIE_SIDES[dieType];
@@ -96,15 +131,15 @@ export function createRollStats({
     minSampleSize = DEFAULT_MIN_SAMPLE_SIZE,
     storageKey = STORAGE_KEY,
     persist = true,
-} = {}) {
-    const store = new Map();
+}: RollStatsOptions = {}): RollStats {
+    const store = new Map<string, DieStatsEntry>();
 
-    function load() {
+    function load(): void {
         if (!persist || typeof localStorage === 'undefined') return;
         try {
             const raw = localStorage.getItem(storageKey);
             if (!raw) return;
-            const parsed = JSON.parse(raw);
+            const parsed = JSON.parse(raw) as unknown;
             const restored = deserializeStore(parsed);
             store.clear();
             for (const [dieType, entry] of restored.entries()) {
@@ -115,7 +150,7 @@ export function createRollStats({
         }
     }
 
-    function save() {
+    function save(): void {
         if (!persist || typeof localStorage === 'undefined') return;
         try {
             localStorage.setItem(storageKey, JSON.stringify(serializeStore(store)));
@@ -124,7 +159,7 @@ export function createRollStats({
         }
     }
 
-    function recordResults(diceResults) {
+    function recordResults(diceResults: DiceResult[] | null | undefined): void {
         if (!Array.isArray(diceResults)) return;
 
         let changed = false;
@@ -143,14 +178,13 @@ export function createRollStats({
         if (changed) save();
     }
 
-    function reset() {
+    function reset(): void {
         store.clear();
         save();
     }
 
-    function getStats() {
-        /** @type {import('../types/roll').RollDieStats[]} */
-        const stats = DIE_ORDER.map((dieType) => {
+    function getStats(): RollDieStats[] {
+        const stats = DIE_ORDER.map((dieType): RollDieStats | null => {
             const entry = store.get(dieType);
             if (!entry) return null;
 
@@ -179,7 +213,7 @@ export function createRollStats({
                 hasEnoughSamples: entry.totalRolls >= minSampleSize,
                 passes: criticalValue == null ? null : chiSquared <= criticalValue,
             };
-        }).filter(Boolean);
+        }).filter((entry): entry is RollDieStats => entry != null);
         return stats;
     }
 
