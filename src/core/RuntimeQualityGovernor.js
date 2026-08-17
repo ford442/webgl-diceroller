@@ -60,11 +60,16 @@ export function createRuntimeQualityGovernor(deps) {
 
     function markShadowMapsDirty() {
         scene.traverse((child) => {
-            if (child.isLight && child.castShadow && child.shadow) {
-                child.shadow.needsUpdate = true;
+            if (!('isLight' in child) || !child.isLight) return;
+            const light = /** @type {import('three').Light} */ (child);
+            if (light.castShadow && light.shadow) {
+                light.shadow.needsUpdate = true;
             }
         });
-        renderer.shadowMap.needsUpdate = true;
+        const shadowMap = /** @type {{ needsUpdate?: boolean }} */ (renderer.shadowMap);
+        if (shadowMap.needsUpdate !== undefined) {
+            shadowMap.needsUpdate = true;
+        }
     }
 
     function applyStressStep(level) {

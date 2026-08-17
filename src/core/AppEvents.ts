@@ -4,7 +4,9 @@
  * cannot break the frame loop.
  */
 
-/** @typedef {(payload: unknown) => void} AppEventHandler */
+import type { AppEvents, AppEventName } from '../types/app';
+
+export type AppEventHandler = (payload: unknown) => void;
 
 export const AppEvent = Object.freeze({
     ROLL_STARTED: 'roll:started',
@@ -13,20 +15,12 @@ export const AppEvent = Object.freeze({
     RENDERER_LOST: 'renderer:lost',
     LAYOUT_REROLLED: 'layout:rerolled',
     APP_READY: 'app:ready',
-});
+} as const satisfies Record<string, AppEventName>);
 
-/**
- * @returns {import('../types/app').AppEvents}
- */
-export function createAppEvents() {
-    /** @type {Map<string, Set<AppEventHandler>>} */
-    const listeners = new Map();
+export function createAppEvents(): AppEvents {
+    const listeners = new Map<string, Set<AppEventHandler>>();
 
-    /**
-     * @param {string} type
-     * @returns {Set<AppEventHandler>}
-     */
-    function bucket(type) {
+    function bucket(type: string): Set<AppEventHandler> {
         let set = listeners.get(type);
         if (!set) {
             set = new Set();
@@ -35,45 +29,25 @@ export function createAppEvents() {
         return set;
     }
 
-    /**
-     * @param {string} type
-     * @param {AppEventHandler} handler
-     * @returns {() => void}
-     */
-    function on(type, handler) {
+    function on(type: string, handler: AppEventHandler): () => void {
         if (typeof handler !== 'function') return () => {};
         bucket(type).add(handler);
         return () => off(type, handler);
     }
 
-    /**
-     * @param {string} type
-     * @param {AppEventHandler} handler
-     * @returns {() => void}
-     */
-    function once(type, handler) {
-        const wrap = /** @type {AppEventHandler} */ (
-            (payload) => {
-                off(type, wrap);
-                handler(payload);
-            }
-        );
+    function once(type: string, handler: AppEventHandler): () => void {
+        const wrap: AppEventHandler = (payload) => {
+            off(type, wrap);
+            handler(payload);
+        };
         return on(type, wrap);
     }
 
-    /**
-     * @param {string} type
-     * @param {AppEventHandler} handler
-     */
-    function off(type, handler) {
+    function off(type: string, handler: AppEventHandler): void {
         listeners.get(type)?.delete(handler);
     }
 
-    /**
-     * @param {string} type
-     * @param {unknown} [payload]
-     */
-    function emit(type, payload) {
+    function emit(type: string, payload?: unknown): void {
         const set = listeners.get(type);
         if (!set || set.size === 0) return;
         for (const handler of [...set]) {
@@ -85,7 +59,7 @@ export function createAppEvents() {
         }
     }
 
-    function clear() {
+    function clear(): void {
         listeners.clear();
     }
 

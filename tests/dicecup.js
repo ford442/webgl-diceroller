@@ -4,9 +4,9 @@
  * Requires preview server with WASM built:
  *   npx vite build   (or npm run build if wasm available)
  *   npm run preview
- *   node test_dicecup.js
+ *   node tests/dicecup.js
  */
-import { chromium } from 'playwright';
+const { chromium } = require('playwright');
 
 const URL = process.env.DICE_URL || 'http://localhost:4173/?webgl&no-post&fair-dice&test';
 
@@ -18,12 +18,12 @@ async function main() {
 
     await page.goto(URL, { waitUntil: 'networkidle', timeout: 120000 });
 
-    await page.waitForFunction(() => (window.__app?.ready ?? window.sceneReady) === true, null, {
+    await page.waitForFunction(() => window.__app?.ready === true, null, {
         timeout: 120000,
     });
 
     const state = await page.evaluate(() => {
-        const cup = window.__app?.interactables?.diceCup ?? window.__interactables?.diceCup;
+        const cup = window.__app?.interactables?.diceCup;
         if (!cup) return { ok: false, reason: 'missing interactable' };
         const snap = cup.getState?.() ?? {};
         return {

@@ -22,7 +22,7 @@ const url = 'http://localhost:4173/?webgl&no-post&fair-dice&test';
     try {
         await page.goto(url, { waitUntil: 'load', timeout: 60000 });
         await page.waitForFunction(
-            () => (window.__app?.ready ?? window.sceneReady) === true,
+            () => window.__app?.ready === true,
             null,
             { timeout: 150000 }
         );

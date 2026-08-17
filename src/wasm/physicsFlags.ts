@@ -6,11 +6,8 @@
 /** Disable per-die quadratic air resistance (matches ?no-drag). */
 export const PHYSICS_FLAG_NO_DRAG = 1 << 0;
 
-/**
- * @param {URLSearchParams} searchParams
- * @returns {number} u32 flag bits for DicePhysicsEngine.setFlags()
- */
-export function parsePhysicsFlags(searchParams) {
+/** u32 flag bits for DicePhysicsEngine.setFlags() */
+export function parsePhysicsFlags(searchParams: URLSearchParams): number {
     let flags = 0;
     if (searchParams.has('no-drag')) flags |= PHYSICS_FLAG_NO_DRAG;
     return flags >>> 0;

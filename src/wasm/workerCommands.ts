@@ -1,5 +1,5 @@
 /**
- * workerCommands.js
+ * workerCommands.ts
  *
  * Shared batched-command protocol for the physics Web Worker.  High-frequency
  * per-die mutations (torque impulses, kinematic transforms/velocities) are
@@ -11,16 +11,19 @@
  * Structural / rare commands (addDie, init, …) stay on plain postMessage.
  */
 
-/** @enum {number} */
+import type { PhysicsEngine } from './physicsTypes.js';
+
 export const OP = {
     APPLY_IMPULSE: 1,
     APPLY_TORQUE: 2,
     SET_TRANSFORM: 3,
     SET_VELOCITY: 4,
-};
+} as const;
+
+type Opcode = (typeof OP)[keyof typeof OP];
 
 /** Floats per record (including opcode + id). */
-export const RECORD_LEN = {
+export const RECORD_LEN: Record<Opcode, number> = {
     [OP.APPLY_IMPULSE]: 5,
     [OP.APPLY_TORQUE]: 5,
     [OP.SET_TRANSFORM]: 9,
@@ -29,20 +32,24 @@ export const RECORD_LEN = {
 
 const MAX_RECORD_LEN = 9;
 
+function recordLen(opcode: number): number | undefined {
+    return (RECORD_LEN as Record<number, number>)[opcode];
+}
+
 /**
  * Dispatch every record in a linear command buffer.
- * @param {import('./physicsTypes').PhysicsEngine} engine
- * @param {Float32Array} buf
- * @param {number} [start]
- * @param {number} [end]
- * @returns {number} records dispatched
  */
-export function dispatchLinear(engine, buf, start = 0, end = buf.length) {
+export function dispatchLinear(
+    engine: PhysicsEngine,
+    buf: Float32Array,
+    start = 0,
+    end = buf.length
+): number {
     let records = 0;
     let i = start;
     while (i < end) {
         const opcode = buf[i];
-        const len = RECORD_LEN[opcode];
+        const len = recordLen(opcode);
         if (!len || i + len > end) break;
         const id = buf[i + 1];
         switch (opcode) {
@@ -84,11 +91,14 @@ export function dispatchLinear(engine, buf, start = 0, end = buf.length) {
     return records;
 }
 
-/**
- * Drain a ring-buffered command queue from `tail` up to `head` (exclusive).
- * @returns {number} new tail index
- */
-export function drainRing(engine, ring, head, tail, capacity) {
+/** Drain a ring-buffered command queue from `tail` up to `head` (exclusive). */
+export function drainRing(
+    engine: PhysicsEngine,
+    ring: Float32Array,
+    head: number,
+    tail: number,
+    capacity: number
+): number {
     let t = tail;
     while (t !== head) {
         const opcode = ring[t];
@@ -97,7 +107,7 @@ export function drainRing(engine, ring, head, tail, capacity) {
             if (t === head) break;
             continue;
         }
-        const len = RECORD_LEN[opcode];
+        const len = recordLen(opcode);
         if (!len) {
             t = (t + 1) % capacity;
             continue;
@@ -111,7 +121,12 @@ export function drainRing(engine, ring, head, tail, capacity) {
 }
 
 /** Copy `src` into `ring` starting at `head`, wrapping as needed. */
-export function copyIntoRing(ring, capacity, head, src) {
+export function copyIntoRing(
+    ring: Float32Array,
+    capacity: number,
+    head: number,
+    src: Float32Array | number[]
+): number {
     for (let i = 0; i < src.length; i++) {
         ring[(head + i) % capacity] = src[i];
     }
@@ -119,11 +134,11 @@ export function copyIntoRing(ring, capacity, head, src) {
 }
 
 /** Count records in a linear buffer (for debug stats). */
-export function countRecords(buf, start = 0, end = buf.length) {
+export function countRecords(buf: Float32Array, start = 0, end = buf.length): number {
     let records = 0;
     let i = start;
     while (i < end) {
-        const len = RECORD_LEN[buf[i]];
+        const len = recordLen(buf[i]);
         if (!len || i + len > end) break;
         i += len;
         records++;

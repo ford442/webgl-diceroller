@@ -13,16 +13,13 @@ runTest(
         console.log('Waiting for the playingCards interactable to register...');
         await page.waitForFunction(
             () =>
-                !!(
-                    window.__app?.interactables?.playingCards ??
-                    window.__interactables?.playingCards
-                ),
+                !!window.__app?.interactables?.playingCards,
             null,
             { timeout: 150000 }
         );
 
         const inScene = await page.evaluate(() => {
-            const scene = window.__app?.scene ?? window.scene;
+            const scene = window.__app?.scene;
             if (!scene) return { found: 'pending' };
             /** @type {import('three').Object3D | null} */
             let found = null;
@@ -34,8 +31,7 @@ runTest(
 
         // Draw a couple of cards and confirm state advances + a card face is revealed.
         const result = await page.evaluate(() => {
-            const api =
-                window.__app?.interactables?.playingCards ?? window.__interactables.playingCards;
+            const api = window.__app?.interactables?.playingCards;
             const before = api.getState().draws;
             api.trigger();
             api.trigger();
@@ -54,7 +50,7 @@ runTest(
             pass = false;
         } else if (inScene.found === 'pending')
             console.log(
-                '• PlayingCards scene-graph check skipped (window.scene not exposed yet); interactable present'
+                '• PlayingCards scene-graph check skipped (__app.scene not exposed yet); interactable present'
             );
         else console.log(`✓ PlayingCards found (${inScene.children} children)`);
 

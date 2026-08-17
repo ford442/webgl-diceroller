@@ -2,11 +2,61 @@
  * HTTP + WebSocket client for the Cloudflare signaling Worker.
  */
 
+export interface SignalingUrlParts {
+    httpBase: string;
+    wsBase: string;
+}
+
+export interface SignalingMessage {
+    type: string;
+    peerId?: string;
+    role?: string;
+    peers?: Array<{ peerId: string; role: string }>;
+    error?: string;
+    to?: string;
+    data?: unknown;
+    [key: string]: unknown;
+}
+
+export type SignalingMessageHandler = (msg: SignalingMessage) => void;
+
+export interface CreateRoomResult {
+    code: string;
+}
+
+export interface RoomExistsResult {
+    exists: boolean;
+    peerCount: number;
+}
+
+export interface ConnectRoomOptions {
+    peerId: string;
+    role: 'host' | 'guest';
+}
+
+export interface ConnectRoomResult {
+    peerId: string;
+    role: string;
+    peers: Array<{ peerId: string; role: string }>;
+}
+
+export interface SignalingClient {
+    httpBase: string;
+    wsBase: string;
+    createRoom: () => Promise<CreateRoomResult>;
+    roomExists: (code: string) => Promise<RoomExistsResult>;
+    connectRoom: (code: string, opts: ConnectRoomOptions) => Promise<ConnectRoomResult>;
+    send: (msg: SignalingMessage) => boolean;
+    sendSignal: (toPeerId: string, data: unknown) => boolean;
+    onMessage: (fn: SignalingMessageHandler) => () => void;
+    disconnect: () => void;
+    isConnected: () => boolean;
+}
+
 /**
- * @param {string} baseUrl  e.g. https://dice-signal.example.workers.dev or http://127.0.0.1:8787
- * @returns {{ httpBase: string, wsBase: string }}
+ * @param baseUrl  e.g. https://dice-signal.example.workers.dev or http://127.0.0.1:8787
  */
-export function normalizeSignalingUrl(baseUrl) {
+export function normalizeSignalingUrl(baseUrl: string): SignalingUrlParts {
     const trimmed = String(baseUrl || '').replace(/\/+$/, '');
     if (!trimmed) return { httpBase: '', wsBase: '' };
     let httpBase = trimmed;
@@ -16,29 +66,17 @@ export function normalizeSignalingUrl(baseUrl) {
     return { httpBase, wsBase };
 }
 
-/**
- * @param {string} signalingUrl
- */
-export function createSignalingClient(signalingUrl) {
+export function createSignalingClient(signalingUrl: string): SignalingClient {
     const { httpBase, wsBase } = normalizeSignalingUrl(signalingUrl);
-    /** @type {WebSocket | null} */
-    let ws = null;
-    /** @type {Set<(msg: object) => void>} */
-    const listeners = new Set();
+    let ws: WebSocket | null = null;
+    const listeners = new Set<SignalingMessageHandler>();
 
-    /**
-     * @param {(msg: object) => void} fn
-     * @returns {() => void}
-     */
-    function onMessage(fn) {
+    function onMessage(fn: SignalingMessageHandler): () => void {
         listeners.add(fn);
         return () => listeners.delete(fn);
     }
 
-    /**
-     * @param {object} msg
-     */
-    function emit(msg) {
+    function emit(msg: SignalingMessage): void {
         for (const fn of [...listeners]) {
             try {
                 fn(msg);
@@ -48,36 +86,24 @@ export function createSignalingClient(signalingUrl) {
         }
     }
 
-    /**
-     * @returns {Promise<{ code: string }>}
-     */
-    async function createRoom() {
+    async function createRoom(): Promise<CreateRoomResult> {
         if (!httpBase) throw new Error('signaling_url_missing');
         const res = await fetch(`${httpBase}/rooms`, { method: 'POST' });
         if (!res.ok) {
             const body = await res.text().catch(() => '');
             throw new Error(`create_room_failed:${res.status}:${body}`);
         }
-        return /** @type {{ code: string }} */ (await res.json());
+        return (await res.json()) as CreateRoomResult;
     }
 
-    /**
-     * @param {string} code
-     * @returns {Promise<{ exists: boolean, peerCount: number }>}
-     */
-    async function roomExists(code) {
+    async function roomExists(code: string): Promise<RoomExistsResult> {
         if (!httpBase) throw new Error('signaling_url_missing');
         const res = await fetch(`${httpBase}/rooms/${encodeURIComponent(code)}`);
         if (!res.ok) throw new Error(`room_lookup_failed:${res.status}`);
-        return /** @type {{ exists: boolean, peerCount: number }} */ (await res.json());
+        return (await res.json()) as RoomExistsResult;
     }
 
-    /**
-     * @param {string} code
-     * @param {{ peerId: string, role: 'host' | 'guest' }} opts
-     * @returns {Promise<{ peerId: string, role: string, peers: Array<{ peerId: string, role: string }> }>}
-     */
-    function connectRoom(code, opts) {
+    function connectRoom(code: string, opts: ConnectRoomOptions): Promise<ConnectRoomResult> {
         if (!wsBase) return Promise.reject(new Error('signaling_url_missing'));
 
         disconnect();
@@ -92,7 +118,7 @@ export function createSignalingClient(signalingUrl) {
             const socket = new WebSocket(url);
             ws = socket;
 
-            const fail = (err) => {
+            const fail = (err: unknown): void => {
                 if (settled) return;
                 settled = true;
                 reject(err instanceof Error ? err : new Error(String(err)));
@@ -102,10 +128,10 @@ export function createSignalingClient(signalingUrl) {
                 /* wait for joined */
             });
 
-            socket.addEventListener('message', (event) => {
-                let msg;
+            socket.addEventListener('message', (event: MessageEvent) => {
+                let msg: SignalingMessage;
                 try {
-                    msg = JSON.parse(String(event.data));
+                    msg = JSON.parse(String(event.data)) as SignalingMessage;
                 } catch {
                     return;
                 }
@@ -113,13 +139,13 @@ export function createSignalingClient(signalingUrl) {
                 if (!settled && msg?.type === 'joined') {
                     settled = true;
                     resolve({
-                        peerId: msg.peerId,
-                        role: msg.role,
+                        peerId: msg.peerId ?? opts.peerId,
+                        role: msg.role ?? opts.role,
                         peers: msg.peers ?? [],
                     });
                 }
                 if (!settled && msg?.error) {
-                    fail(new Error(msg.error));
+                    fail(new Error(String(msg.error)));
                 }
             });
 
@@ -132,25 +158,17 @@ export function createSignalingClient(signalingUrl) {
         });
     }
 
-    /**
-     * @param {object} msg
-     */
-    function send(msg) {
+    function send(msg: SignalingMessage): boolean {
         if (!ws || ws.readyState !== WebSocket.OPEN) return false;
         ws.send(JSON.stringify(msg));
         return true;
     }
 
-    /**
-     * Relay SDP/ICE to a peer via the Worker.
-     * @param {string} toPeerId
-     * @param {unknown} data
-     */
-    function sendSignal(toPeerId, data) {
+    function sendSignal(toPeerId: string, data: unknown): boolean {
         return send({ type: 'signal', to: toPeerId, data });
     }
 
-    function disconnect() {
+    function disconnect(): void {
         if (ws) {
             try {
                 ws.close();
@@ -161,7 +179,7 @@ export function createSignalingClient(signalingUrl) {
         }
     }
 
-    function isConnected() {
+    function isConnected(): boolean {
         return ws != null && ws.readyState === WebSocket.OPEN;
     }
 

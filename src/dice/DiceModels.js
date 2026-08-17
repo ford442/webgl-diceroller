@@ -32,7 +32,7 @@ function getAppearanceOptions() {
         envMap: diceAppearanceEnvMap ?? diceAppearanceScene?.environment ?? null,
         qualityProfile:
             diceAppearanceQualityProfile ??
-            (typeof window !== 'undefined' ? window.qualityProfile : null),
+            (typeof window !== 'undefined' ? window.__app?.qualityProfile : null),
     };
 }
 

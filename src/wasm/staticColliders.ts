@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { PhysicsEngine } from './physicsTypes.js';
+import type { StaticColliderSpec } from '../types/staticCollider.js';
 
 /** @enum {number} */
 export const STATIC_MATERIAL = {
@@ -7,29 +9,44 @@ export const STATIC_MATERIAL = {
     WOOD: 2,
     METAL: 3,
     LEATHER: 4,
-};
+} as const;
 
 let nextAutoStaticId = 10000;
 
-export function allocStaticColliderId() {
+export function allocStaticColliderId(): number {
     return nextAutoStaticId++;
 }
 
-export function resetStaticColliderIds(seed = 10000) {
+export function resetStaticColliderIds(seed = 10000): void {
     nextAutoStaticId = seed;
 }
 
-/**
- * @param {object} bodyDef
- * @returns {number}
- */
-function materialTagForBodyDef(bodyDef) {
+interface TablePhysicsBodyDef {
+    type: string;
+    position: { x: number; y: number; z: number };
+    size: { x: number; y: number; z: number };
+    materialTag?: number;
+    restitution?: number;
+}
+
+interface TableConfig {
+    physicsBodies?: TablePhysicsBodyDef[];
+}
+
+type Vec3Input = { x?: number; y?: number; z?: number } | number[];
+
+interface PoseSpec {
+    offset?: Vec3Input;
+    rotation?: Vec3Input;
+}
+
+function materialTagForBodyDef(bodyDef: TablePhysicsBodyDef): number {
     if (bodyDef.materialTag != null) return bodyDef.materialTag;
     if (bodyDef.restitution != null && bodyDef.restitution <= 0.1) return STATIC_MATERIAL.VELVET;
     return STATIC_MATERIAL.WOOD;
 }
 
-function vec3From(value = {}) {
+function vec3From(value: Vec3Input = {}): { x: number; y: number; z: number } {
     if (Array.isArray(value)) {
         return { x: value[0] ?? 0, y: value[1] ?? 0, z: value[2] ?? 0 };
     }
@@ -40,11 +57,10 @@ function vec3From(value = {}) {
     };
 }
 
-/**
- * @param {import('three').Object3D} anchor
- * @param {{ offset?: { x?: number; y?: number; z?: number } | number[]; rotation?: { x?: number; y?: number; z?: number } | number[] }} spec
- */
-export function computeWorldPose(anchor, spec = {}) {
+export function computeWorldPose(
+    anchor: THREE.Object3D,
+    spec: PoseSpec = {}
+): { position: THREE.Vector3; quaternion: THREE.Quaternion } {
     const position = new THREE.Vector3();
     const quaternion = new THREE.Quaternion();
     anchor.updateWorldMatrix?.(true, false);
@@ -69,13 +85,11 @@ export function computeWorldPose(anchor, spec = {}) {
     return { position, quaternion };
 }
 
-/**
- * @param {import('./physicsTypes').PhysicsEngine} engine
- * @param {import('../types/staticCollider').StaticColliderSpec} spec
- * @param {{ position: THREE.Vector3; quaternion: THREE.Quaternion }} worldPose
- * @returns {number}
- */
-export function addStaticColliderToEngine(engine, spec, worldPose) {
+export function addStaticColliderToEngine(
+    engine: PhysicsEngine,
+    spec: StaticColliderSpec,
+    worldPose: { position: THREE.Vector3; quaternion: THREE.Quaternion }
+): number {
     const id = spec.id ?? allocStaticColliderId();
     const materialTag = spec.materialTag ?? STATIC_MATERIAL.DEFAULT;
     const px = worldPose.position.x;
@@ -113,7 +127,7 @@ export function addStaticColliderToEngine(engine, spec, worldPose) {
             return engine.addStaticConvexHull(id, px, py, pz, qx, qy, qz, qw, flat, materialTag);
         }
         default: {
-            const unsupported = /** @type {{ type?: string }} */ (spec).type;
+            const unsupported = (spec as { type?: string }).type;
             console.warn(`staticColliders: unsupported type "${unsupported}"`);
             return -1;
         }
@@ -122,11 +136,11 @@ export function addStaticColliderToEngine(engine, spec, worldPose) {
 
 /**
  * Register table physics bodies from Table.js config into the WASM static registry.
- * @param {import('./physicsTypes').PhysicsEngine} engine
- * @param {object | null | undefined} tableConfig
- * @returns {number} colliders added
  */
-export function createWasmTableBoundsForEngine(engine, tableConfig) {
+export function createWasmTableBoundsForEngine(
+    engine: PhysicsEngine | null | undefined,
+    tableConfig: TableConfig | null | undefined
+): number {
     if (!engine?.addStaticBox || !engine.clearStatics) return 0;
 
     engine.clearStatics();
@@ -157,22 +171,23 @@ export function createWasmTableBoundsForEngine(engine, tableConfig) {
     return added;
 }
 
-/**
- * @param {import('./physicsTypes').PhysicsEngine} engine
- * @param {import('../types/staticCollider').StaticColliderSpec} spec
- * @param {import('three').Object3D} anchor
- * @returns {number}
- */
-export function addStaticColliderForEngine(engine, spec, anchor) {
+export function addStaticColliderForEngine(
+    engine: PhysicsEngine | null | undefined,
+    spec: StaticColliderSpec,
+    anchor: THREE.Object3D
+): number {
     if (!engine) return -1;
     const worldPose = computeWorldPose(anchor, spec);
     return addStaticColliderToEngine(engine, spec, worldPose);
 }
 
-export function removeStaticColliderForEngine(engine, userId) {
+export function removeStaticColliderForEngine(
+    engine: PhysicsEngine | null | undefined,
+    userId: number
+): boolean {
     return !!engine?.removeStatic?.(userId);
 }
 
-export function clearStaticCollidersForEngine(engine) {
+export function clearStaticCollidersForEngine(engine: PhysicsEngine | null | undefined): void {
     engine?.clearStatics?.();
 }

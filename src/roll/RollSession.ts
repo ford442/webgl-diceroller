@@ -3,6 +3,7 @@
  * evaluate keep/drop/modifiers, and handle exploding / one-shot rerolls.
  */
 
+import type { EvaluatedRoll, RollSessionDeps as BaseRollSessionDeps } from '../types/roll.js';
 import {
     parseNotation,
     buildSpawnSpecsForGroups,
@@ -12,61 +13,37 @@ import {
     DEFAULT_ROLL_SYSTEM,
     NotationError,
 } from './Notation.js';
+import type { DiceGroup, DieOutcome, ParsedSide, SpawnDieSpec } from './Notation.js';
 
-/**
- * @typedef {Object} DieSpec
- * @property {string} type
- * @property {'tens'|'ones'|null} role
- * @property {number} groupIndex
- * @property {number} dieIndex
- * @property {boolean} explode
- * @property {number} sides
- * @property {number|null} [rerollMax]
- * @property {number} [replacesDieIndex]
- * @property {boolean} [isReroll]
- */
+export interface RollSessionDeps extends BaseRollSessionDeps {
+    getSystem?: () => string;
+}
 
-/**
- * @typedef {Object} RollSessionDeps
- * @property {object} scene
- * @property {object} world
- * @property {(scene: object, world: object, specs: DieSpec[]) => void} replaceDiceSet
- * @property {(scene: object, world: object, seed?: number|null) => void} throwDice
- * @property {() => Array<{type: string, value: number|null, role?: string|null, groupIndex?: number}>} readAllDiceValues
- * @property {() => boolean} areDiceSettled
- * @property {(ms?: number) => Promise<void>} [waitFrame]
- * @property {(active: boolean) => void} [setDeferAutoResults]
- * @property {(result: import('./Notation.js').EvaluatedRoll) => void} [onComplete]
- * @property {(state: string) => void} [onStateChange]
- * @property {() => string} [getSystem]
- */
+interface ActiveSession {
+    expression: string;
+    seed: number | null;
+    system: string;
+}
 
-let activeSession = null;
+let activeSession: ActiveSession | null = null;
 let deferAutoResults = false;
 
-/** @returns {boolean} */
-export function isNotationRollActive() {
+export function isNotationRollActive(): boolean {
     return activeSession !== null;
 }
 
-/** @returns {boolean} */
-export function shouldDeferAutoResults() {
+export function shouldDeferAutoResults(): boolean {
     return deferAutoResults;
 }
 
-/**
- * @param {RollSessionDeps} deps
- */
-export function createRollSession(deps) {
-    const waitFrame =
-        deps.waitFrame ?? (() => new Promise((r) => requestAnimationFrame(() => r())));
+export function createRollSession(deps: RollSessionDeps) {
+    const waitFrame = deps.waitFrame ?? (() => new Promise<void>((r) => requestAnimationFrame(() => r())));
 
-    /**
-     * @param {string} expression
-     * @param {number|null} [seed]
-     * @param {{ system?: string }} [options]
-     */
-    async function roll(expression, seed = null, options = {}) {
+    async function roll(
+        expression: string,
+        seed: number | null = null,
+        options: { system?: string } = {}
+    ): Promise<EvaluatedRoll> {
         if (activeSession) {
             throw new NotationError('A notation roll is already in progress');
         }
@@ -80,10 +57,14 @@ export function createRollSession(deps) {
         deps.onStateChange?.('parsing');
 
         try {
-            const leftSide = { groups: parsed.groups, modifier: parsed.modifier, raw: parsed.raw };
+            const leftSide: ParsedSide = {
+                groups: parsed.groups,
+                modifier: parsed.modifier,
+                raw: parsed.raw,
+            };
             const leftDice = await resolveSide(deps, leftSide, seed, waitFrame);
 
-            let opposedDice = null;
+            let opposedDice: DieOutcome[] | null = null;
             if (parsed.opposed) {
                 const rightSeed = seed != null ? (seed + 0x9e3779b9) >>> 0 : null;
                 opposedDice = await resolveSide(deps, parsed.opposed, rightSeed, waitFrame);
@@ -108,16 +89,15 @@ export function createRollSession(deps) {
     return { roll };
 }
 
-/**
- * @param {RollSessionDeps} deps
- * @param {{ groups: import('./Notation.js').DiceGroup[], modifier: number, raw: string }} side
- * @param {number|null} seed
- * @param {(ms?: number) => Promise<void>} waitFrame
- */
-async function resolveSide(deps, side, seed, waitFrame) {
-    let specs = buildSpawnSpecsForGroups(side.groups);
+async function resolveSide(
+    deps: RollSessionDeps,
+    side: { groups: DiceGroup[]; modifier: number; raw: string },
+    seed: number | null,
+    waitFrame: (ms?: number) => Promise<void>
+): Promise<DieOutcome[]> {
+    let specs: SpawnDieSpec[] = buildSpawnSpecsForGroups(side.groups);
     let subSeed = seed;
-    let accumulatedDice = [];
+    let accumulatedDice: DieOutcome[] = [];
     let explosionRound = 0;
     const maxExplosionRounds = 20;
     let didRerollPass = false;
@@ -134,12 +114,12 @@ async function resolveSide(deps, side, seed, waitFrame) {
         await waitForSettled(deps.areDiceSettled, waitFrame);
 
         const raw = deps.readAllDiceValues();
-        const roundDice = raw.map((r, i) => ({
+        const roundDice: DieOutcome[] = raw.map((r, i) => ({
             groupIndex: specs[i]?.groupIndex ?? 0,
             dieIndex: specs[i]?.dieIndex ?? i,
             type: r.type,
             value: r.value,
-            role: specs[i]?.role ?? r.role ?? null,
+            role: specs[i]?.role ?? (r.role as DieOutcome['role']) ?? null,
             exploded: Boolean(specs[i]?.replacesDieIndex != null && !specs[i]?.isReroll),
             rerolled: Boolean(specs[i]?.isReroll),
         }));
@@ -208,11 +188,10 @@ async function resolveSide(deps, side, seed, waitFrame) {
     return accumulatedDice;
 }
 
-/**
- * @param {() => boolean} areDiceSettled
- * @param {(ms?: number) => Promise<void>} waitFrame
- */
-async function waitForSettled(areDiceSettled, waitFrame) {
+async function waitForSettled(
+    areDiceSettled: () => boolean,
+    waitFrame: (ms?: number) => Promise<void>
+): Promise<void> {
     let idleFrames = 0;
     while (idleFrames < 3) {
         await waitFrame();

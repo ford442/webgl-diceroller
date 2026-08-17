@@ -196,6 +196,8 @@ export function applyQualityProfile({
 
 /**
  * Cheaper render path while dice move or external motion is active.
+ * @param {boolean} active
+ * @param {import('../types/app').MotionProfileDeps} deps
  */
 export function applyMotionProfile(active, deps) {
     const { scene, postConfig, postRuntime, appliedProfile, runtimeGovernor, diceGameFeel } = deps;

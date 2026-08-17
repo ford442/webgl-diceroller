@@ -12,16 +12,16 @@ runTest(
 
         console.log('Waiting for the flute interactable to register...');
         // The interactable registers as the prop spawns (mid-load), which is a more
-        // reliable signal than window.scene (only exposed after the full load).
+        // reliable signal than waiting for the full scene load.
         await page.waitForFunction(
-            () => !!(window.__app?.interactables?.flute ?? window.__interactables?.flute),
+            () => !!window.__app?.interactables?.flute,
             null,
             { timeout: 150000 }
         );
 
-        // Confirm the flute is in the scene graph (window.scene may not be exposed yet).
+        // Confirm the flute is in the scene graph (scene may not be exposed yet).
         const inScene = await page.evaluate(() => {
-            const scene = window.__app?.scene ?? window.scene;
+            const scene = window.__app?.scene;
             if (!scene) return 'pending';
             let found = false;
             scene.traverse((c) => {
@@ -33,7 +33,7 @@ runTest(
         // A real user gesture so the AudioContext can resume, then trigger the melody.
         await page.mouse.click(5, 5);
         const result = await page.evaluate(() => {
-            const flute = window.__app?.interactables?.flute ?? window.__interactables?.flute;
+            const flute = window.__app?.interactables?.flute;
             const before = flute.getState().playCount;
             flute.trigger();
             const after = flute.getState().playCount;
@@ -46,7 +46,7 @@ runTest(
             pass = false;
         } else if (inScene === 'pending')
             console.log(
-                '• Flute scene-graph check skipped (window.scene not exposed yet); interactable present'
+                '• Flute scene-graph check skipped (__app.scene not exposed yet); interactable present'
             );
         else console.log('✓ Flute found in scene');
 

@@ -61,18 +61,9 @@ import { createShadowController } from './app/RendererRecovery.js';
 /** @typedef {import('./types/app').ComposerLike} ComposerLike */
 /** @typedef {import('./types/app').PostConfig} PostConfig */
 /** @typedef {import('./types/app').RendererState} RendererState */
-/** @typedef {import('./types/ammo').AmmoWorld} AmmoWorld */
 
-/** @type {import('three').PerspectiveCamera | undefined} */
-let camera;
-/** @type {import('three').Scene | undefined} */
-let scene;
-/** @type {import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer | undefined} */
-let renderer;
 /** @type {ComposerLike | null | undefined} */
 let composer;
-/** @type {AmmoWorld | null | undefined} */
-let physicsWorld;
 /** @type {import('three').Clock | undefined} */
 let clock;
 /** @type {ReturnType<typeof import('./ui.js').initUI> | null | undefined} */
@@ -154,7 +145,7 @@ let diceCupController = null;
 const multiplayerRef = { current: null };
 
 function isSimulationReady() {
-    return isWasmAvailable() || physicsWorld != null;
+    return isWasmAvailable() || app.physicsWorld != null;
 }
 
 function showCupFeedback(message) {
@@ -185,24 +176,21 @@ async function init() {
 
     // Scene, camera, renderer, lights, post-processing, environment map
     const sceneSetup = await setupScene(container);
-    scene = sceneSetup.scene;
-    camera = sceneSetup.camera;
-    renderer = sceneSetup.renderer;
+    app.scene = sceneSetup.scene;
+    app.camera = sceneSetup.camera;
+    app.renderer = sceneSetup.renderer;
     composer = sceneSetup.composer;
     rendererState = sceneSetup.rendererState;
     pointLight = sceneSetup.pointLight;
     postConfig = sceneSetup.postConfig;
     spotLight = sceneSetup.spotLight;
     postRuntime = sceneSetup.postRuntime;
-    shadowController = createShadowController(() => renderer, scene);
+    shadowController = createShadowController(() => app.renderer, app.scene);
     console.info(
         `[Renderer] Active backend: ${rendererState?.rendererType ?? 'webgl'}` +
             (rendererState?.fallbackReason ? ` (${rendererState.fallbackReason})` : '')
     );
 
-    app.scene = scene;
-    app.camera = camera;
-    app.renderer = renderer;
     app.postConfig = postConfig;
     app.rendererType = rendererState?.rendererType ?? 'webgl';
     app.usingWebGPU = rendererState?.usingWebGPU === true;
@@ -212,7 +200,7 @@ async function init() {
 
     collisionAudio = createDiceCollisionAudio();
     app.audio = collisionAudio;
-    diceGameFeel = createDiceGameFeelSystem(scene, { postConfig, rendererState });
+    diceGameFeel = createDiceGameFeelSystem(app.scene, { postConfig, rendererState });
     rollHistory = createRollHistory();
     rollStats = createRollStats();
     app.rollHistory = rollHistory;
@@ -220,8 +208,8 @@ async function init() {
 
     const rollWiring = createRollWiring(app, {
         appEvents,
-        getScene: () => scene,
-        getPhysicsWorld: () => physicsWorld,
+        getScene: () => app.scene,
+        getPhysicsWorld: () => app.physicsWorld,
         getShadowController: () => shadowController,
         getDiceGameFeel: () => diceGameFeel,
         getCameraController: () => cameraController,
@@ -237,11 +225,11 @@ async function init() {
 
     const rendererRecoveryDeps = {
         app,
-        scene,
+        scene: app.scene,
         appEvents,
-        getRenderer: () => renderer,
+        getRenderer: () => app.renderer,
         setRenderer: (r) => {
-            renderer = r;
+            app.renderer = r;
         },
         getComposer: () => composer,
         setComposer: (c) => {
@@ -267,8 +255,8 @@ async function init() {
 
     ({ renderStats, fairnessMonitor, adaptiveQualityState, runtimeGovernor } =
         bootstrapRendererExtras(app, {
-            scene,
-            renderer,
+            scene: app.scene,
+            renderer: app.renderer,
             composer,
             rendererState,
             postConfig,
@@ -295,11 +283,11 @@ async function init() {
     registerFrameCallbacks(scheduler, {
         app,
         isSimulationReady,
-        getPhysicsWorld: () => physicsWorld,
-        getCamera: () => camera,
-        getRenderer: () => renderer,
+        getPhysicsWorld: () => app.physicsWorld,
+        getCamera: () => app.camera,
+        getRenderer: () => app.renderer,
         getComposer: () => composer,
-        scene,
+        scene: app.scene,
         cullingSystem,
         appEvents,
         getCollisionAudio: () => collisionAudio,
@@ -332,27 +320,26 @@ async function init() {
     // while the physics engine (WASM) compiles and initialises in the background.
     clock = new THREE.Clock();
     window.addEventListener('resize', onWindowResize);
-    renderer.setAnimationLoop(animate);
+    app.renderer.setAnimationLoop(animate);
 
     // Initialize Physics — awaited here but the render loop above is already running,
     // so the browser paints every frame while WASM compiles/allocates.
     const physicsBoot = await bootstrapPhysics(app);
     if (!physicsBoot) return;
-    physicsWorld = physicsBoot.physicsWorld;
     if (physicsBoot.wasmAvailable) {
         syncAllDiceToWasm();
     }
 
     // Camera controller (focus state + FPS movement)
-    cameraController = createCameraController(camera);
+    cameraController = createCameraController(app.camera);
 
     // Load all tiers
     let tierResult;
     try {
         tierResult = await loadTiers(
-            scene,
-            camera,
-            physicsWorld,
+            app.scene,
+            app.camera,
+            app.physicsWorld,
             { scheduler, cullingSystem },
             buildTierLoadOptions(app, {
                 collisionAudio,
@@ -378,7 +365,7 @@ async function init() {
                 getDiceCupController: () => diceCupController,
                 getShadowController: () => shadowController,
             }),
-            renderer
+            app.renderer
         );
     } catch (e) {
         console.error('Failed to load scene tiers', e);
@@ -403,7 +390,7 @@ async function init() {
     if (tierResult.diceCupProp) {
         diceCupController = createDiceCupController({
             cupProp: tierResult.diceCupProp,
-            camera,
+            camera: app.camera,
             beginCupRoll: rollWiring.beginCupRoll,
             onMotionActivityChange: (active, source) => {
                 if (!shadowController) return;
@@ -420,8 +407,8 @@ async function init() {
 
     // Input handling
     inputState = setupInput({
-        renderer,
-        camera,
+        renderer: app.renderer,
+        camera: app.camera,
         interaction,
         cameraController,
         diceFocusStateRef: {
@@ -453,9 +440,9 @@ async function init() {
         searchParams,
         app,
         scheduler,
-        renderer,
-        scene,
-        camera,
+        renderer: app.renderer,
+        scene: app.scene,
+        camera: app.camera,
         getShadowController: () => shadowController,
         isXrPresentingRef,
         getCrosshairUI: () => crosshairUI,
@@ -498,7 +485,9 @@ async function init() {
 
 function onWindowResize() {
     const container = document.getElementById('canvas-container');
-    if (!container || !renderer) return;
+    const renderer = app.renderer;
+    const camera = app.camera;
+    if (!container || !renderer || !camera) return;
 
     const width = container.clientWidth;
     const height = container.clientHeight;
@@ -513,5 +502,12 @@ function onWindowResize() {
 function animate() {
     const deltaTime = clock.getDelta();
     const time = clock.getElapsedTime();
-    scheduler.runFrame({ deltaTime, time, renderer, composer, scene, camera });
+    scheduler.runFrame({
+        deltaTime,
+        time,
+        renderer: app.renderer,
+        composer,
+        scene: app.scene,
+        camera: app.camera,
+    });
 }

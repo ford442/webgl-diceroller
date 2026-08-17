@@ -12,19 +12,19 @@ const { launchPage } = require('./helpers/browser');
         timeout: 60000,
     });
 
-    await page.waitForFunction(() => (window.__app?.scene ?? window.scene) !== undefined, {
+    await page.waitForFunction(() => window.__app?.scene !== undefined, {
         timeout: 60000,
     });
-    console.log('window.__app.scene / window.scene is defined');
+    console.log('window.__app.scene is defined');
 
     // Poll every 5 seconds for 60 seconds
     for (let i = 0; i < 12; i++) {
         await page.waitForTimeout(5000);
         const state = await page.evaluate(() => {
             const app = window.__app;
-            const scene = app?.scene ?? window.scene;
+            const scene = app?.scene;
             return {
-                sceneReady: app?.ready ?? window.sceneReady,
+                sceneReady: app?.ready,
                 sceneChildren: scene?.children?.length ?? 0,
             };
         });

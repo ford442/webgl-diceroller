@@ -10,13 +10,13 @@ runTest(
 
         console.log('Waiting for scene to be ready...');
         await page.waitForFunction(
-            () => (window.__app?.ready ?? window.sceneReady) === true,
+            () => window.__app?.ready === true,
             null,
             { timeout: 150000 }
         );
 
         const inScene = await page.evaluate(() => {
-            const scene = window.__app?.scene ?? window.scene;
+            const scene = window.__app?.scene;
             if (!scene) return false;
             let found = false;
             scene.traverse((c) => {

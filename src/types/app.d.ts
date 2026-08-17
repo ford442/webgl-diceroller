@@ -37,8 +37,10 @@ export interface RendererState {
     fallbackReason?: string | null;
     pixelRatio?: number;
     pixelRatioForced?: boolean;
-    usePostAA?: boolean;
+    antialias?: boolean;
     isSoftwareRenderer?: boolean;
+    usePostAA?: boolean;
+    _recoveryCleanup?: (() => void) | null;
     [key: string]: unknown;
 }
 
@@ -88,6 +90,16 @@ export interface AdaptiveQualityState {
     rendererState?: RendererState;
 }
 
+export interface PostRuntimeControls {
+    setBloomBlend: (value: number) => void;
+    setChromaticIntensity: (value: number) => void;
+    getBloomBlend: () => number;
+    getChromaticIntensity: () => number;
+    restoreBaseline: () => void;
+    getBaselineBloomBlend: () => number;
+    getBaselineChromaticIntensity: () => number;
+}
+
 export interface RenderStatsConfig {
     renderer: import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer;
     scene: import('three').Scene;
@@ -96,6 +108,7 @@ export interface RenderStatsConfig {
     getRenderer?: () => import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer | null;
     getRendererState?: () => RendererState | null;
     getPost?: () => PostConfig | null;
+    getGovernor?: () => Record<string, unknown> | null;
     getShadow?: () => Record<string, unknown> | null;
     getDice?: () => Record<string, unknown> | null;
     getWasm?: () => Record<string, unknown> | null;
@@ -104,6 +117,29 @@ export interface RenderStatsConfig {
     getTierRenderStats?: () => unknown;
     debugPerf?: boolean;
     visible?: boolean;
+}
+
+export interface MotionProfileDeps {
+    scene: import('three').Scene;
+    postConfig: PostConfig;
+    postRuntime: PostRuntimeControls;
+    appliedProfile?: { godRaysEnabled?: boolean; shadowLights?: string } | null;
+    runtimeGovernor?: { setDisabled?: (disabled: boolean) => void; refreshBaselineFromProfile?: (profile: unknown) => void } | null;
+    diceGameFeel?: { setMotionBlurAllowed?: (allowed: boolean) => void } | null;
+}
+
+export interface SceneSetupResult {
+    scene: import('three').Scene;
+    camera: import('three').PerspectiveCamera;
+    renderer: import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer;
+    composer: ComposerLike | import('three/examples/jsm/postprocessing/EffectComposer.js').EffectComposer | null;
+    pointLight: import('three').PointLight;
+    spotLight: import('three').SpotLight;
+    postConfig: PostConfig;
+    postPasses?: unknown;
+    postRuntime: PostRuntimeControls;
+    rendererState: RendererState;
+    initialQuality: unknown;
 }
 
 export interface MainDebugHooks {

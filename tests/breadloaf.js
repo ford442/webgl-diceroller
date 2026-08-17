@@ -12,7 +12,7 @@ runTest(async (page, _errors) => {
     // Poll the scene until BreadLoaf is found
     await page.waitForFunction(
         () => {
-            const scene = window.__app?.scene ?? window.scene;
+            const scene = window.__app?.scene;
             if (!scene) return false;
             let found = false;
             scene.traverse((c) => {
@@ -28,9 +28,9 @@ runTest(async (page, _errors) => {
 
     const dataUrl = await page.evaluate(() => {
         const app = window.__app;
-        const renderer = app?.renderer ?? window.renderer;
-        const scene = app?.scene ?? window.scene;
-        const camera = app?.camera ?? window.camera;
+        const renderer = app?.renderer;
+        const scene = app?.scene;
+        const camera = app?.camera;
         if (renderer && scene && camera) {
             // Render it explicitly to the canvas
             renderer.render(scene, camera);

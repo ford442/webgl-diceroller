@@ -1,5 +1,5 @@
 /**
- * workerLayout.js
+ * workerLayout.ts
  *
  * Single source of truth for the SharedArrayBuffer memory layout shared between
  * the physics Web Worker (`dice_physics.worker.js`) and the main-thread proxy
@@ -35,6 +35,8 @@
  * without locking.
  */
 
+import { MAX_RECORD_LEN } from './workerCommands.js';
+
 export const MAX_DICE = 500; // must match dice_physics.cpp MAX_DICE
 export const STRIDE = 7; // [px,py,pz, qx,qy,qz,qw] per die
 
@@ -58,8 +60,6 @@ export const IDS_BYTES = MAX_DICE * 4; // f32 ids
 export const XF_BYTES = MAX_DICE * STRIDE * 4; // f32 transforms
 export const BUFFER_BYTES = IDS_BYTES + XF_BYTES;
 
-import { MAX_RECORD_LEN } from './workerCommands.js';
-
 // Ring holds several frames of worst-case batched commands (transform = 9 floats).
 export const CMD_RING_FLOATS = MAX_DICE * MAX_RECORD_LEN * 8;
 export const CMD_RING_BYTES = CMD_RING_FLOATS * 4;
@@ -74,12 +74,12 @@ export const SAB_BYTES = TRANSFORM_SAB_BYTES + CMD_RING_BYTES;
 export const CMD_RING_OFFSET = TRANSFORM_SAB_BYTES;
 
 /** Byte offset of the ids region for buffer `b` (0|1). */
-export const idsOffset = (b) => HEADER_BYTES + b * BUFFER_BYTES;
+export const idsOffset = (b: 0 | 1): number => HEADER_BYTES + b * BUFFER_BYTES;
 /** Byte offset of the transforms region for buffer `b` (0|1). */
-export const xfOffset = (b) => HEADER_BYTES + b * BUFFER_BYTES + IDS_BYTES;
+export const xfOffset = (b: 0 | 1): number => HEADER_BYTES + b * BUFFER_BYTES + IDS_BYTES;
 
 /** True when SharedArrayBuffer + Atomics may be used (cross-origin isolated). */
-export const sabSupported = () =>
+export const sabSupported = (): boolean =>
     typeof SharedArrayBuffer !== 'undefined' &&
     typeof Atomics !== 'undefined' &&
     (typeof self === 'undefined' ? false : self.crossOriginIsolated === true);

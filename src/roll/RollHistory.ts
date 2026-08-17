@@ -1,28 +1,67 @@
 const STORAGE_KEY = 'dice-roller-roll-history';
 const DEFAULT_MAX_ENTRIES = 500;
-const DICE_TYPE_ORDER = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+const DICE_TYPE_ORDER = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'] as const;
 
-function formatDiceSet(diceSet) {
+type DieType = (typeof DICE_TYPE_ORDER)[number];
+
+interface DiceResult {
+    type: string;
+    value: number;
+}
+
+interface RollHistoryMeta {
+    diceSet?: Record<string, number>;
+    seed?: number | null;
+    expression?: string | null;
+}
+
+interface RollHistoryEntry {
+    id: string;
+    timestamp: number;
+    diceSet: Record<string, number>;
+    diceResults: DiceResult[];
+    total: number;
+    seed: number | null;
+    expression: string | null;
+}
+
+export interface RollHistoryOptions {
+    maxEntries?: number;
+    storageKey?: string;
+    persist?: boolean;
+}
+
+export interface RollHistory {
+    appendRoll: (diceResults: DiceResult[] | null | undefined, meta?: RollHistoryMeta) => RollHistoryEntry | null;
+    getEntries: () => RollHistoryEntry[];
+    clear: () => void;
+    exportAsText: () => string;
+    exportAsCsv: () => string;
+    maxEntries: number;
+}
+
+function formatDiceSet(diceSet: Record<string, number> | null | undefined): string {
     if (!diceSet || typeof diceSet !== 'object') return '';
     return DICE_TYPE_ORDER.filter((type) => (diceSet[type] ?? 0) > 0)
         .map((type) => `${diceSet[type]}${type}`)
         .join(' + ');
 }
 
-function formatResultsSummary(diceResults) {
-    const grouped = {};
+function formatResultsSummary(diceResults: DiceResult[]): string {
+    const grouped: Partial<Record<DieType, number[]>> = {};
     for (const result of diceResults) {
         if (!result?.type || !Number.isInteger(result.value)) continue;
-        if (!grouped[result.type]) grouped[result.type] = [];
-        grouped[result.type].push(result.value);
+        const type = result.type as DieType;
+        if (!grouped[type]) grouped[type] = [];
+        grouped[type]!.push(result.value);
     }
 
     return DICE_TYPE_ORDER.filter((type) => grouped[type])
-        .map((type) => `${grouped[type].length}${type}: ${grouped[type].join(', ')}`)
+        .map((type) => `${grouped[type]!.length}${type}: ${grouped[type]!.join(', ')}`)
         .join('  •  ');
 }
 
-function escapeCsv(value) {
+function escapeCsv(value: unknown): string {
     const text = String(value ?? '');
     if (/[",\n]/.test(text)) {
         return `"${text.replace(/"/g, '""')}"`;
@@ -34,20 +73,25 @@ export function createRollHistory({
     maxEntries = DEFAULT_MAX_ENTRIES,
     storageKey = STORAGE_KEY,
     persist = true,
-} = {}) {
-    let entries = [];
+}: RollHistoryOptions = {}): RollHistory {
+    let entries: RollHistoryEntry[] = [];
     let nextId = 1;
 
-    function load() {
+    function load(): void {
         if (!persist || typeof localStorage === 'undefined') return;
         try {
             const raw = localStorage.getItem(storageKey);
             if (!raw) return;
-            const parsed = JSON.parse(raw);
+            const parsed = JSON.parse(raw) as { entries?: unknown };
             if (!Array.isArray(parsed?.entries)) return;
 
             entries = parsed.entries
-                .filter((entry) => entry && Array.isArray(entry.diceResults))
+                .filter(
+                    (entry): entry is RollHistoryEntry =>
+                        !!entry &&
+                        typeof entry === 'object' &&
+                        Array.isArray((entry as RollHistoryEntry).diceResults)
+                )
                 .map((entry) => ({
                     id: entry.id ?? `roll-${nextId++}`,
                     timestamp: entry.timestamp ?? Date.now(),
@@ -69,7 +113,7 @@ export function createRollHistory({
         }
     }
 
-    function save() {
+    function save(): void {
         if (!persist || typeof localStorage === 'undefined') return;
         try {
             localStorage.setItem(storageKey, JSON.stringify({ entries }));
@@ -78,14 +122,17 @@ export function createRollHistory({
         }
     }
 
-    function appendRoll(diceResults, meta = {}) {
+    function appendRoll(
+        diceResults: DiceResult[] | null | undefined,
+        meta: RollHistoryMeta = {}
+    ): RollHistoryEntry | null {
         const valid = (diceResults ?? []).filter(
             (result) => result && Number.isInteger(result.value)
         );
         if (valid.length === 0) return null;
 
         const total = valid.reduce((sum, result) => sum + result.value, 0);
-        const entry = {
+        const entry: RollHistoryEntry = {
             id: `roll-${nextId++}`,
             timestamp: Date.now(),
             diceSet: meta.diceSet ?? {},
@@ -104,16 +151,16 @@ export function createRollHistory({
         return entry;
     }
 
-    function getEntries() {
+    function getEntries(): RollHistoryEntry[] {
         return entries.map((entry) => ({ ...entry, diceResults: [...entry.diceResults] }));
     }
 
-    function clear() {
+    function clear(): void {
         entries = [];
         save();
     }
 
-    function exportAsText() {
+    function exportAsText(): string {
         if (entries.length === 0) return 'No rolls recorded.';
 
         return entries
@@ -129,7 +176,7 @@ export function createRollHistory({
             .join('\n');
     }
 
-    function exportAsCsv() {
+    function exportAsCsv(): string {
         const header = 'timestamp,dice_set,results,total,seed,expression';
         const rows = entries.map((entry) => {
             const time = new Date(entry.timestamp).toISOString();
