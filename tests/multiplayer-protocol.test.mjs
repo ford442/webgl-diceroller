@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import {
     PROTOCOL_VERSION,
+    PROTOCOL_VERSION_V2,
     MsgType,
     encodeMessage,
     decodeMessage,
@@ -11,7 +12,10 @@ import {
     makePresence,
     makeTableSync,
     makeHello,
+    makeCommit,
+    makeReveal,
 } from '../src/net/Protocol.js';
+import { createCommit, generateNonce, verifyReveal } from '../src/net/CommitReveal.js';
 
 function test(name, fn) {
     try {
@@ -86,6 +90,38 @@ test('rejects invalid json', () => {
     const decoded = decodeMessage('{not-json');
     assert.equal(decoded.ok, false);
     assert.equal(decoded.error, 'invalid_json');
+});
+
+test('commit round-trip v2', () => {
+    const msg = makeCommit({
+        hash: 'abc123',
+        notation: '2d6+1',
+        dieCount: 2,
+        diceCounts: { d6: 2 },
+    });
+    const decoded = decodeMessage(encodeMessage(msg, PROTOCOL_VERSION_V2));
+    assert.equal(decoded.ok, true);
+    assert.equal(decoded.msg.type, MsgType.COMMIT);
+    assert.equal(decoded.msg.hash, 'abc123');
+});
+
+test('reveal round-trip v2', async () => {
+    const seed = 0xdeadbeef;
+    const nonce = generateNonce();
+    const commit = await createCommit(seed, nonce, { dieCount: 1, notation: '1d20' });
+    const msg = makeReveal({
+        seed,
+        nonce,
+        notation: '1d20',
+        diceCounts: { d20: 1 },
+    });
+    const decoded = decodeMessage(encodeMessage(msg, PROTOCOL_VERSION_V2));
+    assert.equal(decoded.ok, true);
+    assert.equal(decoded.msg.type, MsgType.REVEAL);
+    const ok = await verifyReveal(commit.hash, seed, nonce);
+    assert.equal(ok, true);
+    const bad = await verifyReveal(commit.hash, seed + 1, nonce);
+    assert.equal(bad, false);
 });
 
 console.log('All multiplayer protocol tests passed.');

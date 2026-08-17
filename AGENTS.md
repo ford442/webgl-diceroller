@@ -120,6 +120,19 @@ npm run format:check        # Prettier check (CI)
     - `?no-godrays` disables the tavern window volumetric beam meshes (both renderers).
     - `?renderer-info` shows a small badge with the active renderer type.
     - `?debug` / `?debug-perf` shows render stats (incl. renderer type + fallback); `debug-perf` also logs slow frame systems.
+    - `?fair-commit` enables multiplayer protocol v2 (commit-reveal seeds before throw). Default v1 still broadcasts cleartext seeds.
+
+### Session layer
+
+Initiative / turn tracking and durable multiplayer rooms are wired through **`AppContext`** + **`AppEvents`** (not `main.js`):
+
+- [`src/session/SessionState.ts`](src/session/SessionState.ts) — seat list, current actor, last expression; `localStorage` per room code.
+- [`src/app/SessionWiring.js`](src/app/SessionWiring.js) + [`src/ui/SessionStrip.js`](src/ui/SessionStrip.js) — desktop strip (`session:initiative`, `session:turn`).
+- [`signaling/src/RoomDurableObject.js`](signaling/src/RoomDurableObject.js) — persisted room state + hibernating WebSockets; `solverBuildId` mismatch rejected at join.
+- [`src/net/CommitReveal.ts`](src/net/CommitReveal.ts) — SHA-256 commit-reveal when `?fair-commit` is set.
+- [`src/xr/XrResultsHud.js`](src/xr/XrResultsHud.js) — world-space totals on `xrWorld`; DOM HUD hidden while presenting.
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md).
 
 ## Architecture Details
 

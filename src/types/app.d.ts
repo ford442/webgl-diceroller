@@ -172,10 +172,13 @@ export interface MainDebugHooks {
 export type AppEventName =
     | 'roll:started'
     | 'roll:settled'
+    | 'roll:evaluated'
     | 'dice:collision'
     | 'renderer:lost'
     | 'layout:rerolled'
-    | 'app:ready';
+    | 'app:ready'
+    | 'session:initiative'
+    | 'session:turn';
 
 export interface AppEvents {
     on(type: string, handler: (payload: unknown) => void): () => void;
@@ -186,10 +189,13 @@ export interface AppEvents {
     AppEvent: {
         ROLL_STARTED: 'roll:started';
         ROLL_SETTLED: 'roll:settled';
+        ROLL_EVALUATED: 'roll:evaluated';
         DICE_COLLISION: 'dice:collision';
         RENDERER_LOST: 'renderer:lost';
         LAYOUT_REROLLED: 'layout:rerolled';
         APP_READY: 'app:ready';
+        SESSION_INITIATIVE: 'session:initiative';
+        SESSION_TURN: 'session:turn';
     };
 }
 
@@ -258,6 +264,12 @@ export interface AppContext {
     refreshDiceAppearance: (() => void) | null;
     REPLAY_VERSION: number | null;
     multiplayer?: unknown;
+    session?: {
+        getSnapshot?: () => unknown;
+        applyRemoteSession?: (msg: unknown) => void;
+        setSeats?: (seats: unknown) => void;
+    };
+    xrResultsHud?: unknown;
     /** WebXR seated-table spike API when `?xr` is set. */
     xr?: unknown;
     /** Top-level aliases for Playwright (`window.__app.replayRoll`). */

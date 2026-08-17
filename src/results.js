@@ -28,6 +28,11 @@ let liveRegion = null;
 let historyPanel = null;
 let historyList = null;
 let lastLiveAnnouncement = '';
+let domResultsSuppressed = false;
+
+export function setDomResultsSuppressed(suppressed) {
+    domResultsSuppressed = suppressed;
+}
 
 // ---------------------------------------------------------------------------
 // Tavern theme tokens
@@ -61,6 +66,11 @@ export function initResultsUI() {
  */
 export function updateDiceHud(diceResults, options = {}) {
     if (!diceHudRow) return;
+    if (options.hidden && diceHudPanel) {
+        diceHudPanel.style.display = 'none';
+        return;
+    }
+    if (diceHudPanel) diceHudPanel.style.display = '';
 
     const rolling = options.rolling === true;
     const debugRows = options.debugRows ?? null;
@@ -72,7 +82,9 @@ export function updateDiceHud(diceResults, options = {}) {
         return;
     }
 
-    const valid = diceResults.filter((r) => r.value !== null && r.value !== undefined && r.value > 0);
+    const valid = diceResults.filter(
+        (r) => r.value !== null && r.value !== undefined && r.value > 0
+    );
     const total = valid.reduce((s, r) => s + r.value, 0);
 
     diceResults.forEach((result, index) => {
@@ -114,6 +126,7 @@ export function updateDiceHud(diceResults, options = {}) {
  */
 /** @param {DiceReadValue[]} diceResults */
 export function showResults(diceResults) {
+    if (domResultsSuppressed) return;
     if (!resultsOverlay) return;
 
     const valid = diceResults.filter((r) => r.value !== null && r.value !== undefined);
@@ -207,6 +220,7 @@ export function showResults(diceResults) {
  * @param {import('./roll/Notation.js').EvaluatedRoll} evaluated
  */
 export function showNotationResults(evaluated) {
+    if (domResultsSuppressed) return;
     if (!resultsOverlay || !evaluated) return;
 
     const displayDice = evaluated.dice.filter((d) => !d.exploded);

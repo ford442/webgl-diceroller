@@ -5,13 +5,17 @@
 import { AppEvent } from '../core/AppEvents.js';
 import {
     MsgType,
-    PROTOCOL_VERSION,
+    PROTOCOL_VERSION_V2,
     decodeMessage,
     encodeMessage,
     makeHello,
     makeWelcome,
     makeTableSync,
     makeRoll,
+    makeCommit,
+    makeCommitAck,
+    makeReveal,
+    makeSessionSync,
     makePresence,
     makePing,
     makePong,
@@ -27,16 +31,24 @@ import { createPeerMesh } from './PeerMesh.js';
  * @param {{
  *   signalingUrl: string,
  *   events: import('../types/app').AppEvents,
+ *   protocolVersion: number,
+ *   solverBuildId: string,
  *   getDiceCounts: () => Record<string, number>,
  *   getPresencePayload: () => { diceAppearance?: string, diceAppearanceVersion?: number },
+ *   getSessionSnapshot?: () => object | null,
  *   applyPresencePayload: (payload: object) => void,
  *   isWasmAvailable: () => boolean,
+ *   useFairCommit?: boolean,
  *   onRemoteRoll: (msg: {
  *     seed: number,
  *     notation: string | null,
  *     diceCounts: Record<string, number> | null,
  *   }) => void | Promise<void>,
  *   onRemoteTableSync?: (msg: object) => void | Promise<void>,
+ *   onRemoteCommit?: (msg: object) => void | Promise<void>,
+ *   onRemoteReveal?: (msg: object) => void | Promise<void>,
+ *   onRemoteSessionSync?: (msg: object) => void | Promise<void>,
+ *   onRoomSnapshot?: (msg: object) => void | Promise<void>,
  *   generatePeerId?: () => string,
  *   displayName?: string,
  * }} deps
@@ -45,6 +57,8 @@ export function createRoomSession(deps) {
     const signaling = createSignalingClient(deps.signalingUrl);
     const peerId = deps.generatePeerId?.() ?? crypto.randomUUID();
     const displayName = deps.displayName ?? null;
+    const protocolVersion = deps.protocolVersion;
+    const useFairCommit = deps.useFairCommit ?? protocolVersion >= PROTOCOL_VERSION_V2;
 
     /** @type {'host' | 'guest' | null} */
     let role = null;
@@ -68,8 +82,14 @@ export function createRoomSession(deps) {
     let suppressBroadcast = false;
     /** @type {{ seed: number, notation: string | null, diceCounts: Record<string, number>, results?: unknown } | null} */
     let lastRoll = null;
+    /** @type {unknown} */
+    let pendingCommit = null;
+    /** @type {unknown} */
+    let lastReveal = null;
     /** @type {Set<(state: object) => void>} */
     const statusListeners = new Set();
+    /** @type {Set<string>} */
+    const commitAckPeers = new Set();
 
     function getState() {
         return {
@@ -80,7 +100,9 @@ export function createRoomSession(deps) {
             peerId,
             connectedPeers: mesh?.getConnectedPeerIds() ?? [],
             signalingConfigured: Boolean(signaling.httpBase),
-            protocolVersion: PROTOCOL_VERSION,
+            protocolVersion,
+            solverBuildId: deps.solverBuildId,
+            useFairCommit,
         };
     }
 
@@ -108,31 +130,82 @@ export function createRoomSession(deps) {
 
     function buildPresenceMsg() {
         const presence = deps.getPresencePayload() ?? {};
-        return makePresence({
-            peerId,
-            name: displayName,
-            diceAppearance: presence.diceAppearance ?? '',
-            diceAppearanceVersion: presence.diceAppearanceVersion ?? 1,
-        });
+        return makePresence(
+            {
+                peerId,
+                name: displayName,
+                diceAppearance: presence.diceAppearance ?? '',
+                diceAppearanceVersion: presence.diceAppearanceVersion ?? 1,
+            },
+            protocolVersion
+        );
     }
 
     function sendEncoded(toPeerId, msg) {
-        mesh?.sendTo(toPeerId, encodeMessage(msg));
+        mesh?.sendTo(toPeerId, encodeMessage(msg, protocolVersion));
     }
 
     function broadcastEncoded(msg) {
-        mesh?.broadcast(encodeMessage(msg));
+        mesh?.broadcast(encodeMessage(msg, protocolVersion));
+    }
+
+    function pushPersistedRoomState() {
+        if (role !== 'host') return;
+        signaling.pushRoomState({
+            diceCounts: deps.getDiceCounts(),
+            presence: deps.getPresencePayload(),
+            lastRoll,
+            session: deps.getSessionSnapshot?.() ?? null,
+            pendingCommit,
+            lastReveal,
+        });
     }
 
     function sendTableSync(toPeerId) {
         sendEncoded(
             toPeerId,
-            makeTableSync({
-                diceCounts: deps.getDiceCounts(),
-                presence: deps.getPresencePayload(),
-                lastRoll,
-            })
+            makeTableSync(
+                {
+                    diceCounts: deps.getDiceCounts(),
+                    presence: deps.getPresencePayload(),
+                    lastRoll,
+                },
+                protocolVersion
+            )
         );
+    }
+
+    /**
+     * @param {object} msg
+     */
+    async function applyRoomSnapshot(msg) {
+        if (msg.diceCounts || msg.lastRoll || msg.session) {
+            try {
+                await deps.onRoomSnapshot?.(msg);
+            } catch (err) {
+                console.warn('[RoomSession] room-snapshot apply failed', err);
+            }
+        }
+        if (msg.session) {
+            try {
+                await deps.onRemoteSessionSync?.(msg.session);
+            } catch (err) {
+                console.warn('[RoomSession] session snapshot apply failed', err);
+            }
+        }
+        if (msg.diceCounts || msg.lastRoll) {
+            try {
+                await deps.onRemoteTableSync?.({
+                    diceCounts: msg.diceCounts,
+                    lastRoll: msg.lastRoll,
+                    presence: msg.presence,
+                });
+            } catch (err) {
+                console.warn('[RoomSession] table snapshot apply failed', err);
+            }
+        }
+        pendingCommit = msg.pendingCommit ?? pendingCommit;
+        lastReveal = msg.lastReveal ?? lastReveal;
     }
 
     /**
@@ -153,16 +226,32 @@ export function createRoomSession(deps) {
             case MsgType.HELLO:
                 sendEncoded(
                     fromPeerId,
-                    makeWelcome({ peerId, role: role ?? 'guest', name: displayName })
+                    makeWelcome(
+                        { peerId, role: role ?? 'guest', name: displayName },
+                        protocolVersion
+                    )
                 );
                 if (role === 'host') {
                     sendTableSync(fromPeerId);
                     broadcastEncoded(buildPresenceMsg());
+                    const session = deps.getSessionSnapshot?.();
+                    if (session) {
+                        sendEncoded(
+                            fromPeerId,
+                            makeSessionSync(
+                                {
+                                    seats: session.seats,
+                                    currentIndex: session.currentIndex,
+                                    lastExpression: session.lastExpression,
+                                },
+                                protocolVersion
+                            )
+                        );
+                    }
                 }
                 break;
 
             case MsgType.WELCOME:
-                // Host answered; request sync by waiting for table-sync from host.
                 break;
 
             case MsgType.TABLE_SYNC:
@@ -184,7 +273,7 @@ export function createRoomSession(deps) {
                 break;
 
             case MsgType.ROLL:
-                if (role !== 'guest') break;
+                if (role !== 'guest' || useFairCommit) break;
                 if (!deps.isWasmAvailable()) {
                     setStatus('error', 'Enable WASM for multiplayer');
                     break;
@@ -209,21 +298,74 @@ export function createRoomSession(deps) {
                 }
                 break;
 
-            case MsgType.PRESENCE:
-                if (role === 'guest' || fromPeerId !== peerId) {
-                    // v1: guests apply host presence; host ignores guest skins.
-                    if (role === 'guest') {
-                        try {
-                            deps.applyPresencePayload(msg);
-                        } catch (err) {
-                            console.warn('[RoomSession] presence apply failed', err);
-                        }
+            case MsgType.COMMIT:
+                if (role !== 'guest' || !useFairCommit) break;
+                pendingCommit = msg;
+                pushPersistedRoomState();
+                sendEncoded(fromPeerId, makeCommitAck({ peerId }, protocolVersion));
+                try {
+                    await deps.onRemoteCommit?.(msg);
+                } catch (err) {
+                    console.warn('[RoomSession] remote commit failed', err);
+                }
+                break;
+
+            case MsgType.COMMIT_ACK:
+                if (role !== 'host' || !useFairCommit) break;
+                if (fromPeerId) commitAckPeers.add(fromPeerId);
+                break;
+
+            case MsgType.REVEAL:
+                if (role !== 'guest' || !useFairCommit) break;
+                if (!deps.isWasmAvailable()) {
+                    setStatus('error', 'Enable WASM for multiplayer');
+                    break;
+                }
+                lastReveal = msg;
+                pendingCommit = null;
+                suppressBroadcast = true;
+                try {
+                    await deps.onRemoteReveal?.(msg);
+                    lastRoll = {
+                        seed: msg.seed >>> 0,
+                        notation: msg.notation ?? null,
+                        diceCounts: msg.diceCounts ?? deps.getDiceCounts(),
+                    };
+                    pushPersistedRoomState();
+                } catch (err) {
+                    console.warn('[RoomSession] remote reveal failed', err);
+                    setStatus('error', 'Commit-reveal verification failed');
+                } finally {
+                    suppressBroadcast = false;
+                }
+                break;
+
+            case MsgType.SESSION_SYNC:
+                if (role === 'guest') {
+                    try {
+                        await deps.onRemoteSessionSync?.(msg);
+                    } catch (err) {
+                        console.warn('[RoomSession] session-sync apply failed', err);
                     }
                 }
                 break;
 
+            case MsgType.PRESENCE:
+                if (role === 'guest') {
+                    try {
+                        deps.applyPresencePayload(msg);
+                    } catch (err) {
+                        console.warn('[RoomSession] presence apply failed', err);
+                    }
+                }
+                break;
+
+            case MsgType.ERROR:
+                setStatus('error', msg.detail ?? msg.code ?? 'Protocol error');
+                break;
+
             case MsgType.PING:
-                sendEncoded(fromPeerId, makePong(msg.t));
+                sendEncoded(fromPeerId, makePong(msg.t, protocolVersion));
                 break;
 
             case MsgType.PONG:
@@ -245,7 +387,15 @@ export function createRoomSession(deps) {
                 reconnectAttempts = 0;
                 sendEncoded(
                     remoteId,
-                    makeHello({ peerId, role: role ?? 'guest', name: displayName })
+                    makeHello(
+                        {
+                            peerId,
+                            role: role ?? 'guest',
+                            name: displayName,
+                            solverBuildId: deps.solverBuildId,
+                        },
+                        protocolVersion
+                    )
                 );
                 if (role === 'host') {
                     sendTableSync(remoteId);
@@ -271,6 +421,12 @@ export function createRoomSession(deps) {
     function wireSignalingHandlers() {
         unsubSignal?.();
         unsubSignal = signaling.onMessage((msg) => {
+            if (msg.type === 'room-snapshot') {
+                applyRoomSnapshot(msg).catch((err) => {
+                    console.warn('[RoomSession] room-snapshot failed', err);
+                });
+                return;
+            }
             if (msg.type === 'signal' && msg.from && msg.data) {
                 mesh?.handleSignal(msg.from, msg.data);
                 return;
@@ -294,7 +450,7 @@ export function createRoomSession(deps) {
     function startPing() {
         stopPing();
         pingTimer = setInterval(() => {
-            broadcastEncoded(makePing());
+            broadcastEncoded(makePing(undefined, protocolVersion));
         }, 15000);
     }
 
@@ -326,17 +482,23 @@ export function createRoomSession(deps) {
         signaling.disconnect();
         attachMesh();
         wireSignalingHandlers();
-        const joined = await signaling.connectRoom(roomCode, { peerId, role });
+        await connectSignaling(roomCode, role);
         if (role === 'host') {
-            for (const p of joined.peers) {
-                if (p.role === 'guest') mesh?.connectToGuest(p.peerId);
-            }
+            // Peers re-offer via peer-joined after reconnect.
             setStatus('connected', `Host · ${mesh?.getConnectedPeerIds().length ?? 0} connected`);
         } else {
-            // Guest waits for host offer / channel.
             setStatus('joining', `Guest · waiting for host`);
         }
         startPing();
+    }
+
+    async function connectSignaling(code, connectRole) {
+        await signaling.connectRoom(code, {
+            peerId,
+            role: connectRole,
+            solverBuildId: deps.solverBuildId,
+            protocolVersion,
+        });
     }
 
     function bindHostRollBroadcast() {
@@ -344,20 +506,56 @@ export function createRoomSession(deps) {
         unsubRollStarted = deps.events.on(AppEvent.ROLL_STARTED, (payload) => {
             if (role !== 'host' || suppressBroadcast) return;
             const p =
-                /** @type {{ seed?: number | null, expression?: string | null, diceSet?: Record<string, number>, source?: string }} */ (
+                /** @type {{ seed?: number | null, expression?: string | null, diceSet?: Record<string, number>, source?: string, commit?: object, reveal?: object }} */ (
                     payload ?? {}
                 );
-            if (p.seed == null) return; // cup pours / unseeded
+            if (p.seed == null) return;
             if (!deps.isWasmAvailable()) return;
 
             const diceCounts = p.diceSet ?? deps.getDiceCounts();
-            const msg = makeRoll({
-                seed: p.seed,
-                notation: p.expression ?? null,
-                diceCounts,
-                presence: deps.getPresencePayload(),
-                throwAt: performance.now(),
-            });
+            if (useFairCommit) {
+                if (p.commit) {
+                    pendingCommit = p.commit;
+                    broadcastEncoded(makeCommit(p.commit, protocolVersion));
+                    pushPersistedRoomState();
+                }
+                if (p.reveal) {
+                    lastReveal = p.reveal;
+                    pendingCommit = null;
+                    broadcastEncoded(
+                        makeReveal(
+                            {
+                                seed: p.reveal.seed,
+                                nonce: p.reveal.nonce,
+                                notation: p.reveal.notation ?? p.expression ?? null,
+                                diceCounts,
+                                presence: deps.getPresencePayload(),
+                                throwAt: p.reveal.throwAt ?? performance.now(),
+                            },
+                            protocolVersion
+                        )
+                    );
+                    lastRoll = {
+                        seed: p.reveal.seed >>> 0,
+                        notation: p.reveal.notation ?? p.expression ?? null,
+                        diceCounts,
+                    };
+                    pushPersistedRoomState();
+                    broadcastEncoded(buildPresenceMsg());
+                }
+                return;
+            }
+
+            const msg = makeRoll(
+                {
+                    seed: p.seed,
+                    notation: p.expression ?? null,
+                    diceCounts,
+                    presence: deps.getPresencePayload(),
+                    throwAt: performance.now(),
+                },
+                protocolVersion
+            );
             lastRoll = {
                 seed: p.seed >>> 0,
                 notation: p.expression ?? null,
@@ -365,6 +563,7 @@ export function createRoomSession(deps) {
             };
             broadcastEncoded(msg);
             broadcastEncoded(buildPresenceMsg());
+            pushPersistedRoomState();
         });
     }
 
@@ -379,9 +578,10 @@ export function createRoomSession(deps) {
         roomCode = code;
         attachMesh();
         wireSignalingHandlers();
-        await signaling.connectRoom(code, { peerId, role: 'host' });
+        await connectSignaling(code, 'host');
         bindHostRollBroadcast();
         startPing();
+        pushPersistedRoomState();
         setStatus('connected', `Host · room ${code}`);
         syncRoomToUrl(code);
         return { code };
@@ -411,10 +611,18 @@ export function createRoomSession(deps) {
             setStatus('error', 'Room not found');
             throw new Error('room_not_found');
         }
+        if (
+            info.solverBuildId &&
+            info.solverBuildId !== deps.solverBuildId &&
+            deps.solverBuildId !== 'unknown'
+        ) {
+            setStatus('error', 'Solver build mismatch — rebuild WASM on all clients');
+            throw new Error('solver_build_mismatch');
+        }
 
         attachMesh();
         wireSignalingHandlers();
-        await signaling.connectRoom(normalized, { peerId, role: 'guest' });
+        await connectSignaling(normalized, 'guest');
         startPing();
         syncRoomToUrl(normalized);
         setStatus('joining', `Guest · waiting for host`);
@@ -424,7 +632,6 @@ export function createRoomSession(deps) {
         try {
             const url = new URL(window.location.href);
             url.searchParams.set('room', code);
-            // Room wins over one-shot shareable seed replay.
             url.searchParams.delete('seed');
             window.history.replaceState({}, '', url.toString());
         } catch {
@@ -437,9 +644,25 @@ export function createRoomSession(deps) {
         broadcastEncoded(buildPresenceMsg());
     }
 
+    function broadcastSessionSync(snapshot) {
+        if (role !== 'host' || !mesh || !snapshot) return;
+        broadcastEncoded(
+            makeSessionSync(
+                {
+                    seats: snapshot.seats,
+                    currentIndex: snapshot.currentIndex,
+                    lastExpression: snapshot.lastExpression,
+                },
+                protocolVersion
+            )
+        );
+        pushPersistedRoomState();
+    }
+
     function recordSettledResults(results) {
         if (lastRoll) {
             lastRoll = { ...lastRoll, results };
+            pushPersistedRoomState();
         }
     }
 
@@ -459,6 +682,9 @@ export function createRoomSession(deps) {
         role = null;
         roomCode = null;
         reconnectAttempts = 0;
+        pendingCommit = null;
+        lastReveal = null;
+        commitAckPeers.clear();
         setStatus('idle');
     }
 
@@ -478,10 +704,13 @@ export function createRoomSession(deps) {
         joinRoom,
         leave,
         broadcastPresence,
+        broadcastSessionSync,
         recordSettledResults,
+        pushPersistedRoomState,
         isGuest,
         isHost,
         signalingConfigured: Boolean(signaling.httpBase),
+        useFairCommit,
     };
 }
 

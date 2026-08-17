@@ -15,6 +15,15 @@ export interface SignalingMessage {
     error?: string;
     to?: string;
     data?: unknown;
+    diceCounts?: Record<string, number> | null;
+    presence?: unknown;
+    lastRoll?: unknown;
+    layoutSeed?: number | null;
+    session?: unknown;
+    pendingCommit?: unknown;
+    lastReveal?: unknown;
+    protocolVersion?: number;
+    solverBuildId?: string | null;
     [key: string]: unknown;
 }
 
@@ -27,17 +36,31 @@ export interface CreateRoomResult {
 export interface RoomExistsResult {
     exists: boolean;
     peerCount: number;
+    protocolVersion?: number;
+    solverBuildId?: string | null;
 }
 
 export interface ConnectRoomOptions {
     peerId: string;
     role: 'host' | 'guest';
+    solverBuildId?: string;
+    protocolVersion?: number;
 }
 
 export interface ConnectRoomResult {
     peerId: string;
     role: string;
     peers: Array<{ peerId: string; role: string }>;
+}
+
+export interface RoomStatePayload {
+    diceCounts?: Record<string, number> | null;
+    presence?: unknown;
+    lastRoll?: unknown;
+    layoutSeed?: number | null;
+    session?: unknown;
+    pendingCommit?: unknown;
+    lastReveal?: unknown;
 }
 
 export interface SignalingClient {
@@ -48,9 +71,23 @@ export interface SignalingClient {
     connectRoom: (code: string, opts: ConnectRoomOptions) => Promise<ConnectRoomResult>;
     send: (msg: SignalingMessage) => boolean;
     sendSignal: (toPeerId: string, data: unknown) => boolean;
+    pushRoomState: (payload: RoomStatePayload) => boolean;
     onMessage: (fn: SignalingMessageHandler) => () => void;
     disconnect: () => void;
     isConnected: () => boolean;
+}
+
+const SIGNALING_ERROR_MESSAGES: Record<string, string> = {
+    solver_build_mismatch:
+        'Solver build mismatch — rebuild WASM on all clients (npm run build:wasm) and refresh.',
+    protocol_version_mismatch: 'Protocol version mismatch — use the same app build on all clients.',
+    host_already_present: 'Another host is already connected to this room.',
+    room_not_found: 'Room not found.',
+    room_full: 'Room is full (max 6 players).',
+};
+
+function signalingErrorMessage(errorCode: string): string {
+    return SIGNALING_ERROR_MESSAGES[errorCode] ?? errorCode;
 }
 
 /**
@@ -108,10 +145,14 @@ export function createSignalingClient(signalingUrl: string): SignalingClient {
 
         disconnect();
 
-        const url =
-            `${wsBase}/rooms/${encodeURIComponent(code)}` +
-            `?peerId=${encodeURIComponent(opts.peerId)}` +
-            `&role=${encodeURIComponent(opts.role)}`;
+        const params = new URLSearchParams();
+        params.set('peerId', opts.peerId);
+        params.set('role', opts.role);
+        if (opts.solverBuildId) params.set('solverBuildId', opts.solverBuildId);
+        if (opts.protocolVersion != null)
+            params.set('protocolVersion', String(opts.protocolVersion));
+
+        const url = `${wsBase}/rooms/${encodeURIComponent(code)}?${params.toString()}`;
 
         return new Promise((resolve, reject) => {
             let settled = false;
@@ -145,7 +186,7 @@ export function createSignalingClient(signalingUrl: string): SignalingClient {
                     });
                 }
                 if (!settled && msg?.error) {
-                    fail(new Error(String(msg.error)));
+                    fail(new Error(signalingErrorMessage(String(msg.error))));
                 }
             });
 
@@ -166,6 +207,10 @@ export function createSignalingClient(signalingUrl: string): SignalingClient {
 
     function sendSignal(toPeerId: string, data: unknown): boolean {
         return send({ type: 'signal', to: toPeerId, data });
+    }
+
+    function pushRoomState(payload: RoomStatePayload): boolean {
+        return send({ type: 'room-state', ...payload });
     }
 
     function disconnect(): void {
@@ -191,6 +236,7 @@ export function createSignalingClient(signalingUrl: string): SignalingClient {
         connectRoom,
         send,
         sendSignal,
+        pushRoomState,
         onMessage,
         disconnect,
         isConnected,

@@ -51,6 +51,8 @@ import { registerFrameCallbacks } from './app/SchedulerSetup.js';
 import { createRollWiring } from './app/RollWiring.js';
 import { installDebugGlobals } from './app/DebugGlobals.js';
 import { setupMultiplayer } from './app/MultiplayerWiring.js';
+import { setupSessionWiring } from './app/SessionWiring.js';
+import { isFairCommitEnabled } from './net/protocolFlags.js';
 import { bootstrapPhysics, showLoadFailure } from './app/PhysicsBootstrap.js';
 import { startPostLoadAdaptiveProbe } from './core/AdaptiveQuality.js';
 import { bootstrapRendererExtras } from './app/RendererBootstrap.js';
@@ -221,6 +223,7 @@ async function init() {
         getRollHistoryPanel: () => rollHistoryPanel,
         multiplayerRef,
         getCollisionAudio: () => collisionAudio,
+        useFairCommit: isFairCommitEnabled(searchParams),
     });
 
     const rendererRecoveryDeps = {
@@ -439,6 +442,7 @@ async function init() {
     await bootstrapXr({
         searchParams,
         app,
+        appEvents,
         scheduler,
         renderer: app.renderer,
         scene: app.scene,
@@ -446,6 +450,7 @@ async function init() {
         getShadowController: () => shadowController,
         isXrPresentingRef,
         getCrosshairUI: () => crosshairUI,
+        readAllDiceValues,
     });
 
     rollHistoryPanel = createRollHistoryPanel({
@@ -472,7 +477,15 @@ async function init() {
         multiplayerRef,
     });
 
-    const { roomParam } = setupMultiplayer(app, {
+    setupSessionWiring(app, {
+        appEvents,
+        multiplayerRef,
+        getRoomCode: () =>
+            multiplayerRef.current?.getState?.()?.roomCode ?? searchParams.get('room') ?? null,
+        getPendingExpression: () => rollWiring.getPendingRollMeta()?.expression ?? null,
+    });
+
+    const { roomParam } = await setupMultiplayer(app, {
         searchParams,
         appEvents,
         multiplayerRef,

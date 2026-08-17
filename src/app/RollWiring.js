@@ -29,6 +29,9 @@ import {
     generateRollSeed,
     parseShareableRollParams,
 } from '../roll/ShareableRoll.js';
+import { createCommit, generateNonce, verifyReveal } from '../net/CommitReveal.js';
+
+const FAIR_COMMIT_ACK_MS = 300;
 
 /**
  * @param {import('../types/app').AppContext} app
@@ -49,6 +52,7 @@ export function createRollWiring(app, deps) {
         getFairnessMonitor,
         getRollHistoryPanel,
         multiplayerRef,
+        useFairCommit = false,
     } = deps;
 
     /** @type {import('../types/app').PendingRollMeta} */
@@ -57,6 +61,9 @@ export function createRollWiring(app, deps) {
 
     const rollSessionRef = { current: null };
     const rollHandlerRef = { roll: null, lastRoll: null };
+
+    /** @type {{ hash: string, notation?: string | null } | null} */
+    let pendingFairCommit = null;
 
     function captureDiceSet() {
         /** @type {Record<string, number>} */
@@ -87,6 +94,32 @@ export function createRollWiring(app, deps) {
         const lampData = getLampData();
         if (lampData) lampData.setRolling(true);
         emitRollStarted({ source: 'cup' });
+    }
+
+    async function broadcastFairCommit(seed, expression, diceSet, source) {
+        if (!useFairCommit || !multiplayerRef.current?.isHost?.()) return;
+        const nonce = generateNonce();
+        const dieCount = Object.values(diceSet).reduce((sum, n) => sum + (Number(n) || 0), 0);
+        const commit = await createCommit(seed, nonce, {
+            notation: expression,
+            dieCount,
+            diceCounts: diceSet,
+            throwAt: performance.now(),
+        });
+        emitRollStarted({ source, seed, expression, diceSet, commit });
+        await new Promise((resolve) => setTimeout(resolve, FAIR_COMMIT_ACK_MS));
+        emitRollStarted({
+            source,
+            seed,
+            expression,
+            diceSet,
+            reveal: {
+                seed,
+                nonce,
+                notation: expression,
+                throwAt: performance.now(),
+            },
+        });
     }
 
     function beginRoll(seed = null, expression = null, meta = {}) {
@@ -180,13 +213,15 @@ export function createRollWiring(app, deps) {
                 }
                 showNotationResults(result);
                 getDiceGameFeel()?.onNotationResult?.(result);
+                appEvents.emit(AppEvent.ROLL_EVALUATED, { result });
             },
         });
         app.rollSession = rollSessionRef.current;
 
-        rollHandlerRef.roll = (explicitSeed = null) => {
+        rollHandlerRef.roll = async (explicitSeed = null) => {
             if (multiplayerRef.current?.isGuest()) return;
             const seed = explicitSeed ?? generateRollSeed();
+            const diceSet = captureDiceSet();
             rollHandlerRef.lastRoll = {
                 seed: seed >>> 0,
                 counts: getSpawnedDiceCounts(),
@@ -194,18 +229,21 @@ export function createRollWiring(app, deps) {
             pendingRollMeta = {
                 seed: seed >>> 0,
                 expression: null,
-                diceSet: captureDiceSet(),
+                diceSet,
                 source: 'ui',
             };
             const shadowController = getShadowController();
             shadowController?.pulse('roll');
             getDiceGameFeel()?.clearRollState();
-            throwDice(getScene(), getPhysicsWorld(), seed);
-            getCameraController().setState(DiceFocusState.WAITING_FOR_STOP);
             hideResults();
             const lampData = getLampData();
             if (lampData) lampData.setRolling(true);
-            emitRollStarted({ source: 'ui', seed: seed >>> 0 });
+            await broadcastFairCommit(seed, null, diceSet, 'ui');
+            throwDice(getScene(), getPhysicsWorld(), seed);
+            getCameraController().setState(DiceFocusState.WAITING_FOR_STOP);
+            if (!useFairCommit) {
+                emitRollStarted({ source: 'ui', seed: seed >>> 0 });
+            }
             return seed;
         };
     }
@@ -227,10 +265,11 @@ export function createRollWiring(app, deps) {
                 const system = opts.system ?? activeRollSystem;
                 activeRollSystem = system;
                 const seed = generateRollSeed();
+                const diceSet = captureDiceSet();
                 pendingRollMeta = {
                     seed,
                     expression,
-                    diceSet: captureDiceSet(),
+                    diceSet,
                     source: 'notation',
                 };
                 const shadowController = getShadowController();
@@ -240,7 +279,10 @@ export function createRollWiring(app, deps) {
                 getCameraController().setState(DiceFocusState.WAITING_FOR_STOP);
                 const lampData = getLampData();
                 if (lampData) lampData.setRolling(true);
-                emitRollStarted({ source: 'notation', expression, seed });
+                await broadcastFairCommit(seed, expression, diceSet, 'notation');
+                if (!useFairCommit) {
+                    emitRollStarted({ source: 'notation', expression, seed });
+                }
                 await rollSessionRef.current.roll(expression, seed, { system });
             },
         };
@@ -256,6 +298,33 @@ export function createRollWiring(app, deps) {
         return buildShareableRollUrl(last.seed, last.counts, undefined, getDiceAppearanceConfig(), {
             expression: last.expression ?? null,
             system: last.system ?? null,
+        });
+    }
+
+    async function handleRemoteCommit(msg) {
+        pendingFairCommit = {
+            hash: msg.hash,
+            notation: msg.notation ?? null,
+        };
+    }
+
+    async function handleRemoteReveal(msg) {
+        if (!isWasmAvailable()) {
+            throw new Error('wasm_required');
+        }
+        const expectedHash = pendingFairCommit?.hash ?? msg.hash;
+        if (!expectedHash) {
+            throw new Error('commit_missing');
+        }
+        const ok = await verifyReveal(expectedHash, msg.seed >>> 0, msg.nonce);
+        if (!ok) {
+            throw new Error('commit_mismatch');
+        }
+        pendingFairCommit = null;
+        await handleRemoteRoll({
+            seed: msg.seed >>> 0,
+            notation: msg.notation ?? null,
+            diceCounts: msg.diceCounts ?? null,
         });
     }
 
@@ -372,7 +441,10 @@ export function createRollWiring(app, deps) {
         getLastRollShareUrl,
         handleRemoteRoll,
         handleRemoteTableSync,
+        handleRemoteCommit,
+        handleRemoteReveal,
         replayShareableRoll,
         REPLAY_VERSION,
+        getPendingRollMeta: () => ({ ...pendingRollMeta }),
     };
 }

@@ -14,29 +14,43 @@ import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
 import { createRoomSession, resolveSignalingUrl } from '../net/RoomSession.js';
 import { createMultiplayerPanel } from '../ui/MultiplayerPanel.js';
 import { isTouchPrimaryDevice } from '../core/DeviceCapabilities.js';
+import { loadSolverBuildId } from '../wasm/SolverBuildId.js';
+import { resolveNegotiatedProtocolVersion, isFairCommitEnabled } from '../net/protocolFlags.js';
 
 /**
  * @param {import('../types/app').AppContext} app
  * @param {object} deps
  */
-export function setupMultiplayer(app, deps) {
+export async function setupMultiplayer(app, deps) {
     const { searchParams, appEvents, multiplayerRef, rollWiring } = deps;
 
     const signalingUrl = resolveSignalingUrl(searchParams);
     const roomParam = searchParams.get('room');
     if (!signalingUrl) return { roomParam };
 
+    const solverBuildId = await loadSolverBuildId(searchParams);
+    const protocolVersion = resolveNegotiatedProtocolVersion(searchParams);
+    const useFairCommit = isFairCommitEnabled(searchParams);
+
     const session = createRoomSession({
         signalingUrl,
         events: appEvents,
+        protocolVersion,
+        solverBuildId,
+        useFairCommit,
         getDiceCounts: () => getSpawnedDiceCounts(),
         getPresencePayload: () => buildDicePresencePayload(getDiceAppearanceConfig()),
+        getSessionSnapshot: () => app.session?.getSnapshot?.() ?? null,
         applyPresencePayload: (payload) => {
             applyDicePresencePayload(payload);
         },
         isWasmAvailable,
         onRemoteRoll: rollWiring.handleRemoteRoll,
         onRemoteTableSync: rollWiring.handleRemoteTableSync,
+        onRemoteCommit: rollWiring.handleRemoteCommit,
+        onRemoteReveal: rollWiring.handleRemoteReveal,
+        onRemoteSessionSync: (msg) => app.session?.applyRemoteSession?.(msg),
+        onRoomSnapshot: rollWiring.handleRemoteTableSync,
     });
     multiplayerRef.current = session;
     app.multiplayer = session;

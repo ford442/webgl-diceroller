@@ -28,8 +28,11 @@ main.js
 
 | Event             | Payload (typical)                        | Producers                                | Consumers                                                       |
 | ----------------- | ---------------------------------------- | ---------------------------------------- | --------------------------------------------------------------- |
-| `roll:started`    | `{ seed, expression, diceSet, source? }` | `beginRoll`, UI roll, cup pour, notation | (open)                                                          |
-| `roll:settled`    | `{ results }`                            | Camera focus settle                      | Results HUD (`showResults`), history / fairness / game-feel     |
+| `roll:started`    | `{ seed, expression, diceSet, source? }` | `beginRoll`, UI roll, cup pour, notation | RoomSession host broadcast                                      |
+| `roll:settled`    | `{ results }`                            | Camera focus settle                      | Results HUD, history / fairness / game-feel / session strip     |
+| `roll:evaluated`  | `{ result }`                             | Notation `RollSession` onComplete        | XR world HUD, session strip                                     |
+| `session:initiative` | `{ order, currentIndex }`              | SessionWiring                            | Session strip                                                   |
+| `session:turn`    | `{ actorId, actorName, direction }`    | Session strip pass turn                  | Session strip                                                   |
 | `dice:collision`  | Enriched collision event                 | `postPhysicsSync` poll                   | Collision audio, game-feel; optional `__onDiceCollision` bridge |
 | `renderer:lost`   | `{ reason, … }`                          | GPU context/device loss                  | (open)                                                          |
 | `layout:rerolled` | Layout manager result                    | Layout reroll                            | (open)                                                          |
@@ -39,7 +42,18 @@ Collision audio and the settled results overlay subscribe via events; the live p
 
 ### Multiplayer
 
-Host-authoritative WebRTC tables use deterministic WASM seeded replay. See [`MULTIPLAYER.md`](MULTIPLAYER.md) for signaling (Cloudflare Worker), `?room=` deep links, and COOP/COEP constraints.
+Host-authoritative WebRTC tables use deterministic WASM seeded replay. See [`MULTIPLAYER.md`](MULTIPLAYER.md) for signaling (Cloudflare Durable Object rooms), `?room=` deep links, `?fair-commit` (protocol v2), and COOP/COEP constraints.
+
+### Session layer
+
+Desktop **initiative / turn strip** and multiplayer session sync live outside `main.js`:
+
+- [`SessionState.ts`](src/session/SessionState.ts) — seat list, current actor, `lastExpression`; persisted in `localStorage` per room code.
+- [`SessionWiring.js`](src/app/SessionWiring.js) — subscribes to `roll:settled` / `roll:evaluated`; emits `session:initiative` and `session:turn`; host broadcasts `session-sync` via [`RoomSession.js`](src/net/RoomSession.js).
+- [`SessionStrip.js`](src/ui/SessionStrip.js) — DOM strip (pass turn, current actor).
+- XR roll totals: [`XrResultsHud.js`](src/xr/XrResultsHud.js) on `xrWorld`; DOM HUD suppressed while presenting (`setDomResultsSuppressed`).
+
+State flows through **`AppContext`** (`app.session`, `app.multiplayer`) and **`AppEvents`** — not new `window.*` globals.
 
 ### Test / debug hooks
 

@@ -25,6 +25,14 @@ export const QUALITY_PROFILES = {
         shadowLights: 'key',
         pixelRatioCap: 1.25,
     },
+    xr: {
+        id: 'xr',
+        postQuality: 'low',
+        bloomEnabled: false,
+        godRaysEnabled: false,
+        shadowLights: 'key',
+        pixelRatioCap: 1.0,
+    },
 };
 
 export function hasExplicitQualityOverride() {
@@ -41,6 +49,10 @@ export function hasExplicitQualityOverride() {
 }
 
 export function guessInitialQualityProfile(rendererState) {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('xr') || params.has('xr-emulator')) {
+        return QUALITY_PROFILES.xr;
+    }
     const hints = collectDeviceQualityHints(rendererState);
     if (hints.reducedMotion) {
         return QUALITY_PROFILES.medium;

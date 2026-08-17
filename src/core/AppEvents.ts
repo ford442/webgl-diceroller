@@ -11,10 +11,13 @@ export type AppEventHandler = (payload: unknown) => void;
 export const AppEvent = Object.freeze({
     ROLL_STARTED: 'roll:started',
     ROLL_SETTLED: 'roll:settled',
+    ROLL_EVALUATED: 'roll:evaluated',
     DICE_COLLISION: 'dice:collision',
     RENDERER_LOST: 'renderer:lost',
     LAYOUT_REROLLED: 'layout:rerolled',
     APP_READY: 'app:ready',
+    SESSION_INITIATIVE: 'session:initiative',
+    SESSION_TURN: 'session:turn',
 } as const satisfies Record<string, AppEventName>);
 
 export function createAppEvents(): AppEvents {

@@ -186,6 +186,7 @@ export function registerFrameCallbacks(scheduler, deps) {
             const rolling = !areDiceSettled();
             updateDiceHud(readAllDiceValues(), {
                 rolling,
+                hidden: isXrPresentingRef.value,
                 debugRows: deps.debugEnabled ? getDiceValueDebugSnapshot() : null,
             });
         },
