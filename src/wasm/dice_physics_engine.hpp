@@ -53,6 +53,13 @@ public:
 
     void setDieHull(int id, const std::vector<float>& flatVerts);
 
+    void setDieFaceTable(int id, const std::vector<float>& packed);
+
+    int getDieFaceValue(int id) const;
+
+    /** Test hook: force sleep without waiting for integration. */
+    void setDieSleepingForTesting(int id, bool sleeping);
+
     void applyImpulse(int id, float fx, float fy, float fz);
 
     void applyTorqueImpulse(int id, float tx, float ty, float tz);
@@ -129,6 +136,8 @@ public:
 
     const std::vector<float>& buildCollisionEventBuffer();
 
+    const std::vector<int32_t>& buildFaceValueBuffer();
+
     void seedRNG(uint64_t s);
     float randomFloat();
 
@@ -173,6 +182,7 @@ private:
     mutable std::vector<float> transformBuffer_;
     mutable std::vector<float> idBuffer_;
     mutable std::vector<float> eventBuffer_;
+    mutable std::vector<int32_t> faceValueBuffer_;
     DeterministicRNG rng_;
     bool noDrag_ = false;
     bool containerActive_ = false;
@@ -231,3 +241,4 @@ private:
 #include "dice_physics/dice_engine_collision_static.hpp"
 #include "dice_physics/dice_engine_collision_dynamic.hpp"
 #include "dice_physics/dice_engine_integrate.hpp"
+#include "dice_physics/dice_engine_face_value.hpp"

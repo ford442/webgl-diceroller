@@ -17,6 +17,11 @@ namespace dice_physics {
 // Rigid body
 // ---------------------------------------------------------------------------
 
+struct FaceEntry {
+    Vec3 normal;
+    int value = 0;
+};
+
 struct RigidBody {
     int   id     = -1;
     int   sides  = 6;
@@ -43,16 +48,25 @@ struct RigidBody {
     float sleepTimer  = 0.0f;
     bool  kinematic   = false;
 
+    std::vector<FaceEntry> faceTable;
+
     void computeInertiaFromHull() {
+        const float sphereI = std::max(0.4f * mass * radius * radius, 1e-8f);
+        const auto sphereInv = Vec3{1.0f / sphereI, 1.0f / sphereI, 1.0f / sphereI};
+
         if (!useHull || hull.verts.empty()) {
-            float i = 0.4f * mass * radius * radius;
-            invInertia = {1.0f/i, 1.0f/i, 1.0f/i};
+            invInertia = sphereInv;
             return;
         }
         Vec3 dim = hull.aabbMax - hull.aabbMin;
         float ix = (1.0f / 12.0f) * mass * (dim.y*dim.y + dim.z*dim.z);
         float iy = (1.0f / 12.0f) * mass * (dim.x*dim.x + dim.z*dim.z);
         float iz = (1.0f / 12.0f) * mass * (dim.x*dim.x + dim.y*dim.y);
+        const float minI = 1e-8f;
+        if (ix < minI || iy < minI || iz < minI) {
+            invInertia = sphereInv;
+            return;
+        }
         invInertia = {1.0f/ix, 1.0f/iy, 1.0f/iz};
     }
 

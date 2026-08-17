@@ -28,6 +28,7 @@ import {
     H_CONTACTS,
     idsOffset,
     xfOffset,
+    faceValuesOffset,
     SAB_BYTES,
     CMD_RING_FLOATS,
     CMD_RING_OFFSET,
@@ -136,15 +137,21 @@ class WorkerEngineProxy {
                 new Float32Array(sab, xfOffset(0), MAX_DICE * STRIDE),
                 new Float32Array(sab, xfOffset(1), MAX_DICE * STRIDE),
             ];
+            this.faceValuesView = [
+                new Int32Array(sab, faceValuesOffset(0), MAX_DICE),
+                new Int32Array(sab, faceValuesOffset(1), MAX_DICE),
+            ];
             this.cmdRing = new Float32Array(sab, CMD_RING_OFFSET, CMD_RING_FLOATS);
             Atomics.store(this.header, H_CMD_HEAD, 0);
             Atomics.store(this.header, H_CMD_TAIL, 0);
         } else {
             this.header = null;
+            this.faceValuesView = null;
         }
 
         this._snapIds = new Float32Array(0);
         this._snapXf = new Float32Array(0);
+        this._snapFaceValues = new Int32Array(0);
         this._snapCount = 0;
         this._snapSettled = true;
         this._eventChunks = [];
@@ -172,6 +179,7 @@ class WorkerEngineProxy {
             case 'snapshot':
                 this._snapIds = payload.ids;
                 this._snapXf = payload.transforms;
+                this._snapFaceValues = payload.faceValues ?? new Int32Array(0);
                 this._snapCount = payload.count;
                 this._snapSettled = payload.settled;
                 break;
@@ -441,6 +449,24 @@ class WorkerEngineProxy {
             return this.idsView[front].subarray(0, count);
         }
         return this._snapIds;
+    }
+
+    getFaceValues() {
+        if (this.faceValuesView && this.header) {
+            const front = Atomics.load(this.header, H_FRONT);
+            const count = Atomics.load(this.header, H_COUNT);
+            return this.faceValuesView[front].subarray(0, count);
+        }
+        return this._snapFaceValues;
+    }
+
+    getDieFaceValue(id) {
+        const ids = this.getDieIds();
+        const values = this.getFaceValues();
+        for (let i = 0; i < ids.length; i++) {
+            if (Math.round(ids[i]) === id) return values[i] | 0;
+        }
+        return 0;
     }
 
     getDieCount() {
