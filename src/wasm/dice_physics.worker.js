@@ -40,6 +40,7 @@ import {
     H_CONTACTS,
     idsOffset,
     xfOffset,
+    faceValuesOffset,
     CMD_RING_FLOATS,
     CMD_RING_OFFSET,
 } from './workerLayout.js';
@@ -57,6 +58,7 @@ let hulls = null;
 let header = null; // Int32Array view over the header
 const idsView = [null, null]; // Float32Array per buffer
 const xfView = [null, null];
+const faceValuesView = [null, null];
 let cmdRing = null; // Float32Array command ring (SAB path)
 
 let running = false; // true once init() has configured the world
@@ -104,6 +106,22 @@ function attachHull(id, sides) {
     }
     engine.setDieHull(id, vec);
     if (typeof vec.delete === 'function') vec.delete();
+    attachFaceTable(id, sides);
+}
+
+function attachFaceTable(id, sides) {
+    if (id < 0 || !hulls || typeof engine.setDieFaceTable !== 'function') return;
+    const data = hulls['d' + sides];
+    if (!data?.faces?.length) return;
+    const vec = new Module.VectorFloat();
+    for (const face of data.faces) {
+        vec.push_back(face.normal[0]);
+        vec.push_back(face.normal[1]);
+        vec.push_back(face.normal[2]);
+        vec.push_back(face.value);
+    }
+    engine.setDieFaceTable(id, vec);
+    if (typeof vec.delete === 'function') vec.delete();
 }
 
 function publishSAB() {
@@ -111,6 +129,7 @@ function publishSAB() {
     // their contents into the SAB back buffer (never alias/transfer the heap).
     const ids = engine.getDieIds();
     const xf = engine.getTransforms();
+    const faceValues = engine.getFaceValues();
     const count = Math.min(Math.floor(ids.length), MAX_DICE);
 
     const front = Number(Atomics.load(header, H_FRONT));
@@ -119,6 +138,7 @@ function publishSAB() {
     if (count > 0) {
         idsView[back].set(ids.subarray(0, count));
         xfView[back].set(xf.subarray(0, count * STRIDE));
+        faceValuesView[back].set(faceValues.subarray(0, count));
     }
 
     // Store count *before* flipping front so a reader that sees the new front
@@ -139,17 +159,20 @@ function publishSnapshot() {
     // fresh (non-heap) buffers to avoid a second copy on the structured clone.
     const srcIds = engine.getDieIds();
     const srcXf = engine.getTransforms();
+    const srcFaceValues = engine.getFaceValues();
     const count = Math.floor(srcIds.length);
     const ids = new Float32Array(count);
     const transforms = new Float32Array(count * STRIDE);
+    const faceValues = new Int32Array(count);
     ids.set(srcIds.subarray(0, count));
     transforms.set(srcXf.subarray(0, count * STRIDE));
+    faceValues.set(srcFaceValues.subarray(0, count));
     self.postMessage(
         {
             type: 'snapshot',
-            payload: { ids, transforms, count, settled: engine.areAllSettled() },
+            payload: { ids, transforms, faceValues, count, settled: engine.areAllSettled() },
         },
-        [ids.buffer, transforms.buffer]
+        [ids.buffer, transforms.buffer, faceValues.buffer]
     );
 }
 
@@ -230,6 +253,7 @@ function handle(type, payload) {
                 for (let b = 0; b < 2; b++) {
                     idsView[b] = new Float32Array(payload.sab, idsOffset(b), MAX_DICE);
                     xfView[b] = new Float32Array(payload.sab, xfOffset(b), MAX_DICE * STRIDE);
+                    faceValuesView[b] = new Int32Array(payload.sab, faceValuesOffset(b), MAX_DICE);
                 }
                 cmdRing = new Float32Array(payload.sab, CMD_RING_OFFSET, CMD_RING_FLOATS);
                 Atomics.store(header, H_CMD_HEAD, 0);

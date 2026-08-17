@@ -121,12 +121,26 @@ two reasons:
             └──────────────────────────────────────────────────────────── ┘
 ```
 
-The SAB layout (header + two transform/id buffers) lives in `workerLayout.js`,
-the single source of truth shared by both threads. The worker writes the freshly
-stepped frame into the back buffer, stores `count`, then atomically flips
-`front`; readers load `front` then `count`, guaranteeing a coherent snapshot
-without locks. When the page is not cross-origin isolated the worker instead
-posts copied `snapshot` messages — it never transfers the WASM heap buffer.
+The SAB layout (header + two transform/id/face-value buffers) lives in
+`workerLayout.js`, the single source of truth shared by both threads. The worker
+writes the freshly stepped frame into the back buffer, stores `count`, then
+atomically flips `front`; readers load `front` then `count`, guaranteeing a
+coherent snapshot without locks. When the page is not cross-origin isolated the
+worker instead posts copied `snapshot` messages — it never transfers the WASM
+heap buffer.
+
+Each double-buffer slot contains, per die index `i`:
+
+| Region | Type | Stride | Notes |
+| ------ | ---- | ------ | ----- |
+| `ids[i]` | `f32` | 1 | WASM die id |
+| `transforms[i]` | `f32` | 7 | `px,py,pz,qx,qy,qz,qw` |
+| `faceValues[i]` | `i32` | 1 | Settled face value (`0` while moving) |
+
+Face values are computed in C++ from the rigid-body quaternion and a per-die face
+table uploaded via `setDieFaceTable`. **d4** uses the **bottom** face (minimum
+dot with local-up); all other dice use the top face (maximum dot). Values are
+only published once the die is sleeping.
 
 ### Data Transfer Strategy
 
@@ -147,8 +161,11 @@ structural mutation (`addDie` / `removeDie` / `clearAllDice`).
 Dice models are now Draco-compressed GLB files (`public/images/dice/*.glb`).
 A build-time Node script (`scripts/extract-hulls.mjs`) reads each GLB via
 `@gltf-transform/core` + `draco3dgltf`, computes the canonical polyhedral
-vertices, and writes `public/wasm/hulls.json`. At runtime the JS bridge loads
-this JSON and passes hull vertices to `engine.setDieHull(id, vertices)`.
+vertices, and writes `public/wasm/hulls.json`. Each entry includes canonical
+`vertices`, an `aabb`, and a `faces` array (`{ normal: [x,y,z], value }`) sourced
+from `src/dice/diceFaceMaps.json` (visual-mesh local space). At runtime the JS
+bridge loads this JSON and passes hull vertices to `engine.setDieHull(id, vertices)`
+and face tables to `engine.setDieFaceTable(id, packed)`.
 
 ---
 
@@ -405,7 +422,10 @@ const engine = getWasmEngine();
 | `addDie`       | `(sides, x, y, z): i32`             | Spawn a die. Returns unique ID (or -1 at max capacity). |
 | `removeDie`    | `(id): void`                        | Remove a die by ID.                                     |
 | `clearAllDice` | `(): void`                          | Remove all dice.                                        |
-| `setDieHull`   | `(id, vertices: VectorFloat): void` | Attach convex hull vertices (flat `[x,y,z,…]`).         |
+| `setDieHull`       | `(id, vertices: VectorFloat): void` | Attach convex hull vertices (flat `[x,y,z,…]`).         |
+| `setDieFaceTable`  | `(id, packed: VectorFloat): void`   | Upload face normals + values (`nx,ny,nz,value × N`).    |
+| `getDieFaceValue`  | `(id): i32`                         | Settled face value for one die (`0` while moving).      |
+| `getFaceValues`    | `(): Int32Array view`               | Parallel buffer aligned with `getDieIds()` / transforms.  |
 
 #### Forces
 

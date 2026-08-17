@@ -15,6 +15,9 @@ export interface PhysicsEngine {
     setDieMaterial(id: number, friction: number, rollingFriction: number): void;
     setDieDrag(id: number, drag: number): void;
     setDieHull(id: number, sidesOrHull: number | unknown): void;
+    setDieFaceTable?(id: number, packed: unknown): void;
+    getDieFaceValue?(id: number): number;
+    getFaceValues?(): Int32Array;
     applyImpulse(id: number, fx: number, fy: number, fz: number): void;
     applyTorqueImpulse(id: number, tx: number, ty: number, tz: number): void;
     setDieTransform(

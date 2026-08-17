@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getDieSides, getMassBiasRatio } from './DicePhysicsPresets.js';
+import faceMaps from './diceFaceMaps.json';
 
 function _computeFaceNormals(geometry) {
     const CLUSTER_THRESHOLD = 0.98;
@@ -107,80 +108,7 @@ function _selectPrincipalFaceNormals(allNormals, sides) {
     return selected;
 }
 
-const FACE_VALUE_NORMAL_MAPS = {
-    d4: [
-        { normal: [0, -0.335, -0.942], value: 3 },
-        { normal: [0.817, -0.334, 0.471], value: 4 },
-        { normal: [-0.816, -0.333, 0.471], value: 1 },
-        { normal: [0, 1, 0], value: 2 },
-    ],
-    d6: [
-        { normal: [0, 1, 0], value: 1 },
-        { normal: [0, 0, 1], value: 2 },
-        { normal: [-1, 0, 0], value: 3 },
-        { normal: [1, 0, 0], value: 4 },
-        { normal: [0, 0, -1], value: 5 },
-        { normal: [0, -1, 0], value: 6 },
-    ],
-    d8: [
-        { normal: [0.816, -0.333, 0.471], value: 8 },
-        { normal: [-0.816, 0.333, -0.471], value: 3 },
-        { normal: [0.816, 0.333, -0.471], value: 7 },
-        { normal: [-0.816, -0.333, 0.471], value: 2 },
-        { normal: [0, 1, 0], value: 6 },
-        { normal: [0, -1, 0], value: 1 },
-        { normal: [0, -0.333, -0.943], value: 4 },
-        { normal: [0, 0.333, 0.943], value: 5 },
-    ],
-    d10: [
-        { normal: [0.771, -0.056, -0.634], value: 6 },
-        { normal: [-0.054, -0.056, -0.997], value: 2 },
-        { normal: [0, 1, 0], value: 10 },
-        { normal: [-0.533, 0.596, -0.601], value: 8 },
-        { normal: [0.803, 0.596, -0.014], value: 4 },
-        { normal: [0.531, -0.597, 0.602], value: 1 },
-        { normal: [0, -1, 0], value: 9 },
-        { normal: [-0.771, 0.056, 0.634], value: 3 },
-        { normal: [-0.802, -0.597, 0.015], value: 5 },
-        { normal: [0.053, 0.056, 0.997], value: 7 },
-    ],
-    d12: [
-        { normal: [0.632, -0.447, -0.632], value: 1 },
-        { normal: [0.883, 0.447, -0.14], value: 2 },
-        { normal: [0.14, 0.447, -0.883], value: 3 },
-        { normal: [-0.406, -0.447, -0.797], value: 4 },
-        { normal: [0, -1, 0], value: 5 },
-        { normal: [-0.14, -0.447, 0.883], value: 6 },
-        { normal: [-0.632, 0.447, 0.632], value: 7 },
-        { normal: [0.406, 0.447, 0.797], value: 8 },
-        { normal: [0.797, -0.447, 0.406], value: 9 },
-        { normal: [-0.883, -0.447, 0.14], value: 10 },
-        { normal: [-0.797, 0.447, -0.406], value: 11 },
-        { normal: [0, 1, 0], value: 12 },
-    ],
-    d20: [
-        { normal: [0.111, 0.745, 0.658], value: 1 },
-        { normal: [-0.512, -0.746, 0.426], value: 2 },
-        { normal: [-0.942, -0.334, 0.03], value: 3 },
-        { normal: [0.497, -0.334, 0.801], value: 4 },
-        { normal: [0.624, -0.746, 0.232], value: 5 },
-        { normal: [-0.9, 0.333, 0.282], value: 6 },
-        { normal: [0, -1, 0], value: 7 },
-        { normal: [-0.206, -0.333, 0.92], value: 8 },
-        { normal: [-0.444, 0.331, 0.832], value: 9 },
-        { normal: [0.694, 0.333, 0.638], value: 10 },
-        { normal: [-0.693, -0.333, -0.639], value: 11 },
-        { normal: [0.513, 0.745, -0.425], value: 12 },
-        { normal: [0, 1, 0], value: 13 },
-        { normal: [0.445, -0.333, -0.831], value: 14 },
-        { normal: [0.9, -0.333, -0.282], value: 15 },
-        { normal: [-0.498, 0.333, -0.801], value: 16 },
-        { normal: [0.942, 0.333, -0.031], value: 17 },
-        { normal: [0.206, 0.334, -0.92], value: 18 },
-        { normal: [-0.625, 0.745, -0.232], value: 19 },
-        { normal: [-0.111, -0.746, -0.656], value: 20 },
-    ],
-};
+const FACE_VALUE_NORMAL_MAPS = faceMaps;
 
 function _assignFaceValues(faceNormals, type = null) {
     const n = faceNormals.length;

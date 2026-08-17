@@ -37,6 +37,8 @@ EMSCRIPTEN_BINDINGS(dice_physics) {
         .function("setDieMaterial",    &DicePhysicsEngine::setDieMaterial)
         .function("setDieDrag",        &DicePhysicsEngine::setDieDrag)
         .function("setDieHull",        &DicePhysicsEngine::setDieHull)
+        .function("setDieFaceTable",   &DicePhysicsEngine::setDieFaceTable)
+        .function("getDieFaceValue",   &DicePhysicsEngine::getDieFaceValue)
         .function("applyImpulse",      &DicePhysicsEngine::applyImpulse)
         .function("applyTorqueImpulse",&DicePhysicsEngine::applyTorqueImpulse)
         .function("setDieTransform",   &DicePhysicsEngine::setDieTransform)
@@ -66,6 +68,10 @@ EMSCRIPTEN_BINDINGS(dice_physics) {
         .function("randomFloat",       &DicePhysicsEngine::randomFloat)
         .function("getCollisionEvents",+[](DicePhysicsEngine& e) {
             const auto& buf = e.buildCollisionEventBuffer();
+            return val(typed_memory_view(buf.size(), buf.data()));
+        })
+        .function("getFaceValues",     +[](DicePhysicsEngine& e) {
+            const auto& buf = e.buildFaceValueBuffer();
             return val(typed_memory_view(buf.size(), buf.data()));
         })
         .function("serializeState",    &DicePhysicsEngine::serializeState)

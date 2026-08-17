@@ -3,11 +3,13 @@ import { getWasmEngine } from '../wasm/PhysicsBridge.js';
 import { diceModels, spawnedDice, diceTypes } from './DiceState.js';
 import { isUsingWasmPhysics } from './DicePhysicsPresets.js';
 import { getDieQuaternion } from './DiceTransformRead.js';
+import { getWasmFaceValueForDie } from './DiceFaceValueRead.js';
 
 const _invQ = new THREE.Quaternion();
 const _localUp = new THREE.Vector3();
 
-export const readDiceValue = (die) => {
+/** Legacy visual-mesh face clusterer (debug / ammo fallback only). */
+export const readDiceValueVisual = (die) => {
     const model = diceModels[die.type];
     if (!model) return null;
 
@@ -39,6 +41,16 @@ export const readDiceValue = (die) => {
     return faceValues[bestIdx];
 };
 
+export const readDiceValue = (die) => {
+    if (isUsingWasmPhysics() && die?.wasmId != null) {
+        const engineValue = getWasmFaceValueForDie(die.wasmId);
+        if (engineValue > 0) return engineValue;
+        return 0;
+    }
+
+    return readDiceValueVisual(die);
+};
+
 export const getSpawnedDiceCounts = () => {
     const counts = Object.fromEntries(diceTypes.map(({ type }) => [type, 0]));
     spawnedDice.forEach((die) => {
@@ -56,12 +68,19 @@ export const readAllDiceValues = () =>
         dieIndex: die.dieIndex ?? 0,
     }));
 
+const debugEnabled =
+    typeof window !== 'undefined' &&
+    (new URLSearchParams(window.location.search).has('debug') ||
+        new URLSearchParams(window.location.search).has('debug-perf'));
+
 export const getDiceValueDebugSnapshot = () =>
     spawnedDice.map((die) => {
         const model = diceModels[die.type];
         const faceNormals = model?.userData?.faceNormals ?? [];
         const faceValues = model?.userData?.faceValues ?? [];
-        const value = readDiceValue(die);
+        const engineValue = isUsingWasmPhysics() ? readDiceValue(die) : null;
+        const visualValue = readDiceValueVisual(die);
+        const value = isUsingWasmPhysics() ? engineValue : visualValue;
         const dieQuaternion = getDieQuaternion(die);
 
         _invQ.copy(dieQuaternion).invert();
@@ -81,6 +100,14 @@ export const getDiceValueDebugSnapshot = () =>
         return {
             type: die.type,
             value,
+            engineValue,
+            visualValue,
+            disagrees:
+                debugEnabled &&
+                isUsingWasmPhysics() &&
+                engineValue != null &&
+                visualValue != null &&
+                engineValue !== visualValue,
             selectedFaceIndex: bestIdx,
             selectedFaceValue: bestIdx >= 0 ? faceValues[bestIdx] : null,
             selectedDot: bestDot,

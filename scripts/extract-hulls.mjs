@@ -20,6 +20,13 @@ import { NodeIO } from '@gltf-transform/core';
 import { KHRDracoMeshCompression } from '@gltf-transform/extensions';
 import draco3d from 'draco3dgltf';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const FACE_MAPS = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '../src/dice/diceFaceMaps.json'), 'utf8')
+);
 
 const DICE = [
     { type: 'd4', file: 'public/images/dice/die_4.glb', sides: 4 },
@@ -213,7 +220,12 @@ for (const die of DICE) {
         }
     }
 
-    result[die.type] = { sides: die.sides, vertices: verts, aabb: { min, max } };
+    result[die.type] = {
+        sides: die.sides,
+        vertices: verts,
+        aabb: { min, max },
+        faces: FACE_MAPS[die.type] ?? [],
+    };
     console.log(
         `[extract-hulls] ${die.type}: ${verts.length} canonical verts, scale=${scale.toFixed(4)}, maxR=${maxR.toFixed(4)}`
     );

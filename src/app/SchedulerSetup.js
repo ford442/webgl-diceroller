@@ -15,6 +15,7 @@ import {
     spawnedDice,
     readAllDiceValues,
     areDiceSettled,
+    getDiceValueDebugSnapshot,
     setDiceAppearanceQualityProfile,
 } from '../dice.js';
 import { updateInteraction } from '../interaction.js';
@@ -183,7 +184,10 @@ export function registerFrameCallbacks(scheduler, deps) {
                 return;
             }
             const rolling = !areDiceSettled();
-            updateDiceHud(readAllDiceValues(), { rolling });
+            updateDiceHud(readAllDiceValues(), {
+                rolling,
+                debugRows: deps.debugEnabled ? getDiceValueDebugSnapshot() : null,
+            });
         },
         { priority: -5 }
     );

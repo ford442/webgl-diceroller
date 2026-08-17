@@ -20,6 +20,7 @@ import { publicAssetUrl } from '../core/publicAssetUrl.js';
 import { parsePhysicsFlags } from './physicsFlags.js';
 import { parseCollisionEventBuffer } from './collisionEvents.js';
 import { instantiateDicePhysicsModule, WASM_SCALAR_DIR } from './wasmArtifact.js';
+import { applyFaceTableForDie } from './faceTableLoader.js';
 
 // ---------------------------------------------------------------------------
 // No-op stub
@@ -36,6 +37,9 @@ const STUB_ENGINE = {
     setDieMaterial: () => {},
     setDieDrag: () => {},
     setDieHull: () => {},
+    setDieFaceTable: () => {},
+    getDieFaceValue: () => 0,
+    getFaceValues: () => new Int32Array(0),
     applyImpulse: () => {},
     applyTorqueImpulse: () => {},
     setDieTransform: () => {},
@@ -154,6 +158,7 @@ export const loadHullForDie = (wasmId, sides) => {
         flat.push_back(data.vertices[i][2]);
     }
     _engine.setDieHull(wasmId, flat);
+    applyFaceTableForDie(_engine, _moduleClass, wasmId, data);
 };
 
 /**

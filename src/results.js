@@ -63,6 +63,7 @@ export function updateDiceHud(diceResults, options = {}) {
     if (!diceHudRow) return;
 
     const rolling = options.rolling === true;
+    const debugRows = options.debugRows ?? null;
     diceHudRow.innerHTML = '';
 
     if (!diceResults?.length) {
@@ -71,11 +72,15 @@ export function updateDiceHud(diceResults, options = {}) {
         return;
     }
 
-    const valid = diceResults.filter((r) => r.value !== null && r.value !== undefined);
+    const valid = diceResults.filter((r) => r.value !== null && r.value !== undefined && r.value > 0);
     const total = valid.reduce((s, r) => s + r.value, 0);
 
-    diceResults.forEach((result) => {
-        const card = _makeResultCard(result, { compact: true, rolling });
+    diceResults.forEach((result, index) => {
+        const card = _makeResultCard(result, {
+            compact: true,
+            rolling,
+            debug: debugRows?.[index] ?? null,
+        });
         diceHudRow.appendChild(card);
     });
 
@@ -535,7 +540,7 @@ function _createHistoryPanel() {
 
 function _makeResultCard(
     result,
-    { compact = false, rolling = false, kept = true, dropped = false } = {}
+    { compact = false, rolling = false, kept = true, dropped = false, debug = null } = {}
 ) {
     const card = document.createElement('div');
     const borderColor = dropped
@@ -571,6 +576,21 @@ function _makeResultCard(
 
     card.appendChild(typeEl);
     card.appendChild(valueEl);
+
+    if (debug?.disagrees) {
+        const badge = document.createElement('div');
+        badge.title = `Engine ${debug.engineValue} vs visual ${debug.visualValue}`;
+        badge.style.cssText = `
+            margin-top: 2px;
+            font-size: ${compact ? '8px' : '9px'};
+            color: #ff6b6b;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+        `;
+        badge.textContent = `Δ ${debug.visualValue}`;
+        card.appendChild(badge);
+    }
+
     return card;
 }
 

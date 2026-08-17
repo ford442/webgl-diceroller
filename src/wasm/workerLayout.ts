@@ -22,8 +22,10 @@
  *   │   [9] contacts       — die–die contacts resolved last step    │
  *   ├────────────────────────────────────────────────────────────┤
  *   │ Buffer 0:  ids[MAX_DICE] (f32)   transforms[MAX_DICE*7] (f32)│
+ *   │            faceValues[MAX_DICE] (i32)                          │
  *   ├────────────────────────────────────────────────────────────┤
  *   │ Buffer 1:  ids[MAX_DICE] (f32)   transforms[MAX_DICE*7] (f32)│
+ *   │            faceValues[MAX_DICE] (i32)                          │
  *   ├────────────────────────────────────────────────────────────┤
  *   │ Command ring: CMD_RING_FLOATS (f32) — batched per-frame ops  │
  *   └────────────────────────────────────────────────────────────┘
@@ -58,7 +60,8 @@ export const H_CONTACTS = 9;
 // Per-buffer byte sizes.
 export const IDS_BYTES = MAX_DICE * 4; // f32 ids
 export const XF_BYTES = MAX_DICE * STRIDE * 4; // f32 transforms
-export const BUFFER_BYTES = IDS_BYTES + XF_BYTES;
+export const FACE_VALUES_BYTES = MAX_DICE * 4; // i32 settled face values
+export const BUFFER_BYTES = IDS_BYTES + XF_BYTES + FACE_VALUES_BYTES;
 
 // Ring holds several frames of worst-case batched commands (transform = 9 floats).
 export const CMD_RING_FLOATS = MAX_DICE * MAX_RECORD_LEN * 8;
@@ -77,6 +80,9 @@ export const CMD_RING_OFFSET = TRANSFORM_SAB_BYTES;
 export const idsOffset = (b: 0 | 1): number => HEADER_BYTES + b * BUFFER_BYTES;
 /** Byte offset of the transforms region for buffer `b` (0|1). */
 export const xfOffset = (b: 0 | 1): number => HEADER_BYTES + b * BUFFER_BYTES + IDS_BYTES;
+/** Byte offset of the settled face-value region for buffer `b` (0|1). */
+export const faceValuesOffset = (b: 0 | 1): number =>
+    HEADER_BYTES + b * BUFFER_BYTES + IDS_BYTES + XF_BYTES;
 
 /** True when SharedArrayBuffer + Atomics may be used (cross-origin isolated). */
 export const sabSupported = (): boolean =>

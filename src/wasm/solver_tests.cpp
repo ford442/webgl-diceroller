@@ -195,6 +195,115 @@ TEST_CASE("Container inactive ignores planes") {
     CHECK(xf[1] < 1.5f);
 }
 
+TEST_CASE("Degenerate hull inertia stays finite") {
+    RigidBody body;
+    body.mass = 5.0f;
+    body.radius = 0.9f;
+    body.useHull = true;
+    body.hull.build({{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}});
+    body.computeInertiaFromHull();
+    CHECK(std::isfinite(body.invInertia.x));
+    CHECK(std::isfinite(body.invInertia.y));
+    CHECK(std::isfinite(body.invInertia.z));
+    CHECK(body.invInertia.x > 0.0f);
+    CHECK(body.invInertia.y > 0.0f);
+    CHECK(body.invInertia.z > 0.0f);
+}
+
+namespace {
+
+void uploadD6FaceTable(DicePhysicsEngine& engine, int id) {
+    engine.setDieFaceTable(id, {
+        0.0f, 1.0f, 0.0f, 1.0f,
+        0.0f, 0.0f, 1.0f, 2.0f,
+        -1.0f, 0.0f, 0.0f, 3.0f,
+        1.0f, 0.0f, 0.0f, 4.0f,
+        0.0f, 0.0f, -1.0f, 5.0f,
+        0.0f, -1.0f, 0.0f, 6.0f,
+    });
+}
+
+void uploadD4FaceTable(DicePhysicsEngine& engine, int id) {
+    engine.setDieFaceTable(id, {
+        0.0f, -0.335f, -0.942f, 3.0f,
+        0.817f, -0.334f, 0.471f, 4.0f,
+        -0.816f, -0.333f, 0.471f, 1.0f,
+        0.0f, 1.0f, 0.0f, 2.0f,
+    });
+}
+
+void uploadD20FaceTable(DicePhysicsEngine& engine, int id) {
+    engine.setDieFaceTable(id, {
+        0.111f, 0.745f, 0.658f, 1.0f,
+        -0.512f, -0.746f, 0.426f, 2.0f,
+        -0.942f, -0.334f, 0.03f, 3.0f,
+        0.497f, -0.334f, 0.801f, 4.0f,
+        0.624f, -0.746f, 0.232f, 5.0f,
+        -0.9f, 0.333f, 0.282f, 6.0f,
+        0.0f, -1.0f, 0.0f, 7.0f,
+        -0.206f, -0.333f, 0.92f, 8.0f,
+        -0.444f, 0.331f, 0.832f, 9.0f,
+        0.694f, 0.333f, 0.638f, 10.0f,
+        -0.693f, -0.333f, -0.639f, 11.0f,
+        0.513f, 0.745f, -0.425f, 12.0f,
+        0.0f, 1.0f, 0.0f, 13.0f,
+        0.445f, -0.333f, -0.831f, 14.0f,
+        0.9f, -0.333f, -0.282f, 15.0f,
+        -0.498f, 0.333f, -0.801f, 16.0f,
+        0.942f, 0.333f, -0.031f, 17.0f,
+        0.206f, 0.334f, -0.92f, 18.0f,
+        -0.625f, 0.745f, -0.232f, 19.0f,
+        -0.111f, -0.746f, -0.656f, 20.0f,
+    });
+}
+
+} // namespace
+
+TEST_CASE("Face value: d6 identity reads top face") {
+    DicePhysicsEngine engine;
+    const int id = engine.addDie(6, 0.0f, 0.0f, 0.0f);
+    uploadD6FaceTable(engine, id);
+    engine.setDieTransform(id, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+    engine.setDieSleepingForTesting(id, true);
+    CHECK(engine.getDieFaceValue(id) == 1);
+}
+
+TEST_CASE("Face value: d6 upside-down reads bottom face") {
+    DicePhysicsEngine engine;
+    const int id = engine.addDie(6, 0.0f, 0.0f, 0.0f);
+    uploadD6FaceTable(engine, id);
+    engine.setDieTransform(id, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f);
+    engine.setDieSleepingForTesting(id, true);
+    CHECK(engine.getDieFaceValue(id) == 6);
+}
+
+TEST_CASE("Face value: d4 uses bottom face at identity") {
+    DicePhysicsEngine engine;
+    const int id = engine.addDie(4, 0.0f, 0.0f, 0.0f);
+    uploadD4FaceTable(engine, id);
+    engine.setDieTransform(id, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+    engine.setDieSleepingForTesting(id, true);
+    CHECK(engine.getDieFaceValue(id) == 3);
+}
+
+TEST_CASE("Face value: d20 identity reads top face") {
+    DicePhysicsEngine engine;
+    const int id = engine.addDie(20, 0.0f, 0.0f, 0.0f);
+    uploadD20FaceTable(engine, id);
+    engine.setDieTransform(id, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+    engine.setDieSleepingForTesting(id, true);
+    CHECK(engine.getDieFaceValue(id) == 13);
+}
+
+TEST_CASE("Face value: returns zero while die is moving") {
+    DicePhysicsEngine engine;
+    const int id = engine.addDie(6, 0.0f, 0.0f, 0.0f);
+    uploadD6FaceTable(engine, id);
+    engine.setDieTransform(id, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+    engine.setDieVelocity(id, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    CHECK(engine.getDieFaceValue(id) == 0);
+}
+
 TEST_CASE("Serialize round-trip preserves state") {
     DicePhysicsEngine engine;
     engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
