@@ -11,8 +11,9 @@ import {
     buildShareableRollUrl,
     serializeDiceAppearance,
 } from '../src/roll/ShareableRoll.js';
-import { createDefaultAppearanceConfig } from '../src/dice/DiceAppearanceConfig.js';
 import { computeSeededThrowParams, createSeededRng } from '../src/wasm/seededThrowParams.js';
+
+const { createDefaultAppearanceConfig } = await import('../src/dice/DiceAppearanceConfig.js');
 
 let passed = 0;
 let failed = 0;

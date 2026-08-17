@@ -14,8 +14,14 @@ add_executable(dice_physics
 # ---------------------------------------------------------------------------
 # Emscripten link flags — shared with build.sh via emcc_flags.sh
 # ---------------------------------------------------------------------------
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(EM_PROFILE "debug")
+else()
+    set(EM_PROFILE "release")
+endif()
+
 execute_process(
-    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/emcc_flags.sh" --print-link-line release
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/emcc_flags.sh" --print-link-line "${EM_PROFILE}"
     OUTPUT_VARIABLE EM_LINK_FLAGS
     OUTPUT_STRIP_TRAILING_WHITESPACE
     RESULT_VARIABLE EM_FLAGS_RESULT

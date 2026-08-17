@@ -4,7 +4,7 @@
  * A small, central place where interactive props publish a named, programmatic
  * handle to their behaviour. This is what makes the "click the flute / draw a
  * card" interactions discoverable and — importantly — deterministically
- * testable via `app.interactables` (mirrored to `window.__interactables` under
+ * testable via `app.interactables` (exposed as `window.__app.interactables` under
  * `?test` / `?debug` by AppTestHooks).
  *
  * Handlers shape (all optional except `trigger`):

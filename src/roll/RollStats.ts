@@ -11,7 +11,7 @@ const DIE_SIDES: Record<string, number> = {
 
 const DIE_ORDER = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'] as const;
 
-type DieType = (typeof DIE_ORDER)[number];
+type _DieType = (typeof DIE_ORDER)[number];
 
 // Chi-squared critical values for alpha=0.05, df = sides - 1.
 const CHI_SQUARED_CRITICAL_95: Partial<Record<number, number>> = {

@@ -150,7 +150,7 @@ npm run format:check        # Prettier check (CI)
     - **Tier 1 (Important, 55–70%):** Furniture and background props (bookshelf, chairs, chest, rug, atmosphere, billiard lamp, floating candles, runecircle).
     - **Tier 2 (Secondary, ~85%):** Tabletop props arranged around the dice zone edges (dice tower, tray, jail, bag, bell, meal, hourglass, map, scroll, crystal ball, potions, skull, scale, lantern, spellbook, mug, tankard).
     - **Tier 3 (Decorative, 95%):** Background/decorative props (dagger, sword, shield, axe, pocket watch, compass, chalice, miniature, character sheet, bounty poster, pencil, coin pouch, lute, runestones, candelabra, smoking pipe, gemstones, writing set, cheese wheel, wax seal, crown, helmet, gong, mystic orb, DM screen, dragon scale, spyglass, playing cards, key, padlock, lockpicks, spectacles, leather journal, drinking horn, wand, coin, amulet, abacus, dart, scroll case, magnifying glass, rope, goblet, crossbow, waterskin, astrolabe, sundial, ale keg, flute, apple).
-    - **Finalizing (100%):** Disables `castShadow` on small decorative props by name, fades out loading overlay, sets `app.ready = true` (exposed as `window.__app.ready` / shim `window.sceneReady` under `?test` / `?debug`).
+    - **Finalizing (100%):** Disables `castShadow` on small decorative props by name, fades out loading overlay, sets `app.ready = true` (exposed as `window.__app.ready` under `?test` / `?debug`).
 - Implements an **"Eye-Head" FPS camera** with pointer lock (right-click to enter, ESC to exit). WASD moves, Space jumps.
 - Manages the **dice focus state machine** after a roll:
   `IDLE` → `WAITING_FOR_STOP` → `FOCUSING` → `HOLDING` (2s) → `RETURNING` → `IDLE`
@@ -193,7 +193,7 @@ npm run format:check        # Prettier check (CI)
 - Left-click on a die starts WASM kinematic drag by default (`setDieKinematic` + `setDieVelocity` toward the cursor). Mouse movement updates the die inside the WASM worker.
 - Double-clicking a die (within 300ms) triggers **levitation** in WASM: the die rises with a blue glow (`0x0088ff` PointLight), spins, then is released with a random throw after 1.5s.
 - **Ammo fallback (`?no-wasm` only):** drag + levitation route through ammo.js `btPoint2PointConstraint` / kinematic flags. Unreachable whenever the WASM engine is live.
-- **Dice cup (`DiceCup` prop):** WASM-only scoop/shake/pour ritual. Click the cup to scoop nearby dice, hold and wiggle to rattle (interior container planes + muffled leather audio), release or press `T` to pour onto the velvet zone. Cup pours use `seed = null` and are excluded from share URLs. Test hook: `window.__app.interactables.diceCup` (shim `window.__interactables.diceCup`).
+- **Dice cup (`DiceCup` prop):** WASM-only scoop/shake/pour ritual. Click the cup to scoop nearby dice, hold and wiggle to rattle (interior container planes + muffled leather audio), release or press `T` to pour onto the velvet zone. Cup pours use `seed = null` and are excluded from share URLs. Test hook: `window.__app.interactables.diceCup`.
 - The WASM control primitives live in `src/dice.js`: `driveDieWasmTransform`, `setDieWasmVelocity`, `getDieWasmTransform` (alongside `applyWasmImpulseForDie`).
 - `getHoveredDie(camera, normX, normY)` — returns the die under the cursor for hover cursor changes.
 - `updateInteraction(deltaTime)` — activates dragged bodies (ammo) or drives the WASM drag, and updates levitation state each frame.
@@ -273,6 +273,8 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 - **ESLint + Prettier** enforce a minimal ruleset (`eslint:recommended`, unused imports/vars, `eqeqeq`, import resolution). Config: [`eslint.config.js`](eslint.config.js), [`.prettierrc`](.prettierrc).
 - Run `npm run lint` before committing; CI blocks merge on lint/format failures.
+- **TypeScript policy:** `npm run typecheck` (`tsc --noEmit`, `checkJs` over all of `src/`). `npm run typecheck:strict` runs `strict: true` on converted seams (`src/roll/`, WASM flag/layout/command modules, `src/net/Protocol` + `SignalingClient`, `AppEvents` / `AppContext` / `FrameScheduler` / `RendererFactory`). No `tsc` emit — Vite bundles `.ts` directly. **Environment props stay JavaScript** with JSDoc until individually migrated through `propKit`; do not bulk-convert the ~99 prop modules.
+- Native solver tests may emit `src/wasm/build-native/compile_commands.json` when `bear` or `compiledb` is installed (`npm run test:solver`). CMake Debug builds use `emcc_flags.sh` debug profile (`-O0 -g`), not release `-O3 -flto`.
 - **Format on save (Cursor / VS Code):** enable Prettier as the default formatter and `"editor.formatOnSave": true` so agent edits match project style. ESLint fixes on save: `"editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" }`.
 - Optional local hook: `npm install` runs `husky` + `lint-staged` (ESLint fix + Prettier on staged `*.{js,mjs}`).
 - Prefix intentionally unused bindings with `_` (e.g. `_elapsedTime`, `catch (_e)`).
@@ -428,7 +430,7 @@ npm run test:share-roll-replay   # Two page loads of the same share URL settle t
 npm run test:a11y             # axe accessibility scan
 npm run test:notation         # Roll notation parser (Node, no browser)
 npm run test:share-roll       # Shareable roll encoding (Node)
-node test_dicecup.js          # DiceCup interactable (root; needs WASM for available:true)
+node tests/dicecup.js           # DiceCup interactable (needs WASM for available:true)
 
 # Physics / renderer harnesses (scripts/)
 npm run test:solver                 # Native C++ unit + fuzz (see docs/WASM_ENGINE.md)
@@ -443,8 +445,7 @@ npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when b
 - `test:wasm-gameplay-loop`, `test:wasm-authoritative`, and `test:share-roll-replay` all run in CI (`verify-tests` matrix); `verify:worker-replay` runs in the `verify` matrix. All four need the `wasm-artifacts` build (`npm run build:wasm`) to exercise the WASM-authoritative path rather than skipping.
 
 **Automation hooks** (require `?test`, `?debug`, or `?debug-perf`):
-- `window.__app` — stable API (`ready`, `scene`, `camera`, `renderer`, `interactables`, `replayRoll`, …). Prefer this.
-- Flat shims (`window.scene`, `window.sceneReady`, …) — deprecated for one release; see docs/ARCHITECTURE.md.
+- `window.__app` — stable API (`ready`, `scene`, `camera`, `renderer`, `interactables`, `replayRoll`, …). All Playwright scripts use this exclusively.
 - Smoke scripts use `?no-post` (and often `?webgl&fair-dice&test` in headless CI) to reduce GPU load.
 
 ## Deployment
@@ -487,7 +488,7 @@ Running/verifying the app in this headless, software-rendered, WASM-absent envir
 
 - **Use the `?webgl` baseline path.** There is no GPU, so WebGPU is unavailable. The default renderer falls back to the Three.js WebGL2 _TSL_ backend, which throws `Cannot read properties of undefined (reading 'buffers')` under SwiftShader and never finishes loading. Forcing `?webgl` (the classic `WebGLRenderer`) renders fine.
 - **Add `?fair-dice` when WASM is not compiled.** Emscripten is not installed, so there are no `public/wasm/` artifacts and physics uses the ammo.js fallback. The default pipping-bias path then calls `btCompoundShape.recalculateLocalAabb()`, which the bundled `ammo.js@0.0.10` build does not expose — this throws `Failed to load scene tiers: TypeError: ...recalculateLocalAabb is not a function` and the scene never becomes ready. `?fair-dice` disables the COM-bias compound-shape path and the scene loads (`window.__app.ready === true` under `&test`). Building the WASM module (`npm run build:wasm`, needs Emscripten) is the alternative that routes the bias through the WASM engine instead.
-- So a reliable local URL is e.g. `http://localhost:5173/?webgl&no-post&fair-dice&test&renderer-info` (dev) or the same on `:4173` (preview). Trigger a roll programmatically with `window.__app.replayRoll(seed)` (or shim `window.replayRoll`) or via the top-right "Roll All" button / `R` key.
+- So a reliable local URL is e.g. `http://localhost:5173/?webgl&no-post&fair-dice&test&renderer-info` (dev) or the same on `:4173` (preview). Trigger a roll programmatically with `window.__app.replayRoll(seed)` or via the top-right "Roll All" button / `R` key.
 - **Multiplayer (optional):** run `npm run signal:dev` (Cloudflare Worker on `:8787`), then `VITE_SIGNALING_URL=http://127.0.0.1:8787 npm run dev`. See [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md). Guests need WASM for deterministic replay.
 - **Browser WebGL needs software flags.** Launch Chrome/Chromium with `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`; rendering is slow but functional.
 - **`npm run build` fails here** because it runs `build:wasm` first (needs Emscripten at `/root/emsdk`). To build only the frontend bundle, run `npx vite build` (succeeds and is what `npm run preview` serves).

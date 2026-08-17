@@ -43,7 +43,7 @@ async function collectScripts(page, path) {
     // and physics lazy chunks to have been requested.
     await page.waitForFunction(
         () =>
-            (window.__app?.ready ?? window.sceneReady) === true ||
+            window.__app?.ready === true ||
             document.getElementById('loading-text')?.textContent?.includes('Error'),
         null,
         { timeout: 240000 }
@@ -80,7 +80,7 @@ try {
         const page = await browser.newPage();
         const urls = await collectScripts(page, '/?webgl&no-post&fair-dice&test');
         const wasmActive = await page.evaluate(
-            () => (window.__app?.physicsWorld ?? window.physicsWorld) == null
+            () => window.__app?.physicsWorld == null
         );
         const physics = scriptRequests(urls, /\/physics-[^/]+\.js/i);
         if (!wasmActive) {

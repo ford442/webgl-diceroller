@@ -25,6 +25,26 @@ echo "[test:solver] Compiling native solver tests with ${CXX}..."
     "${SCRIPT_DIR}/solver_tests.cpp" \
     -o "${BIN}"
 
+# compile_commands.json for clangd (native C++ only — not the Emscripten target).
+if command -v bear >/dev/null 2>&1; then
+    echo "[test:solver] Writing ${BUILD_DIR}/compile_commands.json via bear..."
+    bear --output "${BUILD_DIR}/compile_commands.json" -- \
+        "${CXX}" -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+            -I"${SCRIPT_DIR}" \
+            "${SCRIPT_DIR}/solver_tests.cpp" \
+            -o "${BIN}.bear-tmp"
+    rm -f "${BIN}.bear-tmp"
+elif command -v compiledb >/dev/null 2>&1; then
+    echo "[test:solver] Writing ${BUILD_DIR}/compile_commands.json via compiledb..."
+  (cd "${BUILD_DIR}" && compiledb -n test:solver \
+        "${CXX}" -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+            -I"${SCRIPT_DIR}" \
+            "${SCRIPT_DIR}/solver_tests.cpp" \
+            -o "${BIN}")
+else
+    echo "[test:solver] compile_commands.json skipped (install bear or compiledb for clangd)."
+fi
+
 echo "[test:solver] Running unit + fuzz tests..."
 (cd "${REPO_ROOT}" && "${BIN}")
 

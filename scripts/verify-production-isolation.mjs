@@ -92,7 +92,7 @@ async function checkBrowserIsolation(url) {
     });
     try {
         const page = await browser.newPage();
-        await page.goto(`${url}?webgl&no-post&fair-dice&worker-physics`, {
+        await page.goto(`${url}?webgl&no-post&fair-dice&test&worker-physics`, {
             waitUntil: 'domcontentloaded',
             timeout: 120000,
         });
@@ -110,17 +110,15 @@ async function checkBrowserIsolation(url) {
         let worker = null;
         try {
             await page.waitForFunction(
-                () => window.sceneReady === true || window.physicsWorld != null,
+                () => window.__app?.ready === true || window.__app?.physicsWorld != null,
                 null,
                 { timeout: 45000 }
             ).catch(() => {});
             worker = await page.evaluate(async () => {
-                // Dynamic import of the bundled physics bridge is not stable by
-                // chunk name; prefer any debug hooks, else infer from isolation.
                 const sabOk = window.crossOriginIsolated === true
                     && typeof SharedArrayBuffer === 'function';
                 return {
-                    sceneReady: window.sceneReady ?? false,
+                    sceneReady: window.__app?.ready === true,
                     inferredSABAvailable: sabOk,
                 };
             });

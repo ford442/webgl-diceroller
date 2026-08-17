@@ -46,17 +46,17 @@ const CHROME_ARGS = [
 const PROFILES = [
     {
         id: 'webgl-nopost',
-        query: `?webgl&no-post&fair-dice&layout-seed=${LAYOUT_SEED}&pr=1`,
+        query: `?webgl&no-post&fair-dice&test&layout-seed=${LAYOUT_SEED}&pr=1`,
         required: true,
     },
     {
         id: 'webgl',
-        query: `?webgl&fair-dice&layout-seed=${LAYOUT_SEED}&pr=1`,
+        query: `?webgl&fair-dice&test&layout-seed=${LAYOUT_SEED}&pr=1`,
         required: true,
     },
     {
         id: 'webgpu',
-        query: `?webgpu&fair-dice&layout-seed=${LAYOUT_SEED}&pr=1`,
+        query: `?webgpu&fair-dice&test&layout-seed=${LAYOUT_SEED}&pr=1`,
         required: false,
     },
 ];
@@ -92,18 +92,18 @@ async function startVite() {
 
 async function stabilizeScene(page) {
     await page
-        .waitForFunction(() => window.scene !== undefined, { timeout: 45000 })
+        .waitForFunction(() => window.__app?.scene !== undefined, { timeout: 45000 })
         .catch(() => {});
     await page
-        .waitForFunction(() => window.sceneReady === true, { timeout: 90000 })
+        .waitForFunction(() => window.__app?.ready === true, { timeout: 90000 })
         .catch(() => {});
 
     // Pin camera, strip UI/particles, freeze lights — golden frames should
     // reflect the 3D render path, not HUD chrome or candle flicker.
     await page
         .evaluate(({ pos, lookAt }) => {
-            const win = /** @type {any} */ (window);
-            const sched = win.__frameScheduler;
+            const app = window.__app;
+            const sched = app?.scheduler;
             if (sched?.systems) {
                 const keep = new Set(['sceneRender', 'frustumCull', 'workerPhysicsFlush']);
                 for (const phase of Object.keys(sched.systems)) {
@@ -112,12 +112,13 @@ async function stabilizeScene(page) {
                     }
                 }
             }
-            if (window.camera) {
-                window.camera.position.set(pos[0], pos[1], pos[2]);
-                window.camera.lookAt(lookAt[0], lookAt[1], lookAt[2]);
-                window.camera.updateMatrixWorld(true);
+            const camera = app?.camera;
+            if (camera) {
+                camera.position.set(pos[0], pos[1], pos[2]);
+                camera.lookAt(lookAt[0], lookAt[1], lookAt[2]);
+                camera.updateMatrixWorld(true);
             }
-            window.scene?.traverse?.((obj) => {
+            app?.scene?.traverse?.((obj) => {
                 const o = /** @type {any} */ (obj);
                 if (o.userData?.isDie) o.visible = false;
                 if (o.isPoints || o.isSprite) o.visible = false;
@@ -156,12 +157,11 @@ async function capturePng(page, file) {
     // redraw during screenshot (Playwright can time out waiting for "idle").
     await page
         .evaluate(() => {
-            const r = window.renderer;
+            const app = window.__app;
+            const r = app?.renderer;
             if (!r) return;
             r.setAnimationLoop(null);
-            const composer = /** @type {any} */ (window).composer;
-            if (composer) composer.render();
-            else if (window.scene && window.camera) r.render(window.scene, window.camera);
+            if (app?.scene && app?.camera) r.render(app.scene, app.camera);
         })
         .catch(() => {});
 
@@ -208,25 +208,35 @@ async function probe(browser, profile) {
 
         const info = await page
             .evaluate(() => {
-                const r = /** @type {any} */ (window.renderer);
-                const render = r?.info?.render ?? {};
-                const memory = r?.info?.memory ?? {};
+                const app = window.__app;
+                const r = /** @type {import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer | undefined} */ (
+                    app?.renderer ?? undefined
+                );
+                const render = /** @type {{ calls?: number; drawCalls?: number; triangles?: number }} */ (
+                    r?.info?.render ?? {}
+                );
+                const memory = /** @type {{ geometries?: number; textures?: number }} */ (
+                    r?.info?.memory ?? {}
+                );
                 let objects = 0;
-                window.scene?.traverse?.(() => {
+                app?.scene?.traverse?.(() => {
                     objects += 1;
                 });
                 return {
-                    rendererType: window.rendererType ?? null,
-                    usingWebGPU: window.usingWebGPU ?? null,
-                    fallbackReason: window.rendererFallbackReason ?? null,
-                    sceneReady: window.sceneReady ?? false,
-                    sceneChildren: window.scene?.children?.length ?? null,
+                    rendererType: app?.rendererType ?? null,
+                    usingWebGPU: app?.usingWebGPU ?? null,
+                    fallbackReason: app?.rendererFallbackReason ?? null,
+                    sceneReady: app?.ready === true,
+                    sceneChildren: app?.scene?.children?.length ?? null,
                     sceneObjects: objects || null,
                     drawCalls: render.calls ?? render.drawCalls ?? null,
                     triangles: render.triangles ?? null,
                     geometries: memory.geometries ?? null,
                     textures: memory.textures ?? null,
-                    frameMs: window.__renderStats?.timings?.render ?? null,
+                    frameMs:
+                        /** @type {{ timings?: { render?: number } } | null | undefined} */ (
+                            app?.stats
+                        )?.timings?.render ?? null,
                 };
             })
             .catch((e) => ({ error: String(e) }));

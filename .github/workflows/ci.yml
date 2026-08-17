@@ -74,6 +74,7 @@ jobs:
                   cache: npm
             - run: npm ci
             - run: npm run typecheck
+            - run: npm run typecheck:strict
 
     lint:
         name: Lint (ESLint + Prettier)

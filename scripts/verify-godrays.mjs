@@ -42,19 +42,20 @@ async function probe(browser, query, file) {
     });
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 
-    await page.goto(`${BASE}/${query}`, { waitUntil: 'load' });
+    await page.goto(`${BASE}/${query}&test`, { waitUntil: 'load' });
     await sleep(6000); // let renderer init + a few animation frames run
 
     const info = await page
         .evaluate(() => {
             const app = window.__app;
-            const scene = app?.scene ?? window.scene;
-            const stats =
-                /** @type {typeof window.__renderStats} */ (app?.stats) ?? window.__renderStats;
-            const post = app?.postConfig ?? window.postConfig;
+            const scene = app?.scene;
+            const stats = app?.stats;
+            const post = app?.postConfig;
             return {
                 backend:
-                    stats?.post?.rendererType ??
+                    /** @type {{ post?: { rendererType?: string } } | null | undefined} */ (
+                        stats
+                    )?.post?.rendererType ??
                     /** @type {{ rendererType?: string } | undefined} */ (
                         scene?.userData?.rendererState
                     )?.rendererType ??

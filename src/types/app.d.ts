@@ -37,8 +37,10 @@ export interface RendererState {
     fallbackReason?: string | null;
     pixelRatio?: number;
     pixelRatioForced?: boolean;
-    usePostAA?: boolean;
+    antialias?: boolean;
     isSoftwareRenderer?: boolean;
+    usePostAA?: boolean;
+    _recoveryCleanup?: (() => void) | null;
     [key: string]: unknown;
 }
 

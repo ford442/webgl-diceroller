@@ -149,8 +149,9 @@ function applySharedRendererConfig(
     applyRendererSize(renderer, width, height, pixelRatio);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.shadowMap.autoUpdate = false;
-    renderer.shadowMap.needsUpdate = true;
+    const shadowMap = renderer.shadowMap as THREE.WebGLShadowMap;
+    shadowMap.autoUpdate = false;
+    shadowMap.needsUpdate = true;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.3;
 }
@@ -265,7 +266,8 @@ function attachRecoveryHandlers(
                     state.pixelRatio ?? 1
                 );
             }
-            renderer.shadowMap.needsUpdate = true;
+            const shadowMap = renderer.shadowMap as THREE.WebGLShadowMap;
+            shadowMap.needsUpdate = true;
         };
 
         canvas.addEventListener('webglcontextlost', onWebGlLost, false);

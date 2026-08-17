@@ -43,22 +43,19 @@ Host-authoritative WebRTC tables use deterministic WASM seeded replay. See [`MUL
 
 ### Test / debug hooks
 
-Under `?test`, `?debug`, or `?debug-perf`, [`AppTestHooks.js`](../src/core/AppTestHooks.js) installs:
-
-1. **`window.__app`** — stable documented API (prefer this in Playwright).
-2. **Flat `window.*` shims** — deprecated compatibility aliases (`window.scene`, `window.sceneReady`, `window.replayRoll`, …) for one release. Prefer `__app`; remove shims next release after consumers migrate.
+Under `?test`, `?debug`, or `?debug-perf`, [`AppTestHooks.js`](../src/core/AppTestHooks.js) installs **`window.__app`** — the stable documented API for Playwright and manual debugging.
 
 Minimum `__app` surface:
 
 | Field / method | Notes |
 | -------------- | ----- |
-| `ready` | Replaces `sceneReady` |
+| `ready` | Scene fully loaded |
 | `scene`, `camera`, `renderer`, `THREE` | Three.js handles |
 | `physicsWorld`, `physics.getWasmEngine`, `physics.isWasmAvailable` | Physics |
 | `rendererType`, `usingWebGPU`, `usingWebGL`, `rendererFallbackReason`, `postConfig` | Renderer |
 | `qualityProfile`, `touchInputEnabled`, `isTouchPrimaryDevice` | Device / quality |
 | `stats` | Scheduler timings (was `__renderStats`) |
-| `interactables` | Named prop hooks (was `__interactables`) |
+| `interactables` | Named prop hooks |
 | `replayRoll`, `areDiceSettled`, `readAllDiceValues` | Dice / replay |
 | `events` | Subscribe to `AppEvent` names |
 

@@ -1,10 +1,56 @@
 /**
  * Shared deterministic throw parameter generation for dice.js and the physics
- * worker.  Keeps RNG draw order identical across in-process and worker paths.
+ * worker. Keeps RNG draw order identical across in-process and worker paths.
  */
 
+export interface SeededDieRef {
+    id: number;
+    index: number;
+}
+
+export interface SeededThrowParam {
+    id: number;
+    x: number;
+    y: number;
+    z: number;
+    qx: number;
+    qy: number;
+    qz: number;
+    qw: number;
+    forceX: number;
+    forceY: number;
+    forceZ: number;
+    spinX: number;
+    spinY: number;
+    spinZ: number;
+}
+
+export interface ThrowParamEngine {
+    setDieTransform(
+        id: number,
+        x: number,
+        y: number,
+        z: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number
+    ): void;
+    setDieVelocity(
+        id: number,
+        vx: number,
+        vy: number,
+        vz: number,
+        wx: number,
+        wy: number,
+        wz: number
+    ): void;
+    applyImpulse(id: number, fx: number, fy: number, fz: number): void;
+    applyTorqueImpulse(id: number, tx: number, ty: number, tz: number): void;
+}
+
 /** THREE.js default Euler order (XYZ). */
-function eulerToQuaternion(ex, ey, ez) {
+function eulerToQuaternion(ex: number, ey: number, ez: number) {
     const c1 = Math.cos(ex / 2);
     const c2 = Math.cos(ey / 2);
     const c3 = Math.cos(ez / 2);
@@ -23,7 +69,7 @@ const DEFAULT_RNG_STATE = 0x123456789abcdef0n;
 const RNG_MUL = 0x2545f4914f6cdd1dn;
 
 /** xorshift64* PRNG matching DicePhysicsEngine::DeterministicRNG in dice_physics.cpp */
-export function createSeededRng(seed) {
+export function createSeededRng(seed: number): () => number {
     let state = BigInt(seed >>> 0) || DEFAULT_RNG_STATE;
     return () => {
         state ^= state >> 12n;
@@ -34,12 +80,11 @@ export function createSeededRng(seed) {
     };
 }
 
-/**
- * @param {() => number} rand — deterministic RNG in [0, 1)
- * @param {{ id: number, index: number }[]} dice
- * @param {number} tableSurfaceY
- */
-export function computeSeededThrowParams(rand, dice, tableSurfaceY) {
+export function computeSeededThrowParams(
+    rand: () => number,
+    dice: SeededDieRef[],
+    tableSurfaceY: number
+): SeededThrowParam[] {
     return dice.map(({ id, index }) => {
         const x = (rand() - 0.5) * 4;
         const y = tableSurfaceY + 6.75 + index * 0.5;
@@ -72,7 +117,7 @@ export function computeSeededThrowParams(rand, dice, tableSurfaceY) {
 }
 
 /** Apply precomputed throw params to a DicePhysicsEngine (or proxy). */
-export function applyThrowParams(engine, params) {
+export function applyThrowParams(engine: ThrowParamEngine, params: SeededThrowParam[]): void {
     for (const p of params) {
         engine.setDieTransform(p.id, p.x, p.y, p.z, p.qx, p.qy, p.qz, p.qw);
         engine.setDieVelocity(p.id, 0, 0, 0, 0, 0, 0);

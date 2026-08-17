@@ -3,6 +3,7 @@ import eslintConfigPrettier from 'eslint-config-prettier';
 import importPlugin from 'eslint-plugin-import';
 import unusedImports from 'eslint-plugin-unused-imports';
 import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
 const importRules = {
     'import/no-duplicates': 'error',
@@ -74,6 +75,37 @@ export default [
             ...importRules,
         },
     },
+    ...tseslint.config({
+        files: ['src/**/*.ts'],
+        extends: [tseslint.configs.recommended],
+        languageOptions: {
+            ecmaVersion: 2022,
+            sourceType: 'module',
+            parser: tseslint.parser,
+            globals: {
+                ...globals.browser,
+                ...globals.es2021,
+            },
+        },
+        plugins: { import: importPlugin, 'unused-imports': unusedImports },
+        settings: {
+            'import/resolver': {
+                typescript: {
+                    alwaysTryTypes: true,
+                    project: './tsconfig.json',
+                },
+                node: {
+                    extensions: ['.js', '.mjs', '.ts'],
+                },
+            },
+        },
+        rules: {
+            ...coreRules,
+            ...importRules,
+            '@typescript-eslint/no-explicit-any': 'off',
+            '@typescript-eslint/no-unused-vars': 'off',
+        },
+    }),
     {
         files: ['src/wasm/dice_physics.worker.js'],
         languageOptions: {
@@ -105,7 +137,6 @@ export default [
         files: [
             'scripts/**/*.{js,mjs}',
             'tests/**/*.{js,mjs}',
-            'test_dicecup.js',
             'vite.config.js',
             'eslint.config.js',
         ],
