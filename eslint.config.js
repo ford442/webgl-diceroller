@@ -60,8 +60,12 @@ export default [
         plugins: { import: importPlugin, 'unused-imports': unusedImports },
         settings: {
             'import/resolver': {
+                typescript: {
+                    alwaysTryTypes: true,
+                    project: './tsconfig.json',
+                },
                 node: {
-                    extensions: ['.js', '.mjs'],
+                    extensions: ['.js', '.mjs', '.ts'],
                 },
             },
         },
@@ -83,8 +87,12 @@ export default [
         plugins: { import: importPlugin, 'unused-imports': unusedImports },
         settings: {
             'import/resolver': {
+                typescript: {
+                    alwaysTryTypes: true,
+                    project: './tsconfig.json',
+                },
                 node: {
-                    extensions: ['.js', '.mjs'],
+                    extensions: ['.js', '.mjs', '.ts'],
                 },
             },
         },
@@ -113,8 +121,12 @@ export default [
         plugins: { import: importPlugin, 'unused-imports': unusedImports },
         settings: {
             'import/resolver': {
+                typescript: {
+                    alwaysTryTypes: true,
+                    project: './tsconfig.json',
+                },
                 node: {
-                    extensions: ['.js', '.mjs'],
+                    extensions: ['.js', '.mjs', '.ts'],
                 },
             },
         },
