@@ -1,11 +1,15 @@
 import * as THREE from 'three';
-import { getPropAmmo, createPropStaticBody } from '../PropPhysics.js';
+import { createStaticCollider } from '../../core/StaticColliderBridge.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
 import { getWoodMaterial } from '../../core/MaterialPalette.js';
 import { resolvePlacement } from './ClutterPlacement.js';
 
 const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
 const randomUnit = (options) => (options?.rng ?? Math.random)();
+
+function addBoxCollider(physicsWorld, anchor, halfExtents) {
+    createStaticCollider(physicsWorld, anchor, { type: 'box', halfExtents });
+}
 
 function generateCharacterSheetTexture() {
     const canvas = document.createElement('canvas');
@@ -59,7 +63,6 @@ function generateCharacterSheetTexture() {
 }
 
 export function createParchment(scene, physicsWorld, options = {}) {
-    const ammo = getPropAmmo();
     const width = 5;
     const depth = 7;
     const thickness = 0.02;
@@ -82,10 +85,7 @@ export function createParchment(scene, physicsWorld, options = {}) {
     scene.add(mesh);
     options.track?.(mesh);
 
-    if (ammo && physicsWorld) {
-        const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, depth / 2));
-        createPropStaticBody(physicsWorld, mesh, shape);
-    }
+    addBoxCollider(physicsWorld, mesh, [width / 2, thickness / 2, depth / 2]);
 }
 
 function generateTarotTexture(name, number, color) {
@@ -130,7 +130,6 @@ function generateTarotTexture(name, number, color) {
 }
 
 export function createTarotCards(scene, physicsWorld, options = {}) {
-    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'TarotCards';
 
@@ -170,13 +169,7 @@ export function createTarotCards(scene, physicsWorld, options = {}) {
         mesh.rotation.y = (randomUnit(options) - 0.5) * 0.5;
 
         group.add(mesh);
-        if (ammo && physicsWorld) {
-            createPropStaticBody(
-                physicsWorld,
-                mesh,
-                new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, height / 2))
-            );
-        }
+        addBoxCollider(physicsWorld, mesh, [width / 2, thickness / 2, height / 2]);
     });
 
     scene.add(group);
@@ -230,7 +223,6 @@ function generateWantedPosterTexture() {
 }
 
 export function createWantedPoster(scene, physicsWorld, options = {}) {
-    const ammo = getPropAmmo();
     const width = 2.5;
     const height = 3.5;
     const thickness = 0.02;
@@ -254,10 +246,7 @@ export function createWantedPoster(scene, physicsWorld, options = {}) {
     scene.add(mesh);
     options.track?.(mesh);
 
-    if (ammo && physicsWorld) {
-        const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, height / 2));
-        createPropStaticBody(physicsWorld, mesh, shape);
-    }
+    addBoxCollider(physicsWorld, mesh, [width / 2, thickness / 2, height / 2]);
 }
 
 function generateDMChartsTexture() {
@@ -303,7 +292,6 @@ function generateDMChartsTexture() {
 }
 
 export function createDMScreen(scene, physicsWorld, options = {}) {
-    const ammo = getPropAmmo();
     const centerWidth = 8;
     const wingWidth = 4;
     const height = 3;
@@ -336,12 +324,7 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
     scene.add(centerMesh);
     options.track?.(centerMesh);
 
-    if (ammo && physicsWorld) {
-        const centerShape = new ammo.btBoxShape(
-            new ammo.btVector3(centerWidth / 2, height / 2, thickness / 2)
-        );
-        createPropStaticBody(physicsWorld, centerMesh, centerShape);
-    }
+    addBoxCollider(physicsWorld, centerMesh, [centerWidth / 2, height / 2, thickness / 2]);
 
     const angleRad = Math.PI / 6;
 
@@ -353,12 +336,7 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
     scene.add(leftWingMesh);
     options.track?.(leftWingMesh);
 
-    if (ammo && physicsWorld) {
-        const leftShape = new ammo.btBoxShape(
-            new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2)
-        );
-        createPropStaticBody(physicsWorld, leftWingMesh, leftShape);
-    }
+    addBoxCollider(physicsWorld, leftWingMesh, [wingWidth / 2, height / 2, thickness / 2]);
 
     const rightWingMesh = new THREE.Mesh(wingGeo, materials);
     rightWingMesh.rotation.y = -angleRad;
@@ -368,10 +346,5 @@ export function createDMScreen(scene, physicsWorld, options = {}) {
     scene.add(rightWingMesh);
     options.track?.(rightWingMesh);
 
-    if (ammo && physicsWorld) {
-        const rightShape = new ammo.btBoxShape(
-            new ammo.btVector3(wingWidth / 2, height / 2, thickness / 2)
-        );
-        createPropStaticBody(physicsWorld, rightWingMesh, rightShape);
-    }
+    addBoxCollider(physicsWorld, rightWingMesh, [wingWidth / 2, height / 2, thickness / 2]);
 }

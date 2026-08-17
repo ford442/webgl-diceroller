@@ -28,8 +28,9 @@ export function createChalk(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
         colliders: [
             {
                 type: 'box',
-                size: [1.2, 0.3, 0.3], // Approximate with a box for simplicity since it lies flat on the table
+                halfExtents: [0.6, 0.15, 0.15],
                 offset: [0, 0.15, 0],
+                materialTag: 0,
             },
         ],
     });

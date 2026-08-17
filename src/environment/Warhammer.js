@@ -19,14 +19,10 @@ export function createWarhammer(scene, physicsWorld, position, rotationAngle) {
         rotation: rotationAngle,
         colliders: [
             {
-                type: 'compound',
-                parts: [
-                    {
-                        type: 'box',
-                        halfExtents: [hx, hy, hz],
-                        offset: { y: hy },
-                    },
-                ],
+                type: 'box',
+                halfExtents: [hx, hy, hz],
+                offset: { y: hy },
+                materialTag: 3,
             },
         ],
         build({ group }) {

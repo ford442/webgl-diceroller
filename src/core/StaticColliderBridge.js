@@ -7,6 +7,8 @@ import {
     removeStaticCollider as wasmRemoveStaticCollider,
 } from '../wasm/PhysicsBridge.js';
 
+/** @typedef {import('../types/staticCollider').StaticColliderSpec} StaticColliderSpec */
+
 /** @returns {'ammo' | 'wasm'} */
 export function getStaticColliderBackend() {
     return isWasmAvailable() ? 'wasm' : 'ammo';
@@ -40,6 +42,42 @@ function applyLocalOffsetToProxy(anchor, proxy, offset, rotation) {
     }
 }
 
+function addVec3(base, delta) {
+    const a = vec3FromSpec(base);
+    const b = vec3FromSpec(delta);
+    return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
+}
+
+function addEuler(base, delta) {
+    const a = vec3FromSpec(base);
+    const b = vec3FromSpec(delta);
+    return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
+}
+
+/**
+ * Flatten compound specs into leaf colliders with merged local pose.
+ * @param {StaticColliderSpec | { type: string, parts?: StaticColliderSpec[], offset?: object, rotation?: object, materialTag?: number }} spec
+ * @returns {StaticColliderSpec[]}
+ */
+export function flattenColliderSpecs(spec) {
+    if (!spec) return [];
+    if (spec.type === 'compound') {
+        const merged = [];
+        for (const part of spec.parts ?? []) {
+            for (const leaf of flattenColliderSpecs(part)) {
+                merged.push({
+                    ...leaf,
+                    offset: addVec3(spec.offset, leaf.offset),
+                    rotation: addEuler(spec.rotation, leaf.rotation),
+                    materialTag: leaf.materialTag ?? spec.materialTag,
+                });
+            }
+        }
+        return merged;
+    }
+    return [/** @type {StaticColliderSpec} */ (spec)];
+}
+
 function buildAmmoShape(ammo, spec) {
     switch (spec.type) {
         case 'box': {
@@ -49,10 +87,30 @@ function buildAmmoShape(ammo, spec) {
             ammo.destroy(halfExtents);
             return shape;
         }
-        case 'cylinder': {
-            const halfExtents = new ammo.btVector3(spec.radius, spec.halfHeight, spec.radius);
+        case 'cylinder':
+        case 'openCylinder': {
+            const halfHeight =
+                spec.halfHeight ?? (spec.height != null ? spec.height / 2 : 0);
+            const halfExtents = new ammo.btVector3(spec.radius, halfHeight, spec.radius);
             const shape = new ammo.btCylinderShape(halfExtents);
             ammo.destroy(halfExtents);
+            return shape;
+        }
+        case 'plane': {
+            const normal = vec3FromSpec(spec.normal);
+            const shape = new ammo.btStaticPlaneShape(
+                new ammo.btVector3(normal.x, normal.y, normal.z),
+                spec.dist ?? 0
+            );
+            return shape;
+        }
+        case 'convexHull': {
+            const shape = new ammo.btConvexHullShape();
+            for (const vertex of spec.vertices ?? []) {
+                const [x = 0, y = 0, z = 0] = vertex;
+                shape.addPoint(new ammo.btVector3(x, y, z), false);
+            }
+            shape.setMargin(0.01);
             return shape;
         }
         case 'compound': {
@@ -122,11 +180,18 @@ function attachWasmIdToAnchor(anchor, wasmId) {
 export function createStaticCollider(physicsWorld, anchor, spec) {
     if (!anchor || !spec) return null;
 
+    const leaves = flattenColliderSpecs(spec);
+    if (leaves.length === 0) return null;
+
     if (getStaticColliderBackend() === 'wasm') {
-        const wasmId = wasmAddStaticCollider(spec, anchor);
-        if (wasmId < 0) return null;
-        attachWasmIdToAnchor(anchor, wasmId);
-        return { wasmId };
+        let first = null;
+        for (const leaf of leaves) {
+            const wasmId = wasmAddStaticCollider(leaf, anchor);
+            if (wasmId < 0) continue;
+            attachWasmIdToAnchor(anchor, wasmId);
+            if (!first) first = { wasmId };
+        }
+        return first;
     }
 
     if (!physicsWorld) return null;
@@ -134,23 +199,28 @@ export function createStaticCollider(physicsWorld, anchor, spec) {
     const ammo = getAmmo();
     if (!ammo) return null;
 
-    const shape = buildAmmoShape(ammo, spec);
-    if (!shape) return null;
+    let first = null;
+    for (const leaf of leaves) {
+        const shape = buildAmmoShape(ammo, leaf);
+        if (!shape) continue;
 
-    let body;
-    if (needsPoseProxy(spec)) {
-        const proxy = new THREE.Object3D();
-        applyLocalOffsetToProxy(anchor, proxy, spec.offset, spec.rotation);
-        body = createStaticBody(physicsWorld, proxy, shape);
-        proxy.userData.physicsBody = null;
-    } else {
-        body = createStaticBody(physicsWorld, anchor, shape);
+        let body;
+        if (needsPoseProxy(leaf)) {
+            const proxy = new THREE.Object3D();
+            applyLocalOffsetToProxy(anchor, proxy, leaf.offset, leaf.rotation);
+            body = createStaticBody(physicsWorld, proxy, shape);
+            proxy.userData.physicsBody = null;
+        } else {
+            body = createStaticBody(physicsWorld, anchor, shape);
+        }
+
+        if (!body) continue;
+
+        attachBodyToAnchor(anchor, body);
+        if (!first) first = { body, shapes: [shape] };
     }
 
-    if (!body) return null;
-
-    attachBodyToAnchor(anchor, body);
-    return { body, shapes: [shape] };
+    return first;
 }
 
 export function destroyStaticCollider(physicsWorld, body) {

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
+import { createProp, mesh, STATIC_MATERIAL } from './propKit.js';
 
 export function createAmulet(
     scene,
@@ -7,18 +7,17 @@ export function createAmulet(
     position = { x: -6, y: -2.74, z: -8 },
     rotationY = Math.PI / 6
 ) {
-    const group = new THREE.Group();
-    group.name = 'Amulet';
+    const radius = 0.4;
+    const thickness = 0.05;
+    const shapeRadius = radius + thickness;
+    const shapeHeight = thickness * 2;
 
-    // Materials
-    // Gold casing
     const goldMaterial = new THREE.MeshStandardMaterial({
         color: 0xffd700,
         metalness: 0.9,
         roughness: 0.3,
     });
 
-    // Glowing/Shiny Ruby center
     const rubyMaterial = new THREE.MeshPhysicalMaterial({
         color: 0xff0033,
         metalness: 0.1,
@@ -30,93 +29,59 @@ export function createAmulet(
         clearcoatRoughness: 0.1,
     });
 
-    // Chain/String material
     const stringMaterial = new THREE.MeshStandardMaterial({
-        color: 0x332211, // Dark leather/twine
+        color: 0x332211,
         roughness: 0.9,
         metalness: 0.0,
     });
 
-    // 1. Amulet Base (Gold Ring)
-    // The amulet lies flat on the table, so its local Y axis points UP.
-    // A cylinder with low height is a coin-like shape.
-    const radius = 0.4;
-    const thickness = 0.05;
+    return createProp(scene, physicsWorld, {
+        name: 'Amulet',
+        position,
+        rotation: rotationY,
+        colliders: [
+            {
+                type: 'cylinder',
+                radius: shapeRadius,
+                halfHeight: shapeHeight / 2,
+                materialTag: STATIC_MATERIAL.METAL,
+            },
+        ],
+        build({ group }) {
+            const ringGeometry = new THREE.TorusGeometry(radius, thickness, 16, 32);
+            ringGeometry.rotateX(Math.PI / 2);
+            group.add(mesh(ringGeometry, goldMaterial));
 
-    // Create the outer ring using Torus for a rounded edge
-    const ringGeometry = new THREE.TorusGeometry(radius, thickness, 16, 32);
-    // Torus default orientation is upright (facing Z). We rotate it to lie flat.
-    ringGeometry.rotateX(Math.PI / 2);
-    const ringMesh = new THREE.Mesh(ringGeometry, goldMaterial);
-    ringMesh.castShadow = true;
-    ringMesh.receiveShadow = true;
-    group.add(ringMesh);
+            const backingGeometry = new THREE.CylinderGeometry(radius, radius, thickness * 0.5, 32);
+            group.add(
+                mesh(backingGeometry, goldMaterial, { position: { y: -thickness * 0.5 } })
+            );
 
-    // 2. Amulet Backing (Flat gold disc inside the ring)
-    const backingGeometry = new THREE.CylinderGeometry(radius, radius, thickness * 0.5, 32);
-    const backingMesh = new THREE.Mesh(backingGeometry, goldMaterial);
-    // Offset slightly down so it sits at the bottom of the ring
-    backingMesh.position.y = -thickness * 0.5;
-    backingMesh.castShadow = true;
-    backingMesh.receiveShadow = true;
-    group.add(backingMesh);
+            const gemGeometry = new THREE.CylinderGeometry(
+                radius * 0.7,
+                radius * 0.7,
+                thickness * 1.5,
+                8
+            );
+            group.add(mesh(gemGeometry, rubyMaterial));
 
-    // 3. Gemstone Center
-    const gemGeometry = new THREE.CylinderGeometry(radius * 0.7, radius * 0.7, thickness * 1.5, 8); // Octagonal gem
-    const gemMesh = new THREE.Mesh(gemGeometry, rubyMaterial);
-    gemMesh.castShadow = true;
-    gemMesh.receiveShadow = true;
-    group.add(gemMesh);
+            const loopGeometry = new THREE.TorusGeometry(0.08, 0.02, 8, 16);
+            loopGeometry.rotateY(Math.PI / 2);
+            group.add(
+                mesh(loopGeometry, goldMaterial, { position: { x: 0, y: 0, z: -radius - 0.05 } })
+            );
 
-    // 4. Little loop at the top for the chain
-    const loopGeometry = new THREE.TorusGeometry(0.08, 0.02, 8, 16);
-    loopGeometry.rotateY(Math.PI / 2); // Rotate so the hole is horizontal
-    const loopMesh = new THREE.Mesh(loopGeometry, goldMaterial);
-    loopMesh.position.set(0, 0, -radius - 0.05); // Position at the "top" (negative Z in flat space)
-    loopMesh.castShadow = true;
-    loopMesh.receiveShadow = true;
-    group.add(loopMesh);
-
-    // 5. Chain/String (A squiggly path lying on the table)
-    // Create a curved path for the string
-    const stringCurve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(0, -thickness, -radius - 0.1),
-        new THREE.Vector3(0.2, -thickness, -radius - 0.5),
-        new THREE.Vector3(-0.3, -thickness, -radius - 1.0),
-        new THREE.Vector3(0.5, -thickness, -radius - 1.8),
-        new THREE.Vector3(-0.1, -thickness, -radius - 2.5),
-        new THREE.Vector3(0.3, -thickness, -radius - 3.2),
-        new THREE.Vector3(0.0, -thickness, -radius - 3.5),
-    ]);
-    const stringGeometry = new THREE.TubeGeometry(stringCurve, 64, 0.02, 8, false);
-    const stringMesh = new THREE.Mesh(stringGeometry, stringMaterial);
-    stringMesh.castShadow = true;
-    stringMesh.receiveShadow = true;
-    group.add(stringMesh);
-
-    // Set Group Position and Rotation
-    group.position.set(position.x, position.y, position.z);
-    group.rotation.set(0, rotationY, 0);
-
-    scene.add(group);
-
-    // Physics
-    if (physicsWorld && getPropAmmo()) {
-        const AmmoInstance = getPropAmmo();
-
-        // Use a simple flat cylinder shape for the main amulet body
-        const shapeRadius = radius + thickness; // encompass the ring
-        const shapeHeight = thickness * 2; // thin
-
-        // btCylinderShape expects a vector of half-extents.
-        // For a Y-axis cylinder, it's (radius, halfHeight, radius).
-        const shape = new AmmoInstance.btCylinderShape(
-            new AmmoInstance.btVector3(shapeRadius, shapeHeight / 2, shapeRadius)
-        );
-
-        // createPropStaticBody handles position/rotation from the group
-        createPropStaticBody(physicsWorld, group, shape);
-    }
-
-    return { group };
+            const stringCurve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(0, -thickness, -radius - 0.1),
+                new THREE.Vector3(0.2, -thickness, -radius - 0.5),
+                new THREE.Vector3(-0.3, -thickness, -radius - 1.0),
+                new THREE.Vector3(0.5, -thickness, -radius - 1.8),
+                new THREE.Vector3(-0.1, -thickness, -radius - 2.5),
+                new THREE.Vector3(0.3, -thickness, -radius - 3.2),
+                new THREE.Vector3(0.0, -thickness, -radius - 3.5),
+            ]);
+            const stringGeometry = new THREE.TubeGeometry(stringCurve, 64, 0.02, 8, false);
+            group.add(mesh(stringGeometry, stringMaterial));
+        },
+    });
 }

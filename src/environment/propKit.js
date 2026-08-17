@@ -27,6 +27,7 @@ import {
     getWroughtIronMaterial,
 } from '../core/MaterialPalette.js';
 import { createStaticCollider } from '../core/StaticColliderBridge.js';
+export { STATIC_MATERIAL } from '../wasm/staticColliders.js';
 
 export const materials = {
     wood: (color) => getWoodMaterial(color),
@@ -141,7 +142,7 @@ export function createProp(
     scene.add(group);
 
     let body = null;
-    if (physicsWorld && colliders.length > 0) {
+    if (colliders.length > 0) {
         for (const colliderSpec of colliders) {
             const result = createStaticCollider(physicsWorld, group, colliderSpec);
             if (!body && result?.body) body = result.body;

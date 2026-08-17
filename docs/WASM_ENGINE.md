@@ -629,7 +629,7 @@ const t2 = window.getWasmEngine().getTransforms();
 - [x] `?dual-physics` / `?ammo-drag` / `?wasm-drag` removed; `?no-wasm` is the only escape hatch.
 - [x] Prop ammo usage funnelled through `src/environment/PropPhysics.js`; no prop imports `physics.js` directly.
 - [x] `npm run verify:wasm-interaction` covers drag + levitation on the WASM-only path; `npm run verify:bundle-loading` asserts no ammo chunk and no ammo dice bodies by default.
-- [ ] Static prop colliders still use ammo when loaded — see [issue #237](https://github.com/ford442/webgl-diceroller/issues/237).
+- [x] Static prop colliders use declarative specs via `createProp` + `StaticColliderBridge` (WASM on the default path; ammo fallback on `?no-wasm`). Run `node scripts/prop-collider-audit.mjs` for migration coverage.
 - [x] SIMD optimisation (`-msimd128`) for SAT axis projections (`projectHullOntoAxis` in `dice_physics/dice_sat.hpp`).
 
 ### Phase 6 (Broadphase, SIMD, bench — complete)

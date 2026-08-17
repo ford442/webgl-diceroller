@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
+import { createProp, materials, mesh, STATIC_MATERIAL } from './propKit.js';
 
 export function createGoblet(
     scene,
@@ -7,88 +7,55 @@ export function createGoblet(
     position = { x: 5, y: -2.75, z: 12 },
     rotationY = 0
 ) {
-    const group = new THREE.Group();
-    group.name = 'Goblet';
+    const scale = 0.6;
+    const radius = 1.3 * scale;
+    const height = 4.0 * scale;
 
-    // Goblet material: Silver/Pewter
-    const silverMat = new THREE.MeshStandardMaterial({
-        color: 0xc0c0c0,
-        metalness: 0.9,
-        roughness: 0.2,
-        envMapIntensity: 1.0,
+    return createProp(scene, physicsWorld, {
+        name: 'Goblet',
+        position,
+        rotation: rotationY,
+        colliders: [
+            {
+                type: 'cylinder',
+                radius,
+                halfHeight: height / 2,
+                offset: { y: height / 2 },
+                materialTag: STATIC_MATERIAL.METAL,
+            },
+        ],
+        build({ group }) {
+            const silverMat = materials.silver();
+
+            const points = [];
+            points.push(new THREE.Vector2(0, 0));
+            points.push(new THREE.Vector2(0.8, 0.1));
+            points.push(new THREE.Vector2(0.8, 0.2));
+            points.push(new THREE.Vector2(0.2, 0.4));
+            points.push(new THREE.Vector2(0.15, 0.8));
+            points.push(new THREE.Vector2(0.2, 1.2));
+            points.push(new THREE.Vector2(0.15, 1.6));
+            points.push(new THREE.Vector2(0.8, 1.8));
+            points.push(new THREE.Vector2(1.2, 2.4));
+            points.push(new THREE.Vector2(1.3, 3.2));
+            points.push(new THREE.Vector2(1.2, 3.8));
+            points.push(new THREE.Vector2(1.25, 4.0));
+            points.push(new THREE.Vector2(1.15, 4.0));
+            points.push(new THREE.Vector2(1.1, 3.2));
+            points.push(new THREE.Vector2(0.7, 2.2));
+            points.push(new THREE.Vector2(0.0, 2.0));
+
+            const latheGeo = new THREE.LatheGeometry(points, 32);
+            const gobletMesh = mesh(latheGeo, silverMat);
+            gobletMesh.scale.set(scale, scale, scale);
+            group.add(gobletMesh);
+
+            const ring = mesh(new THREE.TorusGeometry(0.2, 0.05, 16, 32), materials.gold(), {
+                position: { y: 1.0 },
+                rotation: { x: Math.PI / 2 },
+            });
+            ring.scale.set(scale, scale, scale);
+            group.add(ring);
+        },
     });
-
-    // Outer and Inner Lathe Profile
-    const points = [];
-    // Base
-    points.push(new THREE.Vector2(0, 0));
-    points.push(new THREE.Vector2(0.8, 0.1));
-    points.push(new THREE.Vector2(0.8, 0.2));
-    points.push(new THREE.Vector2(0.2, 0.4));
-    // Stem
-    points.push(new THREE.Vector2(0.15, 0.8));
-    points.push(new THREE.Vector2(0.2, 1.2));
-    points.push(new THREE.Vector2(0.15, 1.6));
-    // Cup Base
-    points.push(new THREE.Vector2(0.8, 1.8));
-    points.push(new THREE.Vector2(1.2, 2.4));
-    points.push(new THREE.Vector2(1.3, 3.2));
-    points.push(new THREE.Vector2(1.2, 3.8));
-    points.push(new THREE.Vector2(1.25, 4.0)); // Rim
-
-    // Inner Cup profile (to make it hollow)
-    points.push(new THREE.Vector2(1.15, 4.0)); // Inner Rim
-    points.push(new THREE.Vector2(1.1, 3.2));
-    points.push(new THREE.Vector2(0.7, 2.2));
-    points.push(new THREE.Vector2(0.0, 2.0));
-
-    const latheGeo = new THREE.LatheGeometry(points, 32);
-    const gobletMesh = new THREE.Mesh(latheGeo, silverMat);
-
-    // Scale down a bit to fit on the table nicely
-    gobletMesh.scale.set(0.6, 0.6, 0.6);
-    gobletMesh.castShadow = true;
-    gobletMesh.receiveShadow = true;
-
-    group.add(gobletMesh);
-
-    // Decorative ring on stem
-    const ringGeo = new THREE.TorusGeometry(0.2, 0.05, 16, 32);
-    const ringMat = new THREE.MeshStandardMaterial({
-        color: 0xffd700, // Gold trim
-        metalness: 1.0,
-        roughness: 0.3,
-    });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.position.y = 1.0;
-    ring.rotation.x = Math.PI / 2;
-    ring.scale.set(0.6, 0.6, 0.6);
-    ring.castShadow = true;
-    group.add(ring);
-
-    group.position.set(position.x, position.y, position.z);
-    group.rotation.y = rotationY;
-    scene.add(group);
-
-    // Physics
-    const Ammo = getPropAmmo();
-    if (Ammo && physicsWorld) {
-        // Use a cylinder shape for the goblet
-        const radius = 1.3 * 0.6; // Max radius * scale
-        const height = 4.0 * 0.6; // Max height * scale
-
-        // Physics shape is centered, so we need to offset the position
-        if (Ammo && physicsWorld) {
-            const shape = new Ammo.btCylinderShape(new Ammo.btVector3(radius, height / 2, radius));
-
-            const proxy = new THREE.Object3D();
-            proxy.position.copy(group.position);
-            proxy.position.y += height / 2; // Move up by half height since group origin is at bottom
-            proxy.quaternion.copy(group.quaternion);
-
-            createPropStaticBody(physicsWorld, proxy, shape);
-        }
-    }
-
-    return { group };
 }

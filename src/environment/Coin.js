@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
 import { getInstancedMetalMaterial } from '../core/MaterialPalette.js';
+import { createProp, STATIC_MATERIAL } from './propKit.js';
 
 export function createCoin(
     scene,
@@ -8,71 +8,61 @@ export function createCoin(
     position = { x: 8, y: -2.75, z: -2 },
     rotationY = 0
 ) {
-    const ammo = getPropAmmo();
-
-    const coinGroup = new THREE.Group();
-    coinGroup.name = 'Coin';
-
     const radius = 0.3;
     const height = 0.05;
-    const geometry = new THREE.CylinderGeometry(radius, radius, height, 16);
-
     const numCoins = 12;
+    const geometry = new THREE.CylinderGeometry(radius, radius, height, 16);
     const instanceMaterial = getInstancedMetalMaterial();
-    const coins = new THREE.InstancedMesh(geometry, instanceMaterial, numCoins);
-    coins.castShadow = true;
-    coins.receiveShadow = true;
-    coins.instanceMatrix.setUsage(THREE.StaticDrawUsage);
     const goldColor = new THREE.Color(0xffd700);
 
+    const colliders = [];
     const dummy = new THREE.Object3D();
-    const pileCenter = new THREE.Vector3(position.x, position.y, position.z);
 
-    if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
-        coins.userData.physicsBodies = [];
+    for (let i = 0; i < numCoins; i++) {
+        const offsetX = (Math.random() - 0.5) * 2.5;
+        const offsetZ = (Math.random() - 0.5) * 2.5;
+        const rotX = (Math.random() - 0.5) * 0.3;
+        const rotY = rotationY + Math.random() * Math.PI * 2;
+        const rotZ = (Math.random() - 0.5) * 0.3;
 
-        for (let i = 0; i < numCoins; i++) {
-            coins.setColorAt(i, goldColor);
-
-            const offsetX = (Math.random() - 0.5) * 2.5;
-            const offsetZ = (Math.random() - 0.5) * 2.5;
-            const posY = -2.75 + height / 2;
-
-            dummy.position.set(pileCenter.x + offsetX, posY, pileCenter.z + offsetZ);
-            dummy.rotation.set(
-                (Math.random() - 0.5) * 0.3,
-                rotationY + Math.random() * Math.PI * 2,
-                (Math.random() - 0.5) * 0.3
-            );
-            dummy.updateMatrix();
-            coins.setMatrixAt(i, dummy.matrix);
-            coins.userData.physicsBodies.push(createPropStaticBody(physicsWorld, dummy, shape));
-        }
-    } else {
-        for (let i = 0; i < numCoins; i++) {
-            coins.setColorAt(i, goldColor);
-
-            const offsetX = (Math.random() - 0.5) * 2.5;
-            const offsetZ = (Math.random() - 0.5) * 2.5;
-            const posY = -2.75 + height / 2;
-
-            dummy.position.set(pileCenter.x + offsetX, posY, pileCenter.z + offsetZ);
-            dummy.rotation.set(
-                (Math.random() - 0.5) * 0.3,
-                rotationY + Math.random() * Math.PI * 2,
-                (Math.random() - 0.5) * 0.3
-            );
-            dummy.updateMatrix();
-            coins.setMatrixAt(i, dummy.matrix);
-        }
+        colliders.push({
+            type: 'cylinder',
+            radius,
+            halfHeight: height / 2,
+            offset: { x: offsetX, y: height / 2, z: offsetZ },
+            rotation: { x: rotX, y: rotY, z: rotZ },
+            materialTag: STATIC_MATERIAL.METAL,
+        });
     }
 
-    coins.instanceMatrix.needsUpdate = true;
-    if (coins.instanceColor) coins.instanceColor.needsUpdate = true;
+    return createProp(scene, physicsWorld, {
+        name: 'Coin',
+        position,
+        rotation: rotationY,
+        colliders,
+        build({ group }) {
+            const coins = new THREE.InstancedMesh(geometry, instanceMaterial, numCoins);
+            coins.castShadow = true;
+            coins.receiveShadow = true;
+            coins.instanceMatrix.setUsage(THREE.StaticDrawUsage);
 
-    coinGroup.add(coins);
-    scene.add(coinGroup);
+            for (let i = 0; i < numCoins; i++) {
+                coins.setColorAt(i, goldColor);
 
-    return { group: coinGroup };
+                const offsetX = colliders[i].offset.x;
+                const offsetZ = colliders[i].offset.z;
+                const { x: rotX, y: rotY, z: rotZ } = colliders[i].rotation;
+
+                dummy.position.set(offsetX, height / 2, offsetZ);
+                dummy.rotation.set(rotX, rotY, rotZ);
+                dummy.updateMatrix();
+                coins.setMatrixAt(i, dummy.matrix);
+            }
+
+            coins.instanceMatrix.needsUpdate = true;
+            if (coins.instanceColor) coins.instanceColor.needsUpdate = true;
+
+            group.add(coins);
+        },
+    });
 }

@@ -1,19 +1,5 @@
 import * as THREE from 'three';
-import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
-import {
-    getWoodTexturedMaterial,
-    getBookCoverMaterials,
-    getPaperMaterial,
-} from '../core/MaterialPalette.js';
-
-// Re-export palette accessors for any external callers that relied on getMaterials.
-function getMaterials() {
-    return {
-        wood: getWoodTexturedMaterial(),
-        books: getBookCoverMaterials(),
-        paper: getPaperMaterial(),
-    };
-}
+import { createProp, materials } from './propKit.js';
 
 export function createBookshelf(
     scene,
@@ -21,158 +7,105 @@ export function createBookshelf(
     position = { x: 0, y: 0, z: 0 },
     rotationY = 0
 ) {
-    const materials = getMaterials();
-    const ammo = getPropAmmo();
-
-    // Group
-    const bookshelfGroup = new THREE.Group();
-    bookshelfGroup.position.set(position.x, position.y, position.z);
-    bookshelfGroup.rotation.y = rotationY;
-
-    // --- Geometry ---
-    // Bookshelf Dimensions
     const width = 8;
     const height = 12;
     const depth = 2;
     const thickness = 0.5;
 
-    // 1. Frame
-    // Left Side
-    const sideGeo = new THREE.BoxGeometry(thickness, height, depth);
-    const leftSide = new THREE.Mesh(sideGeo, materials.wood);
-    leftSide.position.set(-width / 2 + thickness / 2, height / 2, 0);
-    leftSide.castShadow = true;
-    leftSide.receiveShadow = true;
-    bookshelfGroup.add(leftSide);
+    return createProp(scene, physicsWorld, {
+        name: 'Bookshelf',
+        position,
+        rotation: rotationY,
+        colliders: [
+            {
+                type: 'box',
+                halfExtents: [width / 2, height / 2, depth / 2],
+                offset: { y: height / 2 },
+            },
+        ],
+        build({ group, mesh: meshHelper }) {
+            const wood = materials.woodTextured();
+            const books = materials.bookCovers();
+            const paper = materials.paper();
 
-    // Right Side
-    const rightSide = new THREE.Mesh(sideGeo, materials.wood);
-    rightSide.position.set(width / 2 - thickness / 2, height / 2, 0);
-    rightSide.castShadow = true;
-    rightSide.receiveShadow = true;
-    bookshelfGroup.add(rightSide);
+            const sideGeo = new THREE.BoxGeometry(thickness, height, depth);
+            group.add(
+                meshHelper(sideGeo, wood, {
+                    position: { x: -width / 2 + thickness / 2, y: height / 2 },
+                })
+            );
+            group.add(
+                meshHelper(sideGeo, wood, {
+                    position: { x: width / 2 - thickness / 2, y: height / 2 },
+                })
+            );
 
-    // Top
-    const topBotGeo = new THREE.BoxGeometry(width, thickness, depth);
-    const top = new THREE.Mesh(topBotGeo, materials.wood);
-    top.position.set(0, height - thickness / 2, 0);
-    top.castShadow = true;
-    top.receiveShadow = true;
-    bookshelfGroup.add(top);
+            const topBotGeo = new THREE.BoxGeometry(width, thickness, depth);
+            group.add(meshHelper(topBotGeo, wood, { position: { y: height - thickness / 2 } }));
+            group.add(meshHelper(topBotGeo, wood, { position: { y: thickness / 2 } }));
 
-    // Bottom
-    const bottom = new THREE.Mesh(topBotGeo, materials.wood);
-    bottom.position.set(0, thickness / 2, 0);
-    bottom.castShadow = true;
-    bottom.receiveShadow = true;
-    bookshelfGroup.add(bottom);
+            const backGeo = new THREE.BoxGeometry(width, height, thickness);
+            group.add(
+                meshHelper(backGeo, wood, {
+                    position: { y: height / 2, z: -depth / 2 + thickness / 2 },
+                    castShadow: false,
+                })
+            );
 
-    // Back
-    const backGeo = new THREE.BoxGeometry(width, height, thickness);
-    const back = new THREE.Mesh(backGeo, materials.wood);
-    back.position.set(0, height / 2, -depth / 2 + thickness / 2);
-    back.receiveShadow = true;
-    bookshelfGroup.add(back);
+            const numShelves = 4;
+            const shelfSpacing = (height - thickness * 2) / numShelves;
 
-    // Shelves
-    const numShelves = 4;
-    const shelfSpacing = (height - thickness * 2) / numShelves;
+            for (let i = 1; i < numShelves; i++) {
+                const y = i * shelfSpacing;
+                group.add(meshHelper(topBotGeo, wood, { position: { y } }));
+                populateShelf(
+                    group,
+                    y,
+                    width - thickness * 2,
+                    depth - thickness,
+                    books,
+                    paper
+                );
+            }
 
-    for (let i = 1; i < numShelves; i++) {
-        const y = i * shelfSpacing;
-        const shelf = new THREE.Mesh(topBotGeo, materials.wood);
-        shelf.position.set(0, y, 0);
-        shelf.castShadow = true;
-        shelf.receiveShadow = true;
-        bookshelfGroup.add(shelf);
-
-        // Populate with Books
-        populateShelf(
-            bookshelfGroup,
-            y,
-            width - thickness * 2,
-            depth - thickness,
-            materials.books,
-            materials.paper
-        );
-    }
-
-    // Populate bottom shelf too
-    populateShelf(
-        bookshelfGroup,
-        thickness / 2,
-        width - thickness * 2,
-        depth - thickness,
-        materials.books,
-        materials.paper
-    );
-
-    scene.add(bookshelfGroup);
-
-    // --- Physics ---
-    // Simple Box Shape for the whole unit
-    if (ammo) {
-        if (ammo && physicsWorld) {
-            const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
-
-            // Adjust center for physics body (created at center of mass)
-            // Group is at 'position'. Center of bookshelf logic is at y=height/2 relative to position.
-            // createPropStaticBody uses mesh position.
-            // We can attach physics to a hidden proxy mesh at the center.
-
-            const proxyGeo = new THREE.BoxGeometry(width, height, depth);
-            const proxyMesh = new THREE.Mesh(proxyGeo);
-            proxyMesh.visible = false;
-            proxyMesh.position.set(position.x, position.y + height / 2, position.z);
-            // Apply rotation
-            proxyMesh.rotation.y = rotationY;
-
-            // Just add to scene invisibly to track transform
-            scene.add(proxyMesh);
-
-            createPropStaticBody(physicsWorld, proxyMesh, shape);
-        }
-    }
+            populateShelf(
+                group,
+                thickness / 2,
+                width - thickness * 2,
+                depth - thickness,
+                books,
+                paper
+            );
+        },
+    });
 }
 
 function populateShelf(group, shelfY, shelfWidth, shelfDepth, coverMats, paperMat) {
-    let currentX = -shelfWidth / 2 + 0.5; // Start from left with padding
+    let currentX = -shelfWidth / 2 + 0.5;
     const maxX = shelfWidth / 2 - 0.5;
 
     while (currentX < maxX) {
-        // Random Book Dimensions
         const bThick = 0.2 + Math.random() * 0.3;
         const bHeight = 1.5 + Math.random() * 0.8;
         const bDepth = shelfDepth * 0.8 + Math.random() * (shelfDepth * 0.1);
 
         if (currentX + bThick > maxX) break;
 
-        // Chance to skip (gap)
         if (Math.random() < 0.1) {
             currentX += 0.5 + Math.random() * 1.0;
             continue;
         }
 
-        // Chance to lean
         const lean = Math.random() < 0.2 ? Math.random() * 0.3 - 0.15 : 0;
-
         const book = createBookMesh(bThick, bHeight, bDepth, coverMats, paperMat);
-
-        // Position
-        // On top of shelf: shelfY + thickness/2 (shelf thick is 0.5) + bHeight/2?
-        // Wait, shelfY is center of shelf board. Shelf board thickness is 0.5.
-        // Surface is at shelfY + 0.25.
         const surfaceY = shelfY + 0.25;
 
         book.position.set(currentX + bThick / 2, surfaceY + bHeight / 2, 0);
         book.rotation.z = lean;
-
-        // Randomize depth slightly
         book.position.z = (Math.random() - 0.5) * 0.2;
 
         group.add(book);
-
-        currentX += bThick + 0.02; // Gap
+        currentX += bThick + 0.02;
     }
 }
 

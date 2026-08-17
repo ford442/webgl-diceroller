@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
+import { createProp } from './propKit.js';
 
 export function createPotionSet(
     scene,
@@ -7,120 +7,80 @@ export function createPotionSet(
     position = { x: 12, y: -2.75, z: -6 },
     rotationY = -Math.PI / 6
 ) {
-    const ammo = getPropAmmo();
-    const group = new THREE.Group();
-    group.name = 'PotionSet';
-
-    // Materials
-    const woodMat = new THREE.MeshStandardMaterial({
-        color: 0x8b4513,
-        roughness: 0.8,
-        bumpScale: 0.1,
-    });
-
-    // Glass Material (Base)
-    const _glassMatBase = {
-        metalness: 0,
-        roughness: 0.1,
-        transmission: 0.95,
-        thickness: 0.1,
-        transparent: true,
-        side: THREE.DoubleSide,
-    };
-
-    // --- 1. The Stand ---
-    // Simple 2-step stand
     const stepWidth = 4;
     const stepDepth = 1.5;
     const stepHeight = 0.5;
 
-    // Bottom Step
-    const botStepGeo = new THREE.BoxGeometry(stepWidth, stepHeight, stepDepth * 2);
-    const botStep = new THREE.Mesh(botStepGeo, woodMat);
-    botStep.position.y = stepHeight / 2;
-    botStep.castShadow = true;
-    botStep.receiveShadow = true;
-    group.add(botStep);
+    return createProp(scene, physicsWorld, {
+        name: 'PotionSet',
+        position,
+        rotation: rotationY,
+        colliders: [
+            {
+                type: 'box',
+                halfExtents: [stepWidth / 2, stepHeight / 2, stepDepth],
+                offset: { y: stepHeight / 2 },
+            },
+            {
+                type: 'box',
+                halfExtents: [stepWidth / 2, stepHeight / 2, stepDepth / 2],
+                offset: { y: stepHeight + stepHeight / 2, z: -stepDepth / 2 },
+            },
+            {
+                type: 'cylinder',
+                radius: 0.4,
+                halfHeight: 0.4,
+                offset: { x: -1.0, y: 1.4, z: -0.5 },
+            },
+            {
+                type: 'box',
+                halfExtents: [0.3, 0.5, 0.3],
+                offset: { x: 1.0, y: 1.5, z: -0.5 },
+            },
+            {
+                type: 'cylinder',
+                radius: 0.3,
+                halfHeight: 0.5,
+                offset: { x: 0, y: 1.0, z: 0.8 },
+            },
+        ],
+        build({ group }) {
+            const woodMat = new THREE.MeshStandardMaterial({
+                color: 0x8b4513,
+                roughness: 0.8,
+                bumpScale: 0.1,
+            });
 
-    // Top Step (Back half)
-    const topStepGeo = new THREE.BoxGeometry(stepWidth, stepHeight, stepDepth);
-    const topStep = new THREE.Mesh(topStepGeo, woodMat);
-    topStep.position.set(0, stepHeight + stepHeight / 2, -stepDepth / 2);
-    topStep.castShadow = true;
-    topStep.receiveShadow = true;
-    group.add(topStep);
+            const botStepGeo = new THREE.BoxGeometry(stepWidth, stepHeight, stepDepth * 2);
+            const botStep = new THREE.Mesh(botStepGeo, woodMat);
+            botStep.position.y = stepHeight / 2;
+            botStep.castShadow = true;
+            botStep.receiveShadow = true;
+            group.add(botStep);
 
-    // --- 2. Potions ---
-    const healthPotion = createRoundPotion(0xff0000);
-    healthPotion.position.set(-1.0, stepHeight * 2, -0.5);
-    group.add(healthPotion);
+            const topStepGeo = new THREE.BoxGeometry(stepWidth, stepHeight, stepDepth);
+            const topStep = new THREE.Mesh(topStepGeo, woodMat);
+            topStep.position.set(0, stepHeight + stepHeight / 2, -stepDepth / 2);
+            topStep.castShadow = true;
+            topStep.receiveShadow = true;
+            group.add(topStep);
 
-    const manaPotion = createSquarePotion(0x0000ff);
-    manaPotion.position.set(1.0, stepHeight * 2, -0.5);
-    group.add(manaPotion);
-
-    const staminaPotion = createConicalPotion(0x00ff00);
-    staminaPotion.position.set(0, stepHeight, 0.8);
-    group.add(staminaPotion);
-
-    group.position.set(position.x, position.y, position.z);
-    group.rotation.y = rotationY;
-    scene.add(group);
-
-    if (ammo && physicsWorld) {
-        const botShape = new ammo.btBoxShape(
-            new ammo.btVector3(stepWidth / 2, stepHeight / 2, stepDepth)
-        );
-        const topShape = new ammo.btBoxShape(
-            new ammo.btVector3(stepWidth / 2, stepHeight / 2, stepDepth / 2)
-        );
-
-        function addBodyForMesh(mesh, shape, offsetY = 0) {
-            const worldPos = new THREE.Vector3();
-            mesh.getWorldPosition(worldPos);
-            const worldQuat = new THREE.Quaternion();
-            mesh.getWorldQuaternion(worldQuat);
-
-            const dummy = new THREE.Object3D();
-            dummy.position.copy(worldPos);
-            dummy.quaternion.copy(worldQuat);
-
-            if (offsetY !== 0) {
-                dummy.translateY(offsetY);
-            }
-
-            createPropStaticBody(physicsWorld, dummy, shape);
-        }
-
-        addBodyForMesh(botStep, botShape);
-        addBodyForMesh(topStep, topShape);
-
-        const healthShape = new ammo.btSphereShape(0.4);
-        addBodyForMesh(healthPotion, healthShape, 0.4);
-
-        const manaShape = new ammo.btBoxShape(new ammo.btVector3(0.3, 0.5, 0.3));
-        addBodyForMesh(manaPotion, manaShape, 0.5);
-
-        const staminaShape = new ammo.btCylinderShape(new ammo.btVector3(0.3, 0.5, 0.3));
-        addBodyForMesh(staminaPotion, staminaShape, 0.5);
-    }
-
-    return { group };
+            group.add(createRoundPotion(0xff0000, -1.0, stepHeight * 2, -0.5));
+            group.add(createSquarePotion(0x0000ff, 1.0, stepHeight * 2, -0.5));
+            group.add(createConicalPotion(0x00ff00, 0, stepHeight, 0.8));
+        },
+    });
 }
 
-function createRoundPotion(color) {
+function createRoundPotion(color, x, y, z) {
     const group = new THREE.Group();
-
-    // Flask
     const points = [];
     for (let i = 0; i <= 10; i++) {
         const angle = (Math.PI / 2) * (i / 10);
-        points.push(new THREE.Vector2(Math.sin(angle) * 0.4, -Math.cos(angle) * 0.4 + 0.4)); // Radius 0.4, shifted up
+        points.push(new THREE.Vector2(Math.sin(angle) * 0.4, -Math.cos(angle) * 0.4 + 0.4));
     }
-    points.push(new THREE.Vector2(0.15, 0.8)); // Neck
-    points.push(new THREE.Vector2(0.2, 0.85)); // Rim
+    points.push(new THREE.Vector2(0.15, 0.8), new THREE.Vector2(0.2, 0.85));
 
-    const geo = new THREE.LatheGeometry(points, 16);
     const mat = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
         metalness: 0,
@@ -129,15 +89,13 @@ function createRoundPotion(color) {
         thickness: 0.1,
         transparent: true,
     });
-    const flask = new THREE.Mesh(geo, mat);
+    const flask = new THREE.Mesh(new THREE.LatheGeometry(points, 16), mat);
     flask.castShadow = true;
     flask.receiveShadow = true;
     group.add(flask);
 
-    // Liquid
-    const liquidGeo = new THREE.SphereGeometry(0.35, 16, 16);
     const liquidMat = new THREE.MeshPhysicalMaterial({
-        color: color,
+        color,
         emissive: color,
         emissiveIntensity: 0.5,
         metalness: 0.1,
@@ -145,28 +103,26 @@ function createRoundPotion(color) {
         transmission: 0.6,
         transparent: true,
     });
-    const liquid = new THREE.Mesh(liquidGeo, liquidMat);
+    const liquid = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), liquidMat);
     liquid.position.y = 0.4;
     group.add(liquid);
 
-    // Cork
-    const corkGeo = new THREE.CylinderGeometry(0.12, 0.1, 0.2, 16);
-    const corkMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.9 });
-    const cork = new THREE.Mesh(corkGeo, corkMat);
+    const cork = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.1, 0.2, 16),
+        new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.9 })
+    );
     cork.position.y = 0.9;
     group.add(cork);
 
+    group.position.set(x, y, z);
     return group;
 }
 
-function createSquarePotion(color) {
+function createSquarePotion(color, x, y, z) {
     const group = new THREE.Group();
-
-    // Bottle
     const width = 0.6;
     const height = 1.0;
     const depth = 0.6;
-    const geo = new THREE.BoxGeometry(width, height, depth);
     const mat = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
         metalness: 0,
@@ -175,56 +131,49 @@ function createSquarePotion(color) {
         thickness: 0.1,
         transparent: true,
     });
-    const bottle = new THREE.Mesh(geo, mat);
+    const bottle = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), mat);
     bottle.position.y = height / 2;
     bottle.castShadow = true;
     bottle.receiveShadow = true;
     group.add(bottle);
 
-    // Liquid
-    const liquidGeo = new THREE.BoxGeometry(width - 0.1, height * 0.7, depth - 0.1);
     const liquidMat = new THREE.MeshPhysicalMaterial({
-        color: color,
+        color,
         emissive: color,
         emissiveIntensity: 0.5,
         transmission: 0.6,
         transparent: true,
     });
-    const liquid = new THREE.Mesh(liquidGeo, liquidMat);
+    const liquid = new THREE.Mesh(
+        new THREE.BoxGeometry(width - 0.1, height * 0.7, depth - 0.1),
+        liquidMat
+    );
     liquid.position.y = (height * 0.7) / 2 + 0.05;
     group.add(liquid);
 
-    // Neck
-    const neckGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.3, 16);
-    const neck = new THREE.Mesh(neckGeo, mat);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.3, 16), mat);
     neck.position.y = height + 0.15;
     group.add(neck);
 
-    // Cork
-    const corkGeo = new THREE.CylinderGeometry(0.14, 0.12, 0.2, 16);
-    const corkMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
-    const cork = new THREE.Mesh(corkGeo, corkMat);
+    const cork = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.14, 0.12, 0.2, 16),
+        new THREE.MeshStandardMaterial({ color: 0x8b4513 })
+    );
     cork.position.y = height + 0.35;
     group.add(cork);
 
+    group.position.set(x, y, z);
     return group;
 }
 
-function createConicalPotion(color) {
+function createConicalPotion(color, x, y, z) {
     const group = new THREE.Group();
-
-    // Flask (Cone)
-    const _radius = 0.5;
-    const _height = 1.0;
-
-    // Custom Lathe for better shape
     const points = [
         new THREE.Vector2(0, 0),
         new THREE.Vector2(0.5, 0),
-        new THREE.Vector2(0.15, 0.8), // Taper up
-        new THREE.Vector2(0.2, 0.9), // Rim
+        new THREE.Vector2(0.15, 0.8),
+        new THREE.Vector2(0.2, 0.9),
     ];
-    const flaskGeo = new THREE.LatheGeometry(points, 16);
     const mat = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
         transmission: 0.9,
@@ -232,35 +181,35 @@ function createConicalPotion(color) {
         roughness: 0.1,
         transparent: true,
     });
-    const flask = new THREE.Mesh(flaskGeo, mat);
+    const flask = new THREE.Mesh(new THREE.LatheGeometry(points, 16), mat);
     flask.castShadow = true;
     flask.receiveShadow = true;
     group.add(flask);
 
-    // Liquid
-    const liquidPoints = [
-        new THREE.Vector2(0, 0),
-        new THREE.Vector2(0.45, 0),
-        new THREE.Vector2(0.2, 0.6),
-    ];
-    const liquidGeo = new THREE.LatheGeometry(liquidPoints, 16);
     const liquidMat = new THREE.MeshPhysicalMaterial({
-        color: color,
+        color,
         emissive: color,
         emissiveIntensity: 0.5,
         transmission: 0.6,
         transparent: true,
     });
-    const liquid = new THREE.Mesh(liquidGeo, liquidMat);
+    const liquid = new THREE.Mesh(
+        new THREE.LatheGeometry(
+            [new THREE.Vector2(0, 0), new THREE.Vector2(0.45, 0), new THREE.Vector2(0.2, 0.6)],
+            16
+        ),
+        liquidMat
+    );
     liquid.position.y = 0.05;
     group.add(liquid);
 
-    // Cork
-    const corkGeo = new THREE.CylinderGeometry(0.12, 0.1, 0.2, 16);
-    const corkMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
-    const cork = new THREE.Mesh(corkGeo, corkMat);
+    const cork = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.1, 0.2, 16),
+        new THREE.MeshStandardMaterial({ color: 0x8b4513 })
+    );
     cork.position.y = 0.9;
     group.add(cork);
 
+    group.position.set(x, y, z);
     return group;
 }

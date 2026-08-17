@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createPropStaticBody, getPropAmmo } from './PropPhysics.js';
+import { createProp } from './propKit.js';
 
 export function createRunestones(
     scene,
@@ -7,94 +7,63 @@ export function createRunestones(
     position = { x: 10, y: -2.75, z: -10 },
     _rotationY = 0
 ) {
-    const ammo = getPropAmmo();
-    const group = new THREE.Group();
-    group.name = 'Runestones';
-
-    // Dimensions for a single runestone
     const radius = 0.15;
     const height = 0.05;
-
-    // We'll create a handful of hexagonal stones
     const numStones = 5;
-
-    // Define colors for the glowing runes
-    const runeColors = [
-        '#00ffff', // Cyan
-        '#ff00ff', // Magenta
-        '#ffff00', // Yellow
-        '#00ff00', // Green
-        '#ff8800', // Orange
-    ];
-
-    // Base position on the table (Table Y is approx -2.75)
+    const runeColors = ['#00ffff', '#ff00ff', '#ffff00', '#00ff00', '#ff8800'];
     const baseX = position.x;
     const baseZ = position.z;
-    const baseY = position.y + height / 2; // Sit exactly on the table
+    const baseY = position.y + height / 2;
 
-    for (let i = 0; i < numStones; i++) {
-        // Procedurally generated texture for the top face
-        const runeColor = runeColors[i % runeColors.length];
-        const texture = generateRuneTexture(runeColor);
+    const stones = Array.from({ length: numStones }, (_, i) => ({
+        offsetX: (Math.random() - 0.5) * 1.5,
+        offsetZ: (Math.random() - 0.5) * 1.5,
+        y: baseY + i * 0.001,
+        rotY: Math.random() * Math.PI * 2,
+        runeColor: runeColors[i % runeColors.length],
+    }));
 
-        // Stone material (dark grey, slightly rough)
-        const stoneMat = new THREE.MeshStandardMaterial({
-            color: 0x333333,
-            roughness: 0.8,
-            metalness: 0.1,
-        });
+    const result = createProp(scene, physicsWorld, {
+        name: 'Runestones',
+        colliders: stones.map((stone) => ({
+            type: 'cylinder',
+            radius,
+            halfHeight: height / 2,
+            offset: { x: baseX + stone.offsetX, y: stone.y, z: baseZ + stone.offsetZ },
+            rotation: { y: stone.rotY },
+        })),
+        build({ group }) {
+            stones.forEach((stone) => {
+                const texture = generateRuneTexture(stone.runeColor);
+                const stoneMat = new THREE.MeshStandardMaterial({
+                    color: 0x333333,
+                    roughness: 0.8,
+                    metalness: 0.1,
+                });
+                const runeMat = new THREE.MeshStandardMaterial({
+                    map: texture,
+                    emissiveMap: texture,
+                    emissive: new THREE.Color(stone.runeColor),
+                    emissiveIntensity: 1.5,
+                    color: 0x333333,
+                    roughness: 0.6,
+                    metalness: 0.2,
+                });
+                const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 6), [
+                    stoneMat,
+                    runeMat,
+                    stoneMat,
+                ]);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                mesh.position.set(baseX + stone.offsetX, stone.y, baseZ + stone.offsetZ);
+                mesh.rotation.y = stone.rotY;
+                group.add(mesh);
+            });
+        },
+    });
 
-        // Glowing rune material (for the top face)
-        const runeMat = new THREE.MeshStandardMaterial({
-            map: texture,
-            emissiveMap: texture,
-            emissive: new THREE.Color(runeColor),
-            emissiveIntensity: 1.5,
-            color: 0x333333,
-            roughness: 0.6,
-            metalness: 0.2,
-        });
-
-        // CylinderGeometry (radiusTop, radiusBottom, height, radialSegments)
-        // 6 segments makes a hexagon
-        const geometry = new THREE.CylinderGeometry(radius, radius, height, 6);
-
-        // Cylinder materials array:
-        // [0: side, 1: top, 2: bottom]
-        const materials = [stoneMat, runeMat, stoneMat];
-
-        const mesh = new THREE.Mesh(geometry, materials);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-
-        // Position with some random scatter
-        const offsetX = (Math.random() - 0.5) * 1.5;
-        const offsetZ = (Math.random() - 0.5) * 1.5;
-
-        // Add a slight stack/overlap offset to avoid z-fighting if they touch
-        const yPos = baseY + i * 0.001;
-
-        mesh.position.set(baseX + offsetX, yPos, baseZ + offsetZ);
-
-        // Randomly rotate around the Y axis
-        mesh.rotation.y = Math.random() * Math.PI * 2;
-
-        group.add(mesh);
-
-        // Physics for each runestone
-        // btCylinderShape expects a vector of (radius, height/2, radius)
-        if (ammo) {
-            if (ammo && physicsWorld) {
-                const shape = new ammo.btCylinderShape(
-                    new ammo.btVector3(radius, height / 2, radius)
-                );
-                createPropStaticBody(physicsWorld, mesh, shape);
-            }
-        }
-    }
-
-    scene.add(group);
-    return group;
+    return result.group;
 }
 
 function generateRuneTexture(glowColor) {
@@ -103,11 +72,9 @@ function generateRuneTexture(glowColor) {
     canvas.height = 128;
     const ctx = canvas.getContext('2d');
 
-    // Background (dark stone)
     ctx.fillStyle = '#111111';
     ctx.fillRect(0, 0, 128, 128);
 
-    // Subtle noise for stone texture
     for (let i = 0; i < 500; i++) {
         const x = Math.random() * 128;
         const y = Math.random() * 128;
@@ -116,38 +83,27 @@ function generateRuneTexture(glowColor) {
         ctx.fillRect(x, y, 2, 2);
     }
 
-    // Rune symbol
     ctx.strokeStyle = glowColor;
     ctx.lineWidth = 6;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-
     ctx.beginPath();
-    // Draw a random abstract rune (3-4 connected lines)
-    // Start somewhere near the center
     let cx = 64 + (Math.random() - 0.5) * 20;
     let cy = 64 + (Math.random() - 0.5) * 20;
     ctx.moveTo(cx, cy);
-
-    const segments = Math.floor(Math.random() * 3) + 3; // 3 to 5 segments
+    const segments = Math.floor(Math.random() * 3) + 3;
     for (let s = 0; s < segments; s++) {
-        // Next point within bounds
         cx += (Math.random() - 0.5) * 60;
         cy += (Math.random() - 0.5) * 60;
-        // Keep inside circle
         cx = Math.max(30, Math.min(98, cx));
         cy = Math.max(30, Math.min(98, cy));
         ctx.lineTo(cx, cy);
     }
-
-    // Outer glow
     ctx.shadowColor = glowColor;
     ctx.shadowBlur = 10;
     ctx.stroke();
-
-    // Solid inner line
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = '#ffffff'; // White hot core
+    ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
     ctx.stroke();
 

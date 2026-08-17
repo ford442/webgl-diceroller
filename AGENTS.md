@@ -218,7 +218,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 - Props that need per-frame animation provide an `update(deltaTime, elapsedTime)` function.
 - `LoadingTiers.js` wires these into `FrameScheduler` through the prop registry; do not add ad-hoc per-frame calls in `main.js`.
 - Interactive props return callbacks (e.g., `interact`, `toggleGlow`) that are registered in the prop entry’s `afterCreate` hook.
-- Legacy physics-enabled props build invisible collision meshes with `createPropStaticBody()` / `getPropAmmo()` from [`PropPhysics.js`](src/environment/PropPhysics.js). Those colliders exist only when ammo is loaded (`?no-wasm`); otherwise the prop is visual-only. New props use `StaticColliderBridge` collider specs instead, which prefer WASM.
+- Legacy physics-enabled props build invisible collision meshes with `createPropStaticBody()` / `getPropAmmo()` from [`PropPhysics.js`](src/environment/PropPhysics.js). **Migration complete:** registered props use `createProp` + declarative `colliders` via [`StaticColliderBridge.js`](src/core/StaticColliderBridge.js) (WASM default). `PropPhysics.js` remains only as the ammo implementation behind the bridge for `?no-wasm`.
 - Shadows are aggressively optimized: small decorative props are listed in `SHADOW_DISABLED_PROP_NAMES` in `src/environment/PropRegistry.js`.
 
 ### Rendering Notes
@@ -311,7 +311,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 ### Adding New Environment Props
 
-**New props must use `propKit`.** Legacy modules are migrated opportunistically when touched — do not bulk-rewrite the full catalogue.
+**New props must use `propKit`.** The prop catalogue migration to declarative colliders is complete; ESLint blocks `PropPhysics` imports in `src/environment/**`.
 
 #### Authoring recipe
 

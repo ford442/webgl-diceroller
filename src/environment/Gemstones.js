@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
+import { createProp, mesh, STATIC_MATERIAL } from './propKit.js';
 
 export function createGemstones(
     scene,
@@ -8,11 +8,6 @@ export function createGemstones(
     position = { x: 6, y: -2.75, z: -5 },
     rotation = 0
 ) {
-    const ammo = getPropAmmo();
-    const group = new THREE.Group();
-    group.name = 'Gemstones';
-
-    // Gem configurations: color, size, type, position offset
     const gemConfigs = [
         { type: 'ruby', color: 0xff0044, size: 0.25, x: -0.4, z: 0.2 },
         { type: 'sapphire', color: 0x0044ff, size: 0.22, x: 0.3, z: 0.4 },
@@ -24,74 +19,67 @@ export function createGemstones(
     ];
 
     const gems = [];
-
-    gemConfigs.forEach((config, index) => {
-        const gem = createGem(config);
-
-        // Random scatter position
+    const colliders = gemConfigs.map((config) => {
         const scatterX = config.x + (Math.random() - 0.5) * 0.3;
         const scatterZ = config.z + (Math.random() - 0.5) * 0.3;
-        const rotY = Math.random() * Math.PI * 2;
-        const rotX = Math.random() * 0.5;
-        const rotZ = Math.random() * 0.5;
-
-        gem.position.set(scatterX, config.size * 0.6, scatterZ);
-        gem.rotation.set(rotX, rotY, rotZ);
-
-        gem.castShadow = true;
-        gem.receiveShadow = true;
-
-        // Store animation data
-        gem.userData = {
-            baseY: gem.position.y,
-            offset: index * 0.5,
-            rotationSpeed: 0.2 + Math.random() * 0.3,
+        config._scatterX = scatterX;
+        config._scatterZ = scatterZ;
+        return {
+            type: 'box',
+            halfExtents: [config.size * 0.5, config.size * 0.4, config.size * 0.5],
+            offset: { x: scatterX, y: config.size * 0.4, z: scatterZ },
+            materialTag: STATIC_MATERIAL.DEFAULT,
         };
+    });
 
-        group.add(gem);
-        gems.push(gem);
+    colliders.push({
+        type: 'box',
+        halfExtents: [1.25, 0.01, 1.25],
+        offset: { y: 0.01 },
+        materialTag: STATIC_MATERIAL.VELVET,
+    });
 
-        // Physics for each gem
-        if (ammo && physicsWorld) {
-            const shape = new ammo.btBoxShape(
-                new ammo.btVector3(config.size * 0.5, config.size * 0.4, config.size * 0.5)
+    const result = createProp(scene, physicsWorld, {
+        name: 'Gemstones',
+        position,
+        rotation,
+        colliders,
+        build({ group }) {
+            gemConfigs.forEach((config, index) => {
+                const gem = createGem(config);
+                const rotY = Math.random() * Math.PI * 2;
+                const rotX = Math.random() * 0.5;
+                const rotZ = Math.random() * 0.5;
+
+                gem.position.set(config._scatterX, config.size * 0.6, config._scatterZ);
+                gem.rotation.set(rotX, rotY, rotZ);
+                gem.userData = {
+                    baseY: gem.position.y,
+                    offset: index * 0.5,
+                    rotationSpeed: 0.2 + Math.random() * 0.3,
+                };
+                group.add(gem);
+                gems.push(gem);
+            });
+
+            const clothMat = new THREE.MeshStandardMaterial({
+                color: 0x4a0e0e,
+                roughness: 0.9,
+                metalness: 0.1,
+            });
+            group.add(
+                mesh(new THREE.BoxGeometry(2.5, 0.02, 2.5), clothMat, {
+                    position: { y: 0.01 },
+                })
             );
-            const dummy = new THREE.Object3D();
-            dummy.position.copy(gem.position).applyEuler(group.rotation).add(group.position);
-            dummy.rotation.copy(gem.rotation);
-            dummy.position.y = group.position.y + config.size * 0.4;
-            createPropStaticBody(physicsWorld, dummy, shape);
-        }
+        },
     });
 
-    // Add a small velvet cloth underneath
-    const clothGeo = new THREE.BoxGeometry(2.5, 0.02, 2.5);
-    const clothMat = new THREE.MeshStandardMaterial({
-        color: 0x4a0e0e,
-        roughness: 0.9,
-        metalness: 0.1,
-    });
-    const cloth = new THREE.Mesh(clothGeo, clothMat);
-    cloth.position.y = 0.01;
-    cloth.receiveShadow = true;
-    group.add(cloth);
-
-    // Position the entire group
-    group.position.set(position.x, position.y, position.z);
-    group.rotation.y = rotation;
-    scene.add(group);
-
-    // Animation update function
     const updateGems = (time) => {
         gems.forEach((gem) => {
-            // Subtle shimmer - rotate slightly
             gem.rotation.y += gem.userData.rotationSpeed * 0.01;
-
-            // Very subtle floating effect
             const floatY = Math.sin(time * 2 + gem.userData.offset) * 0.005;
             gem.position.y = gem.userData.baseY + floatY;
-
-            // Sparkle effect - subtle emissive pulse
             if (gem.material.emissive) {
                 const sparkle = 0.1 + Math.sin(time * 3 + gem.userData.offset) * 0.05;
                 gem.material.emissiveIntensity = sparkle;
@@ -99,36 +87,29 @@ export function createGemstones(
         });
     };
 
-    return { group, update: updateGems };
+    return { ...result, update: updateGems };
 }
 
 function createGem(config) {
     let geometry;
 
-    // Different shapes for different gem types
     switch (config.type) {
         case 'ruby':
-            // Diamond/Cut shape
             geometry = createDiamondGeometry(config.size);
             break;
         case 'sapphire':
-            // Octahedron
             geometry = new THREE.OctahedronGeometry(config.size, 0);
             break;
         case 'emerald':
-            // Box with bevel effect
             geometry = new THREE.BoxGeometry(config.size, config.size * 1.2, config.size);
             break;
         case 'diamond':
-            // Double cone (brilliant cut)
             geometry = createBrilliantCut(config.size);
             break;
         case 'amethyst':
-            // Dodecahedron
             geometry = new THREE.DodecahedronGeometry(config.size, 0);
             break;
         case 'topaz':
-            // Cylinder cut
             geometry = new THREE.CylinderGeometry(
                 config.size * 0.6,
                 config.size * 0.8,
@@ -137,14 +118,12 @@ function createGem(config) {
             );
             break;
         case 'opal':
-            // Smooth sphere with special material
             geometry = new THREE.SphereGeometry(config.size * 0.8, 16, 16);
             break;
         default:
             geometry = new THREE.IcosahedronGeometry(config.size, 0);
     }
 
-    // Create material with transmission for glass-like effect
     const material = new THREE.MeshPhysicalMaterial({
         color: config.color,
         metalness: 0.1,
@@ -157,60 +136,44 @@ function createGem(config) {
         ior: 1.5,
     });
 
-    // Special handling for opal's shimmer effect
     if (config.isOpal) {
         material.color = new THREE.Color(0xffffff);
         material.emissive = new THREE.Color(0x88ccff);
         material.emissiveIntensity = 0.2;
-        // Use dispersion instead of iridescence for better compatibility
         material.dispersion = 0.5;
     }
 
-    // Add subtle emissive for sparkle effect
     material.emissive = new THREE.Color(config.color);
     material.emissiveIntensity = 0.1;
 
-    const mesh = new THREE.Mesh(geometry, material);
-    return mesh;
+    return mesh(geometry, material);
 }
 
 function createDiamondGeometry(size) {
-    // Create a diamond-shaped geometry (two pyramids base to base)
     const geometry = new THREE.ConeGeometry(size * 0.7, size, 4);
-    const _positions = geometry.attributes.position;
-
-    // Mirror to create bottom half
     const bottomGeo = new THREE.ConeGeometry(size * 0.7, size * 0.6, 4);
     bottomGeo.rotateX(Math.PI);
     bottomGeo.translate(0, -size * 0.3, 0);
 
-    // Merge geometries
-    const merged = BufferGeometryUtils
+    return BufferGeometryUtils
         ? BufferGeometryUtils.mergeGeometries([geometry, bottomGeo])
         : mergeGeometriesManual(geometry, bottomGeo);
-
-    return merged;
 }
 
 function createBrilliantCut(size) {
-    // Create a brilliant cut diamond approximation
     const topGeo = new THREE.ConeGeometry(size * 0.8, size * 0.6, 8);
     const bottomGeo = new THREE.ConeGeometry(size * 0.4, size * 0.4, 8);
     bottomGeo.rotateX(Math.PI);
     bottomGeo.translate(0, -size * 0.2, 0);
 
-    const merged = BufferGeometryUtils
+    return BufferGeometryUtils
         ? BufferGeometryUtils.mergeGeometries([topGeo, bottomGeo])
         : mergeGeometriesManual(topGeo, bottomGeo);
-
-    return merged;
 }
 
 function mergeGeometriesManual(geo1, geo2) {
-    // Simple merge without BufferGeometryUtils
     const count1 = geo1.attributes.position.count;
     const count2 = geo2.attributes.position.count;
-
     const positions = new Float32Array((count1 + count2) * 3);
     const normals = new Float32Array((count1 + count2) * 3);
 
@@ -226,6 +189,5 @@ function mergeGeometriesManual(geo1, geo2) {
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
     geometry.computeVertexNormals();
-
     return geometry;
 }

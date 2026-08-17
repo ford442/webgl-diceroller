@@ -1,17 +1,9 @@
 /**
  * PropPhysics.js
  *
- * The single ammo.js seam for environment props.
- *
- * Dice run entirely on the WASM engine (ammo dice bodies exist only on the
- * `?no-wasm` fallback). Props are the one remaining ammo consumer: their
- * hand-built `bt*Shape` static colliders have no WASM equivalent yet, so this
- * module wraps the two ammo entry points props need and keeps every prop file
- * free of a direct `physics.js` import.
- *
- * When ammo is not loaded — the default WASM session — every call here is a
- * no-op and props become visual-only. Declarative colliders should instead go
- * through `core/StaticColliderBridge.js`, which prefers the WASM backend.
+ * Internal ammo.js implementation seam for StaticColliderBridge.
+ * Prop modules must not import this file — use createProp + declarative
+ * colliders from propKit.js instead.
  */
 
 import { createStaticBody, getAmmo, isAmmoAvailable } from '../physics.js';
