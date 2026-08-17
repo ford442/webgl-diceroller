@@ -12,18 +12,18 @@ const LOAD_TIMEOUT_MS = 120000;
 const SETTLE_TIMEOUT_MS = 180000;
 
 async function waitForReplaySettled(page) {
-    await page.waitForFunction(() => (window.__app?.ready ?? window.sceneReady) === true, {
+    await page.waitForFunction(() => window.__app?.ready === true, {
         timeout: LOAD_TIMEOUT_MS,
     });
     const wasmReady = await page.evaluate(
-        () => (window.__app?.isWasmAvailable ?? window.isWasmAvailable)?.() === true
+        () => window.__app?.isWasmAvailable?.() === true
     );
     if (!wasmReady) {
         return { skipped: true, reason: 'WASM physics not available (run npm run build:wasm)' };
     }
     await page.waitForFunction(
         () => {
-            const settled = window.__app?.areDiceSettled ?? window.areDiceSettled;
+            const settled = window.__app?.areDiceSettled;
             return typeof settled === 'function' && settled() === true;
         },
         { timeout: SETTLE_TIMEOUT_MS }
@@ -38,7 +38,7 @@ function isBenignBrowserError(message) {
 
 async function captureReplayValues(page) {
     return page.evaluate(() => {
-        const read = window.__app?.readAllDiceValues ?? window.readAllDiceValues;
+        const read = window.__app?.readAllDiceValues;
         return read().map((die) => ({ type: die.type, value: die.value }));
     });
 }

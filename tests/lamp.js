@@ -138,8 +138,8 @@ async function runLampTest() {
     try {
         await page.waitForFunction(
             () => {
-                const scene = window.__app?.scene ?? window.scene;
-                const ready = window.__app?.ready ?? window.sceneReady;
+                const scene = window.__app?.scene;
+                const ready = window.__app?.ready;
                 return scene != null && ready === true;
             },
             { timeout: 45000 }
@@ -154,7 +154,7 @@ async function runLampTest() {
     await page.waitForTimeout(8000);
 
     const result = await page.evaluate(() => {
-        const scene = window.__app?.scene ?? window.scene;
+        const scene = window.__app?.scene;
         if (!scene) return { error: 'no scene' };
 
         // Find the lamp group
@@ -303,7 +303,7 @@ async function runLampTest() {
     // Interactable hook check: the lamp toggle is reachable programmatically
     // (drives the in-game click handler and is now exposed for e2e).
     const lampInteract = await page.evaluate(() => {
-        const api = window.__app?.interactables?.lamp ?? window.__interactables?.lamp;
+        const api = window.__app?.interactables?.lamp;
         if (!api || typeof api.trigger !== 'function') return { ok: false };
         try {
             api.trigger();

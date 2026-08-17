@@ -12,7 +12,7 @@ runTest(
         await page.goto(url, { waitUntil: 'load', timeout: 60000 });
 
         await page.waitForFunction(
-            () => (window.__app?.ready ?? window.sceneReady) === true,
+            () => window.__app?.ready === true,
             null,
             { timeout: 150000 }
         );
@@ -21,13 +21,12 @@ runTest(
             const app = window.__app;
             const container = document.getElementById('canvas-container');
             const rect = container?.getBoundingClientRect?.() ?? { width: 0, height: 0 };
-            const camera = app?.camera ?? window.camera;
+            const camera = app?.camera;
             return {
-                sceneReady: (app?.ready ?? window.sceneReady) === true,
-                touchInputEnabled: (app?.touchInputEnabled ?? window.touchInputEnabled) === true,
-                isTouchPrimaryDevice:
-                    (app?.isTouchPrimaryDevice ?? window.isTouchPrimaryDevice) === true,
-                qualityProfile: app?.qualityProfile ?? window.qualityProfile ?? null,
+                sceneReady: app?.ready === true,
+                touchInputEnabled: app?.touchInputEnabled === true,
+                isTouchPrimaryDevice: app?.isTouchPrimaryDevice === true,
+                qualityProfile: app?.qualityProfile ?? null,
                 cameraAspect:
                     /** @type {import('three').PerspectiveCamera | undefined} */ (camera)?.aspect ??
                     null,
