@@ -4,11 +4,11 @@ Immersive VR entry for the tavern dice table. This is an experimental spike: **W
 
 ## Flags
 
-| Flag | Effect |
-|------|--------|
-| `?xr` | Enable XR path: force **WebGL**, imply **no-post**, show Enter VR when `immersive-vr` is supported |
-| `?xr-emulator` | Alias of `?xr` (handy for Chrome WebXR emulator bookmarks) |
-| `?xr-snap=45` | Snap-turn degrees (clamped 15–90, default 45) |
+| Flag           | Effect                                                                                             |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| `?xr`          | Enable XR path: force **WebGL**, imply **no-post**, show Enter VR when `immersive-vr` is supported |
+| `?xr-emulator` | Alias of `?xr` (handy for Chrome WebXR emulator bookmarks)                                         |
+| `?xr-snap=45`  | Snap-turn degrees (clamped 15–90, default 45)                                                      |
 
 Canonical URL:
 
@@ -20,7 +20,7 @@ https://host/path/?xr
 
 ## Requirements
 
-- **Renderer:** `THREE.WebGLRenderer` with `renderer.xr`. WebGPU + WebXR is deferred.
+- **Renderer:** `THREE.WebGLRenderer` with `renderer.xr`. The WebGL2 context is created with `xrCompatible: true` when `?xr` / `?xr-emulator` is set so `requestSession` does not recreate the canvas. WebGPU + WebXR is deferred.
 - **Physics:** Default WASM path (`driveDieWasmTransform` / `setDieWasmKinematic`). Prefer a build with `public/wasm/` present; XR grab has no ammo path.
 - **COOP/COEP:** Already applied by Vite (`same-origin` / `require-corp`) for SharedArrayBuffer worker physics. Quest Browser generally accepts this; if session start fails, check the browser console for isolation errors.
 
@@ -44,25 +44,25 @@ https://host/path/?xr
 
 The authored scene is **not** meters. [`XrRig.js`](../src/xr/XrRig.js) wraps content in `xrWorld`:
 
-| Constant | Default | Meaning |
-|----------|---------|---------|
-| `XR_WORLD_SCALE` | `0.05` | Scene unit → meters (table ~1.8 m wide; velvet ~0.8 m) |
-| `XR_TABLE_HEIGHT_M` | `0.75` | Table surface height under `local-floor` |
-| `XR_SEAT_OFFSET_SCENE` | `1.5` | Extra distance past velvet edge for seating |
+| Constant               | Default | Meaning                                                |
+| ---------------------- | ------- | ------------------------------------------------------ |
+| `XR_WORLD_SCALE`       | `0.05`  | Scene unit → meters (table ~1.8 m wide; velvet ~0.8 m) |
+| `XR_TABLE_HEIGHT_M`    | `0.75`  | Table surface height under `local-floor`               |
+| `XR_SEAT_OFFSET_SCENE` | `1.5`   | Extra distance past velvet edge for seating            |
 
 Transforms apply **only while presenting**; exiting VR restores identity on the world group.
 
 ## Module map
 
-| File | Role |
-|------|------|
-| [`src/xr/XrFlags.js`](../src/xr/XrFlags.js) | `?xr` / snap parsing |
-| [`src/xr/XrSession.js`](../src/xr/XrSession.js) | Session enter/exit, `renderer.xr` |
-| [`src/xr/XrRig.js`](../src/xr/XrRig.js) | Scale + seat + snap dolly |
-| [`src/xr/XrControllers.js`](../src/xr/XrControllers.js) | Rays, squeeze, snap-turn |
-| [`src/xr/XrGrab.js`](../src/xr/XrGrab.js) | Controller → WASM grab |
-| [`src/xr/XrUi.js`](../src/xr/XrUi.js) | Enter VR button |
-| [`src/interaction/WasmDieGrab.js`](../src/interaction/WasmDieGrab.js) | Shared mouse + XR grab |
+| File                                                                  | Role                              |
+| --------------------------------------------------------------------- | --------------------------------- |
+| [`src/xr/XrFlags.js`](../src/xr/XrFlags.js)                           | `?xr` / snap parsing              |
+| [`src/xr/XrSession.js`](../src/xr/XrSession.js)                       | Session enter/exit, `renderer.xr` |
+| [`src/xr/XrRig.js`](../src/xr/XrRig.js)                               | Scale + seat + snap dolly         |
+| [`src/xr/XrControllers.js`](../src/xr/XrControllers.js)               | Rays, squeeze, snap-turn          |
+| [`src/xr/XrGrab.js`](../src/xr/XrGrab.js)                             | Controller → WASM grab            |
+| [`src/xr/XrUi.js`](../src/xr/XrUi.js)                                 | Enter VR button                   |
+| [`src/interaction/WasmDieGrab.js`](../src/interaction/WasmDieGrab.js) | Shared mouse + XR grab            |
 
 ## Acceptance (manual)
 

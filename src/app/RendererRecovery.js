@@ -160,7 +160,7 @@ export function createRendererBadge(state, { persistent } = {}, onRemoved = () =
         badge.textContent = isFallback
             ? `renderer: ${type} (fallback)${prLabel}`
             : `renderer: ${type}${prLabel}`;
-        badge.title = nextState?.fallbackReason ?? '';
+        badge.title = nextState?.fallbackReason ?? nextState?.gpuLimitNote ?? '';
         badge.style.backgroundColor = isFallback ? 'rgba(120, 40, 0, 0.7)' : 'rgba(0, 0, 0, 0.55)';
         badge.style.color = isFallback ? '#ffd9b0' : '#bfe8ff';
         badge.style.opacity = '1';

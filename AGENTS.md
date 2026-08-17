@@ -69,7 +69,8 @@ npm install
 # Start development server (opens browser, hot reload on http://localhost:5173)
 npm run dev
 
-# Build the custom WASM physics module (requires Emscripten)
+# Build the custom WASM physics module (requires Emscripten).
+# Default release emits public/wasm/ (SIMD) and public/wasm-scalar/.
 npm run build:wasm
 
 # Debug WASM build (same output paths; overwrites release artifacts)
@@ -430,6 +431,7 @@ npm run test:share-roll-replay   # Two page loads of the same share URL settle t
 npm run test:a11y             # axe accessibility scan
 npm run test:notation         # Roll notation parser (Node, no browser)
 npm run test:share-roll       # Shareable roll encoding (Node)
+npm run test:simd-support     # WASM SIMD probe + artifact-dir picker (Node)
 node tests/dicecup.js           # DiceCup interactable (needs WASM for available:true)
 
 # Physics / renderer harnesses (scripts/)
@@ -445,6 +447,7 @@ npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when b
 - `test:wasm-gameplay-loop`, `test:wasm-authoritative`, and `test:share-roll-replay` all run in CI (`verify-tests` matrix); `verify:worker-replay` runs in the `verify` matrix. All four need the `wasm-artifacts` build (`npm run build:wasm`) to exercise the WASM-authoritative path rather than skipping.
 
 **Automation hooks** (require `?test`, `?debug`, or `?debug-perf`):
+
 - `window.__app` — stable API (`ready`, `scene`, `camera`, `renderer`, `interactables`, `replayRoll`, …). All Playwright scripts use this exclusively.
 - Smoke scripts use `?no-post` (and often `?webgl&fair-dice&test` in headless CI) to reduce GPU load.
 

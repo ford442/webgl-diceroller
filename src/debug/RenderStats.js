@@ -155,6 +155,12 @@ export function createRenderStats({
         const fallbackSuffix = state?.fallbackReason ? ' (fallback)' : '';
         const contextSuffix = state?.contextStatus === 'lost' ? ' · CONTEXT LOST' : '';
         lines.push(`renderer ${backend}${fallbackSuffix}${contextSuffix}`);
+        if (state?.gpuLimitNote) {
+            lines.push(`webgpu limits ${state.gpuLimitNote}`);
+        }
+        if (state?.xrCompatible) {
+            lines.push('webgl xrCompatible');
+        }
 
         if (state?.pixelRatio != null) {
             const msaa = state.antialias ? 'msaa' : state.usePostAA ? 'fxaa' : 'no-aa';

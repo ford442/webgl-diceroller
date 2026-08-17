@@ -34,6 +34,7 @@ import {
     sabSupported,
 } from './workerLayout.js';
 import { parsePhysicsFlags } from './physicsFlags.js';
+import { resolveWasmArtifactDir } from './wasmArtifact.js';
 import { OP, copyIntoRing, countRecords } from './workerCommands.js';
 import { parseCollisionEventBuffer } from './collisionEvents.js';
 
@@ -539,6 +540,7 @@ export const loadWasmEngine = async () => {
     try {
         const worker = new Worker(new URL('./dice_physics.worker.js', import.meta.url), {
             type: 'module',
+            name: resolveWasmArtifactDir({ searchParams: _searchParams }),
         });
 
         await new Promise((resolve, reject) => {

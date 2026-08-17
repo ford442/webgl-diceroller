@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import type { WebGPURenderer } from 'three/webgpu';
 import type { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import type { ComposerLike, RendererState } from '../types/app';
+import { isXrRequested } from '../xr/XrFlags.js';
+
+export { isXrRequested, getXrSnapDegrees } from '../xr/XrFlags.js';
 
 const DEFAULT_PIXEL_RATIO_CAP = 2;
 const FRAME_BUDGET_MS = 32; // ~30 fps — step down when sustained above this
@@ -93,6 +96,8 @@ export function detectSoftwareWebGL(): boolean {
         const gl = canvas.getContext('webgl', {
             failIfMajorPerformanceCaveat: true,
             powerPreference: 'high-performance',
+            alpha: false,
+            stencil: false,
         });
 
         if (!gl) {
@@ -140,6 +145,121 @@ export function syncComposerPixelRatio(
     composer.setSize?.(width, height);
 }
 
+/**
+ * Documented WebGPU device floor. Values sit at or below the spec's guaranteed
+ * minima so a conforming adapter succeeds; `requestDevice` reject still falls
+ * through to the existing WebGL path.
+ */
+export const WEBGPU_REQUIRED_LIMITS: Record<string, number> = {
+    maxTextureDimension2D: 2048,
+    maxBufferSize: 32 * 1024 * 1024,
+    maxUniformBufferBindingSize: 16384,
+};
+
+export interface WebGlContextAttributeOptions {
+    antialias: boolean;
+    xrCompatible?: boolean;
+}
+
+export interface TavernWebGlContextAttributes {
+    alpha: false;
+    depth: true;
+    stencil: false;
+    antialias: boolean;
+    premultipliedAlpha: true;
+    preserveDrawingBuffer: false;
+    powerPreference: 'high-performance';
+    failIfMajorPerformanceCaveat: false;
+    xrCompatible: boolean;
+}
+
+/**
+ * Explicit WebGL2 context attributes for the tavern canvas.
+ * `xrCompatible` must be set at context creation — Three r181 does not
+ * forward it, and Chrome may recreate the context on `requestSession` otherwise.
+ */
+export function getWebGlContextAttributes({
+    antialias,
+    xrCompatible = false,
+}: WebGlContextAttributeOptions): TavernWebGlContextAttributes {
+    return {
+        alpha: false,
+        depth: true,
+        stencil: false,
+        antialias,
+        premultipliedAlpha: true,
+        preserveDrawingBuffer: false,
+        powerPreference: 'high-performance',
+        failIfMajorPerformanceCaveat: false,
+        xrCompatible,
+    };
+}
+
+/** Constructor bag passed to `THREE.WebGLRenderer` (plus `xrCompatible` for tests). */
+export function getWebGlRendererParameters(options: WebGlContextAttributeOptions): {
+    antialias: boolean;
+    alpha: false;
+    stencil: false;
+    depth: true;
+    preserveDrawingBuffer: false;
+    powerPreference: 'high-performance';
+    xrCompatible: boolean;
+} {
+    const attrs = getWebGlContextAttributes(options);
+    return {
+        antialias: Boolean(attrs.antialias),
+        alpha: false,
+        stencil: false,
+        depth: true,
+        preserveDrawingBuffer: false,
+        powerPreference: 'high-performance',
+        xrCompatible: Boolean(attrs.xrCompatible),
+    };
+}
+
+export function getWebGpuRendererParameters({ antialias }: { antialias: boolean }): {
+    antialias: boolean;
+    alpha: false;
+    stencil: false;
+    powerPreference: 'high-performance';
+    requiredLimits: Record<string, number>;
+} {
+    return {
+        antialias,
+        alpha: false,
+        stencil: false,
+        powerPreference: 'high-performance',
+        requiredLimits: { ...WEBGPU_REQUIRED_LIMITS },
+    };
+}
+
+/**
+ * Compare adapter.limits against {@link WEBGPU_REQUIRED_LIMITS}.
+ * Used when `requestDevice` / `WebGPURenderer.init` fails so `?renderer-info`
+ * can show which limit was short.
+ */
+export async function describeWebGpuLimitMismatches(
+    requiredLimits: Record<string, number> = WEBGPU_REQUIRED_LIMITS
+): Promise<string | null> {
+    try {
+        const gpu = typeof navigator !== 'undefined' ? navigator.gpu : undefined;
+        if (!gpu?.requestAdapter) return 'navigator.gpu.requestAdapter missing';
+        const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
+        if (!adapter) return 'no WebGPU adapter';
+        const parts: string[] = [];
+        const limits = adapter.limits as unknown as Record<string, number>;
+        for (const [key, need] of Object.entries(requiredLimits)) {
+            const have = limits[key];
+            if (typeof have === 'number' && have < need) {
+                parts.push(`${key}: need ${need}, adapter ${have}`);
+            }
+        }
+        return parts.length > 0 ? parts.join('; ') : null;
+    } catch (err) {
+        return err instanceof Error ? err.message : String(err);
+    }
+}
+
 function applySharedRendererConfig(
     renderer: THREE.WebGLRenderer | WebGPURenderer,
     width: number,
@@ -147,6 +267,7 @@ function applySharedRendererConfig(
     pixelRatio: number
 ): void {
     applyRendererSize(renderer, width, height, pixelRatio);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     const shadowMap = renderer.shadowMap as THREE.WebGLShadowMap;
@@ -172,6 +293,7 @@ function createWebGlRenderer({
     pixelRatio,
     requestedRenderer,
     fallbackReason,
+    xrCompatible,
 }: {
     antialias: boolean;
     width: number;
@@ -179,10 +301,24 @@ function createWebGlRenderer({
     pixelRatio: number;
     requestedRenderer: RendererPreference;
     fallbackReason: string | null;
+    xrCompatible: boolean;
 }): WebGlRendererBundle {
+    const contextAttributes = getWebGlContextAttributes({ antialias, xrCompatible });
+    const params = getWebGlRendererParameters({ antialias, xrCompatible });
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('webgl2', contextAttributes);
+    if (!context) {
+        throw new Error('Unable to create WebGL2 context with tavern attributes');
+    }
     const renderer = new THREE.WebGLRenderer({
-        antialias,
-        powerPreference: 'high-performance',
+        canvas,
+        context: context as unknown as WebGLRenderingContext,
+        antialias: params.antialias,
+        alpha: params.alpha,
+        stencil: params.stencil,
+        depth: params.depth,
+        preserveDrawingBuffer: params.preserveDrawingBuffer,
+        powerPreference: params.powerPreference,
     });
     applySharedRendererConfig(renderer, width, height, pixelRatio);
 
@@ -366,6 +502,8 @@ export async function createRenderer(
     const forceWebGl = Boolean(options.forceWebGl);
     const preferredRenderer = getRendererPreference(searchParams, { forceWebGl });
     const webgpuExplicit = searchParams.has('webgpu') || searchParams.has('wgpu');
+    const xrCompatible = isXrRequested(searchParams);
+    const rendererInfo = searchParams.has('renderer-info') || searchParams.has('debug');
 
     const pixelConfig = resolvePixelRatioConfig(searchParams);
     const pixelRatio = options.pixelRatio ?? pixelConfig.pixelRatio;
@@ -382,6 +520,17 @@ export async function createRenderer(
         usePostAA: !antialias && pixelRatio > 1,
         contextStatus: 'ok' as const,
         contextMessage: null as string | null,
+        xrCompatible,
+        gpuLimitNote: null as string | null,
+    };
+
+    const webGlArgs = {
+        antialias,
+        width,
+        height,
+        pixelRatio,
+        requestedRenderer: preferredRenderer,
+        xrCompatible,
     };
 
     if (preferredRenderer === 'webgpu') {
@@ -392,11 +541,7 @@ export async function createRenderer(
             (webgpuExplicit ? console.warn : console.info)(`[RendererFactory] ${reason}`);
             return {
                 ...createWebGlRenderer({
-                    antialias,
-                    width,
-                    height,
-                    pixelRatio,
-                    requestedRenderer: preferredRenderer,
+                    ...webGlArgs,
                     fallbackReason: reason,
                 }),
                 ...sharedMeta,
@@ -405,12 +550,17 @@ export async function createRenderer(
 
         try {
             const THREE_WEBGPU = await import('three/webgpu');
-            const renderer = new THREE_WEBGPU.WebGPURenderer({
-                antialias,
-                powerPreference: 'high-performance',
-            });
+            const gpuParams = getWebGpuRendererParameters({ antialias });
+            const renderer = new THREE_WEBGPU.WebGPURenderer(gpuParams);
             applySharedRendererConfig(renderer, width, height, pixelRatio);
             await renderer.init();
+
+            if (rendererInfo) {
+                console.info(
+                    '[RendererFactory] WebGPU requiredLimits floor',
+                    WEBGPU_REQUIRED_LIMITS
+                );
+            }
 
             return {
                 renderer,
@@ -423,29 +573,27 @@ export async function createRenderer(
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            const reason = `WebGPU init failed (${message}); using WebGLRenderer fallback.`;
+            const gpuLimitNote = await describeWebGpuLimitMismatches();
+            const limitSuffix = gpuLimitNote ? `; ${gpuLimitNote}` : '';
+            const reason = `WebGPU init failed (${message}${limitSuffix}); using WebGLRenderer fallback.`;
             console.warn(`[RendererFactory] ${reason}`, error);
+            if (rendererInfo && gpuLimitNote) {
+                console.info('[RendererFactory] WebGPU requiredLimits mismatch:', gpuLimitNote);
+            }
             return {
                 ...createWebGlRenderer({
-                    antialias,
-                    width,
-                    height,
-                    pixelRatio,
-                    requestedRenderer: preferredRenderer,
+                    ...webGlArgs,
                     fallbackReason: reason,
                 }),
                 ...sharedMeta,
+                gpuLimitNote,
             };
         }
     }
 
     return {
         ...createWebGlRenderer({
-            antialias,
-            width,
-            height,
-            pixelRatio,
-            requestedRenderer: preferredRenderer,
+            ...webGlArgs,
             fallbackReason: null,
         }),
         ...sharedMeta,

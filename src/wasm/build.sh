@@ -6,30 +6,32 @@
 #   2. Activate it in your shell:  source /path/to/emsdk/emsdk_env.sh
 #
 # Usage (run from repository root or this directory):
-#   cd src/wasm && ./build.sh
-#   cd src/wasm && ./build.sh --debug
-#   # or use the npm script:
+#   cd src/wasm && ./build.sh              # SIMD → public/wasm/ AND scalar → public/wasm-scalar/
+#   cd src/wasm && ./build.sh --debug      # debug build → public/wasm/
+#   cd src/wasm && ./build.sh --scalar     # scalar only → public/wasm-scalar/
+#   cd src/wasm && ./build.sh --simd-only  # SIMD only → public/wasm/
 #   npm run build:wasm
 #   npm run build:wasm:debug
 #
 # Output:
-#   public/wasm/dice_physics.js    — Emscripten module loader (ES module)
-#   public/wasm/dice_physics.wasm  — Compiled WASM binary
-#   public/wasm/build-info.json    — Build metadata (emcc version, flags, git sha)
+#   public/wasm/dice_physics.{js,wasm} + build-info.json
+#   public/wasm-scalar/dice_physics.{js,wasm} + build-info.json  (release default)
 
 set -euo pipefail
 
-PROFILE=release
-OUT_SUBDIR=""
+MODE=both
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --debug)
-            PROFILE=debug
+            MODE=debug
             shift
             ;;
         --scalar)
-            PROFILE=release-scalar
-            OUT_SUBDIR="scalar"
+            MODE=scalar
+            shift
+            ;;
+        --simd-only)
+            MODE=simd
             shift
             ;;
         *)
@@ -48,59 +50,99 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-OUT_DIR="${REPO_ROOT}/public/wasm"
-if [ -n "${OUT_SUBDIR}" ]; then
-    OUT_DIR="${OUT_DIR}-${OUT_SUBDIR}"
-fi
 
 # shellcheck source=emcc_flags.inc.sh
 source "${SCRIPT_DIR}/emcc_flags.inc.sh"
-emcc_build_flags "${PROFILE}"
 
-mkdir -p "${OUT_DIR}"
+write_build_info() {
+    local out_dir="$1"
+    local profile="$2"
 
-echo "[build:wasm] Profile: ${PROFILE}"
-echo "[build:wasm] Compiling dice_physics.cpp → ${OUT_DIR}/dice_physics.{js,wasm}"
+    local emcc_full_version emcc_version git_sha built_at js_bytes wasm_bytes
+    emcc_full_version="$(em++ --version 2>/dev/null | head -n1 || echo unknown)"
+    emcc_version="$(echo "${emcc_full_version}" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo unknown)"
+    git_sha="$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    built_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    js_bytes="$(wc -c < "${out_dir}/dice_physics.js" | tr -d ' ')"
+    wasm_bytes="$(wc -c < "${out_dir}/dice_physics.wasm" | tr -d ' ')"
 
-em++ "${SCRIPT_DIR}/dice_physics.cpp" \
-    "${EMCC_FLAGS[@]}" \
-    -o "${OUT_DIR}/dice_physics.js"
+    local simd_json="false"
+    local saw_simd=0
+    local saw_scalar_sat=0
+    local initial_memory="${EMCC_INITIAL_MEMORY:-}"
+    local i
+    for ((i = 0; i < ${#EMCC_FLAGS[@]}; i++)); do
+        case "${EMCC_FLAGS[$i]}" in
+            -msimd128) saw_simd=1 ;;
+            -DDICE_FORCE_SCALAR_SAT) saw_scalar_sat=1 ;;
+            -s\ INITIAL_MEMORY=*) initial_memory="${EMCC_FLAGS[$i]#*INITIAL_MEMORY=}" ;;
+            INITIAL_MEMORY=*) initial_memory="${EMCC_FLAGS[$i]#INITIAL_MEMORY=}" ;;
+            -sINITIAL_MEMORY=*) initial_memory="${EMCC_FLAGS[$i]#*INITIAL_MEMORY=}" ;;
+        esac
+        if [[ "${EMCC_FLAGS[$i]}" == "-s" && $((i + 1)) -lt ${#EMCC_FLAGS[@]} ]]; then
+            if [[ "${EMCC_FLAGS[$((i + 1))]}" == INITIAL_MEMORY=* ]]; then
+                initial_memory="${EMCC_FLAGS[$((i + 1))]#INITIAL_MEMORY=}"
+            fi
+        fi
+    done
+    if [[ "${saw_simd}" -eq 1 && "${saw_scalar_sat}" -eq 0 ]]; then
+        simd_json="true"
+    fi
 
-# ---------------------------------------------------------------------------
-# build-info.json — support metadata (gitignored; included in CI wasm artifact)
-# ---------------------------------------------------------------------------
-EMCC_FULL_VERSION="$(em++ --version 2>/dev/null | head -n1 || echo unknown)"
-EMCC_VERSION="$(echo "${EMCC_FULL_VERSION}" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo unknown)"
-GIT_SHA="$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-JS_BYTES="$(wc -c < "${OUT_DIR}/dice_physics.js" | tr -d ' ')"
-WASM_BYTES="$(wc -c < "${OUT_DIR}/dice_physics.wasm" | tr -d ' ')"
+    local flags_json="["
+    for ((i = 0; i < ${#EMCC_FLAGS[@]}; i++)); do
+        if [[ $i -gt 0 ]]; then flags_json+=","; fi
+        local esc="${EMCC_FLAGS[$i]//\\/\\\\}"
+        esc="${esc//\"/\\\"}"
+        flags_json+="\"${esc}\""
+    done
+    flags_json+="]"
 
-# Build JSON flags array
-FLAGS_JSON="["
-for ((i = 0; i < ${#EMCC_FLAGS[@]}; i++)); do
-    if [[ $i -gt 0 ]]; then FLAGS_JSON+=","; fi
-    # Escape backslashes and double quotes for JSON
-    esc="${EMCC_FLAGS[$i]//\\/\\\\}"
-    esc="${esc//\"/\\\"}"
-    FLAGS_JSON+="\"${esc}\""
-done
-FLAGS_JSON+="]"
-
-cat > "${OUT_DIR}/build-info.json" <<EOF
+    cat > "${out_dir}/build-info.json" <<EOF
 {
-  "profile": "${PROFILE}",
-  "emcc_version": "${EMCC_VERSION}",
-  "emcc_full_version": $(printf '%s' "${EMCC_FULL_VERSION}" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().strip()))'),
-  "flags": ${FLAGS_JSON},
-  "git_sha": "${GIT_SHA}",
-  "built_at": "${BUILT_AT}",
+  "profile": "${profile}",
+  "simd": ${simd_json},
+  "initial_memory": "${initial_memory}",
+  "emcc_version": "${emcc_version}",
+  "emcc_full_version": $(printf '%s' "${emcc_full_version}" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().strip()))'),
+  "flags": ${flags_json},
+  "git_sha": "${git_sha}",
+  "built_at": "${built_at}",
   "artifacts": {
-    "js_bytes": ${JS_BYTES},
-    "wasm_bytes": ${WASM_BYTES}
+    "js_bytes": ${js_bytes},
+    "wasm_bytes": ${wasm_bytes}
   }
 }
 EOF
+}
 
-echo "[build:wasm] Done.  Output:"
-ls -lh "${OUT_DIR}/dice_physics.js" "${OUT_DIR}/dice_physics.wasm" "${OUT_DIR}/build-info.json"
+compile_profile() {
+    local profile="$1"
+    local out_dir="$2"
+    emcc_build_flags "${profile}"
+    mkdir -p "${out_dir}"
+    echo "[build:wasm] Profile: ${profile}"
+    echo "[build:wasm] Compiling dice_physics.cpp → ${out_dir}/dice_physics.{js,wasm}"
+    em++ "${SCRIPT_DIR}/dice_physics.cpp" \
+        "${EMCC_FLAGS[@]}" \
+        -o "${out_dir}/dice_physics.js"
+    write_build_info "${out_dir}" "${profile}"
+    echo "[build:wasm] Done.  Output:"
+    ls -lh "${out_dir}/dice_physics.js" "${out_dir}/dice_physics.wasm" "${out_dir}/build-info.json"
+}
+
+case "${MODE}" in
+    both)
+        compile_profile release "${REPO_ROOT}/public/wasm"
+        compile_profile release-scalar "${REPO_ROOT}/public/wasm-scalar"
+        ;;
+    simd)
+        compile_profile release "${REPO_ROOT}/public/wasm"
+        ;;
+    scalar)
+        compile_profile release-scalar "${REPO_ROOT}/public/wasm-scalar"
+        ;;
+    debug)
+        compile_profile debug "${REPO_ROOT}/public/wasm"
+        ;;
+esac

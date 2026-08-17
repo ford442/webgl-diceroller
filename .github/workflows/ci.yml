@@ -27,6 +27,8 @@ jobs:
             - run: npm run check:bundle-size
             - run: npm run test:notation
             - run: npm run test:share-roll
+            - run: npm run test:simd-support
+            - run: npm run verify:renderer-factory
 
     bundle-loading:
         name: Verify (lazy chunk loading)
@@ -103,7 +105,6 @@ jobs:
             - run: BENCH_SOLVER=1 npm run test:solver
             - run: node scripts/bench-solver-wasm.mjs | tee bench-results.txt
             - run: node scripts/compare-solver-bench.mjs bench-results.txt
-            - run: bash src/wasm/build.sh --scalar
             - run: node scripts/compare-solver-simd.mjs
             - uses: actions/upload-artifact@v4
               with:
