@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
+import { createProp, materials, mesh, STATIC_MATERIAL } from './propKit.js';
 
 export function createMap(
     scene,
@@ -7,40 +7,9 @@ export function createMap(
     position = { x: -8, y: -2.75, z: 12 },
     rotationY = 0
 ) {
-    const ammo = getPropAmmo();
-    const group = new THREE.Group();
-    group.name = 'WorldMap';
-
-    // Map Dimensions
     const width = 10;
     const depth = 7;
-    const thickness = 0.05; // Slightly thicker than paper for visibility
-
-    // --- Texture Generation ---
-    const texture = generateMapTexture();
-
-    // --- Material ---
-    const mapMaterial = new THREE.MeshStandardMaterial({
-        map: texture,
-        roughness: 0.8,
-        metalness: 0.1,
-        side: THREE.DoubleSide,
-    });
-
-    // --- Mesh ---
-    const geometry = new THREE.BoxGeometry(width, thickness, depth);
-    const mesh = new THREE.Mesh(geometry, mapMaterial);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
-
-    // --- Weights (to hold it down) ---
-    const weightGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.4, 16);
-    const weightMat = new THREE.MeshStandardMaterial({
-        color: 0x333333, // Dark stone/metal
-        roughness: 0.6,
-        metalness: 0.5,
-    });
+    const thickness = 0.05;
 
     const weightPositions = [
         { x: -width / 2 + 0.5, z: -depth / 2 + 0.5 },
@@ -49,64 +18,50 @@ export function createMap(
         { x: width / 2 - 0.5, z: depth / 2 - 0.5 },
     ];
 
-    weightPositions.forEach((pos) => {
-        const weight = new THREE.Mesh(weightGeo, weightMat);
-        weight.position.set(pos.x, thickness / 2 + 0.2, pos.z);
-        weight.castShadow = true;
-        weight.receiveShadow = true;
-        group.add(weight);
-    });
+    const colliders = [
+        {
+            type: 'box',
+            halfExtents: [width / 2, thickness / 2, depth / 2],
+            materialTag: STATIC_MATERIAL.DEFAULT,
+        },
+        ...weightPositions.map((pos) => ({
+            type: 'cylinder',
+            radius: 0.3,
+            halfHeight: 0.2,
+            offset: { x: pos.x, y: thickness / 2 + 0.2, z: pos.z },
+            materialTag: STATIC_MATERIAL.METAL,
+        })),
+    ];
 
-    // --- Position on Table ---
-    // Table surface is at Y = -2.75.
-    // Map center Y = -2.75 + thickness/2 = -2.725.
-    const posY = position.y + thickness / 2;
-    group.position.set(position.x, posY, position.z);
-    group.rotation.y = rotationY;
+    createProp(scene, physicsWorld, {
+        name: 'WorldMap',
+        position,
+        rotation: rotationY,
+        footOffsetY: thickness / 2,
+        colliders,
+        build({ group }) {
+            const texture = generateMapTexture();
+            const mapMaterial = new THREE.MeshStandardMaterial({
+                map: texture,
+                roughness: 0.8,
+                metalness: 0.1,
+                side: THREE.DoubleSide,
+            });
 
-    scene.add(group);
+            group.add(mesh(new THREE.BoxGeometry(width, thickness, depth), mapMaterial));
 
-    // --- Physics ---
-    // Map Body
-    if (ammo && physicsWorld) {
-        const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, thickness / 2, depth / 2));
-        createPropStaticBody(physicsWorld, group, shape);
-    }
+            const weightGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.4, 16);
+            const weightMat = materials.iron();
+            weightMat.color.setHex(0x333333);
 
-    // Weights Physics (Approximation: integrated into static map body? Or separate?)
-    // Since it's static, we can just let dice collide with the map surface.
-    // Ideally, weights should have their own shapes added to a compound shape,
-    // but createPropStaticBody currently takes a single shape.
-    // For simplicity, we'll skip physics for the small weights (dice will just roll through them or bounce off map).
-    // Or, we can create separate static bodies for them if needed.
-    // Let's create separate static bodies for weights to be safe.
-
-    weightPositions.forEach((pos) => {
-        if (ammo && physicsWorld) {
-            const wShape = new ammo.btCylinderShape(new ammo.btVector3(0.3, 0.2, 0.3)); // Height 0.4 / 2 = 0.2
-            // We need to transform the local position to world position for createPropStaticBody if we pass a mesh.
-            // But createPropStaticBody uses mesh.position/quaternion.
-            // The weights are children of 'group'.
-            // So their world position depends on group.
-
-            // Option: Make weights separate objects in scene? No, keep hierarchy clean.
-            // Option: Add child shapes to compound shape? Yes, that's better.
-            // But createPropStaticBody is simple.
-
-            // Let's just create individual invisible physics bodies for weights at world coords.
-            // We can use a dummy object for position calculation.
-
-            const dummy = new THREE.Object3D();
-            dummy.position
-                .copy(group.position)
-                .add(
-                    new THREE.Vector3(pos.x, thickness / 2 + 0.2, pos.z).applyEuler(group.rotation)
+            weightPositions.forEach((pos) => {
+                group.add(
+                    mesh(weightGeo, weightMat, {
+                        position: { x: pos.x, y: thickness / 2 + 0.2, z: pos.z },
+                    })
                 );
-            dummy.quaternion.copy(group.quaternion);
-
-            // Since createPropStaticBody expects a mesh (with .position and .quaternion), dummy works.
-            createPropStaticBody(physicsWorld, dummy, wShape);
-        }
+            });
+        },
     });
 }
 
@@ -116,11 +71,9 @@ function generateMapTexture() {
     canvas.height = 768;
     const ctx = canvas.getContext('2d');
 
-    // 1. Background (Parchment)
     ctx.fillStyle = '#e3d2b4';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 2. Grid Lines (Faint)
     ctx.strokeStyle = 'rgba(0,0,0,0.1)';
     ctx.lineWidth = 1;
     const gridSize = 64;
@@ -137,12 +90,10 @@ function generateMapTexture() {
         ctx.stroke();
     }
 
-    // 3. Coastline (Blue water on one side)
     ctx.fillStyle = '#aaddff';
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(300, 0);
-    // Wiggly line down
     for (let y = 0; y <= canvas.height; y += 20) {
         const x = 300 + Math.sin(y * 0.01) * 50 + Math.random() * 20;
         ctx.lineTo(x, y);
@@ -150,7 +101,6 @@ function generateMapTexture() {
     ctx.lineTo(0, canvas.height);
     ctx.fill();
 
-    // 4. Mountains (Triangles)
     ctx.fillStyle = '#8b4513';
     for (let i = 0; i < 20; i++) {
         const x = 400 + Math.random() * 400;
@@ -163,7 +113,6 @@ function generateMapTexture() {
         ctx.fill();
     }
 
-    // 5. Forest (Green Circles)
     ctx.fillStyle = '#228b22';
     for (let i = 0; i < 50; i++) {
         const x = 600 + Math.random() * 300;
@@ -174,12 +123,10 @@ function generateMapTexture() {
         ctx.fill();
     }
 
-    // 6. River (Blue Line)
     ctx.strokeStyle = '#0000ff';
     ctx.lineWidth = 5;
     ctx.beginPath();
-    ctx.moveTo(500, 200); // Start near mountains
-    // Wiggle to sea
+    ctx.moveTo(500, 200);
     let cx = 500;
     let cy = 200;
     while (cx > 300) {
@@ -189,16 +136,13 @@ function generateMapTexture() {
     }
     ctx.stroke();
 
-    // 7. Text Labels
     ctx.fillStyle = '#4b0082';
     ctx.font = 'bold 40px serif';
     ctx.fillText('Kingdom of Aethelgard', 400, 80);
-
     ctx.font = 'italic 24px serif';
     ctx.fillText('The Whispering Woods', 650, 600);
     ctx.fillText("Dragon's Teeth", 500, 150);
 
-    // 8. Red X (Treasure)
     ctx.strokeStyle = '#ff0000';
     ctx.lineWidth = 8;
     const tx = 750;
@@ -209,12 +153,10 @@ function generateMapTexture() {
     ctx.moveTo(tx + 20, ty - 20);
     ctx.lineTo(tx - 20, ty + 20);
     ctx.stroke();
-
     ctx.fillStyle = '#ff0000';
     ctx.font = 'bold 20px sans-serif';
     ctx.fillText('Dig Here', tx - 30, ty + 40);
 
-    // 9. Compass Rose
     const compassX = 900;
     const compassY = 100;
     ctx.strokeStyle = '#000';
