@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getPropAmmo } from './PropPhysics.js';
+import { createProp } from './propKit.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createDMScreen(
@@ -8,152 +8,97 @@ export function createDMScreen(
     position = { x: 0, y: -2.75, z: -7 },
     rotationY = 0
 ) {
-    const ammo = getPropAmmo();
-
-    // Group to hold the screen
-    const group = new THREE.Group();
-    group.name = 'DMScreen';
-    group.position.set(position.x, position.y, position.z);
-    group.rotation.y = rotationY;
-
-    const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } = getWoodTextures();
-    woodDiffuse.repeat.set(1, 1);
-    woodBump.repeat.set(1, 1);
-    woodRoughness.repeat.set(1, 1);
-    woodBump.colorSpace = THREE.NoColorSpace;
-    woodRoughness.colorSpace = THREE.NoColorSpace;
-
-    // Wood Material
-    const woodMaterial = new THREE.MeshStandardMaterial({
-        map: woodDiffuse,
-        bumpMap: woodBump,
-        bumpScale: 0.05,
-        roughnessMap: woodRoughness,
-        roughness: 0.8,
-        color: 0x8b5a2b, // slightly darker wood tint
-    });
-
-    // Panel Dimensions
     const panelThickness = 0.2;
     const panelHeight = 4.0;
     const centerPanelWidth = 8.0;
     const sidePanelWidth = 4.0;
-    const sidePanelAngle = Math.PI / 4; // 45 degrees
-
-    // 1. Center Panel
-    const centerGeom = new THREE.BoxGeometry(centerPanelWidth, panelHeight, panelThickness);
-    const centerMesh = new THREE.Mesh(centerGeom, woodMaterial);
-    centerMesh.position.set(0, panelHeight / 2, 0); // Bottom aligns with local Y=0
-    centerMesh.castShadow = true;
-    centerMesh.receiveShadow = true;
-    group.add(centerMesh);
-
-    // 2. Left Panel
-    const sideGeom = new THREE.BoxGeometry(sidePanelWidth, panelHeight, panelThickness);
-    const leftMesh = new THREE.Mesh(sideGeom, woodMaterial);
-
-    // Position the left panel so its right edge attaches to the center panel's left edge
+    const sidePanelAngle = Math.PI / 4;
     const leftPivotX = -centerPanelWidth / 2;
     const leftPivotZ = -panelThickness / 2;
-
-    // Offset local center to the pivot
-    leftMesh.position.set(-sidePanelWidth / 2, 0, 0);
-
-    const leftPivot = new THREE.Group();
-    leftPivot.position.set(leftPivotX, panelHeight / 2, leftPivotZ);
-    leftPivot.rotation.y = sidePanelAngle;
-    leftPivot.add(leftMesh);
-    group.add(leftPivot);
-
-    // 3. Right Panel
-    const rightMesh = new THREE.Mesh(sideGeom, woodMaterial);
-
     const rightPivotX = centerPanelWidth / 2;
     const rightPivotZ = -panelThickness / 2;
 
-    rightMesh.position.set(sidePanelWidth / 2, 0, 0);
+    const leftCenter = new THREE.Vector3(-sidePanelWidth / 2, 0, 0);
+    leftCenter.applyAxisAngle(new THREE.Vector3(0, 1, 0), sidePanelAngle);
 
-    const rightPivot = new THREE.Group();
-    rightPivot.position.set(rightPivotX, panelHeight / 2, rightPivotZ);
-    rightPivot.rotation.y = -sidePanelAngle;
-    rightPivot.add(rightMesh);
-    group.add(rightPivot);
+    const rightCenter = new THREE.Vector3(sidePanelWidth / 2, 0, 0);
+    rightCenter.applyAxisAngle(new THREE.Vector3(0, 1, 0), -sidePanelAngle);
 
-    scene.add(group);
+    return createProp(scene, physicsWorld, {
+        name: 'DMScreen',
+        position,
+        rotation: rotationY,
+        colliders: [
+            {
+                type: 'box',
+                halfExtents: [centerPanelWidth / 2, panelHeight / 2, panelThickness / 2],
+                offset: { y: panelHeight / 2 },
+            },
+            {
+                type: 'box',
+                halfExtents: [sidePanelWidth / 2, panelHeight / 2, panelThickness / 2],
+                offset: {
+                    x: leftPivotX + leftCenter.x,
+                    y: panelHeight / 2,
+                    z: leftPivotZ + leftCenter.z,
+                },
+                rotation: { y: sidePanelAngle },
+            },
+            {
+                type: 'box',
+                halfExtents: [sidePanelWidth / 2, panelHeight / 2, panelThickness / 2],
+                offset: {
+                    x: rightPivotX + rightCenter.x,
+                    y: panelHeight / 2,
+                    z: rightPivotZ + rightCenter.z,
+                },
+                rotation: { y: -sidePanelAngle },
+            },
+        ],
+        build({ group }) {
+            const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } =
+                getWoodTextures();
+            woodDiffuse.repeat.set(1, 1);
+            woodBump.repeat.set(1, 1);
+            woodRoughness.repeat.set(1, 1);
+            woodBump.colorSpace = THREE.NoColorSpace;
+            woodRoughness.colorSpace = THREE.NoColorSpace;
 
-    let body = null;
-    if (ammo && physicsWorld) {
-        const compoundShape = new ammo.btCompoundShape();
+            const woodMaterial = new THREE.MeshStandardMaterial({
+                map: woodDiffuse,
+                bumpMap: woodBump,
+                bumpScale: 0.05,
+                roughnessMap: woodRoughness,
+                roughness: 0.8,
+                color: 0x8b5a2b,
+            });
 
-        const addShape = (width, height, depth, posX, posY, posZ, rotY) => {
-            const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
-            const transform = new ammo.btTransform();
-            transform.setIdentity();
-            transform.setOrigin(new ammo.btVector3(posX, posY, posZ));
+            const centerGeom = new THREE.BoxGeometry(centerPanelWidth, panelHeight, panelThickness);
+            const centerMesh = new THREE.Mesh(centerGeom, woodMaterial);
+            centerMesh.position.set(0, panelHeight / 2, 0);
+            centerMesh.castShadow = true;
+            centerMesh.receiveShadow = true;
+            group.add(centerMesh);
 
-            const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY);
-            const btQuat = new ammo.btQuaternion(q.x, q.y, q.z, q.w);
-            transform.setRotation(btQuat);
+            const sideGeom = new THREE.BoxGeometry(sidePanelWidth, panelHeight, panelThickness);
 
-            compoundShape.addChildShape(transform, shape);
-        };
+            const leftMesh = new THREE.Mesh(sideGeom, woodMaterial);
+            leftMesh.position.set(-sidePanelWidth / 2, 0, 0);
 
-        addShape(centerPanelWidth, panelHeight, panelThickness, 0, panelHeight / 2, 0, 0);
+            const leftPivot = new THREE.Group();
+            leftPivot.position.set(leftPivotX, panelHeight / 2, leftPivotZ);
+            leftPivot.rotation.y = sidePanelAngle;
+            leftPivot.add(leftMesh);
+            group.add(leftPivot);
 
-        const leftCenter = new THREE.Vector3(-sidePanelWidth / 2, 0, 0);
-        leftCenter.applyAxisAngle(new THREE.Vector3(0, 1, 0), sidePanelAngle);
-        addShape(
-            sidePanelWidth,
-            panelHeight,
-            panelThickness,
-            leftPivotX + leftCenter.x,
-            panelHeight / 2,
-            leftPivotZ + leftCenter.z,
-            sidePanelAngle
-        );
+            const rightMesh = new THREE.Mesh(sideGeom, woodMaterial);
+            rightMesh.position.set(sidePanelWidth / 2, 0, 0);
 
-        const rightCenter = new THREE.Vector3(sidePanelWidth / 2, 0, 0);
-        rightCenter.applyAxisAngle(new THREE.Vector3(0, 1, 0), -sidePanelAngle);
-        addShape(
-            sidePanelWidth,
-            panelHeight,
-            panelThickness,
-            rightPivotX + rightCenter.x,
-            panelHeight / 2,
-            rightPivotZ + rightCenter.z,
-            -sidePanelAngle
-        );
-
-        const mass = 0;
-        const localInertia = new ammo.btVector3(0, 0, 0);
-        const transform = new ammo.btTransform();
-        transform.setIdentity();
-        transform.setOrigin(new ammo.btVector3(position.x, position.y, position.z));
-
-        const groupQuat = new THREE.Quaternion().setFromAxisAngle(
-            new THREE.Vector3(0, 1, 0),
-            rotationY
-        );
-        const btGroupQuat = new ammo.btQuaternion(
-            groupQuat.x,
-            groupQuat.y,
-            groupQuat.z,
-            groupQuat.w
-        );
-        transform.setRotation(btGroupQuat);
-
-        const motionState = new ammo.btDefaultMotionState(transform);
-        const rbInfo = new ammo.btRigidBodyConstructionInfo(
-            mass,
-            motionState,
-            compoundShape,
-            localInertia
-        );
-        body = new ammo.btRigidBody(rbInfo);
-        body.setFriction(0.8);
-        body.setRestitution(0.1);
-        physicsWorld.addRigidBody(body);
-    }
-
-    return { group, body };
+            const rightPivot = new THREE.Group();
+            rightPivot.position.set(rightPivotX, panelHeight / 2, rightPivotZ);
+            rightPivot.rotation.y = -sidePanelAngle;
+            rightPivot.add(rightMesh);
+            group.add(rightPivot);
+        },
+    });
 }

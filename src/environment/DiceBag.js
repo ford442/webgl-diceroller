@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getPropAmmo, createPropStaticBody } from './PropPhysics.js';
+import { createProp, STATIC_MATERIAL } from './propKit.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
 
 export function createDiceBag(
@@ -8,116 +8,59 @@ export function createDiceBag(
     position = { x: -10, y: -1.95, z: 8 },
     rotationY = 0
 ) {
-    const group = new THREE.Group();
-    const leatherBump = getWoodTextures().bump;
-    leatherBump.repeat.set(2, 2);
-
-    const leatherMaterial = new THREE.MeshStandardMaterial({
-        color: 0x8b4513, // Saddle Brown
-        roughness: 0.9,
-        bumpMap: leatherBump,
-        bumpScale: 0.05,
-    });
-
-    const stringMaterial = new THREE.MeshStandardMaterial({
-        color: 0xd2b48c, // Tan
-        roughness: 0.8,
-    });
-
-    // 1. Bag Body (Sphere, slightly flattened)
     const radius = 1.0;
-    const bodyGeo = new THREE.SphereGeometry(radius, 32, 16);
-    // Flatten bottom
-    bodyGeo.applyMatrix4(new THREE.Matrix4().makeScale(1, 0.8, 1));
+    const bagFootY = -1.95;
 
-    const bodyMesh = new THREE.Mesh(bodyGeo, leatherMaterial);
-    bodyMesh.castShadow = true;
-    bodyMesh.receiveShadow = true;
-    // Position so bottom sits on 0 (local)
-    // Radius is 1, scaled Y is 0.8. Height is 1.6.
-    // Center is at 0. Bottom is at -0.8.
-    // We want bottom at 0. So shift up 0.8.
-    bodyMesh.position.y = 0.8;
-    group.add(bodyMesh);
+    return createProp(scene, physicsWorld, {
+        name: 'DiceBag',
+        position: { x: position.x, y: bagFootY, z: position.z },
+        rotation: rotationY,
+        colliders: [
+            {
+                type: 'box',
+                halfExtents: [radius, radius * 0.8, radius],
+                materialTag: STATIC_MATERIAL.LEATHER,
+            },
+        ],
+        build({ group }) {
+            const leatherBump = getWoodTextures().bump;
+            leatherBump.repeat.set(2, 2);
 
-    // 2. Drawstring / Neck
-    const neckGeo = new THREE.CylinderGeometry(0.7, 0.9, 0.5, 32, 1, true);
-    const neckMesh = new THREE.Mesh(neckGeo, leatherMaterial);
-    neckMesh.position.y = 1.5; // On top of body
-    neckMesh.castShadow = true;
-    neckMesh.receiveShadow = true;
-    group.add(neckMesh);
+            const leatherMaterial = new THREE.MeshStandardMaterial({
+                color: 0x8b4513,
+                roughness: 0.9,
+                bumpMap: leatherBump,
+                bumpScale: 0.05,
+            });
 
-    // 3. String (Torus)
-    const stringGeo = new THREE.TorusGeometry(0.7, 0.05, 16, 32);
-    const stringMesh = new THREE.Mesh(stringGeo, stringMaterial);
-    stringMesh.position.y = 1.5;
-    stringMesh.rotation.x = Math.PI / 2;
-    stringMesh.castShadow = true;
-    stringMesh.receiveShadow = true;
-    group.add(stringMesh);
+            const stringMaterial = new THREE.MeshStandardMaterial({
+                color: 0xd2b48c,
+                roughness: 0.8,
+            });
 
-    // Position on Table
-    // Table surface is at -2.75 (approx).
-    // Let's place it near the edge.
-    group.position.set(position.x, position.y, position.z);
-    group.rotation.y = rotationY;
+            const bodyGeo = new THREE.SphereGeometry(radius, 32, 16);
+            bodyGeo.applyMatrix4(new THREE.Matrix4().makeScale(1, 0.8, 1));
 
-    scene.add(group);
+            const bodyMesh = new THREE.Mesh(bodyGeo, leatherMaterial);
+            bodyMesh.castShadow = true;
+            bodyMesh.receiveShadow = true;
+            bodyMesh.position.y = 0;
+            group.add(bodyMesh);
 
-    // Physics
-    const ammo = getPropAmmo();
-    if (ammo) {
-        // Approximate with a Cylinder or Sphere
-        // Sphere is easier for dice to roll off
-        if (ammo && physicsWorld) {
-            const shape = new ammo.btSphereShape(radius);
-            // Note: Physics shape origin is center of mass.
-            // Our visual mesh center is at Y=0.8 (local).
-            // The group is at Y=-2.75.
-            // If we make a static body for the Group, the shape is centered at Group origin.
-            // So the sphere will be centered at -2.75.
-            // But our visual sphere is centered at -2.75 + 0.8 = -1.95.
-            // We need to offset the shape or the body?
-            // createPropStaticBody uses mesh.position.
-            // If we pass 'group', it uses group.position (-6, -2.75, 2).
-            // The shape will be centered there.
-            // The visual sphere center is at Y=0.8 relative to that.
-            // So the physics sphere will be at the bottom of the visual sphere.
-            // That means the visual sphere will float above the physics sphere?
-            // No, visual is UP. Physics is DOWN.
-            // Visual starts at 0 (bottom) goes to 1.6.
-            // Physics sphere (radius 1) goes from -1 to 1.
-            // We want physics sphere to match visual.
-            // Physics center should be at local Y=0.8.
-
-            // createPropStaticBody implementation:
-            // transform.setOrigin(mesh.position)
-            // It doesn't support offset shape.
-
-            // We can use a Compound Shape or just create the body on the bodyMesh instead of the group?
-            // If we use bodyMesh, we need its world position.
-            // bodyMesh.position is local (0, 0.8, 0).
-            // World position is group.position + local.
-            // But createPropStaticBody reads mesh.position. If mesh is child, mesh.position is local.
-            // We should calculate world position.
-
-            // Let's use a workaround: Create a hidden mesh for physics that is centered correctly.
-            // Or just adjust the group so center is at center of mass.
-
-            // Let's adjust group.
-            // Shift visuals so center is 0.
-            bodyMesh.position.y = 0; // Center at 0.
+            const neckGeo = new THREE.CylinderGeometry(0.7, 0.9, 0.5, 32, 1, true);
+            const neckMesh = new THREE.Mesh(neckGeo, leatherMaterial);
             neckMesh.position.y = 0.7;
+            neckMesh.castShadow = true;
+            neckMesh.receiveShadow = true;
+            group.add(neckMesh);
+
+            const stringGeo = new THREE.TorusGeometry(0.7, 0.05, 16, 32);
+            const stringMesh = new THREE.Mesh(stringGeo, stringMaterial);
             stringMesh.position.y = 0.7;
-
-            // Visual bottom is now at -0.8.
-            // To sit on table (-2.75), Group Y must be -2.75 + 0.8 = -1.95.
-            group.position.set(position.x, -1.95, position.z);
-
-            createPropStaticBody(physicsWorld, group, shape);
-        }
-    }
-
-    return group;
+            stringMesh.rotation.x = Math.PI / 2;
+            stringMesh.castShadow = true;
+            stringMesh.receiveShadow = true;
+            group.add(stringMesh);
+        },
+    });
 }

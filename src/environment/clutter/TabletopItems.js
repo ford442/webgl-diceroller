@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getPropAmmo, createPropStaticBody } from '../PropPhysics.js';
+import { createStaticCollider } from '../../core/StaticColliderBridge.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
 import {
     getCeramicMaterial,
@@ -17,8 +17,15 @@ import { resolvePlacement } from './ClutterPlacement.js';
 const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
 const randomUnit = (options) => (options?.rng ?? Math.random)();
 
+function addBoxCollider(physicsWorld, anchor, halfExtents) {
+    createStaticCollider(physicsWorld, anchor, { type: 'box', halfExtents });
+}
+
+function addCylinderCollider(physicsWorld, anchor, radius, halfHeight) {
+    createStaticCollider(physicsWorld, anchor, { type: 'cylinder', radius, halfHeight });
+}
+
 export function createMug(scene, physicsWorld, options = {}) {
-    const ammo = getPropAmmo();
     const mugGroup = new THREE.Group();
 
     // Cup body
@@ -49,14 +56,10 @@ export function createMug(scene, physicsWorld, options = {}) {
     scene.add(mugGroup);
     options.track?.(mugGroup);
 
-    if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(0.5, 0.5, 0.5));
-        createPropStaticBody(physicsWorld, mugGroup, shape);
-    }
+    addCylinderCollider(physicsWorld, mugGroup, 0.5, 0.5);
 }
 
 export function createCoins(scene, physicsWorld, options = {}) {
-    const ammo = getPropAmmo();
     const radius = 0.3;
     const thickness = 0.05;
     const geometry = new THREE.CylinderGeometry(radius, radius, thickness, 32);
@@ -80,39 +83,38 @@ export function createCoins(scene, physicsWorld, options = {}) {
     coins.receiveShadow = true;
     coins.instanceMatrix.setUsage(THREE.StaticDrawUsage);
     const dummy = new THREE.Object3D();
-    if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, thickness / 2, radius));
-        // Track the per-coin static bodies so disposeObject3D can free them on reroll.
-        coins.userData.physicsBodies = [];
+    coins.userData.physicsBodies = [];
 
-        for (let i = 0; i < count; i++) {
-            // Preserve the original per-coin random sequence for seeded reproducibility.
-            coins.setColorAt(i, coinColors[Math.floor(randomUnit(options) * coinColors.length)]);
+    for (let i = 0; i < count; i++) {
+        coins.setColorAt(i, coinColors[Math.floor(randomUnit(options) * coinColors.length)]);
 
-            const angle = randomUnit(options) * Math.PI * 2;
-            const dist = randomUnit(options) * 1.5;
-            const x = centerX + Math.cos(angle) * dist;
-            const z = centerZ + Math.sin(angle) * dist;
+        const angle = randomUnit(options) * Math.PI * 2;
+        const dist = randomUnit(options) * 1.5;
+        const x = centerX + Math.cos(angle) * dist;
+        const z = centerZ + Math.sin(angle) * dist;
 
-            let y = baseY + thickness / 2;
-            if (i > 5) y += thickness;
-            if (i > 10) y += thickness;
+        let y = baseY + thickness / 2;
+        if (i > 5) y += thickness;
+        if (i > 10) y += thickness;
 
-            dummy.position.set(x, y, z);
-            dummy.rotation.set(0, randomUnit(options) * Math.PI * 2, 0);
+        dummy.position.set(x, y, z);
+        dummy.rotation.set(0, randomUnit(options) * Math.PI * 2, 0);
 
-            if (randomUnit(options) > 0.8) {
-                dummy.rotation.x = (randomUnit(options) - 0.5) * 0.5;
-                dummy.rotation.z = (randomUnit(options) - 0.5) * 0.5;
-                dummy.position.y += 0.05;
-            }
-
-            dummy.updateMatrix();
-            coins.setMatrixAt(i, dummy.matrix);
-
-            // One static physics body per coin (cheap; matches prior collision feel).
-            coins.userData.physicsBodies.push(createPropStaticBody(physicsWorld, dummy, shape));
+        if (randomUnit(options) > 0.8) {
+            dummy.rotation.x = (randomUnit(options) - 0.5) * 0.5;
+            dummy.rotation.z = (randomUnit(options) - 0.5) * 0.5;
+            dummy.position.y += 0.05;
         }
+
+        dummy.updateMatrix();
+        coins.setMatrixAt(i, dummy.matrix);
+
+        const result = createStaticCollider(physicsWorld, dummy, {
+            type: 'cylinder',
+            radius,
+            halfHeight: thickness / 2,
+        });
+        if (result?.body) coins.userData.physicsBodies.push(result.body);
     }
 
     coins.instanceMatrix.needsUpdate = true;
@@ -123,7 +125,6 @@ export function createCoins(scene, physicsWorld, options = {}) {
 }
 
 export function createBook(scene, physicsWorld, options = {}) {
-    const ammo = getPropAmmo();
     const width = 3;
     const height = 0.5;
     const depth = 4;
@@ -138,14 +139,10 @@ export function createBook(scene, physicsWorld, options = {}) {
     scene.add(mesh);
     options.track?.(mesh);
 
-    if (ammo && physicsWorld) {
-        const shape = new ammo.btBoxShape(new ammo.btVector3(width / 2, height / 2, depth / 2));
-        createPropStaticBody(physicsWorld, mesh, shape);
-    }
+    addBoxCollider(physicsWorld, mesh, [width / 2, height / 2, depth / 2]);
 }
 
 export function createMiniature(scene, physicsWorld, options = {}) {
-    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'MiniaturePawn';
 
@@ -191,16 +188,10 @@ export function createMiniature(scene, physicsWorld, options = {}) {
     scene.add(group);
     options.track?.(group);
 
-    if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(
-            new ammo.btVector3(baseRadius, totalHeight / 2, baseRadius)
-        );
-        createPropStaticBody(physicsWorld, group, shape);
-    }
+    addCylinderCollider(physicsWorld, group, baseRadius, totalHeight / 2);
 }
 
 export function createD20Holder(scene, physicsWorld, options = {}) {
-    const ammo = getPropAmmo();
     const holderGroup = new THREE.Group();
 
     const material = getDarkLeatherMaterial();
@@ -225,14 +216,10 @@ export function createD20Holder(scene, physicsWorld, options = {}) {
     scene.add(holderGroup);
     options.track?.(holderGroup);
 
-    if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, height / 2, radius));
-        createPropStaticBody(physicsWorld, holderGroup, shape);
-    }
+    addCylinderCollider(physicsWorld, holderGroup, radius, height / 2);
 }
 
 export function createGemstone(scene, physicsWorld, options = {}) {
-    const ammo = getPropAmmo();
     const group = new THREE.Group();
     group.name = 'RubyGem';
 
@@ -265,14 +252,10 @@ export function createGemstone(scene, physicsWorld, options = {}) {
     scene.add(group);
     options.track?.(group);
 
-    if (ammo && physicsWorld) {
-        const shape = new ammo.btSphereShape(radius * 0.8);
-        createPropStaticBody(physicsWorld, group, shape);
-    }
+    addBoxCollider(physicsWorld, group, [radius * 0.8, radius * 0.8, radius * 0.8]);
 }
 
 export function createPotionBottle(scene, physicsWorld, options = {}) {
-    const ammo = getPropAmmo();
     const bottleGroup = new THREE.Group();
     bottleGroup.name = 'PotionBottle';
 
@@ -336,14 +319,10 @@ export function createPotionBottle(scene, physicsWorld, options = {}) {
     scene.add(bottleGroup);
     options.track?.(bottleGroup);
 
-    if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(0.6, 0.8, 0.6));
-        createPropStaticBody(physicsWorld, bottleGroup, shape);
-    }
+    addCylinderCollider(physicsWorld, bottleGroup, 0.6, 0.8);
 }
 
 export function createPencil(scene, physicsWorld, options = {}) {
-    const ammo = getPropAmmo();
     const pencilGroup = new THREE.Group();
 
     const radius = 0.04;
@@ -413,8 +392,5 @@ export function createPencil(scene, physicsWorld, options = {}) {
     options.track?.(pencilGroup);
 
     const totalLen = bodyLen + ferruleLen + eraserLen + tipLen + leadLen;
-    if (ammo && physicsWorld) {
-        const shape = new ammo.btCylinderShape(new ammo.btVector3(radius, totalLen / 2, radius));
-        createPropStaticBody(physicsWorld, pencilGroup, shape);
-    }
+    addCylinderCollider(physicsWorld, pencilGroup, radius, totalLen / 2);
 }
