@@ -5,8 +5,12 @@ import {
     resolveAntialias,
     detectSoftwareWebGL,
     getRendererPreference,
+    getWebGlRendererParameters,
+    getWebGpuRendererParameters,
+    WEBGPU_REQUIRED_LIMITS,
+    isXrRequested,
+    getXrSnapDegrees,
 } from '../src/core/RendererFactory.js';
-import { isXrRequested, getXrSnapDegrees } from '../src/xr/XrFlags.js';
 
 let failed = 0;
 
@@ -66,6 +70,34 @@ assert(isXrRequested(new URLSearchParams('xr')) === true, 'isXrRequested true fo
 assert(getXrSnapDegrees(new URLSearchParams('')) === 45, 'default xr snap is 45');
 assert(getXrSnapDegrees(new URLSearchParams('xr-snap=30')) === 30, 'xr-snap=30 honored');
 assert(getXrSnapDegrees(new URLSearchParams('xr-snap=5')) === 15, 'xr-snap clamps to min 15');
+
+{
+    const gl = getWebGlRendererParameters({ antialias: true, xrCompatible: false });
+    assert(gl.alpha === false, 'WebGL alpha is false (opaque tavern)');
+    assert(gl.stencil === false, 'WebGL stencil is false');
+    assert(gl.powerPreference === 'high-performance', 'WebGL powerPreference is high-performance');
+    assert(gl.xrCompatible === false, 'WebGL xrCompatible false by default');
+    assert(gl.preserveDrawingBuffer === false, 'WebGL preserveDrawingBuffer stays false');
+}
+
+{
+    const xr = getWebGlRendererParameters({ antialias: false, xrCompatible: true });
+    assert(xr.xrCompatible === true, 'WebGL xrCompatible true when XR is requested');
+}
+
+{
+    const gpu = getWebGpuRendererParameters({ antialias: true });
+    assert(gpu.alpha === false, 'WebGPU alpha is false');
+    assert(gpu.stencil === false, 'WebGPU stencil is false');
+    assert(
+        gpu.powerPreference === 'high-performance',
+        'WebGPU powerPreference is high-performance'
+    );
+    assert(
+        gpu.requiredLimits.maxTextureDimension2D === WEBGPU_REQUIRED_LIMITS.maxTextureDimension2D,
+        'WebGPU requiredLimits uses documented floor'
+    );
+}
 
 if (failed > 0) {
     console.error(`\n${failed} assertion(s) failed`);

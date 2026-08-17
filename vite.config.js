@@ -67,6 +67,7 @@ export default defineConfig({
                 'draco/**/*',
                 'basis/**/*',
                 'wasm/**/*',
+                'wasm-scalar/**/*',
                 'images/dice/*.glb',
             ],
             manifest: {
@@ -105,6 +106,7 @@ export default defineConfig({
                     'draco/**/*',
                     'basis/**/*',
                     'wasm/**/*',
+                    'wasm-scalar/**/*',
                 ],
                 // Large JPG/KTX2 textures: runtime cache-first instead of precache.
                 globIgnores: ['**/images/**/*.jpg', '**/images/**/*.ktx2', '**/images/lamp/**'],

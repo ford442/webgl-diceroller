@@ -127,24 +127,20 @@ export function createDiceCasePanel(hooks) {
     body.appendChild(hint);
 
     let collapsed = false;
+    let previewRenderer = null;
     collapseBtn.addEventListener('click', () => {
         collapsed = !collapsed;
         body.style.display = collapsed ? 'none' : 'block';
         collapseBtn.textContent = collapsed ? '+' : '−';
+        if (collapsed) {
+            disposePreviewRenderer();
+        }
     });
 
     [typeSelect, presetSelect, bodyColorInput, pipColorInput].forEach((el) => {
         el.addEventListener('mousedown', (e) => e.stopPropagation());
         el.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     });
-
-    const previewRenderer = new THREE.WebGLRenderer({
-        canvas: previewCanvas,
-        antialias: true,
-        alpha: true,
-    });
-    previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio ?? 1, 2));
-    previewRenderer.setSize(previewCanvas.width, previewCanvas.height, false);
 
     const previewScene = new THREE.Scene();
     const previewCamera = new THREE.PerspectiveCamera(
@@ -159,6 +155,36 @@ export function createDiceCasePanel(hooks) {
     previewLight.position.set(2, 4, 3);
     previewScene.add(previewLight);
     previewScene.add(new THREE.AmbientLight(0x8888aa, 0.45));
+
+    /**
+     * Live PBR preview needs its own GL context (cloned die + env map). Do not
+     * use high-performance: browsers cap GL contexts (8–16) and Intel /
+     * SwiftShader / Quest hit that first. Lazy-create a low-power context and
+     * dispose it on collapse so the slot is released.
+     */
+    function ensurePreviewRenderer() {
+        if (previewRenderer || collapsed) return previewRenderer;
+        previewRenderer = new THREE.WebGLRenderer({
+            canvas: previewCanvas,
+            antialias: false,
+            alpha: true,
+            stencil: false,
+            depth: true,
+            powerPreference: 'low-power',
+            preserveDrawingBuffer: false,
+        });
+        previewRenderer.outputColorSpace = THREE.SRGBColorSpace;
+        previewRenderer.setPixelRatio(1);
+        previewRenderer.setSize(previewCanvas.width, previewCanvas.height, false);
+        return previewRenderer;
+    }
+
+    function disposePreviewRenderer() {
+        if (!previewRenderer) return;
+        previewRenderer.dispose();
+        previewRenderer.forceContextLoss?.();
+        previewRenderer = null;
+    }
 
     let previewMesh = null;
     let selectedType = 'd6';
@@ -240,16 +266,19 @@ export function createDiceCasePanel(hooks) {
             rebuildPreviewMesh();
         },
         updatePreview(deltaTime) {
+            if (collapsed) return;
             if (!previewMesh) return;
+            const renderer = ensurePreviewRenderer();
+            if (!renderer) return;
             previewAngle += deltaTime * 0.55;
             previewMesh.rotation.y = previewAngle;
             const envMap = hooks.getEnvMap?.();
             if (envMap) previewScene.environment = envMap;
-            previewRenderer.render(previewScene, previewCamera);
+            renderer.render(previewScene, previewCamera);
         },
         dispose() {
             if (previewMesh) previewScene.remove(previewMesh);
-            previewRenderer.dispose();
+            disposePreviewRenderer();
             panel.remove();
         },
     };

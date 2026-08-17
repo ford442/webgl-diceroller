@@ -177,45 +177,53 @@ this JSON and passes hull vertices to `engine.setDieHull(id, vertices)`.
 Shared Emscripten flags live in [`src/wasm/emcc_flags.inc.sh`](src/wasm/emcc_flags.inc.sh) and are consumed by [`build.sh`](src/wasm/build.sh), [`build_colab.sh`](src/wasm/build_colab.sh), and CMake (via [`emcc_flags.sh --print-link-line`](src/wasm/emcc_flags.sh)).
 
 ```bash
-# Release profile (default): -O3 -flto -msimd128, ASSERTIONS=0
+# Release: SIMD → public/wasm/ and scalar → public/wasm-scalar/
 npm run build:wasm
 
-# Debug profile: -O0 -g, ASSERTIONS=2, SAFE_HEAP=1 (no SIMD/LTO)
+# Debug profile: -O0 -g, ASSERTIONS=2, SAFE_HEAP=1 (no SIMD/LTO) → public/wasm/
 npm run build:wasm:debug
 
 # Equivalent direct invocation:
 cd src/wasm && ./build.sh
 cd src/wasm && ./build.sh --debug
+cd src/wasm && ./build.sh --scalar     # scalar only
+cd src/wasm && ./build.sh --simd-only  # SIMD only
 ```
 
-Both profiles write to the same paths (`public/wasm/dice_physics.{js,wasm}`); a release build overwrites a prior debug build and vice versa. The Embind API surface is identical.
+A default release build writes **both** artifacts. Debug overwrites `public/wasm/` only. The Embind API surface is identical.
 
-After each build, [`build.sh`](src/wasm/build.sh) emits `public/wasm/build-info.json` (gitignored) with `emcc_version`, full flag list, `git_sha`, and artifact byte sizes. CI uploads it inside the `wasm-artifacts` artifact.
+[`WasmPhysicsBridge.js`](src/wasm/WasmPhysicsBridge.js) / the physics worker probe SIMD128 with a hand-rolled `WebAssembly.validate` of a `v128.const` module ([`simdSupport.js`](src/wasm/simdSupport.js)). Non-SIMD browsers (Safari < 16.4) load `public/wasm-scalar/`. `?wasm-scalar` / `?wasm-simd` override the probe. Hulls stay in `public/wasm/hulls.json`.
+
+After each build, [`build.sh`](src/wasm/build.sh) emits `build-info.json` (gitignored) with `emcc_version`, `simd`, `initial_memory`, full flag list, `git_sha`, and artifact byte sizes. CI uploads the SIMD tree inside the `wasm-artifacts` artifact.
 
 #### Release flag set (EMSDK 3.1.61 / CI pin)
 
-| Flag | Purpose |
-|------|---------|
-| `--bind -std=c++17` | Embind exports |
-| `-O3 -flto` | Release optimisation (+ ~30–60 s link time in CI) |
-| `-msimd128` | WASM SIMD128 for SAT hot paths (`projectHullOntoAxis`, `transformHullVerts`; `#ifdef __wasm_simd128__`; native `test:solver` stays scalar) |
-| `DICE_FORCE_SCALAR_SAT` | Compile-time scalar SAT path (`build.sh --scalar` → `public/wasm-scalar/`) for SIMD parity checks |
-| `-s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=64MB` | Heap policy |
-| `-s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME=DicePhysicsModule` | ES module factory |
-| `-s ENVIRONMENT=web,worker,node` | Main thread, physics worker, and Node parity tooling |
-| `-s FILESYSTEM=0` | No FS usage in `dice_physics.cpp` |
-| `-s ABORTING_MALLOC=0` | OOM returns null under the 64 MB cap |
-| `-s ASSERTIONS=0` | Release assertions off |
+| Flag                                                                               | Purpose                                                                                                                                    |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--bind -std=c++17`                                                                | Embind exports                                                                                                                             |
+| `-O3 -flto`                                                                        | Release optimisation (+ ~30–60 s link time in CI)                                                                                          |
+| `-msimd128`                                                                        | WASM SIMD128 for SAT hot paths (`projectHullOntoAxis`, `transformHullVerts`; `#ifdef __wasm_simd128__`; native `test:solver` stays scalar) |
+| `DICE_FORCE_SCALAR_SAT`                                                            | Compile-time scalar SAT path (`public/wasm-scalar/`) for SIMD parity checks and old-browser fallback                                       |
+| `-s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=64MB -s INITIAL_MEMORY=16MB` | Heap policy                                                                                                                                |
+| `-s MALLOC=emmalloc`                                                               | Smaller allocator than dlmalloc                                                                                                            |
+| `-s DISABLE_EXCEPTION_CATCHING=1 -s SUPPORT_LONGJMP=0`                             | Size; no setjmp, no catch tables                                                                                                           |
+| `-s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME=DicePhysicsModule`                 | ES module factory                                                                                                                          |
+| `-s ENVIRONMENT=web,worker,node`                                                   | Main thread, physics worker, and Node parity tooling                                                                                       |
+| `-s FILESYSTEM=0`                                                                  | No FS usage in `dice_physics.cpp`                                                                                                          |
+| `-s ABORTING_MALLOC=0`                                                             | OOM returns null under the 64 MB cap                                                                                                       |
+| `-s ASSERTIONS=0`                                                                  | Release assertions off                                                                                                                     |
 
-**Browser note:** `-msimd128` requires WASM SIMD128 (Chrome 91+, Firefox 89+, Safari 16.4+). A scalar-only artifact is available via `cd src/wasm && ./build.sh --scalar` (`public/wasm-scalar/`).
+Do **not** add `-ffast-math` or `PRECISE_F32=0` — seeded replay depends on IEEE-754. `-fno-rtti` / `-fno-exceptions` are omitted because Embind still needs RTTI and can throw on error paths.
+
+**Browser note:** `-msimd128` requires WASM SIMD128 (Chrome 91+, Firefox 89+, Safari 16.4+). The runtime probe loads the scalar artifact automatically; `cd src/wasm && ./build.sh --scalar` rebuilds only that tree.
 
 #### Debug flag set
 
-| Flag | Purpose |
-|------|---------|
-| `-O0 -g` | Fast rebuilds, source maps |
-| `-s ASSERTIONS=2 -s SAFE_HEAP=1` | Extra runtime checks |
-| (no `-msimd128`, no `-flto`) | Easier debugging |
+| Flag                             | Purpose                    |
+| -------------------------------- | -------------------------- |
+| `-O0 -g`                         | Fast rebuilds, source maps |
+| `-s ASSERTIONS=2 -s SAFE_HEAP=1` | Extra runtime checks       |
+| (no `-msimd128`, no `-flto`)     | Easier debugging           |
 
 ### Native solver tests (no browser, no Emscripten)
 
@@ -245,21 +253,21 @@ BENCH_SOLVER=1 npm run test:solver
 
 Source layout:
 
-| File                                                | Role                                                        |
-| ---------------------------------------------------- | ----------------------------------------------------------- |
-| `dice_physics_engine.hpp`                            | Thin orchestrator: `DicePhysicsEngine` class declaration + module includes |
-| `dice_physics/dice_math.hpp`                         | `Vec3`, `Quat`, `Mat3`, `PolyHull`                          |
-| `dice_physics/dice_types.hpp`                        | `RigidBody`, `Contact`, `CollisionEvent`, `StaticBody`, etc. |
-| `dice_physics/dice_sat.hpp`                          | SAT narrowphase helpers + `DeterministicRNG`                |
-| `dice_physics/dice_engine_lifecycle.hpp`             | Engine construction, per-die setters, static-collider registration |
-| `dice_physics/dice_engine_step.hpp`                  | `step()`, buffer builders, serialize/deserialize, invariant helpers |
-| `dice_physics/dice_engine_collision_static.hpp`      | Static-collider + container-plane collision resolution      |
-| `dice_physics/dice_engine_collision_dynamic.hpp`     | Die–die broadphase grid, narrowphase, and contact solver     |
-| `dice_physics/dice_engine_integrate.hpp`             | Per-body integration, table/floor collision, sleep bookkeeping |
-| `dice_physics.cpp`                                   | Emscripten Embind exports for the WASM build                |
-| `solver_tests.cpp`                                   | doctest unit + fuzz harness (`--dump-serialize`, `--bench`) |
-| `emcc_flags.inc.sh`                                  | Single source of truth for Emscripten link flags            |
-| `build_solver_test.sh`                               | Native compile + run script                                 |
+| File                                             | Role                                                                       |
+| ------------------------------------------------ | -------------------------------------------------------------------------- |
+| `dice_physics_engine.hpp`                        | Thin orchestrator: `DicePhysicsEngine` class declaration + module includes |
+| `dice_physics/dice_math.hpp`                     | `Vec3`, `Quat`, `Mat3`, `PolyHull`                                         |
+| `dice_physics/dice_types.hpp`                    | `RigidBody`, `Contact`, `CollisionEvent`, `StaticBody`, etc.               |
+| `dice_physics/dice_sat.hpp`                      | SAT narrowphase helpers + `DeterministicRNG`                               |
+| `dice_physics/dice_engine_lifecycle.hpp`         | Engine construction, per-die setters, static-collider registration         |
+| `dice_physics/dice_engine_step.hpp`              | `step()`, buffer builders, serialize/deserialize, invariant helpers        |
+| `dice_physics/dice_engine_collision_static.hpp`  | Static-collider + container-plane collision resolution                     |
+| `dice_physics/dice_engine_collision_dynamic.hpp` | Die–die broadphase grid, narrowphase, and contact solver                   |
+| `dice_physics/dice_engine_integrate.hpp`         | Per-body integration, table/floor collision, sleep bookkeeping             |
+| `dice_physics.cpp`                               | Emscripten Embind exports for the WASM build                               |
+| `solver_tests.cpp`                               | doctest unit + fuzz harness (`--dump-serialize`, `--bench`)                |
+| `emcc_flags.inc.sh`                              | Single source of truth for Emscripten link flags                           |
+| `build_solver_test.sh`                           | Native compile + run script                                                |
 
 ### Runtime flags
 
@@ -543,8 +551,7 @@ node scripts/compare-solver-bench.mjs bench-results.txt
 WASM SIMD vs scalar parity (same engine/arch, fixed-literal scenario):
 
 ```bash
-npm run build:wasm
-cd src/wasm && ./build.sh --scalar   # → public/wasm-scalar/
+npm run build:wasm                 # SIMD + scalar artifacts
 node scripts/compare-solver-simd.mjs
 ```
 

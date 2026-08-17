@@ -1,5 +1,12 @@
 # emcc_flags.inc.sh — Single source of truth for Emscripten compile/link flags.
 # Sourced by build.sh, build_colab.sh, and emcc_flags.sh (--print-link-line for CMake).
+#
+# Determinism: do not add -ffast-math or PRECISE_F32=0 — seeded replay is IEEE-754.
+# -fno-rtti is omitted: Embind on EMSDK 3.1.61 still requires RTTI.
+# -fno-exceptions is omitted: Embind error paths can throw; DISABLE_EXCEPTION_CATCHING=1
+# still strips catch tables in release.
+
+EMCC_INITIAL_MEMORY="16MB"
 
 EMCC_COMMON=(
     --bind
@@ -7,6 +14,10 @@ EMCC_COMMON=(
     -s WASM=1
     -s ALLOW_MEMORY_GROWTH=1
     -s MAXIMUM_MEMORY=64MB
+    -s INITIAL_MEMORY=16MB
+    -s MALLOC=emmalloc
+    -s DISABLE_EXCEPTION_CATCHING=1
+    -s SUPPORT_LONGJMP=0
     -s MODULARIZE=1
     -s EXPORT_ES6=1
     -s "EXPORT_NAME=DicePhysicsModule"

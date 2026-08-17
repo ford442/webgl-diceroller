@@ -30,6 +30,7 @@
         "verify:wasm-interaction": "node scripts/verify-wasm-interaction.mjs",
         "verify:render-regression": "node scripts/render-regression.mjs && node scripts/compare-render-baseline.mjs",
         "verify:renderer-factory": "tsx scripts/verify-renderer-factory.mjs",
+        "test:simd-support": "node tests/simd-support.test.mjs",
         "typecheck": "tsc --noEmit",
         "typecheck:strict": "tsc -p tsconfig.strict.json --noEmit",
         "lint": "eslint .",

@@ -25,7 +25,10 @@ export interface PostConfig {
 
 export interface RendererState {
     renderer?: import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer;
-    composer?: ComposerLike | import('three/examples/jsm/postprocessing/EffectComposer.js').EffectComposer | null;
+    composer?:
+        | ComposerLike
+        | import('three/examples/jsm/postprocessing/EffectComposer.js').EffectComposer
+        | null;
     postConfig?: PostConfig;
     postProcessing?: unknown;
     postPipeline?: unknown;
@@ -35,6 +38,8 @@ export interface RendererState {
     rendererType?: 'webgl' | 'webgpu' | string;
     requestedRenderer?: string;
     fallbackReason?: string | null;
+    gpuLimitNote?: string | null;
+    xrCompatible?: boolean;
     pixelRatio?: number;
     pixelRatioForced?: boolean;
     antialias?: boolean;
@@ -67,7 +72,9 @@ export interface TierLoadCallbacks {
     setLampData?: (data: unknown) => void;
     setGongData?: (data: unknown) => void;
     setCandleFlamePos?: (pos: import('three').Vector3) => void;
-    setInteraction?: (interaction: ReturnType<typeof import('../interaction.js').initInteraction>) => void;
+    setInteraction?: (
+        interaction: ReturnType<typeof import('../interaction.js').initInteraction>
+    ) => void;
     onDiceCupInteract?: () => void;
     getDiceCupState?: () => { available: boolean; state: string };
     interactionHooks?: import('./interaction.d.ts').InteractionHooks;
@@ -85,7 +92,10 @@ export interface AdaptiveQualityState {
     scene: import('three').Scene;
     renderer: import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer;
     postConfig: PostConfig;
-    composer?: ComposerLike | import('three/examples/jsm/postprocessing/EffectComposer.js').EffectComposer | null;
+    composer?:
+        | ComposerLike
+        | import('three/examples/jsm/postprocessing/EffectComposer.js').EffectComposer
+        | null;
     spotLight?: import('three').SpotLight;
     rendererState?: RendererState;
 }
@@ -105,7 +115,8 @@ export interface RenderStatsConfig {
     scene: import('three').Scene;
     scheduler: import('../core/FrameScheduler.js').FrameScheduler;
     cullingSystem?: import('../core/CullingSystem.js').CullingSystem | null;
-    getRenderer?: () => import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer | null;
+    getRenderer?: () =>
+        import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer | null;
     getRendererState?: () => RendererState | null;
     getPost?: () => PostConfig | null;
     getGovernor?: () => Record<string, unknown> | null;
@@ -124,7 +135,10 @@ export interface MotionProfileDeps {
     postConfig: PostConfig;
     postRuntime: PostRuntimeControls;
     appliedProfile?: { godRaysEnabled?: boolean; shadowLights?: string } | null;
-    runtimeGovernor?: { setDisabled?: (disabled: boolean) => void; refreshBaselineFromProfile?: (profile: unknown) => void } | null;
+    runtimeGovernor?: {
+        setDisabled?: (disabled: boolean) => void;
+        refreshBaselineFromProfile?: (profile: unknown) => void;
+    } | null;
     diceGameFeel?: { setMotionBlurAllowed?: (allowed: boolean) => void } | null;
 }
 
@@ -132,7 +146,10 @@ export interface SceneSetupResult {
     scene: import('three').Scene;
     camera: import('three').PerspectiveCamera;
     renderer: import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer;
-    composer: ComposerLike | import('three/examples/jsm/postprocessing/EffectComposer.js').EffectComposer | null;
+    composer:
+        | ComposerLike
+        | import('three/examples/jsm/postprocessing/EffectComposer.js').EffectComposer
+        | null;
     pointLight: import('three').PointLight;
     spotLight: import('three').SpotLight;
     postConfig: PostConfig;

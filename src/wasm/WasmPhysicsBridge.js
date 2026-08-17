@@ -19,6 +19,7 @@
 import { publicAssetUrl } from '../core/publicAssetUrl.js';
 import { parsePhysicsFlags } from './physicsFlags.js';
 import { parseCollisionEventBuffer } from './collisionEvents.js';
+import { instantiateDicePhysicsModule, WASM_SCALAR_DIR } from './wasmArtifact.js';
 
 // ---------------------------------------------------------------------------
 // No-op stub
@@ -92,18 +93,16 @@ export const loadWasmEngine = async () => {
     }
 
     try {
-        const dynamicImport = new Function('u', 'return import(u)');
-        const moduleFactory = await dynamicImport(publicAssetUrl('wasm/dice_physics.js'));
-        // UMD Emscripten output: try .default first, then the module itself
-        const ModuleFactory = moduleFactory.default || moduleFactory;
-        const Module = await ModuleFactory();
+        const { Module, dir } = await instantiateDicePhysicsModule({
+            searchParams: _searchParams,
+        });
 
         _moduleClass = Module;
         _engine = new Module.DicePhysicsEngine();
         _engine.setFlags(parsePhysicsFlags(_searchParams));
         _available = true;
 
-        // Pre-load hulls.json for fast die registration
+        // Hulls live next to the SIMD artifact; the scalar build does not duplicate them.
         try {
             const res = await fetch(publicAssetUrl('wasm/hulls.json'));
             if (res.ok) _hulls = await res.json();
@@ -111,7 +110,8 @@ export const loadWasmEngine = async () => {
             console.warn('[WasmPhysics] Could not load hulls.json:', e);
         }
 
-        console.log('[WasmPhysics] WASM dice physics engine loaded successfully.');
+        const simdLabel = dir === WASM_SCALAR_DIR ? 'scalar' : 'SIMD';
+        console.log(`[WasmPhysics] WASM dice physics engine loaded (${simdLabel} artifact).`);
         console.log('[WasmPhysics] Run `npm run build:wasm` to rebuild after C++ changes.');
     } catch (err) {
         const hint =
