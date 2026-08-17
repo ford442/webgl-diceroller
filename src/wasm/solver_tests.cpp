@@ -244,6 +244,41 @@ TEST_CASE("Determinism: same seed yields identical serialize output") {
     CHECK(a.serializeState() == b.serializeState());
 }
 
+TEST_CASE("Static box: die bounces off wall without tunneling") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    PolyHull cube = makeUnitCubeHull();
+    auto cubeFlat = flattenHull(cube);
+
+    const float wallX = 2.0f;
+    const float wallHalfX = 0.25f;
+    const float wallHalfY = 1.5f;
+    const float wallHalfZ = 2.0f;
+    CHECK(engine.addStaticBox(1, wallX, -1.5f, 0.0f, wallHalfX, wallHalfY, wallHalfZ,
+        0.0f, 0.0f, 0.0f, 1.0f, 2) == 1);
+
+    const int id = engine.addDie(6, -2.0f, -1.0f, 0.0f);
+    engine.setDieHull(id, cubeFlat);
+    engine.applyImpulse(id, 80.0f, 2.0f, 0.0f);
+    engine.applyTorqueImpulse(id, 5.0f, 0.0f, 8.0f);
+
+    float maxX = -1e9f;
+    for (int frame = 0; frame < 360; ++frame) {
+        engine.step(1.0f / 60.0f);
+        CHECK(engine.allBodyStatesFinite());
+        float x = 0.0f;
+        float y = 0.0f;
+        float z = 0.0f;
+        CHECK(engine.getDiePosition(id, x, y, z));
+        maxX = std::max(maxX, x);
+    }
+
+    const float wallFaceX = wallX - wallHalfX;
+    CHECK(maxX < wallFaceX + 0.15f);
+    CHECK(maxX > wallFaceX - 1.0f);
+    CHECK(engine.areAllSettled());
+}
+
 TEST_CASE("Open cylinder: die falls in and settles inside walls") {
     DicePhysicsEngine engine;
     engine.init(-15.0f, -2.75f, 18.0f, 18.0f);

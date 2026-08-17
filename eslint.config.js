@@ -135,4 +135,39 @@ export default [
         },
     },
     eslintConfigPrettier,
+    {
+        files: ['src/environment/**/*.js'],
+        ignores: [
+            'src/environment/PropPhysics.js',
+            'src/environment/PropLifecycle.js',
+            'src/environment/propKit.js',
+        ],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    paths: [
+                        {
+                            name: './PropPhysics.js',
+                            message:
+                                'Use createProp + declarative colliders from propKit.js instead of PropPhysics.',
+                        },
+                        {
+                            name: '../environment/PropPhysics.js',
+                            message:
+                                'Use createProp + declarative colliders from propKit.js instead of PropPhysics.',
+                        },
+                        {
+                            name: '../physics.js',
+                            message: 'Props must not import physics.js — use propKit/StaticColliderBridge.',
+                        },
+                        {
+                            name: '../../physics.js',
+                            message: 'Props must not import physics.js — use propKit/StaticColliderBridge.',
+                        },
+                    ],
+                },
+            ],
+        },
+    },
 ];
