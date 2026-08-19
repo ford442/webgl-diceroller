@@ -44,6 +44,7 @@ const SEMANTIC_TAGS = {
         'Amulet',
         'DragonScale',
         'PotionSet',
+        'MysticTome',
     ],
     treasure: ['Coin', 'CoinPouch', 'Gemstones', 'Crown', 'Chalice', 'Amulet', 'Bone'],
     food: ['TavernMeal', 'CheeseWheel', 'Apple'],
