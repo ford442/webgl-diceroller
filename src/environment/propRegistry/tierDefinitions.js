@@ -545,6 +545,7 @@ export const TIER_PROP_DEFINITIONS = {
                 if (result?.update) ctx.registerUpdate('cauldron', result.update);
             },
         }),
+        factoryEntry('MysticTome', { randomPool: true }),
     ],
 };
 
