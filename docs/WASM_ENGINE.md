@@ -133,11 +133,11 @@ heap buffer.
 
 Each double-buffer slot contains, per die index `i`:
 
-| Region | Type | Stride | Notes |
-| ------ | ---- | ------ | ----- |
-| `ids[i]` | `f32` | 1 | WASM die id |
-| `transforms[i]` | `f32` | 7 | `px,py,pz,qx,qy,qz,qw` |
-| `faceValues[i]` | `i32` | 1 | Settled face value (`0` while moving) |
+| Region          | Type  | Stride | Notes                                 |
+| --------------- | ----- | ------ | ------------------------------------- |
+| `ids[i]`        | `f32` | 1      | WASM die id                           |
+| `transforms[i]` | `f32` | 7      | `px,py,pz,qx,qy,qz,qw`                |
+| `faceValues[i]` | `i32` | 1      | Settled face value (`0` while moving) |
 
 Face values are computed in C++ from the rigid-body quaternion and a per-die face
 table uploaded via `setDieFaceTable`. **d4** uses the **bottom** face (minimum
@@ -277,24 +277,24 @@ BENCH_SOLVER=1 npm run test:solver
 
 Source layout:
 
-| File                                             | Role                                                                       |
-| ------------------------------------------------ | -------------------------------------------------------------------------- |
-| `dice_physics_engine.hpp`                        | `DicePhysicsEngine` class declaration only — no inline definitions        |
-| `dice_physics/dice_math.hpp`                     | `Vec3`, `Quat`, `Mat3`, `PolyHull`                                         |
-| `dice_physics/dice_types.hpp`                    | `RigidBody`, `Contact`, `CollisionEvent`, `StaticBody`, etc.               |
-| `dice_physics/dice_sat.hpp`                      | SAT narrowphase helpers + `DeterministicRNG` (header-only; shared by multiple TUs) |
-| `dice_physics/dice_engine_lifecycle.cpp`         | Engine construction, per-die setters, static-collider registration         |
-| `dice_physics/dice_engine_step.cpp`              | `step()`, buffer builders, serialize/deserialize, invariant helpers        |
-| `dice_physics/dice_engine_collision_static.cpp`  | Static-collider + container-plane collision resolution                     |
-| `dice_physics/dice_engine_collision_dynamic.cpp` | Die–die broadphase grid, narrowphase, and contact solver                   |
-| `dice_physics/dice_engine_integrate.cpp`         | Per-body integration, table/floor collision, sleep bookkeeping             |
-| `dice_physics/dice_engine_face_value.cpp`        | Engine-authoritative die face settlement                                   |
-| `dice_physics.cpp`                               | Emscripten Embind exports for the WASM build (links against the `.cpp` files above) |
+| File                                             | Role                                                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `dice_physics_engine.hpp`                        | `DicePhysicsEngine` class declaration only — no inline definitions                                     |
+| `dice_physics/dice_math.hpp`                     | `Vec3`, `Quat`, `Mat3`, `PolyHull`                                                                     |
+| `dice_physics/dice_types.hpp`                    | `RigidBody`, `Contact`, `CollisionEvent`, `StaticBody`, etc.                                           |
+| `dice_physics/dice_sat.hpp`                      | SAT narrowphase helpers + `DeterministicRNG` (header-only; shared by multiple TUs)                     |
+| `dice_physics/dice_engine_lifecycle.cpp`         | Engine construction, per-die setters, static-collider registration                                     |
+| `dice_physics/dice_engine_step.cpp`              | `step()`, buffer builders, serialize/deserialize, invariant helpers                                    |
+| `dice_physics/dice_engine_collision_static.cpp`  | Static-collider + container-plane collision resolution                                                 |
+| `dice_physics/dice_engine_collision_dynamic.cpp` | Die–die broadphase grid, narrowphase, and contact solver                                               |
+| `dice_physics/dice_engine_integrate.cpp`         | Per-body integration, table/floor collision, sleep bookkeeping                                         |
+| `dice_physics/dice_engine_face_value.cpp`        | Engine-authoritative die face settlement                                                               |
+| `dice_physics.cpp`                               | Emscripten Embind exports for the WASM build (links against the `.cpp` files above)                    |
 | `solver_tests.cpp`                               | doctest unit + fuzz harness (`--dump-serialize`, `--bench`); also links against the `.cpp` files above |
-| `emcc_flags.inc.sh`                              | Single source of truth for Emscripten link flags                           |
-| `build_solver_test.sh`                           | Native compile + run script; always writes `build-native/compile_commands.json` |
-| `.clangd`                                        | Points clangd at `build-native/compile_commands.json`                      |
-| `CMakeLists.txt`                                 | Local IDE / advanced-user build (SIMD + scalar targets) — **not** the CI build; see below |
+| `emcc_flags.inc.sh`                              | Single source of truth for Emscripten link flags                                                       |
+| `build_solver_test.sh`                           | Native compile + run script; always writes `build-native/compile_commands.json`                        |
+| `.clangd`                                        | Points clangd at `build-native/compile_commands.json`                                                  |
+| `CMakeLists.txt`                                 | Local IDE / advanced-user build (SIMD + scalar targets) — **not** the CI build; see below              |
 
 `build.sh`, `build_solver_test.sh`, and `CMakeLists.txt` each list the same
 `dice_physics/dice_engine_*.cpp` sources independently — keep the three
@@ -441,15 +441,15 @@ const engine = getWasmEngine();
 
 #### Die management
 
-| Method         | Signature                           | Description                                             |
-| -------------- | ----------------------------------- | ------------------------------------------------------- |
-| `addDie`       | `(sides, x, y, z): i32`             | Spawn a die. Returns unique ID (or -1 at max capacity). |
-| `removeDie`    | `(id): void`                        | Remove a die by ID.                                     |
-| `clearAllDice` | `(): void`                          | Remove all dice.                                        |
-| `setDieHull`       | `(id, vertices: VectorFloat): void` | Attach convex hull vertices (flat `[x,y,z,…]`).         |
-| `setDieFaceTable`  | `(id, packed: VectorFloat): void`   | Upload face normals + values (`nx,ny,nz,value × N`).    |
-| `getDieFaceValue`  | `(id): i32`                         | Settled face value for one die (`0` while moving).      |
-| `getFaceValues`    | `(): Int32Array view`               | Parallel buffer aligned with `getDieIds()` / transforms.  |
+| Method            | Signature                           | Description                                              |
+| ----------------- | ----------------------------------- | -------------------------------------------------------- |
+| `addDie`          | `(sides, x, y, z): i32`             | Spawn a die. Returns unique ID (or -1 at max capacity).  |
+| `removeDie`       | `(id): void`                        | Remove a die by ID.                                      |
+| `clearAllDice`    | `(): void`                          | Remove all dice.                                         |
+| `setDieHull`      | `(id, vertices: VectorFloat): void` | Attach convex hull vertices (flat `[x,y,z,…]`).          |
+| `setDieFaceTable` | `(id, packed: VectorFloat): void`   | Upload face normals + values (`nx,ny,nz,value × N`).     |
+| `getDieFaceValue` | `(id): i32`                         | Settled face value for one die (`0` while moving).       |
+| `getFaceValues`   | `(): Int32Array view`               | Parallel buffer aligned with `getDieIds()` / transforms. |
 
 #### Forces
 

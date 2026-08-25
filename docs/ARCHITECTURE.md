@@ -26,17 +26,17 @@ main.js
 
 [`AppEvents.js`](../src/core/AppEvents.js) is a tiny synchronous pub/sub. Documented event names (`AppEvent`):
 
-| Event             | Payload (typical)                        | Producers                                | Consumers                                                       |
-| ----------------- | ---------------------------------------- | ---------------------------------------- | --------------------------------------------------------------- |
-| `roll:started`    | `{ seed, expression, diceSet, source? }` | `beginRoll`, UI roll, cup pour, notation | RoomSession host broadcast                                      |
-| `roll:settled`    | `{ results }`                            | Camera focus settle                      | Results HUD, history / fairness / game-feel / session strip     |
-| `roll:evaluated`  | `{ result }`                             | Notation `RollSession` onComplete        | XR world HUD, session strip                                     |
-| `session:initiative` | `{ order, currentIndex }`              | SessionWiring                            | Session strip                                                   |
-| `session:turn`    | `{ actorId, actorName, direction }`    | Session strip pass turn                  | Session strip                                                   |
-| `dice:collision`  | Enriched collision event                 | `postPhysicsSync` poll                   | Collision audio, game-feel; optional `__onDiceCollision` bridge |
-| `renderer:lost`   | `{ reason, … }`                          | GPU context/device loss                  | (open)                                                          |
-| `layout:rerolled` | Layout manager result                    | Layout reroll                            | (open)                                                          |
-| `app:ready`       | `{ ready: true }`                        | Loading tiers finalize                   | (open)                                                          |
+| Event                | Payload (typical)                        | Producers                                | Consumers                                                       |
+| -------------------- | ---------------------------------------- | ---------------------------------------- | --------------------------------------------------------------- |
+| `roll:started`       | `{ seed, expression, diceSet, source? }` | `beginRoll`, UI roll, cup pour, notation | RoomSession host broadcast                                      |
+| `roll:settled`       | `{ results }`                            | Camera focus settle                      | Results HUD, history / fairness / game-feel / session strip     |
+| `roll:evaluated`     | `{ result }`                             | Notation `RollSession` onComplete        | XR world HUD, session strip                                     |
+| `session:initiative` | `{ order, currentIndex }`                | SessionWiring                            | Session strip                                                   |
+| `session:turn`       | `{ actorId, actorName, direction }`      | Session strip pass turn                  | Session strip                                                   |
+| `dice:collision`     | Enriched collision event                 | `postPhysicsSync` poll                   | Collision audio, game-feel; optional `__onDiceCollision` bridge |
+| `renderer:lost`      | `{ reason, … }`                          | GPU context/device loss                  | (open)                                                          |
+| `layout:rerolled`    | Layout manager result                    | Layout reroll                            | (open)                                                          |
+| `app:ready`          | `{ ready: true }`                        | Loading tiers finalize                   | (open)                                                          |
 
 Collision audio and the settled results overlay subscribe via events; the live per-frame dice HUD still updates on the scheduler (60 Hz reads are a poor fit for pub/sub).
 
