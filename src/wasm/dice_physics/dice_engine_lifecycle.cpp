@@ -32,6 +32,7 @@ void DicePhysicsEngine::init(float gravity, float tableY, float tableHalfW, floa
 
 void DicePhysicsEngine::reset() {
     bodies_.clear(); contacts_.clear(); events_.clear(); statics_.clear(); nextId_ = 0;
+    staticCapacityDroppedCount_ = 0;
 }
 
 int DicePhysicsEngine::addDie(int sides, float x, float y, float z) {

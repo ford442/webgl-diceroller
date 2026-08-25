@@ -500,6 +500,17 @@ TEST_CASE("Static capacity: exceeding MAX_STATICS reports drops instead of silen
     // (e.g. rebuilding table bounds on layout reroll).
     engine.clearStatics();
     CHECK(engine.getStaticCapacityDroppedCount() == 0);
+
+    // reset() also clears the static registry (bodies_, contacts_, events_,
+    // statics_, nextId_) and must reset the drop counter along with it, or a
+    // subsequent registration pass inherits a stale nonzero count.
+    for (int i = 1; i <= OVER_CAP; ++i) {
+        engine.addStaticBox(i, static_cast<float>(i) * 4.0f, -1.5f, 0.0f, 1.5f, 1.5f, 1.5f,
+            0.0f, 0.0f, 0.0f, 1.0f, 2);
+    }
+    CHECK(engine.getStaticCapacityDroppedCount() == static_cast<uint32_t>(OVER_CAP - 512));
+    engine.reset();
+    CHECK(engine.getStaticCapacityDroppedCount() == 0);
 }
 
 TEST_CASE("Broadphase grid matches brute-force pair set and serialize state") {
