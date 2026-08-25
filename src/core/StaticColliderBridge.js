@@ -3,9 +3,28 @@ import { createStaticBody, getAmmo } from '../physics.js';
 import { destroyPhysicsBody } from '../environment/PropLifecycle.js';
 import {
     addStaticCollider as wasmAddStaticCollider,
+    getWasmEngine,
     isWasmAvailable,
     removeStaticCollider as wasmRemoveStaticCollider,
 } from '../wasm/PhysicsBridge.js';
+
+// getStaticCapacityDroppedCount() is only synchronously meaningful on the
+// non-worker bridge (worker addStatic* commands are fire-and-forget and
+// always return -1) — undefined there, so this stays silent on the default
+// worker path. Warn once per new drop rather than once per collider so a
+// dense layout doesn't spam the console.
+let lastWarnedStaticCapacityDropped = 0;
+
+function warnOnStaticCapacityDrop(anchor) {
+    const dropped = getWasmEngine?.()?.getStaticCapacityDroppedCount?.();
+    if (!dropped || dropped <= lastWarnedStaticCapacityDropped) return;
+    lastWarnedStaticCapacityDropped = dropped;
+    const label = anchor?.name || anchor?.userData?.propName || 'unknown prop';
+    console.warn(
+        `StaticColliderBridge: MAX_STATICS capacity reached — ${dropped} static ` +
+            `collider(s) dropped so far (most recently while registering "${label}").`
+    );
+}
 
 /** @typedef {import('../types/staticCollider').StaticColliderSpec} StaticColliderSpec */
 
@@ -89,8 +108,7 @@ function buildAmmoShape(ammo, spec) {
         }
         case 'cylinder':
         case 'openCylinder': {
-            const halfHeight =
-                spec.halfHeight ?? (spec.height != null ? spec.height / 2 : 0);
+            const halfHeight = spec.halfHeight ?? (spec.height != null ? spec.height / 2 : 0);
             const halfExtents = new ammo.btVector3(spec.radius, halfHeight, spec.radius);
             const shape = new ammo.btCylinderShape(halfExtents);
             ammo.destroy(halfExtents);
@@ -191,6 +209,7 @@ export function createStaticCollider(physicsWorld, anchor, spec) {
             attachWasmIdToAnchor(anchor, wasmId);
             if (!first) first = { wasmId };
         }
+        warnOnStaticCapacityDrop(anchor);
         return first;
     }
 

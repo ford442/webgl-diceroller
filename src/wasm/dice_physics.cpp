@@ -55,6 +55,7 @@ EMSCRIPTEN_BINDINGS(dice_physics) {
         .function("step",              &DicePhysicsEngine::step)
         .function("getDieCount",       &DicePhysicsEngine::getDieCount)
         .function("getLastStepStats",  &DicePhysicsEngine::getLastStepStats)
+        .function("getStaticCapacityDroppedCount", &DicePhysicsEngine::getStaticCapacityDroppedCount)
         .function("areAllSettled",     &DicePhysicsEngine::areAllSettled)
         .function("getTransforms",     +[](DicePhysicsEngine& e) {
             const auto& buf = e.buildTransformBuffer();

@@ -150,7 +150,7 @@ Post flags (`?no-post`, `?low-post`, `?no-bloom`, `?no-godrays`) apply to both p
 
 Bridges: [`WasmPhysicsBridge.js`](../src/wasm/WasmPhysicsBridge.js), [`WorkerPhysicsBridge.js`](../src/wasm/WorkerPhysicsBridge.js). Dice ammo helpers: [`AmmoDiceBackend.js`](../src/dice/AmmoDiceBackend.js) (lazy-loaded). Flags: `?no-wasm` (sole physics escape hatch), `?worker-physics` — see AGENTS.md and WASM_ENGINE.md.
 
-Declarative static colliders go through `StaticColliderBridge` (WASM when available, ammo otherwise); the remaining hand-built prop shapes go through `environment/PropPhysics.js` and exist only when ammo is loaded. Moving them into WASM is tracked in [issue #237](https://github.com/ford442/webgl-diceroller/issues/237).
+Declarative static colliders go through `StaticColliderBridge` (WASM when available, ammo otherwise); the remaining hand-built prop shapes go through `environment/PropPhysics.js` and exist only when ammo is loaded (WASM static-collider support landed in [issue #237](https://github.com/ford442/webgl-diceroller/issues/237), closed). `DicePhysicsEngine::MAX_STATICS` (512, see [`WASM_ENGINE.md`](WASM_ENGINE.md)) caps the WASM static registry; `addStaticBox`/etc. report drops past that cap via `getStaticCapacityDroppedCount()` rather than silently no-op'ing.
 
 ## Key directories
 

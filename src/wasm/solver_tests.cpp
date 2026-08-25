@@ -425,6 +425,83 @@ TEST_CASE("Open cylinder: die falls in and settles inside walls") {
     CHECK(engine.areAllSettled());
 }
 
+TEST_CASE("Static capacity: raised cap accepts and collides beyond legacy 128") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+
+    // A dense table layout (tower + table bounds + jail/tray/bookshelf
+    // compounds + clutter) can easily register more than the old
+    // MAX_STATICS = 128. Register well past that to prove the raised cap
+    // (512) actually accepts them rather than silently dropping past 128.
+    // Decoys sit far outside the table's own wall bounds (tableHalfW/D = 18,
+    // enforced on dice regardless of static geometry) so they never interact
+    // with the die below; only the interleaved target box (registered at
+    // index 250, well past the old cap) does.
+    const int NUM_STATICS = 300;
+    const int targetIndex = 250;
+    for (int i = 1; i <= NUM_STATICS; ++i) {
+        if (i == targetIndex) {
+            CHECK(engine.addStaticBox(i, 0.0f, -1.5f, 0.0f, 1.5f, 1.5f, 1.5f,
+                0.0f, 0.0f, 0.0f, 1.0f, 2) == i);
+        } else {
+            CHECK(engine.addStaticBox(i, 500.0f, -1.5f, 500.0f, 1.5f, 1.5f, 1.5f,
+                0.0f, 0.0f, 0.0f, 1.0f, 2) == i);
+        }
+    }
+    CHECK(engine.getStaticCapacityDroppedCount() == 0);
+
+    // A collider registered well past the legacy 128-cap must still collide,
+    // not just be accepted into the list.
+    PolyHull cube = makeUnitCubeHull();
+    auto cubeFlat = flattenHull(cube);
+    const int id = engine.addDie(6, 0.0f, 5.0f, 0.0f);
+    engine.setDieHull(id, cubeFlat);
+
+    float yAt200 = 0.0f;
+    for (int frame = 0; frame < 300; ++frame) {
+        engine.step(1.0f / 60.0f);
+        CHECK(engine.allBodyStatesFinite());
+        if (frame == 199) {
+            float x = 0.0f, z = 0.0f;
+            CHECK(engine.getDiePosition(id, x, yAt200, z));
+        }
+    }
+
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    CHECK(engine.getDiePosition(id, x, y, z));
+    // Box #250's top face is at y = -1.5 + 1.5 = 0; the die should rest
+    // there, well above the table floor (tableY = -2.75), proving box #250
+    // (not the table plane fallback) actually caught it. Compare against an
+    // earlier checkpoint (rather than asserting areAllSettled(), which a
+    // perfectly symmetric plumb-line drop can starve — the resting body's
+    // single-point SAT contact keeps a small pitch/roll energy alive without
+    // ever translating) to confirm it is resting, not still falling.
+    CHECK(y > -1.0f);
+    CHECK(y < 2.0f);
+    CHECK(std::abs(y - yAt200) < 0.5f);
+}
+
+TEST_CASE("Static capacity: exceeding MAX_STATICS reports drops instead of silent failure") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+
+    const int OVER_CAP = 520; // MAX_STATICS == 512
+    int successes = 0;
+    for (int i = 1; i <= OVER_CAP; ++i) {
+        const float x = static_cast<float>(i) * 4.0f;
+        const int result = engine.addStaticBox(i, x, -1.5f, 0.0f, 1.5f, 1.5f, 1.5f,
+            0.0f, 0.0f, 0.0f, 1.0f, 2);
+        if (result >= 0) successes++;
+    }
+    CHECK(successes == 512);
+    CHECK(engine.getStaticCapacityDroppedCount() == static_cast<uint32_t>(OVER_CAP - 512));
+
+    // clearStatics() resets the counter for a fresh registration pass
+    // (e.g. rebuilding table bounds on layout reroll).
+    engine.clearStatics();
+    CHECK(engine.getStaticCapacityDroppedCount() == 0);
+}
+
 TEST_CASE("Broadphase grid matches brute-force pair set and serialize state") {
     PolyHull cube = makeUnitCubeHull();
     auto cubeFlat = flattenHull(cube);
