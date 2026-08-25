@@ -11,14 +11,17 @@ import {
 // getStaticCapacityDroppedCount() is only synchronously meaningful on the
 // non-worker bridge (worker addStatic* commands are fire-and-forget and
 // always return -1) — undefined there, so this stays silent on the default
-// worker path. Warn once per new drop rather than once per collider so a
-// dense layout doesn't spam the console.
-let lastWarnedStaticCapacityDropped = 0;
+// worker path. Track the last-seen count (not a monotonic high-water-mark)
+// so a clearStatics()/init() reset (e.g. a table-layout reroll) re-arms the
+// warning instead of a lower post-reset count being suppressed forever by a
+// higher count from a previous registration pass.
+let lastSeenStaticCapacityDropped = 0;
 
 function warnOnStaticCapacityDrop(anchor) {
-    const dropped = getWasmEngine?.()?.getStaticCapacityDroppedCount?.();
-    if (!dropped || dropped <= lastWarnedStaticCapacityDropped) return;
-    lastWarnedStaticCapacityDropped = dropped;
+    const dropped = getWasmEngine?.()?.getStaticCapacityDroppedCount?.() ?? 0;
+    if (dropped === lastSeenStaticCapacityDropped) return;
+    lastSeenStaticCapacityDropped = dropped;
+    if (!dropped) return;
     const label = anchor?.name || anchor?.userData?.propName || 'unknown prop';
     console.warn(
         `StaticColliderBridge: MAX_STATICS capacity reached — ${dropped} static ` +
