@@ -1,26 +1,23 @@
 /**
- * dice_engine_lifecycle.hpp — DicePhysicsEngine construction, per-die setters,
+ * dice_engine_lifecycle.cpp — DicePhysicsEngine construction, per-die setters,
  * and static-collider registration.
- *
- * Part of the dice_physics_engine module split; included by
- * dice_physics_engine.hpp after the class declaration.
  */
 
-#pragma once
+#include "../dice_physics_engine.hpp"
 
 #include <algorithm>
 #include <cmath>
 
 namespace dice_physics {
 
-inline DicePhysicsEngine::DicePhysicsEngine()
+DicePhysicsEngine::DicePhysicsEngine()
     : gravity_(-15.0f), tableY_(-2.75f), tableHalfW_(18.0f), tableHalfD_(18.0f), nextId_(0) {}
 
-inline void DicePhysicsEngine::setFlags(uint32_t flags) {
+void DicePhysicsEngine::setFlags(uint32_t flags) {
     noDrag_ = (flags & FLAG_NO_DRAG) != 0;
 }
 
-inline void DicePhysicsEngine::init(float gravity, float tableY, float tableHalfW, float tableHalfD) {
+void DicePhysicsEngine::init(float gravity, float tableY, float tableHalfW, float tableHalfD) {
     gravity_ = gravity; tableY_ = tableY;
     tableHalfW_ = tableHalfW; tableHalfD_ = tableHalfD;
     bodies_.clear(); contacts_.clear(); events_.clear();
@@ -30,13 +27,15 @@ inline void DicePhysicsEngine::init(float gravity, float tableY, float tableHalf
     gridRows_ = 0;
     dieGridCells_.clear();
     lastStepStats_ = {};
+    staticCapacityDroppedCount_ = 0;
 }
 
-inline void DicePhysicsEngine::reset() {
+void DicePhysicsEngine::reset() {
     bodies_.clear(); contacts_.clear(); events_.clear(); statics_.clear(); nextId_ = 0;
+    staticCapacityDroppedCount_ = 0;
 }
 
-inline int DicePhysicsEngine::addDie(int sides, float x, float y, float z) {
+int DicePhysicsEngine::addDie(int sides, float x, float y, float z) {
     if (bodies_.size() >= static_cast<size_t>(MAX_DICE)) return -1;
     if (std::isnan(x) || std::isnan(y) || std::isnan(z)) return -1;
     RigidBody b;
@@ -52,16 +51,16 @@ inline int DicePhysicsEngine::addDie(int sides, float x, float y, float z) {
     return b.id;
 }
 
-inline void DicePhysicsEngine::removeDie(int id) {
+void DicePhysicsEngine::removeDie(int id) {
     bodies_.erase(
         std::remove_if(bodies_.begin(), bodies_.end(),
             [id](const RigidBody& b) { return b.id == id; }),
         bodies_.end());
 }
 
-inline void DicePhysicsEngine::clearAllDice() { bodies_.clear(); contacts_.clear(); events_.clear(); }
+void DicePhysicsEngine::clearAllDice() { bodies_.clear(); contacts_.clear(); events_.clear(); }
 
-inline void DicePhysicsEngine::setDieMaterial(int id, float friction, float rollingFriction) {
+void DicePhysicsEngine::setDieMaterial(int id, float friction, float rollingFriction) {
     for (auto& b : bodies_) {
         if (b.id != id) continue;
         b.friction = std::clamp(friction, 0.0f, 2.0f);
@@ -70,7 +69,7 @@ inline void DicePhysicsEngine::setDieMaterial(int id, float friction, float roll
     }
 }
 
-inline void DicePhysicsEngine::setDieDrag(int id, float dragFactor) {
+void DicePhysicsEngine::setDieDrag(int id, float dragFactor) {
     for (auto& b : bodies_) {
         if (b.id != id) continue;
         b.dragFactor = std::max(0.0f, dragFactor);
@@ -78,7 +77,7 @@ inline void DicePhysicsEngine::setDieDrag(int id, float dragFactor) {
     }
 }
 
-inline void DicePhysicsEngine::setDieHull(int id, const std::vector<float>& flatVerts) {
+void DicePhysicsEngine::setDieHull(int id, const std::vector<float>& flatVerts) {
     if (flatVerts.size() % 3 != 0) return;
     if (flatVerts.size() / 3 > MAX_VERTICES_PER_HULL) return;
     for (auto& b : bodies_) {
@@ -97,7 +96,7 @@ inline void DicePhysicsEngine::setDieHull(int id, const std::vector<float>& flat
     }
 }
 
-inline void DicePhysicsEngine::applyImpulse(int id, float fx, float fy, float fz) {
+void DicePhysicsEngine::applyImpulse(int id, float fx, float fy, float fz) {
     for (auto& b : bodies_) {
         if (b.id != id) continue;
         b.velocity += Vec3{fx, fy, fz} * b.invMass;
@@ -106,7 +105,7 @@ inline void DicePhysicsEngine::applyImpulse(int id, float fx, float fy, float fz
     }
 }
 
-inline void DicePhysicsEngine::applyTorqueImpulse(int id, float tx, float ty, float tz) {
+void DicePhysicsEngine::applyTorqueImpulse(int id, float tx, float ty, float tz) {
     for (auto& b : bodies_) {
         if (b.id != id) continue;
         b.angularVelocity += b.applyInvInertiaWorld(Vec3{tx, ty, tz});
@@ -115,7 +114,7 @@ inline void DicePhysicsEngine::applyTorqueImpulse(int id, float tx, float ty, fl
     }
 }
 
-inline void DicePhysicsEngine::setDieTransform(int id, float px, float py, float pz,
+void DicePhysicsEngine::setDieTransform(int id, float px, float py, float pz,
                      float qx, float qy, float qz, float qw) {
     for (auto& b : bodies_) {
         if (b.id != id) continue;
@@ -128,7 +127,7 @@ inline void DicePhysicsEngine::setDieTransform(int id, float px, float py, float
     }
 }
 
-inline void DicePhysicsEngine::setDieVelocity(int id, float lvx, float lvy, float lvz,
+void DicePhysicsEngine::setDieVelocity(int id, float lvx, float lvy, float lvz,
                     float avx, float avy, float avz) {
     for (auto& b : bodies_) {
         if (b.id != id) continue;
@@ -139,7 +138,7 @@ inline void DicePhysicsEngine::setDieVelocity(int id, float lvx, float lvy, floa
     }
 }
 
-inline void DicePhysicsEngine::setDieKinematic(int id, bool kinematic) {
+void DicePhysicsEngine::setDieKinematic(int id, bool kinematic) {
     for (auto& b : bodies_) {
         if (b.id != id) continue;
         b.kinematic = kinematic;
@@ -155,9 +154,9 @@ inline void DicePhysicsEngine::setDieKinematic(int id, bool kinematic) {
     }
 }
 
-inline void DicePhysicsEngine::setContainerActive(bool active) { containerActive_ = active; }
+void DicePhysicsEngine::setContainerActive(bool active) { containerActive_ = active; }
 
-inline void DicePhysicsEngine::setContainerPlanes(const std::vector<float>& flat) {
+void DicePhysicsEngine::setContainerPlanes(const std::vector<float>& flat) {
     containerPlanes_.clear();
     if (flat.size() % 4 != 0) return;
     const size_t count = std::min(flat.size() / 4, static_cast<size_t>(MAX_CONTAINER_PLANES));
@@ -171,9 +170,9 @@ inline void DicePhysicsEngine::setContainerPlanes(const std::vector<float>& flat
     }
 }
 
-inline void DicePhysicsEngine::clearStatics() { statics_.clear(); }
+void DicePhysicsEngine::clearStatics() { statics_.clear(); staticCapacityDroppedCount_ = 0; }
 
-inline bool DicePhysicsEngine::removeStatic(int userId) {
+bool DicePhysicsEngine::removeStatic(int userId) {
     const size_t before = statics_.size();
     statics_.erase(
         std::remove_if(statics_.begin(), statics_.end(),
@@ -182,12 +181,16 @@ inline bool DicePhysicsEngine::removeStatic(int userId) {
     return statics_.size() < before;
 }
 
-inline int DicePhysicsEngine::addStaticBox(int userId,
+int DicePhysicsEngine::addStaticBox(int userId,
                  float cx, float cy, float cz,
                  float hx, float hy, float hz,
                  float qx, float qy, float qz, float qw,
                  int materialTag) {
-    if (userId < 0 || statics_.size() >= static_cast<size_t>(MAX_STATICS)) return -1;
+    if (statics_.size() >= static_cast<size_t>(MAX_STATICS)) {
+        ++staticCapacityDroppedCount_;
+        return -1;
+    }
+    if (userId < 0) return -1;
     for (const auto& s : statics_) if (s.userId == userId) return -1;
     if (hx <= 0.0f || hy <= 0.0f || hz <= 0.0f) return -1;
 
@@ -206,8 +209,12 @@ inline int DicePhysicsEngine::addStaticBox(int userId,
     return userId;
 }
 
-inline int DicePhysicsEngine::addStaticPlane(int userId, float nx, float ny, float nz, float dist, int materialTag) {
-    if (userId < 0 || statics_.size() >= static_cast<size_t>(MAX_STATICS)) return -1;
+int DicePhysicsEngine::addStaticPlane(int userId, float nx, float ny, float nz, float dist, int materialTag) {
+    if (statics_.size() >= static_cast<size_t>(MAX_STATICS)) {
+        ++staticCapacityDroppedCount_;
+        return -1;
+    }
+    if (userId < 0) return -1;
     for (const auto& s : statics_) if (s.userId == userId) return -1;
     Vec3 n{nx, ny, nz};
     const float len = n.length();
@@ -224,12 +231,16 @@ inline int DicePhysicsEngine::addStaticPlane(int userId, float nx, float ny, flo
     return userId;
 }
 
-inline int DicePhysicsEngine::addStaticConvexHull(int userId,
+int DicePhysicsEngine::addStaticConvexHull(int userId,
                         float cx, float cy, float cz,
                         float qx, float qy, float qz, float qw,
                         const std::vector<float>& flatVerts,
                         int materialTag) {
-    if (userId < 0 || statics_.size() >= static_cast<size_t>(MAX_STATICS)) return -1;
+    if (statics_.size() >= static_cast<size_t>(MAX_STATICS)) {
+        ++staticCapacityDroppedCount_;
+        return -1;
+    }
+    if (userId < 0) return -1;
     for (const auto& s : statics_) if (s.userId == userId) return -1;
     if (flatVerts.size() % 3 != 0) return -1;
     if (flatVerts.size() / 3 > MAX_VERTICES_PER_HULL) return -1;
@@ -252,12 +263,16 @@ inline int DicePhysicsEngine::addStaticConvexHull(int userId,
     return userId;
 }
 
-inline int DicePhysicsEngine::addStaticOpenCylinder(int userId,
+int DicePhysicsEngine::addStaticOpenCylinder(int userId,
                           float cx, float cy, float cz,
                           float radius, float halfHeight,
                           int segments, bool closedBottom,
                           int materialTag) {
-    if (userId < 0 || statics_.size() >= static_cast<size_t>(MAX_STATICS)) return -1;
+    if (statics_.size() >= static_cast<size_t>(MAX_STATICS)) {
+        ++staticCapacityDroppedCount_;
+        return -1;
+    }
+    if (userId < 0) return -1;
     for (const auto& s : statics_) if (s.userId == userId) return -1;
     if (radius <= 0.0f || halfHeight <= 0.0f) return -1;
 

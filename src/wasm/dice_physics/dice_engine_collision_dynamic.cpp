@@ -1,12 +1,9 @@
 /**
- * dice_engine_collision_dynamic.hpp — Die-vs-die broadphase (uniform grid),
+ * dice_engine_collision_dynamic.cpp — Die-vs-die broadphase (uniform grid),
  * narrowphase SAT/sphere contact generation, and the contact solver.
- *
- * Part of the dice_physics_engine module split; included by
- * dice_physics_engine.hpp after the class declaration.
  */
 
-#pragma once
+#include "../dice_physics_engine.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -14,7 +11,7 @@
 
 namespace dice_physics {
 
-inline void DicePhysicsEngine::ensureDieGridDimensions() {
+void DicePhysicsEngine::ensureDieGridDimensions() {
     if (gridCols_ > 0) return;
     gridOriginX_ = -tableHalfW_ - GRID_CELL_SIZE;
     gridOriginZ_ = -tableHalfD_ - GRID_CELL_SIZE;
@@ -24,31 +21,31 @@ inline void DicePhysicsEngine::ensureDieGridDimensions() {
     gridRows_ = std::max(1, static_cast<int>(std::ceil(extentZ / GRID_CELL_SIZE)));
 }
 
-inline int DicePhysicsEngine::bodyCellXMin(float x, float radius) const {
+int DicePhysicsEngine::bodyCellXMin(float x, float radius) const {
     const float rel = x - radius - gridOriginX_;
     const int c = static_cast<int>(std::floor(rel / GRID_CELL_SIZE));
     return std::clamp(c, 0, gridCols_ - 1);
 }
 
-inline int DicePhysicsEngine::bodyCellXMax(float x, float radius) const {
+int DicePhysicsEngine::bodyCellXMax(float x, float radius) const {
     const float rel = x + radius - gridOriginX_;
     const int c = static_cast<int>(std::floor(rel / GRID_CELL_SIZE));
     return std::clamp(c, 0, gridCols_ - 1);
 }
 
-inline int DicePhysicsEngine::bodyCellZMin(float z, float radius) const {
+int DicePhysicsEngine::bodyCellZMin(float z, float radius) const {
     const float rel = z - radius - gridOriginZ_;
     const int c = static_cast<int>(std::floor(rel / GRID_CELL_SIZE));
     return std::clamp(c, 0, gridRows_ - 1);
 }
 
-inline int DicePhysicsEngine::bodyCellZMax(float z, float radius) const {
+int DicePhysicsEngine::bodyCellZMax(float z, float radius) const {
     const float rel = z + radius - gridOriginZ_;
     const int c = static_cast<int>(std::floor(rel / GRID_CELL_SIZE));
     return std::clamp(c, 0, gridRows_ - 1);
 }
 
-inline void DicePhysicsEngine::rebuildDieGrid() {
+void DicePhysicsEngine::rebuildDieGrid() {
     ensureDieGridDimensions();
     const size_t cellCount = static_cast<size_t>(gridCols_ * gridRows_);
     if (dieGridCells_.size() != cellCount) {
@@ -73,7 +70,7 @@ inline void DicePhysicsEngine::rebuildDieGrid() {
     }
 }
 
-inline void DicePhysicsEngine::forEachDiePair(const std::function<void(size_t, size_t)>& fn) {
+void DicePhysicsEngine::forEachDiePair(const std::function<void(size_t, size_t)>& fn) {
     if (!useBroadphase_ || bodies_.size() < 2) {
         for (size_t i = 0; i < bodies_.size(); ++i) {
             for (size_t j = i + 1; j < bodies_.size(); ++j) {
@@ -120,7 +117,7 @@ inline void DicePhysicsEngine::forEachDiePair(const std::function<void(size_t, s
     }
 }
 
-inline void DicePhysicsEngine::processDiePair(size_t i, size_t j, StepStats& stats) {
+void DicePhysicsEngine::processDiePair(size_t i, size_t j, StepStats& stats) {
     auto& a = bodies_[i];
     auto& b = bodies_[j];
     stats.pairCandidates++;
@@ -167,7 +164,7 @@ inline void DicePhysicsEngine::processDiePair(size_t i, size_t j, StepStats& sta
     contacts_.push_back(c);
 }
 
-inline void DicePhysicsEngine::resolveDieCollisions(float /*dt*/, StepStats& stats) {
+void DicePhysicsEngine::resolveDieCollisions(float /*dt*/, StepStats& stats) {
     contacts_.clear();
     const float POSITION_SLOP = 0.001f;
 

@@ -1,24 +1,21 @@
 /**
- * dice_engine_integrate.hpp — Per-body integration, table/floor collision,
+ * dice_engine_integrate.cpp — Per-body integration, table/floor collision,
  * and sleep-state bookkeeping.
- *
- * Part of the dice_physics_engine module split; included by
- * dice_physics_engine.hpp after the class declaration.
  */
 
-#pragma once
+#include "../dice_physics_engine.hpp"
 
 #include <algorithm>
 #include <cmath>
 
 namespace dice_physics {
 
-inline void DicePhysicsEngine::wake(RigidBody& b) {
+void DicePhysicsEngine::wake(RigidBody& b) {
     b.sleeping = false;
     b.sleepTimer = 0.0f;
 }
 
-inline void DicePhysicsEngine::integrate(RigidBody& b, float dt) {
+void DicePhysicsEngine::integrate(RigidBody& b, float dt) {
     if (b.kinematic) return;
     b.velocity.y += gravity_ * dt;
     if (!noDrag_ && b.dragFactor > 0.0f) {
@@ -35,7 +32,7 @@ inline void DicePhysicsEngine::integrate(RigidBody& b, float dt) {
     b.rotation = b.rotation.integrate(b.angularVelocity, dt);
 }
 
-inline void DicePhysicsEngine::resolveTableCollision(RigidBody& b, float dt) {
+void DicePhysicsEngine::resolveTableCollision(RigidBody& b, float dt) {
     (void)dt;
     if (b.kinematic) return;
     const float floorY = tableY_ + b.radius;
@@ -122,7 +119,7 @@ inline void DicePhysicsEngine::resolveTableCollision(RigidBody& b, float dt) {
     if (b.position.z < -wz) { b.position.z = -wz; b.velocity.z = -b.velocity.z * b.restitution; }
 }
 
-inline void DicePhysicsEngine::checkSleep(RigidBody& b, float dt) const {
+void DicePhysicsEngine::checkSleep(RigidBody& b, float dt) const {
     if (b.kinematic) return;
     const float SPEED_THRESHOLD = 0.05f;
     const float SLEEP_DELAY = 0.5f;

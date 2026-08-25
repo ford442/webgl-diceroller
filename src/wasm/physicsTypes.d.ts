@@ -98,6 +98,12 @@ export interface PhysicsEngine {
         satTests: number;
         contacts: number;
     };
+    /**
+     * Cumulative count of addStatic* calls rejected because MAX_STATICS was
+     * reached. Not available synchronously on the worker bridge (fire-and-
+     * forget commands can't report engine state back) — undefined there.
+     */
+    getStaticCapacityDroppedCount?(): number;
     areAllSettled(): boolean;
     seedRNG(seed: number): void;
     randomFloat(): number;

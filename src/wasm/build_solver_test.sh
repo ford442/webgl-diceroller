@@ -17,33 +17,54 @@ if ! command -v "${CXX}" >/dev/null 2>&1; then
     CXX=clang++
 fi
 
+CXXFLAGS=(-std=c++17 -O2 -Wall -Wextra -Wpedantic -I"${SCRIPT_DIR}")
+
+# DicePhysicsEngine member functions live in separate .cpp translation units
+# (see docs/WASM_ENGINE.md); solver_tests.cpp only needs the class declaration.
+ENGINE_SOURCES=(
+    "${SCRIPT_DIR}/dice_physics/dice_engine_lifecycle.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_step.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_collision_static.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_collision_dynamic.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_integrate.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_face_value.cpp"
+)
+ALL_SOURCES=("${SCRIPT_DIR}/solver_tests.cpp" "${ENGINE_SOURCES[@]}")
+
 mkdir -p "${BUILD_DIR}"
 
 echo "[test:solver] Compiling native solver tests with ${CXX}..."
-"${CXX}" -std=c++17 -O2 -Wall -Wextra -Wpedantic \
-    -I"${SCRIPT_DIR}" \
-    "${SCRIPT_DIR}/solver_tests.cpp" \
-    -o "${BIN}"
+"${CXX}" "${CXXFLAGS[@]}" "${ALL_SOURCES[@]}" -o "${BIN}"
 
-# compile_commands.json for clangd (native C++ only — not the Emscripten target).
-if command -v bear >/dev/null 2>&1; then
-    echo "[test:solver] Writing ${BUILD_DIR}/compile_commands.json via bear..."
-    bear --output "${BUILD_DIR}/compile_commands.json" -- \
-        "${CXX}" -std=c++17 -O2 -Wall -Wextra -Wpedantic \
-            -I"${SCRIPT_DIR}" \
-            "${SCRIPT_DIR}/solver_tests.cpp" \
-            -o "${BIN}.bear-tmp"
-    rm -f "${BIN}.bear-tmp"
-elif command -v compiledb >/dev/null 2>&1; then
-    echo "[test:solver] Writing ${BUILD_DIR}/compile_commands.json via compiledb..."
-  (cd "${BUILD_DIR}" && compiledb -n test:solver \
-        "${CXX}" -std=c++17 -O2 -Wall -Wextra -Wpedantic \
-            -I"${SCRIPT_DIR}" \
-            "${SCRIPT_DIR}/solver_tests.cpp" \
-            -o "${BIN}")
-else
-    echo "[test:solver] compile_commands.json skipped (install bear or compiledb for clangd)."
-fi
+# compile_commands.json for clangd (native C++ only — not the Emscripten
+# target). Written unconditionally, one entry per translation unit, so
+# clangd/agents get accurate include paths without requiring bear/compiledb.
+echo "[test:solver] Writing ${BUILD_DIR}/compile_commands.json..."
+{
+    echo "["
+    first=1
+    for src in "${ALL_SOURCES[@]}"; do
+        if [[ ${first} -eq 0 ]]; then echo ","; fi
+        first=0
+        printf '  {\n'
+        printf '    "directory": "%s",\n' "${SCRIPT_DIR}"
+        printf '    "file": "%s",\n' "${src}"
+        printf '    "arguments": ['
+        args=("${CXX}" "${CXXFLAGS[@]}" "${src}" -c -o "${src}.o")
+        arg_first=1
+        for arg in "${args[@]}"; do
+            if [[ ${arg_first} -eq 0 ]]; then printf ', '; fi
+            arg_first=0
+            esc="${arg//\\/\\\\}"
+            esc="${esc//\"/\\\"}"
+            printf '"%s"' "${esc}"
+        done
+        printf ']\n'
+        printf '  }'
+    done
+    echo ""
+    echo "]"
+} > "${BUILD_DIR}/compile_commands.json"
 
 echo "[test:solver] Running unit + fuzz tests..."
 (cd "${REPO_ROOT}" && "${BIN}")

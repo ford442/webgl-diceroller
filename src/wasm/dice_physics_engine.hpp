@@ -4,9 +4,11 @@
  * Shared by the Emscripten WASM build (via dice_physics.cpp bindings) and the
  * native solver test harness (solver_tests.cpp).
  *
- * This header declares the DicePhysicsEngine class; its member functions are
- * defined out-of-line in the dice_physics/dice_engine_*.hpp modules included
- * at the bottom of this file. See docs/WASM_ENGINE.md for the module map.
+ * This header declares the DicePhysicsEngine class only. Member functions are
+ * defined out-of-line as separate translation units in the dice_physics/
+ * dice_engine_*.cpp files (compiled and linked alongside this header's
+ * includer — see build.sh / CMakeLists.txt / build_solver_test.sh for the
+ * source list). See docs/WASM_ENGINE.md for the module map.
  */
 
 #pragma once
@@ -122,6 +124,9 @@ public:
 
     const StepStats& getLastStepStats() const;
 
+    /** Cumulative count of addStatic* calls rejected because MAX_STATICS was reached. */
+    uint32_t getStaticCapacityDroppedCount() const;
+
     /** Test hook: disable broadphase to compare against brute-force pair generation. */
     void setBroadphaseForTesting(bool enabled);
 
@@ -163,7 +168,12 @@ public:
 private:
     static constexpr int MAX_CONTAINER_PLANES = 9;
     static constexpr int CONTAINER_EVENT_ID_BASE = -100;
-    static constexpr int MAX_STATICS = 128;
+    // Soft cap on registered static colliders (table bounds, tower/jail/tray/
+    // bookshelf compounds, clutter mugs/coins via StaticColliderBridge). A
+    // high-density table layout can easily exceed the old 128 limit; raised
+    // to give real headroom. addStatic* returns -1 and increments
+    // staticCapacityDroppedCount_ past this point instead of silently no-oping.
+    static constexpr int MAX_STATICS = 512;
     static constexpr int STATIC_EVENT_ID_BASE = -2000;
     static constexpr int TABLE_MATERIAL_TAG = 1; // velvet
 
@@ -187,6 +197,7 @@ private:
     bool noDrag_ = false;
     bool containerActive_ = false;
     StepStats lastStepStats_;
+    uint32_t staticCapacityDroppedCount_ = 0;
     bool useBroadphase_ = true;
 
     static constexpr float GRID_CELL_SIZE = 2.2f;
@@ -235,10 +246,3 @@ private:
 };
 
 } // namespace dice_physics
-
-#include "dice_physics/dice_engine_lifecycle.hpp"
-#include "dice_physics/dice_engine_step.hpp"
-#include "dice_physics/dice_engine_collision_static.hpp"
-#include "dice_physics/dice_engine_collision_dynamic.hpp"
-#include "dice_physics/dice_engine_integrate.hpp"
-#include "dice_physics/dice_engine_face_value.hpp"

@@ -1,20 +1,17 @@
 /**
- * dice_engine_collision_static.hpp — Static-collider and container-plane
+ * dice_engine_collision_static.cpp — Static-collider and container-plane
  * collision resolution, plus small shared helpers (event construction,
  * material lookup, per-die radius/inertia scalars).
- *
- * Part of the dice_physics_engine module split; included by
- * dice_physics_engine.hpp after the class declaration.
  */
 
-#pragma once
+#include "../dice_physics_engine.hpp"
 
 #include <algorithm>
 #include <cmath>
 
 namespace dice_physics {
 
-inline float DicePhysicsEngine::radiusForSides(int sides) {
+float DicePhysicsEngine::radiusForSides(int sides) {
     switch (sides) {
         case  4: return 0.80f;
         case  6: return 0.90f;
@@ -26,7 +23,7 @@ inline float DicePhysicsEngine::radiusForSides(int sides) {
     }
 }
 
-inline float DicePhysicsEngine::inertiaScalar(const RigidBody& b) {
+float DicePhysicsEngine::inertiaScalar(const RigidBody& b) {
     if (!b.useHull || b.hull.verts.empty()) {
         return 0.4f * b.mass * b.radius * b.radius;
     }
@@ -37,7 +34,7 @@ inline float DicePhysicsEngine::inertiaScalar(const RigidBody& b) {
     return (ix + iy + iz) / 3.0f;
 }
 
-inline CollisionEvent DicePhysicsEngine::makeEvent(
+CollisionEvent DicePhysicsEngine::makeEvent(
     const RigidBody& primary,
     int otherId,
     float impactSpeed,
@@ -59,7 +56,7 @@ inline CollisionEvent DicePhysicsEngine::makeEvent(
     };
 }
 
-inline void DicePhysicsEngine::applyStaticMaterial(StaticBody& s, int tag) {
+void DicePhysicsEngine::applyStaticMaterial(StaticBody& s, int tag) {
     s.materialTag = static_cast<uint8_t>(std::clamp(tag, 0, 255));
     switch (s.materialTag) {
         case 1: s.friction = 0.6f; s.restitution = 0.05f; s.rollingFriction = 0.12f; break;
@@ -70,11 +67,11 @@ inline void DicePhysicsEngine::applyStaticMaterial(StaticBody& s, int tag) {
     }
 }
 
-inline int DicePhysicsEngine::staticEventOtherId(int userId) {
+int DicePhysicsEngine::staticEventOtherId(int userId) {
     return STATIC_EVENT_ID_BASE - userId;
 }
 
-inline void DicePhysicsEngine::resolveStaticPlane(RigidBody& b, const Vec3& n, float d, const StaticBody& s) {
+void DicePhysicsEngine::resolveStaticPlane(RigidBody& b, const Vec3& n, float d, const StaticBody& s) {
     if (b.kinematic) return;
 
     float maxPen = 0.0f;
@@ -146,7 +143,7 @@ inline void DicePhysicsEngine::resolveStaticPlane(RigidBody& b, const Vec3& n, f
     }
 }
 
-inline void DicePhysicsEngine::resolveStaticHull(RigidBody& b, const StaticBody& s) {
+void DicePhysicsEngine::resolveStaticHull(RigidBody& b, const StaticBody& s) {
     if (b.kinematic || !b.useHull || b.hull.verts.empty() || s.hull.verts.empty()) return;
 
     Vec3 normal, contact;
@@ -202,7 +199,7 @@ inline void DicePhysicsEngine::resolveStaticHull(RigidBody& b, const StaticBody&
     }
 }
 
-inline void DicePhysicsEngine::resolveStaticOpenCylinder(RigidBody& b, const StaticBody& s) {
+void DicePhysicsEngine::resolveStaticOpenCylinder(RigidBody& b, const StaticBody& s) {
     const int segs = s.cylinderSegments;
     const float r = s.cylinderRadius;
     const Vec3 center = s.center;
@@ -223,7 +220,7 @@ inline void DicePhysicsEngine::resolveStaticOpenCylinder(RigidBody& b, const Sta
     }
 }
 
-inline void DicePhysicsEngine::resolveStaticCollisions(RigidBody& b, float /*dt*/) {
+void DicePhysicsEngine::resolveStaticCollisions(RigidBody& b, float /*dt*/) {
     for (const auto& s : statics_) {
         switch (s.shape) {
             case StaticShapeType::Plane:
@@ -240,7 +237,7 @@ inline void DicePhysicsEngine::resolveStaticCollisions(RigidBody& b, float /*dt*
     }
 }
 
-inline void DicePhysicsEngine::resolveContainerCollisions(RigidBody& b, float /*dt*/) {
+void DicePhysicsEngine::resolveContainerCollisions(RigidBody& b, float /*dt*/) {
     if (!containerActive_ || b.kinematic || containerPlanes_.empty()) return;
 
     for (size_t pi = 0; pi < containerPlanes_.size(); ++pi) {

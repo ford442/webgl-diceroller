@@ -1,12 +1,9 @@
 /**
- * dice_engine_step.hpp — DicePhysicsEngine::step, transform/event buffer
+ * dice_engine_step.cpp — DicePhysicsEngine::step, transform/event buffer
  * builders, serialization, and fuzz/invariant test helpers.
- *
- * Part of the dice_physics_engine module split; included by
- * dice_physics_engine.hpp after the class declaration.
  */
 
-#pragma once
+#include "../dice_physics_engine.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -15,7 +12,7 @@
 
 namespace dice_physics {
 
-inline void DicePhysicsEngine::step(float dt) {
+void DicePhysicsEngine::step(float dt) {
     lastStepStats_ = {};
     const int SUB_STEPS = 4;
     const float subDt = dt / static_cast<float>(SUB_STEPS);
@@ -41,13 +38,15 @@ inline void DicePhysicsEngine::step(float dt) {
     }
 }
 
-inline int DicePhysicsEngine::getDieCount() const { return static_cast<int>(bodies_.size()); }
+int DicePhysicsEngine::getDieCount() const { return static_cast<int>(bodies_.size()); }
 
-inline const StepStats& DicePhysicsEngine::getLastStepStats() const { return lastStepStats_; }
+const StepStats& DicePhysicsEngine::getLastStepStats() const { return lastStepStats_; }
 
-inline void DicePhysicsEngine::setBroadphaseForTesting(bool enabled) { useBroadphase_ = enabled; }
+uint32_t DicePhysicsEngine::getStaticCapacityDroppedCount() const { return staticCapacityDroppedCount_; }
 
-inline std::vector<std::pair<size_t, size_t>> DicePhysicsEngine::collectDiePairsForTesting(bool useBroadphase) {
+void DicePhysicsEngine::setBroadphaseForTesting(bool enabled) { useBroadphase_ = enabled; }
+
+std::vector<std::pair<size_t, size_t>> DicePhysicsEngine::collectDiePairsForTesting(bool useBroadphase) {
     const bool saved = useBroadphase_;
     useBroadphase_ = useBroadphase;
     std::set<std::pair<size_t, size_t>> pairSet;
@@ -56,7 +55,7 @@ inline std::vector<std::pair<size_t, size_t>> DicePhysicsEngine::collectDiePairs
     return {pairSet.begin(), pairSet.end()};
 }
 
-inline bool DicePhysicsEngine::areAllSettled() const {
+bool DicePhysicsEngine::areAllSettled() const {
     if (bodies_.empty()) return false;
     for (const auto& b : bodies_) {
         if (b.kinematic) continue;
@@ -65,7 +64,7 @@ inline bool DicePhysicsEngine::areAllSettled() const {
     return true;
 }
 
-inline const std::vector<float>& DicePhysicsEngine::buildTransformBuffer() {
+const std::vector<float>& DicePhysicsEngine::buildTransformBuffer() {
     transformBuffer_.clear();
     transformBuffer_.reserve(bodies_.size() * 7);
     for (const auto& b : bodies_) {
@@ -80,7 +79,7 @@ inline const std::vector<float>& DicePhysicsEngine::buildTransformBuffer() {
     return transformBuffer_;
 }
 
-inline const std::vector<float>& DicePhysicsEngine::buildDieIdBuffer() {
+const std::vector<float>& DicePhysicsEngine::buildDieIdBuffer() {
     idBuffer_.clear();
     idBuffer_.reserve(bodies_.size());
     for (const auto& b : bodies_) {
@@ -89,7 +88,7 @@ inline const std::vector<float>& DicePhysicsEngine::buildDieIdBuffer() {
     return idBuffer_;
 }
 
-inline const std::vector<float>& DicePhysicsEngine::buildCollisionEventBuffer() {
+const std::vector<float>& DicePhysicsEngine::buildCollisionEventBuffer() {
     eventBuffer_.clear();
     eventBuffer_.reserve(events_.size() * 9);
     for (const auto& e : events_) {
@@ -107,10 +106,10 @@ inline const std::vector<float>& DicePhysicsEngine::buildCollisionEventBuffer() 
     return eventBuffer_;
 }
 
-inline void DicePhysicsEngine::seedRNG(uint64_t s) { rng_.seed(s); }
-inline float DicePhysicsEngine::randomFloat() { return rng_.nextFloat(); }
+void DicePhysicsEngine::seedRNG(uint64_t s) { rng_.seed(s); }
+float DicePhysicsEngine::randomFloat() { return rng_.nextFloat(); }
 
-inline std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
+std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
     std::vector<uint8_t> out;
     auto append = [&](const void* ptr, size_t len) {
         const uint8_t* p = static_cast<const uint8_t*>(ptr);
@@ -134,7 +133,7 @@ inline std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
     return out;
 }
 
-inline void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
+void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
     if (data.size() < 8) return;
     size_t off = 0;
     auto read = [&](void* ptr, size_t len) {
@@ -169,7 +168,7 @@ inline void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data
     for (const auto& b : bodies_) nextId_ = std::max(nextId_, b.id + 1);
 }
 
-inline bool DicePhysicsEngine::allBodyStatesFinite() const {
+bool DicePhysicsEngine::allBodyStatesFinite() const {
     for (const auto& b : bodies_) {
         auto bad = [](float v) { return !std::isfinite(v); };
         if (bad(b.position.x) || bad(b.position.y) || bad(b.position.z)) return false;
@@ -180,7 +179,7 @@ inline bool DicePhysicsEngine::allBodyStatesFinite() const {
     return true;
 }
 
-inline bool DicePhysicsEngine::allRotationsUnitLength(float eps) const {
+bool DicePhysicsEngine::allRotationsUnitLength(float eps) const {
     for (const auto& b : bodies_) {
         float lenSq = b.rotation.x*b.rotation.x + b.rotation.y*b.rotation.y
                       + b.rotation.z*b.rotation.z + b.rotation.w*b.rotation.w;
@@ -189,7 +188,7 @@ inline bool DicePhysicsEngine::allRotationsUnitLength(float eps) const {
     return true;
 }
 
-inline bool DicePhysicsEngine::allBodyStatesInWorldBounds(float margin) const {
+bool DicePhysicsEngine::allBodyStatesInWorldBounds(float margin) const {
     for (const auto& b : bodies_) {
         const float wx = tableHalfW_ + b.radius + margin;
         const float wz = tableHalfD_ + b.radius + margin;
@@ -203,7 +202,7 @@ inline bool DicePhysicsEngine::allBodyStatesInWorldBounds(float margin) const {
     return true;
 }
 
-inline float DicePhysicsEngine::totalKineticEnergy() const {
+float DicePhysicsEngine::totalKineticEnergy() const {
     float total = 0.0f;
     for (const auto& b : bodies_) {
         if (b.kinematic) continue;
@@ -213,7 +212,7 @@ inline float DicePhysicsEngine::totalKineticEnergy() const {
     return total;
 }
 
-inline bool DicePhysicsEngine::getDiePosition(int id, float& x, float& y, float& z) const {
+bool DicePhysicsEngine::getDiePosition(int id, float& x, float& y, float& z) const {
     for (const auto& b : bodies_) {
         if (b.id != id) continue;
         x = b.position.x;

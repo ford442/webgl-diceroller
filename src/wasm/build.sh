@@ -54,6 +54,17 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 # shellcheck source=emcc_flags.inc.sh
 source "${SCRIPT_DIR}/emcc_flags.inc.sh"
 
+# DicePhysicsEngine member functions live in separate .cpp translation units
+# (see docs/WASM_ENGINE.md); dice_physics.cpp only holds the Embind bindings.
+ENGINE_SOURCES=(
+    "${SCRIPT_DIR}/dice_physics/dice_engine_lifecycle.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_step.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_collision_static.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_collision_dynamic.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_integrate.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_face_value.cpp"
+)
+
 write_build_info() {
     local out_dir="$1"
     local profile="$2"
@@ -122,8 +133,9 @@ compile_profile() {
     emcc_build_flags "${profile}"
     mkdir -p "${out_dir}"
     echo "[build:wasm] Profile: ${profile}"
-    echo "[build:wasm] Compiling dice_physics.cpp → ${out_dir}/dice_physics.{js,wasm}"
+    echo "[build:wasm] Compiling dice_physics.cpp + dice_physics/*.cpp → ${out_dir}/dice_physics.{js,wasm}"
     em++ "${SCRIPT_DIR}/dice_physics.cpp" \
+        "${ENGINE_SOURCES[@]}" \
         "${EMCC_FLAGS[@]}" \
         -o "${out_dir}/dice_physics.js"
     write_build_info "${out_dir}" "${profile}"

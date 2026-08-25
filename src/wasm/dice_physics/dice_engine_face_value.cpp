@@ -1,12 +1,12 @@
 /**
- * dice_engine_face_value.hpp — Engine-authoritative die face settlement.
+ * dice_engine_face_value.cpp — Engine-authoritative die face settlement.
  *
  * Face normals are uploaded per die via setDieFaceTable (nx,ny,nz,value × N) in
  * the same local frame as the visual mesh (post center/rotateX(-π/2) pipeline).
  * d4 uses the bottom face (minimum dot with local-up); all other dice use top.
  */
 
-#pragma once
+#include "../dice_physics_engine.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -16,7 +16,9 @@
 
 namespace dice_physics {
 
-inline int computeDieFaceValue(const RigidBody& body, bool requireSleep = true) {
+namespace {
+
+int computeDieFaceValue(const RigidBody& body, bool requireSleep = true) {
     if (requireSleep && (!body.sleeping || body.kinematic)) return 0;
     if (body.faceTable.empty()) return 0;
 
@@ -41,7 +43,9 @@ inline int computeDieFaceValue(const RigidBody& body, bool requireSleep = true) 
     return bestValue;
 }
 
-inline void DicePhysicsEngine::setDieFaceTable(int id, const std::vector<float>& packed) {
+} // namespace
+
+void DicePhysicsEngine::setDieFaceTable(int id, const std::vector<float>& packed) {
     if (packed.size() % 4 != 0) return;
     for (auto& b : bodies_) {
         if (b.id != id) continue;
@@ -61,7 +65,7 @@ inline void DicePhysicsEngine::setDieFaceTable(int id, const std::vector<float>&
     }
 }
 
-inline int DicePhysicsEngine::getDieFaceValue(int id) const {
+int DicePhysicsEngine::getDieFaceValue(int id) const {
     for (const auto& b : bodies_) {
         if (b.id != id) return 0;
         return computeDieFaceValue(b, true);
@@ -69,7 +73,7 @@ inline int DicePhysicsEngine::getDieFaceValue(int id) const {
     return 0;
 }
 
-inline const std::vector<int32_t>& DicePhysicsEngine::buildFaceValueBuffer() {
+const std::vector<int32_t>& DicePhysicsEngine::buildFaceValueBuffer() {
     faceValueBuffer_.clear();
     faceValueBuffer_.reserve(bodies_.size());
     for (const auto& b : bodies_) {
@@ -78,7 +82,7 @@ inline const std::vector<int32_t>& DicePhysicsEngine::buildFaceValueBuffer() {
     return faceValueBuffer_;
 }
 
-inline void DicePhysicsEngine::setDieSleepingForTesting(int id, bool sleeping) {
+void DicePhysicsEngine::setDieSleepingForTesting(int id, bool sleeping) {
     for (auto& b : bodies_) {
         if (b.id != id) continue;
         b.sleeping = sleeping;

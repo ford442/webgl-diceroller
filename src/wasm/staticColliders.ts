@@ -168,6 +168,15 @@ export function createWasmTableBoundsForEngine(
         );
         if (result >= 0) added++;
     }
+
+    const dropped = engine.getStaticCapacityDroppedCount?.();
+    if (dropped) {
+        console.warn(
+            `createWasmTableBoundsForEngine: ${dropped} static collider(s) dropped — ` +
+                `MAX_STATICS capacity reached while registering ${bodies.length} table bodies.`
+        );
+    }
+
     return added;
 }
 

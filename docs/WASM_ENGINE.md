@@ -1,9 +1,11 @@
 # WASM Physics Engine — Integration Guide
 
-> **Status:** Phase 4 complete — the WASM engine runs in a production Web Worker
-> by default, exchanging transforms over a double-buffered SharedArrayBuffer
-> (with a postMessage fallback). Phase 3 features (SAT polyhedral collision,
-> deterministic replay, collision events, build-time hull extraction) remain.
+> **Status:** Phases 1–6 complete (see [Roadmap](#roadmap)) — the WASM engine
+> runs in a production Web Worker by default, exchanging transforms over a
+> double-buffered SharedArrayBuffer (with a postMessage fallback), with SAT
+> polyhedral collision, deterministic replay, collision events, build-time
+> hull extraction, broadphase, and SIMD all in place. Ammo.js remains only as
+> the `?no-wasm` fallback.
 
 ## Table of Contents
 
@@ -131,11 +133,11 @@ heap buffer.
 
 Each double-buffer slot contains, per die index `i`:
 
-| Region | Type | Stride | Notes |
-| ------ | ---- | ------ | ----- |
-| `ids[i]` | `f32` | 1 | WASM die id |
-| `transforms[i]` | `f32` | 7 | `px,py,pz,qx,qy,qz,qw` |
-| `faceValues[i]` | `i32` | 1 | Settled face value (`0` while moving) |
+| Region          | Type  | Stride | Notes                                 |
+| --------------- | ----- | ------ | ------------------------------------- |
+| `ids[i]`        | `f32` | 1      | WASM die id                           |
+| `transforms[i]` | `f32` | 7      | `px,py,pz,qx,qy,qz,qw`                |
+| `faceValues[i]` | `i32` | 1      | Settled face value (`0` while moving) |
 
 Face values are computed in C++ from the rigid-body quaternion and a per-die face
 table uploaded via `setDieFaceTable`. **d4** uses the **bottom** face (minimum
@@ -244,10 +246,15 @@ Do **not** add `-ffast-math` or `PRECISE_F32=0` — seeded replay depends on IEE
 
 ### Native solver tests (no browser, no Emscripten)
 
-The engine core lives in `dice_physics_engine.hpp` (a thin orchestrator that
-declares `DicePhysicsEngine` and pulls in the `dice_physics/` module files for
-math, types, SAT, and the engine's member-function definitions) and is
-compiled natively with g++/clang for fast regression coverage:
+The engine core lives in `dice_physics_engine.hpp` (a thin header that
+declares the `DicePhysicsEngine` class only) plus real `.cpp` translation
+units under `dice_physics/` for math, types, SAT, and the engine's
+member-function definitions. `dice_physics.cpp` (Embind bindings) and
+`solver_tests.cpp` each `#include` the header and are linked against those
+`.cpp` files — there is no "second header full of definitions" step anymore,
+so incremental rebuilds, clangd, and sanitizer builds only recompile the TU
+that changed. It's compiled natively with g++/clang for fast regression
+coverage:
 
 ```bash
 # Unit tests (SAT, PRNG, serialize round-trip, determinism) + 2000-seed fuzz loop:
@@ -270,21 +277,28 @@ BENCH_SOLVER=1 npm run test:solver
 
 Source layout:
 
-| File                                             | Role                                                                       |
-| ------------------------------------------------ | -------------------------------------------------------------------------- |
-| `dice_physics_engine.hpp`                        | Thin orchestrator: `DicePhysicsEngine` class declaration + module includes |
-| `dice_physics/dice_math.hpp`                     | `Vec3`, `Quat`, `Mat3`, `PolyHull`                                         |
-| `dice_physics/dice_types.hpp`                    | `RigidBody`, `Contact`, `CollisionEvent`, `StaticBody`, etc.               |
-| `dice_physics/dice_sat.hpp`                      | SAT narrowphase helpers + `DeterministicRNG`                               |
-| `dice_physics/dice_engine_lifecycle.hpp`         | Engine construction, per-die setters, static-collider registration         |
-| `dice_physics/dice_engine_step.hpp`              | `step()`, buffer builders, serialize/deserialize, invariant helpers        |
-| `dice_physics/dice_engine_collision_static.hpp`  | Static-collider + container-plane collision resolution                     |
-| `dice_physics/dice_engine_collision_dynamic.hpp` | Die–die broadphase grid, narrowphase, and contact solver                   |
-| `dice_physics/dice_engine_integrate.hpp`         | Per-body integration, table/floor collision, sleep bookkeeping             |
-| `dice_physics.cpp`                               | Emscripten Embind exports for the WASM build                               |
-| `solver_tests.cpp`                               | doctest unit + fuzz harness (`--dump-serialize`, `--bench`)                |
-| `emcc_flags.inc.sh`                              | Single source of truth for Emscripten link flags                           |
-| `build_solver_test.sh`                           | Native compile + run script                                                |
+| File                                             | Role                                                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `dice_physics_engine.hpp`                        | `DicePhysicsEngine` class declaration only — no inline definitions                                     |
+| `dice_physics/dice_math.hpp`                     | `Vec3`, `Quat`, `Mat3`, `PolyHull`                                                                     |
+| `dice_physics/dice_types.hpp`                    | `RigidBody`, `Contact`, `CollisionEvent`, `StaticBody`, etc.                                           |
+| `dice_physics/dice_sat.hpp`                      | SAT narrowphase helpers + `DeterministicRNG` (header-only; shared by multiple TUs)                     |
+| `dice_physics/dice_engine_lifecycle.cpp`         | Engine construction, per-die setters, static-collider registration                                     |
+| `dice_physics/dice_engine_step.cpp`              | `step()`, buffer builders, serialize/deserialize, invariant helpers                                    |
+| `dice_physics/dice_engine_collision_static.cpp`  | Static-collider + container-plane collision resolution                                                 |
+| `dice_physics/dice_engine_collision_dynamic.cpp` | Die–die broadphase grid, narrowphase, and contact solver                                               |
+| `dice_physics/dice_engine_integrate.cpp`         | Per-body integration, table/floor collision, sleep bookkeeping                                         |
+| `dice_physics/dice_engine_face_value.cpp`        | Engine-authoritative die face settlement                                                               |
+| `dice_physics.cpp`                               | Emscripten Embind exports for the WASM build (links against the `.cpp` files above)                    |
+| `solver_tests.cpp`                               | doctest unit + fuzz harness (`--dump-serialize`, `--bench`); also links against the `.cpp` files above |
+| `emcc_flags.inc.sh`                              | Single source of truth for Emscripten link flags                                                       |
+| `build_solver_test.sh`                           | Native compile + run script; always writes `build-native/compile_commands.json`                        |
+| `.clangd`                                        | Points clangd at `build-native/compile_commands.json`                                                  |
+| `CMakeLists.txt`                                 | Local IDE / advanced-user build (SIMD + scalar targets) — **not** the CI build; see below              |
+
+`build.sh`, `build_solver_test.sh`, and `CMakeLists.txt` each list the same
+`dice_physics/dice_engine_*.cpp` sources independently — keep the three
+lists in sync when adding a new module.
 
 ### Runtime flags
 
@@ -358,13 +372,23 @@ Output files land in `public/wasm/`:
 
 ### CMake alternative (advanced)
 
-Uses the same release flags as `build.sh` via `emcc_flags.sh --print-link-line release`:
+**`build.sh` is the CI source of truth.** CMake is a convenience for local
+IDE / clangd / advanced use and is not run in CI. It uses the same release
+flags as `build.sh` via `emcc_flags.sh --print-link-line release`, exports
+`compile_commands.json` (`CMAKE_EXPORT_COMPILE_COMMANDS ON`), and configures
+two targets mirroring `build.sh`'s SIMD + scalar outputs:
 
 ```bash
 mkdir build && cd build
-emcmake cmake ../src/wasm
+emcmake cmake ../src/wasm   # dice_physics (SIMD → public/wasm/), dice_physics_scalar (→ public/wasm-scalar/)
 emmake make
 ```
+
+A `-DCMAKE_BUILD_TYPE=Debug` configure only builds the `dice_physics` target
+(no scalar variant, matching `build.sh --debug`) and writes to the same
+`public/wasm/` tree the SIMD release build uses — CMake prints a `message(STATUS …)`
+note about this at configure time, same intent as `build.sh --debug`'s doc
+comment above.
 
 ### Full application build
 
@@ -417,15 +441,15 @@ const engine = getWasmEngine();
 
 #### Die management
 
-| Method         | Signature                           | Description                                             |
-| -------------- | ----------------------------------- | ------------------------------------------------------- |
-| `addDie`       | `(sides, x, y, z): i32`             | Spawn a die. Returns unique ID (or -1 at max capacity). |
-| `removeDie`    | `(id): void`                        | Remove a die by ID.                                     |
-| `clearAllDice` | `(): void`                          | Remove all dice.                                        |
-| `setDieHull`       | `(id, vertices: VectorFloat): void` | Attach convex hull vertices (flat `[x,y,z,…]`).         |
-| `setDieFaceTable`  | `(id, packed: VectorFloat): void`   | Upload face normals + values (`nx,ny,nz,value × N`).    |
-| `getDieFaceValue`  | `(id): i32`                         | Settled face value for one die (`0` while moving).      |
-| `getFaceValues`    | `(): Int32Array view`               | Parallel buffer aligned with `getDieIds()` / transforms.  |
+| Method            | Signature                           | Description                                              |
+| ----------------- | ----------------------------------- | -------------------------------------------------------- |
+| `addDie`          | `(sides, x, y, z): i32`             | Spawn a die. Returns unique ID (or -1 at max capacity).  |
+| `removeDie`       | `(id): void`                        | Remove a die by ID.                                      |
+| `clearAllDice`    | `(): void`                          | Remove all dice.                                         |
+| `setDieHull`      | `(id, vertices: VectorFloat): void` | Attach convex hull vertices (flat `[x,y,z,…]`).          |
+| `setDieFaceTable` | `(id, packed: VectorFloat): void`   | Upload face normals + values (`nx,ny,nz,value × N`).     |
+| `getDieFaceValue` | `(id): i32`                         | Settled face value for one die (`0` while moving).       |
+| `getFaceValues`   | `(): Int32Array view`               | Parallel buffer aligned with `getDieIds()` / transforms. |
 
 #### Forces
 
@@ -474,53 +498,71 @@ const engine = getWasmEngine();
 
 ### Current authoritative path
 
-`src/main.js` loads the bridge during `init()`:
+`src/main.js` / `LoadingTiers.js` load the bridge during init, before dice spawn:
 
 ```js
-loadWasmEngine().then((available) => {
-    if (available) {
-        getWasmEngine().init(-15.0, -2.75, 18.0, 18.0);
-        syncAllDiceToWasm();
+await loadWasmEngine();
+if (isWasmAvailable()) {
+    getWasmEngine().init(-15.0, -2.75, 18.0, 18.0);
+}
+```
+
+By default `loadWasmEngine()` resolves to the **worker** bridge (see
+[Worker topology](#worker-topology-phase-4-default) above): the physics
+worker owns `DicePhysicsEngine` and self-paces its own fixed-timestep loop,
+so `getWasmEngine().step(dt)` on the main thread is a documented no-op there.
+`src/app/SchedulerSetup.js` registers the frame-scheduler phases:
+
+```js
+scheduler.register('physicsStep', 'dicePhysics', ({ deltaTime }) => {
+    const useWasm = isWasmAvailable();
+    // ammo only steps on the `?no-wasm` fallback; WASM (worker or in-process
+    // via `?no-worker`) is the default and only physics path otherwise.
+    const shouldStepAmmo = Boolean(physicsWorld) && !useWasm;
+    if (shouldStepAmmo) stepPhysics(physicsWorld, deltaTime);
+    if (useWasm && !isUsingWorkerPhysics()) getWasmEngine().step(deltaTime);
+});
+
+scheduler.register('postPhysicsSync', 'diceVisualSync', () => {
+    updateDiceVisuals();
+});
+```
+
+`src/dice.js` mirrors dice lifecycle events into WASM (and ammo only on the
+`?no-wasm` fallback) and loads hulls:
+
+- `spawnObjects()` registers each die in WASM, calls `loadHullForDie(wasmId, sides)`, and stores the returned ID.
+- `throwDice(scene, world, seed)` supports deterministic throws when `seed !== null`.
+- `updateDiceVisuals()` reads `engine.getTransforms()` (or the worker's SharedArrayBuffer front buffer) unless a die is under active ammo-driven interaction.
+- `clearDice()` and `updateDiceSet()` remove the corresponding WASM entries.
+
+`src/interaction.js` gives dragged/levitating dice **WASM kinematic control**
+(`setDieKinematic`) — the only path while WASM is live; ammo drag/levitation
+only runs on the `?no-wasm` fallback.
+
+Collision events are polled and turned into an `AppEvent` in
+`SchedulerSetup.js` during `postPhysicsSync` — audio is wired, not a TODO:
+
+```js
+scheduler.register('postPhysicsSync', 'collisionAudio', () => {
+    const events = [...pollPhysicsCollisionEvents()];
+    for (const ev of events) {
+        appEvents.emit(AppEvent.DICE_COLLISION, enrichCollisionEventForAudio(ev));
     }
 });
 ```
 
-Per-frame stepping now prefers WASM:
+Collision audio and the results overlay subscribe to `dice:collision` /
+`roll:settled` via `AppEvents` — see [`ARCHITECTURE.md`](ARCHITECTURE.md#appcontext-and-appevents).
+
+Debug handles are **not** on bare `window.*`. Under `?test`, `?debug`, or
+`?debug-perf`, `installDebugGlobals()` (`src/app/DebugGlobals.js`) installs
+`window.__app` — the stable Playwright/manual-debugging surface:
 
 ```js
-const useWasm = isWasmAvailable();
-const shouldStepAmmo = !useWasm || dualPhysicsValidation || hasActiveDiceInteraction();
-
-if (shouldStepAmmo) stepPhysics(physicsWorld, dt);
-if (useWasm) getWasmEngine().step(dt);
-updateDiceVisuals();
-```
-
-`src/dice.js` mirrors dice lifecycle events into both engines and loads hulls:
-
-- `spawnObjects()` registers each die in WASM, calls `loadHullForDie(wasmId, sides)`, and stores the returned ID.
-- `throwDice(scene, world, seed)` supports deterministic throws when `seed !== null`.
-- `updateDiceVisuals()` reads `engine.getTransforms()` unless a die is under active ammo-driven interaction.
-- `clearDice()` and `updateDiceSet()` remove the corresponding WASM entries.
-
-`src/interaction.js` temporarily gives dragged/levitating dice ammo authority,
-then syncs the resulting transform or release impulse back into WASM.
-
-Collision events are polled in `main.js` during `postPhysicsSync`:
-
-```js
-const events = pollPhysicsCollisionEvents();
-for (const ev of events) {
-    // TODO: wire to Web Audio for dice clack / table thump
-}
-```
-
-Global debug handles are exposed for console inspection:
-
-```js
-window.getWasmEngine(); // engine instance
-window.isWasmAvailable(); // true when WASM is loaded
-window.replayRoll(seed); // deterministic re-roll with seed
+window.__app.getWasmEngine(); // engine instance (main-thread/in-process bridge only)
+window.__app.isWasmAvailable(); // true when WASM is loaded
+window.__app.replayRoll(seed); // deterministic re-roll with seed
 ```
 
 ---
@@ -545,10 +587,12 @@ CI informational warn thresholds (ubuntu-latest, `scripts/solver-bench-baselines
 
 ### Quick benchmark
 
-Browser/console (WASM release, SIMD when supported):
+Browser/console (WASM release, SIMD when supported; `?test`/`?debug`/`?debug-perf`
+for `window.__app`; manual `.step()` calls only drive the engine on the
+non-worker bridge — pass `?no-worker` or the worker self-paces past them):
 
 ```js
-const engine = window.getWasmEngine();
+const engine = window.__app.getWasmEngine();
 engine.init(-15, -2.75, 18, 18);
 for (let i = 0; i < 50; i++) engine.addDie(6, 0, 5 + i * 0.1, 0);
 // Load hulls via loadHullForDie in a loop
@@ -584,10 +628,10 @@ Determinism notes:
 ### Replay determinism test
 
 ```js
-window.replayRoll(42); // throw with seed 42
-const t1 = window.getWasmEngine().getTransforms();
-window.replayRoll(42); // reset and replay same seed
-const t2 = window.getWasmEngine().getTransforms();
+window.__app.replayRoll(42); // throw with seed 42
+const t1 = window.__app.getWasmEngine().getTransforms();
+window.__app.replayRoll(42); // reset and replay same seed
+const t2 = window.__app.getWasmEngine().getTransforms();
 // t1 and t2 are bit-identical
 ```
 
@@ -601,7 +645,7 @@ const t2 = window.getWasmEngine().getTransforms();
 - [x] Build-time hull extraction from Draco GLB (`scripts/extract-hulls.mjs`).
 - [x] Deterministic seed + state serialization for replay.
 - [x] Collision event callbacks for audio.
-- [x] Hardening: max dice (500), max hull verts (64), memory cap (64 MB), NaN checks.
+- [x] Hardening: max dice (500), max hull verts (64), max static colliders (512, was silently 128 — `addStatic*` now reports drops via `getStaticCapacityDroppedCount()` instead of no-op failing), memory cap (64 MB), NaN checks.
 - [x] Experimental Worker bridge (`src/wasm/WorkerPhysicsBridge.js`).
 
 ### Phase 4 (Complete)
@@ -661,7 +705,7 @@ const t2 = window.getWasmEngine().getTransforms();
 
 ### Phase 6 (Broadphase, SIMD, bench — complete)
 
-- [x] Uniform XZ grid broadphase for die–die pairs (`resolveDieCollisions` in `dice_physics/dice_engine_collision_dynamic.hpp`); brute-force parity unit test.
+- [x] Uniform XZ grid broadphase for die–die pairs (`resolveDieCollisions` in `dice_physics/dice_engine_collision_dynamic.cpp`); brute-force parity unit test.
 - [x] Skip container/static/table resolution for sleeping bodies.
 - [x] Extended SIMD: `transformHullVerts` (quat→mat3, 4-wide) in `satTest`; scalar fallback via `DICE_FORCE_SCALAR_SAT` / `build.sh --scalar`.
 - [x] `StepStats` + `getLastStepStats()` exposed to JS; worker SAB header slots for `?debug-perf`.
