@@ -3,6 +3,7 @@ import '../Bone.js';
 import '../Cauldron.js';
 import '../BreadLoaf.js';
 import '../Chalk.js';
+import '../Quill.js';
 
 const environmentModules = import.meta.glob('../*.js', { eager: true });
 

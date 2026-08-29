@@ -1,4 +1,5 @@
 export const SHADOW_DISABLED_PROP_NAMES = new Set([
+    'Quill',
     'Chalk',
     'Dart',
     'Bell',
