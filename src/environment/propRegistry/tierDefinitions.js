@@ -206,6 +206,7 @@ export const TIER_PROP_DEFINITIONS = {
         }),
     ],
     tier3: [
+        factoryEntry('Quill', { randomPool: true }),
         factoryEntry('Dagger', {
             randomPool: true,
             position: { x: 13, y: -2.45, z: 11 },
