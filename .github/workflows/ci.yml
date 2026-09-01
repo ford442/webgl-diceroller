@@ -25,6 +25,7 @@ jobs:
             - run: npm ci
             - run: npm run build:js
             - run: npm run check:bundle-size
+            - run: npm run test:unit
             - run: npm run test:notation
             - run: npm run test:share-roll
             - run: npm run test:simd-support

@@ -5,11 +5,21 @@ import '../BreadLoaf.js';
 import '../Chalk.js';
 import '../Quill.js';
 
-const environmentModules = import.meta.glob('../*.js', { eager: true });
+const environmentModules = import.meta.glob(
+    [
+        '../*.js',
+        '!../PropRegistry.js',
+        '!../propKit.js',
+        '!../PropPhysics.js',
+        '!../PropLifecycle.js',
+    ],
+    { eager: true }
+);
 
 export const PROP_FACTORIES = {};
 
 for (const [path, mod] of Object.entries(environmentModules)) {
+    if (path.endsWith('/PropRegistry.js')) continue;
     const baseName = path.split('/').pop().replace('.js', '');
     for (const [exportName, value] of Object.entries(mod)) {
         if (typeof value !== 'function' || !exportName.startsWith('create')) continue;

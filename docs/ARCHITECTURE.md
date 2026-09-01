@@ -104,11 +104,13 @@ Systems register via `scheduler.register(phase, name, fn, { priority })`. Prop `
 
 Table layout (decor count, clutter, theme) comes from [`TableLayoutConfig.js`](../src/core/TableLayoutConfig.js) and [`RandomLayout.js`](../src/core/RandomLayout.js).
 
+Shared KTX2/JPG textures, dice GLBs, Draco/Basis transcoders, and other files under `public/` must be loaded through [`publicAssetUrl.js`](../src/core/publicAssetUrl.js) (`import.meta.env.BASE_URL`) — not raw `./images/…` strings — so subdirectory deploys (e.g. `go.1ink.us/dice-roller/`) do not request host-root `/images/`.
+
 ## Prop registry
 
 [`PropRegistry.js`](../src/environment/PropRegistry.js) is the catalogue and spawn pipeline for environment props.
 
-**Factory discovery** — `import.meta.glob('./*.js')` collects every `createXxx` export into `PROP_FACTORIES`.
+**Factory discovery** — `import.meta.glob` in [`factories.js`](../src/environment/propRegistry/factories.js) collects every `createXxx` export from `src/environment/*.js` into `PROP_FACTORIES`, excluding the `PropRegistry.js` barrel and helper modules (`propKit`, `PropPhysics`, `PropLifecycle`).
 
 **Spawn** — `spawnProp(entry, context)` either calls `entry.call(context)` or invokes the factory with `(scene, physicsWorld, position, rotation)`. Positions with legacy tabletop `y ≈ -2.75` are adjusted via `toCurrentTabletopY()` from [`SceneMetrics.js`](../src/core/SceneMetrics.js).
 

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { publicAssetUrl } from './publicAssetUrl.js';
 
 let pipeline = null;
 const sets = {
@@ -30,7 +31,7 @@ function assignColorSpace(texture, colorSpace) {
  */
 export function initTexturePipeline(renderer) {
     const ktx2Loader = new KTX2Loader();
-    ktx2Loader.setTranscoderPath('./basis/');
+    ktx2Loader.setTranscoderPath(publicAssetUrl('basis/'));
     ktx2Loader.detectSupport(renderer);
 
     const jpgLoader = new THREE.TextureLoader();
@@ -101,9 +102,9 @@ async function loadWoodSet(tp) {
     const srgb = THREE.SRGBColorSpace;
     const linear = THREE.NoColorSpace;
     const [diffuse, roughness, bump] = await Promise.all([
-        tp.load('./images/wood_diffuse.jpg', { colorSpace: srgb }),
-        tp.load('./images/wood_roughness.jpg', { colorSpace: linear }),
-        tp.load('./images/wood_bump.jpg', { colorSpace: linear }),
+        tp.load(publicAssetUrl('images/wood_diffuse.jpg'), { colorSpace: srgb }),
+        tp.load(publicAssetUrl('images/wood_roughness.jpg'), { colorSpace: linear }),
+        tp.load(publicAssetUrl('images/wood_bump.jpg'), { colorSpace: linear }),
     ]);
     applyRepeat([diffuse, roughness, bump]);
     assignColorSpace(diffuse, srgb);
@@ -116,10 +117,10 @@ async function loadTableSet(tp) {
     const srgb = THREE.SRGBColorSpace;
     const linear = THREE.NoColorSpace;
     const [diffuse, roughness, normal, ao] = await Promise.all([
-        tp.load('./images/table_diff.jpg', { colorSpace: srgb }),
-        tp.load('./images/table_rough.jpg', { colorSpace: linear }),
-        tp.load('./images/table_nor.jpg', { colorSpace: linear }),
-        tp.load('./images/table_ao.jpg', { colorSpace: linear }),
+        tp.load(publicAssetUrl('images/table_diff.jpg'), { colorSpace: srgb }),
+        tp.load(publicAssetUrl('images/table_rough.jpg'), { colorSpace: linear }),
+        tp.load(publicAssetUrl('images/table_nor.jpg'), { colorSpace: linear }),
+        tp.load(publicAssetUrl('images/table_ao.jpg'), { colorSpace: linear }),
     ]);
     applyRepeat([diffuse, roughness, normal, ao], 4, 4);
     assignColorSpace(diffuse, srgb);
@@ -131,9 +132,9 @@ async function loadBrickSet(tp) {
     const srgb = THREE.SRGBColorSpace;
     const linear = THREE.NoColorSpace;
     const [diffuse, bump, roughness] = await Promise.all([
-        tp.load('./images/brick_diffuse.jpg', { colorSpace: srgb }),
-        tp.load('./images/brick_bump.jpg', { colorSpace: linear }),
-        tp.load('./images/brick_roughness.jpg', { colorSpace: linear }),
+        tp.load(publicAssetUrl('images/brick_diffuse.jpg'), { colorSpace: srgb }),
+        tp.load(publicAssetUrl('images/brick_bump.jpg'), { colorSpace: linear }),
+        tp.load(publicAssetUrl('images/brick_roughness.jpg'), { colorSpace: linear }),
     ]);
     applyRepeat([diffuse, bump, roughness]);
     assignColorSpace(diffuse, srgb);
@@ -145,7 +146,7 @@ async function loadBrickSet(tp) {
 async function loadLampSet(tp) {
     const srgb = THREE.SRGBColorSpace;
     const linear = THREE.NoColorSpace;
-    const base = './images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_';
+    const base = publicAssetUrl('images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp_');
     const [copper, glass, glassBump, steel, wood] = await Promise.all([
         tp.load(`${base}cooper.jpg`, { colorSpace: srgb }),
         tp.load(`${base}glass.jpg`, { colorSpace: srgb }),

@@ -1,6 +1,7 @@
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { publicAssetUrl } from './publicAssetUrl.js';
 
 let gltfLoader = null;
 let dracoLoader = null;
@@ -10,7 +11,7 @@ export function initPropAssetLoader() {
     if (gltfLoader) return { gltfLoader, dracoLoader, objLoader };
 
     dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('./draco/');
+    dracoLoader.setDecoderPath(publicAssetUrl('draco/'));
 
     gltfLoader = new GLTFLoader();
     gltfLoader.setDRACOLoader(dracoLoader);

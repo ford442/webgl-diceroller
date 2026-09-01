@@ -138,6 +138,7 @@ export default [
             'scripts/**/*.{js,mjs}',
             'tests/**/*.{js,mjs}',
             'vite.config.js',
+            'vitest.config.js',
             'eslint.config.js',
         ],
         languageOptions: {
@@ -177,6 +178,17 @@ export default [
             },
         },
     },
+    {
+        files: ['tests/unit/**/*.js'],
+        languageOptions: {
+            ecmaVersion: 2022,
+            sourceType: 'module',
+            globals: {
+                ...globals.node,
+                ...globals.es2021,
+            },
+        },
+    },
     eslintConfigPrettier,
     {
         files: ['src/environment/**/*.js'],
@@ -202,11 +214,13 @@ export default [
                         },
                         {
                             name: '../physics.js',
-                            message: 'Props must not import physics.js — use propKit/StaticColliderBridge.',
+                            message:
+                                'Props must not import physics.js — use propKit/StaticColliderBridge.',
                         },
                         {
                             name: '../../physics.js',
-                            message: 'Props must not import physics.js — use propKit/StaticColliderBridge.',
+                            message:
+                                'Props must not import physics.js — use propKit/StaticColliderBridge.',
                         },
                     ],
                 },

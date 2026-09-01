@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { publicAssetUrl } from '../core/publicAssetUrl.js';
 import { ensureBodyPipGroups } from './DiceGeometryGroups.js';
 import {
     createDiceMaterials,
@@ -18,7 +19,7 @@ import { diceModels, spawnedDice, diceMeshPool, diceTypes } from './DiceState.js
 import { finalizeDieTemplateUserData } from './DiceFaceData.js';
 
 const dracoLoader = new DRACOLoader();
-dracoLoader.setDecoderPath('./draco/');
+dracoLoader.setDecoderPath(publicAssetUrl('draco/'));
 const loader = new GLTFLoader();
 loader.setDRACOLoader(dracoLoader);
 
@@ -84,7 +85,7 @@ export const loadDiceModels = async (onProgress) => {
             (d) =>
                 new Promise((resolve) => {
                     let timedOut = false;
-                    const url = `./images/${d.file}`;
+                    const url = publicAssetUrl(`images/${d.file}`);
                     const timer = setTimeout(() => {
                         console.warn(`Timeout loading ${url}`);
                         timedOut = true;

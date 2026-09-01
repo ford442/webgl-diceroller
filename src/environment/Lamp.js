@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { loadPropMesh } from '../core/PropAssetLoader.js';
+import { publicAssetUrl } from '../core/publicAssetUrl.js';
 import { getLampTextures } from '../core/TexturePipeline.js';
 import { playPropImpact } from '../audio/DiceCollisionAudio.js';
 
@@ -99,8 +100,10 @@ export async function createLamp() {
 
     let object;
     try {
-        object = await loadPropMesh('./images/props/billiard_lamp.glb', {
-            fallbackObjUrl: './images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj',
+        object = await loadPropMesh(publicAssetUrl('images/props/billiard_lamp.glb'), {
+            fallbackObjUrl: publicAssetUrl(
+                'images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj'
+            ),
         });
     } catch (e) {
         console.error('Failed to load lamp model:', e);

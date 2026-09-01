@@ -10,31 +10,41 @@ const COOP_COEP_HEADERS = {
 
 /** Tier-0 assets: table/brick/wood textures, dice GLBs, transcoder wasm. */
 const CRITICAL_PRELOADS = [
-    './images/table_diff.ktx2',
-    './images/table_nor.ktx2',
-    './images/table_rough.ktx2',
-    './images/brick_diffuse.ktx2',
-    './images/wood_diffuse.ktx2',
-    './images/dice/die_4.glb',
-    './images/dice/die_6.glb',
-    './images/dice/die_8.glb',
-    './images/dice/die_10.glb',
-    './images/dice/die_12.glb',
-    './images/dice/die_20.glb',
-    './draco/draco_decoder.wasm',
-    './basis/basis_transcoder.wasm',
+    'images/table_diff.ktx2',
+    'images/table_nor.ktx2',
+    'images/table_rough.ktx2',
+    'images/brick_diffuse.ktx2',
+    'images/wood_diffuse.ktx2',
+    'images/dice/die_4.glb',
+    'images/dice/die_6.glb',
+    'images/dice/die_8.glb',
+    'images/dice/die_10.glb',
+    'images/dice/die_12.glb',
+    'images/dice/die_20.glb',
+    'draco/draco_decoder.wasm',
+    'basis/basis_transcoder.wasm',
 ];
 
 if (existsSync(resolve('public/wasm/dice_physics.wasm'))) {
-    CRITICAL_PRELOADS.push('./wasm/dice_physics.wasm');
+    CRITICAL_PRELOADS.push('wasm/dice_physics.wasm');
+}
+
+function joinPublicHref(base, relativePath) {
+    const dirBase = base.endsWith('/') ? base : `${base}/`;
+    return `${dirBase}${relativePath.replace(/^\//, '')}`;
 }
 
 function injectCriticalPreloads() {
+    let base = './';
     return {
         name: 'inject-critical-preloads',
+        configResolved(config) {
+            base = config.base || './';
+        },
         transformIndexHtml(html) {
             const tags = CRITICAL_PRELOADS.map(
-                (href) => `<link rel="preload" href="${href}" as="fetch" crossorigin>`
+                (href) =>
+                    `<link rel="preload" href="${joinPublicHref(base, href)}" as="fetch" crossorigin>`
             ).join('\n    ');
             return html.replace('</head>', `    ${tags}\n  </head>`);
         },
