@@ -287,7 +287,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 - **ESLint + Prettier** enforce a minimal ruleset (`eslint:recommended`, unused imports/vars, `eqeqeq`, import resolution). Config: [`eslint.config.js`](eslint.config.js), [`.prettierrc`](.prettierrc).
 - Run `npm run lint` before committing; CI blocks merge on lint/format failures.
-- **TypeScript policy:** `npm run typecheck` (`tsc --noEmit`, `checkJs` over all of `src/`). `npm run typecheck:strict` runs `strict: true` on converted seams (`src/roll/`, WASM flag/layout/command modules, `src/net/Protocol` + `SignalingClient`, `AppEvents` / `AppContext` / `FrameScheduler` / `RendererFactory`). No `tsc` emit — Vite bundles `.ts` directly. **Environment props stay JavaScript** with JSDoc until individually migrated through `propKit`; do not bulk-convert the ~99 prop modules.
+- **TypeScript policy:** `npm run typecheck` (`tsc --noEmit`, `checkJs` over all of `src/`). `npm run typecheck:strict` runs `strict: true` on converted seams (`src/roll/`, WASM flag/layout/command modules, the physics worker + `WorkerPhysicsBridge.ts`, `src/net/Protocol` + `SignalingClient`, `AppEvents` / `AppContext` / `FrameScheduler` / `RendererFactory`). `npm run check:cycles` covers `.js` **and** `.ts`, declaration files included — keep it green (that is why `ComposerLike` lives in `src/types/renderer.d.ts` rather than `app.d.ts`). No `tsc` emit — Vite bundles `.ts` directly. **Environment props stay JavaScript** with JSDoc until individually migrated through `propKit`; do not bulk-convert the ~99 prop modules.
 - Native solver tests always write `src/wasm/build-native/compile_commands.json` (`npm run test:solver`; no `bear`/`compiledb` needed), and `src/wasm/.clangd` points clangd at it. CMake also exports `compile_commands.json` (`CMAKE_EXPORT_COMPILE_COMMANDS`) and Debug builds use `emcc_flags.sh` debug profile (`-O0 -g`), not release `-O3 -flto`.
 - **Format on save (Cursor / VS Code):** enable Prettier as the default formatter and `"editor.formatOnSave": true` so agent edits match project style. ESLint fixes on save: `"editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" }`.
 - Optional local hook: `npm install` runs `husky` + `lint-staged` (ESLint fix + Prettier on staged `*.{js,mjs}`).
@@ -332,7 +332,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 #### Authoring recipe
 
 1. Create `src/environment/PropName.js` using `createProp` from [`src/environment/propKit.js`](src/environment/propKit.js).
-2. Export a factory: `(scene, physicsWorld?, position?, rotation?)`.
+2. Export a factory: `(scene, physicsWorld?, position?, rotation?, options?)`. Accept `{ scale = 1 } = {}` as the fifth argument and pass it to `createProp` if the prop should also be usable as tabletop clutter.
 3. Build geometry inside the `build({ group, materials, mesh })` callback; use `materials.*` from the kit (backed by [`MaterialPalette.js`](src/core/MaterialPalette.js)) instead of inline `MeshStandardMaterial`.
 4. Declare colliders as a spec array — routed through [`StaticColliderBridge.js`](src/core/StaticColliderBridge.js), not direct `getPropAmmo` / `createPropStaticBody` calls.
 5. Return `{ group }` plus optional `update`, `interact`, `body`, etc.
@@ -341,6 +341,31 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 8. For small/decorative props, add the factory name to `SHADOW_DISABLED_PROP_NAMES` in `PropRegistry.js` (shadow policy lives in the registry, not in the prop module).
 
 Tabletop positions in tier entries may still use legacy `y: -2.75`; `PropRegistry.resolveEntryPosition` applies `toCurrentTabletopY` at spawn. Use `footOffsetY` in `createProp` when the mesh origin is not at the resting foot (e.g. a cylinder whose center is mid-height).
+
+#### Never fork a prop for clutter
+
+`RandomClutter.js`'s `CLUTTER_REGISTRY` and `PropRegistry`'s tier entries spawn the
+**same** modules. To make a named prop available as scattered clutter, add a registry
+entry wrapping it in `asClutter()` from
+[`src/environment/clutter/adaptProp.js`](src/environment/clutter/adaptProp.js):
+
+```js
+{ id: 'mug', create: asClutter(createMug, { x: 5, z: 5, scale: 0.85 }), weight: 1 }
+```
+
+`asClutter` resolves the seeded slot, converts the legacy tabletop `y`, and reports the
+root via `options.track`. Pass `placed: false` for a prop that should stay pinned at its
+default spot instead of taking a scatter slot.
+
+Do **not** hand-roll a second geometry under `clutter/*.js` — that fork is what left the
+tavern with two mugs, two pencils and two keys that could not be themed together. The
+remaining `clutter/*.js` factories (coins, candle, book, parchment, quill, tarot cards,
+wanted poster, gemstone, potion bottle, d20 holder) are the ones with no named twin yet;
+promote one to `src/environment/` rather than adding another.
+
+`createProp`'s `scale` scales the group _and_ the collider spec — lengths and offsets by
+`scale`, mass by `scale³` — because `StaticColliderBridge` reads shape dimensions from
+the spec and ignores `group.scale`.
 
 #### Collider spec examples
 

@@ -21,6 +21,9 @@ export function buildTierLoadOptions(app, deps) {
         setCandleFlamePos,
         setInteraction,
         getDiceCupController,
+        getDiceTowerController,
+        getDiceTrayController,
+        getDiceJailController,
         getShadowController,
     } = deps;
 
@@ -49,7 +52,20 @@ export function buildTierLoadOptions(app, deps) {
                 diceCupController?.tryGrabCup();
             }
         },
-        getDiceCupState: () => getDiceCupController()?.getState() ?? { available: false, state: 'idle' },
+        getDiceCupState: () =>
+            getDiceCupController()?.getState() ?? { available: false, state: 'idle' },
+        onDiceTowerInteract: () => {
+            getDiceTowerController()?.dropDice('all');
+        },
+        getDiceTowerController,
+        onDiceTrayInteract: () => {
+            getDiceTrayController()?.trigger();
+        },
+        getDiceTrayController,
+        onDiceJailInteract: () => {
+            getDiceJailController()?.trigger();
+        },
+        getDiceJailController,
         interactionHooks: {
             onMotionActivityChange: (active, source) => {
                 const shadowController = getShadowController();

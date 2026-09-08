@@ -28,6 +28,7 @@ ENGINE_SOURCES=(
     "${SCRIPT_DIR}/dice_physics/dice_engine_collision_dynamic.cpp"
     "${SCRIPT_DIR}/dice_physics/dice_engine_integrate.cpp"
     "${SCRIPT_DIR}/dice_physics/dice_engine_face_value.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_dynamics.cpp"
 )
 ALL_SOURCES=("${SCRIPT_DIR}/solver_tests.cpp" "${ENGINE_SOURCES[@]}")
 
@@ -65,6 +66,40 @@ echo "[test:solver] Writing ${BUILD_DIR}/compile_commands.json..."
     echo ""
     echo "]"
 } > "${BUILD_DIR}/compile_commands.json"
+
+# Guard the clangd contract (see .clangd -> CompilationDatabase: build-native):
+# the database must exist, parse as JSON, and carry one entry per translation
+# unit we just compiled. Runs in CI via `npm run test:solver`.
+echo "[test:solver] Verifying compile_commands.json..."
+node - "${BUILD_DIR}/compile_commands.json" "${#ALL_SOURCES[@]}" <<'NODE'
+const fs = require('fs');
+const [dbPath, expectedCount] = process.argv.slice(2);
+const fail = (msg) => {
+    console.error(`[test:solver] compile_commands.json check failed: ${msg}`);
+    process.exit(1);
+};
+if (!fs.existsSync(dbPath)) fail(`${dbPath} was not generated`);
+let db;
+try {
+    db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+} catch (err) {
+    fail(`${dbPath} is not valid JSON (${err.message})`);
+}
+if (!Array.isArray(db)) fail('expected a top-level JSON array');
+if (db.length !== Number(expectedCount)) {
+    fail(`expected ${expectedCount} entries (one per translation unit), got ${db.length}`);
+}
+for (const entry of db) {
+    for (const key of ['directory', 'file', 'arguments']) {
+        if (!(key in entry)) fail(`entry missing "${key}": ${JSON.stringify(entry)}`);
+    }
+    if (!Array.isArray(entry.arguments) || entry.arguments.length === 0) {
+        fail(`entry has empty "arguments": ${entry.file}`);
+    }
+    if (!fs.existsSync(entry.file)) fail(`entry references missing file: ${entry.file}`);
+}
+console.log(`[test:solver] compile_commands.json ok (${db.length} translation units).`);
+NODE
 
 echo "[test:solver] Running unit + fuzz tests..."
 (cd "${REPO_ROOT}" && "${BIN}")

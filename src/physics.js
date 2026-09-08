@@ -653,6 +653,63 @@ export const createStaticBody = (world, mesh, shape) => {
 };
 
 /**
+ * A mass>0 sibling of createStaticBody for dynamic (knockable) props —
+ * unlike spawnDicePhysics, no center-of-mass-offset compound-shape handling
+ * is needed here since props don't need per-face mass weighting.
+ *
+ * @param {AmmoWorld | null | undefined} world
+ * @param {import('three').Object3D} mesh
+ * @param {import('./types/ammo').AmmoCollisionShape | null | undefined} shape
+ * @param {number} mass
+ * @returns {AmmoRigidBody | null}
+ */
+export const createPropDynamicBody = (world, mesh, shape, mass) => {
+    if (!AmmoInstance || !world || !shape || !mass || mass <= 0) {
+        if (mesh) mesh.userData.physicsBody = null;
+        return null;
+    }
+
+    shape.setMargin?.(0.01);
+
+    const transform = new AmmoInstance.btTransform();
+    transform.setIdentity();
+    transform.setOrigin(
+        new AmmoInstance.btVector3(mesh.position.x, mesh.position.y, mesh.position.z)
+    );
+
+    const q = new AmmoInstance.btQuaternion(
+        mesh.quaternion.x,
+        mesh.quaternion.y,
+        mesh.quaternion.z,
+        mesh.quaternion.w
+    );
+    transform.setRotation(q);
+
+    const motionState = new AmmoInstance.btDefaultMotionState(transform);
+    const localInertia = new AmmoInstance.btVector3(0, 0, 0);
+    shape.calculateLocalInertia(mass, localInertia);
+
+    const rbInfo = new AmmoInstance.btRigidBodyConstructionInfo(
+        mass,
+        motionState,
+        shape,
+        localInertia
+    );
+    const body = new AmmoInstance.btRigidBody(rbInfo);
+    body.setActivationState(4);
+
+    world.addRigidBody(body);
+    mesh.userData.physicsBody = body;
+
+    AmmoInstance.destroy(rbInfo);
+    AmmoInstance.destroy(localInertia);
+    AmmoInstance.destroy(q);
+    AmmoInstance.destroy(transform);
+
+    return body;
+};
+
+/**
  * @param {import('three').Mesh} mesh
  * @returns {import('./types/ammo').AmmoCollisionShape | null}
  */

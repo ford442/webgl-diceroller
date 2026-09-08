@@ -6,7 +6,8 @@ export function createDMScreen(
     scene,
     physicsWorld,
     position = { x: 0, y: -2.75, z: -7 },
-    rotationY = 0
+    rotationY = 0,
+    { scale = 1 } = {}
 ) {
     const panelThickness = 0.2;
     const panelHeight = 4.0;
@@ -28,6 +29,7 @@ export function createDMScreen(
         name: 'DMScreen',
         position,
         rotation: rotationY,
+        scale,
         colliders: [
             {
                 type: 'box',
@@ -56,8 +58,11 @@ export function createDMScreen(
             },
         ],
         build({ group }) {
-            const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } =
-                getWoodTextures();
+            const {
+                diffuse: woodDiffuse,
+                bump: woodBump,
+                roughness: woodRoughness,
+            } = getWoodTextures();
             woodDiffuse.repeat.set(1, 1);
             woodBump.repeat.set(1, 1);
             woodRoughness.repeat.set(1, 1);
@@ -73,8 +78,24 @@ export function createDMScreen(
                 color: 0x8b5a2b,
             });
 
+            // BoxGeometry material slots: 0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z.
+            // Only the DM-facing (+z) side of the center panel carries the charts.
+            const chartsMaterial = new THREE.MeshStandardMaterial({
+                map: generateDMChartsTexture(),
+                roughness: 0.7,
+                metalness: 0.05,
+            });
+            const centerMaterials = [
+                woodMaterial,
+                woodMaterial,
+                woodMaterial,
+                woodMaterial,
+                chartsMaterial,
+                woodMaterial,
+            ];
+
             const centerGeom = new THREE.BoxGeometry(centerPanelWidth, panelHeight, panelThickness);
-            const centerMesh = new THREE.Mesh(centerGeom, woodMaterial);
+            const centerMesh = new THREE.Mesh(centerGeom, centerMaterials);
             centerMesh.position.set(0, panelHeight / 2, 0);
             centerMesh.castShadow = true;
             centerMesh.receiveShadow = true;
@@ -101,4 +122,46 @@ export function createDMScreen(
             group.add(rightPivot);
         },
     });
+}
+
+function generateDMChartsTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#fdf5e6';
+    ctx.fillRect(0, 0, 1024, 512);
+
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 30px serif';
+    ctx.fillText('RANDOM ENCOUNTERS', 50, 50);
+
+    ctx.beginPath();
+    ctx.lineWidth = 2;
+    ctx.moveTo(50, 60);
+    ctx.lineTo(400, 60);
+    ctx.stroke();
+
+    ctx.font = '24px monospace';
+    for (let i = 0; i < 10; i++) {
+        ctx.fillText(`1d20 + ${i}: Goblin Skirmisher`, 50, 90 + i * 30);
+    }
+
+    ctx.font = 'bold 30px serif';
+    ctx.fillText('WEAPON STATS', 500, 50);
+    ctx.beginPath();
+    ctx.moveTo(500, 60);
+    ctx.lineTo(900, 60);
+    ctx.stroke();
+
+    ctx.font = '24px monospace';
+    const weapons = ['Dagger      1d4', 'Shortsword  1d6', 'Longsword   1d8', 'Greataxe    1d12'];
+    weapons.forEach((w, i) => {
+        ctx.fillText(w, 500, 90 + i * 30);
+    });
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
 }

@@ -5,7 +5,8 @@ export function createPencil(
     scene,
     physicsWorld,
     position = { x: -4, y: -2.75, z: -6 },
-    rotationY = -Math.PI / 4
+    rotationY = -Math.PI / 4,
+    { scale = 1 } = {}
 ) {
     const pencilRadius = 0.1;
     const bodyLength = 3;
@@ -19,6 +20,7 @@ export function createPencil(
         position,
         rotation: rotationY,
         footOffsetY: pencilRadius,
+        scale,
         colliders: [
             {
                 type: 'cylinder',
@@ -47,9 +49,13 @@ export function createPencil(
             });
 
             group.add(
-                mesh(new THREE.CylinderGeometry(pencilRadius, pencilRadius, eraserLength, 16), eraserMat, {
-                    position: { y: eraserLength / 2 - totalLength / 2 },
-                })
+                mesh(
+                    new THREE.CylinderGeometry(pencilRadius, pencilRadius, eraserLength, 16),
+                    eraserMat,
+                    {
+                        position: { y: eraserLength / 2 - totalLength / 2 },
+                    }
+                )
             );
             group.add(
                 mesh(
@@ -64,14 +70,25 @@ export function createPencil(
                 )
             );
             group.add(
-                mesh(new THREE.CylinderGeometry(pencilRadius, pencilRadius, bodyLength, 6), yellowPaintMat, {
-                    position: { y: eraserLength + ferruleLength + bodyLength / 2 - totalLength / 2 },
-                })
+                mesh(
+                    new THREE.CylinderGeometry(pencilRadius, pencilRadius, bodyLength, 6),
+                    yellowPaintMat,
+                    {
+                        position: {
+                            y: eraserLength + ferruleLength + bodyLength / 2 - totalLength / 2,
+                        },
+                    }
+                )
             );
             group.add(
                 mesh(new THREE.ConeGeometry(pencilRadius, tipLength, 16), woodMat, {
                     position: {
-                        y: eraserLength + ferruleLength + bodyLength + tipLength / 2 - totalLength / 2,
+                        y:
+                            eraserLength +
+                            ferruleLength +
+                            bodyLength +
+                            tipLength / 2 -
+                            totalLength / 2,
                     },
                 })
             );

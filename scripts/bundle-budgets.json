@@ -4,9 +4,30 @@
         "index": { "pattern": "^assets/index-.*\\.js$", "gzipMax": 175000 },
         "three": { "pattern": "^assets/three-[^.]+\\.js$", "gzipMax": 195000 },
         "three.webgpu": { "pattern": "^assets/three\\.webgpu-.*\\.js$", "gzipMax": 180000 },
-        "physics": { "pattern": "^assets/physics-.*\\.js$", "gzipMax": 310000 }
+        "physics": { "pattern": "^assets/physics-.*\\.js$", "gzipMax": 310000 },
+        "rectAreaLtc": {
+            "pattern": "^assets/RectAreaLightTexturesLib-.*\\.js$",
+            "gzipMax": 115000
+        }
     },
+    "demandLoadedComment": "Chunks fetched only by a subset of sessions, so they do not belong in the every-session (eager) total. Each still needs its own `chunks` budget or an explicit note below.",
+    "demandLoaded": [
+        {
+            "pattern": "^assets/RectAreaLightTexturesLib-.*\\.js$",
+            "reason": "LTC BRDF tables; WebGPU at the high quality profile only (AccentLightRig.js)"
+        },
+        {
+            "pattern": "^assets/GodRayNodeMaterial-.*\\.js$",
+            "reason": "TSL god-ray twin; WebGPU only"
+        },
+        {
+            "pattern": "^assets/AmmoDiceBackend-.*\\.js$",
+            "reason": "ammo.js dice fallback; ?no-wasm only"
+        },
+        { "pattern": "^assets/Xr.*\\.js$", "reason": "WebXR seated spike; ?xr only" }
+    ],
     "totals": {
-        "jsGzipMax": 900000
+        "jsGzipMax": 900000,
+        "allChunksGzipMax": 1050000
     }
 }

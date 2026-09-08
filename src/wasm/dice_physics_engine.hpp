@@ -34,6 +34,10 @@ public:
     static constexpr int MAX_VERTICES_PER_HULL = 64;
     static constexpr int MAX_EVENTS_PER_STEP = 1024;
     static constexpr uint32_t FLAG_NO_DRAG = 1u << 0;
+    // Soft cap on dynamic (non-die) rigid-body props — knockable clutter.
+    // Small on purpose: dynamic×die/dynamic×dynamic pairs are brute-forced
+    // (no broadphase grid), which is trivial at this scale.
+    static constexpr int MAX_DYNAMICS = 64;
 
     DicePhysicsEngine();
 
@@ -118,6 +122,54 @@ public:
                               int segments, bool closedBottom,
                               int materialTag);
 
+    // -----------------------------------------------------------------
+    // Dynamic (non-die) rigid-body props — knockable clutter.
+    // -----------------------------------------------------------------
+
+    /** Remove all registered dynamic props. */
+    void clearDynamics();
+
+    bool removeDynamic(int userId);
+
+    void setDynamicKinematic(int userId, bool kinematic);
+
+    void setDynamicTransform(int userId, float px, float py, float pz,
+                             float qx, float qy, float qz, float qw);
+
+    void setDynamicVelocity(int userId, float lvx, float lvy, float lvz,
+                            float avx, float avy, float avz);
+
+    void applyDynamicImpulse(int userId, float fx, float fy, float fz);
+
+    void applyDynamicTorqueImpulse(int userId, float tx, float ty, float tz);
+
+    /**
+     * Axis-aligned box in local space, posed by center + quaternion.
+     * mass must be > 0 (use a static collider for immovable geometry).
+     * materialTag: 0=default, 1=velvet, 2=wood, 3=metal, 4=leather
+     */
+    int addDynamicBox(int userId, float mass,
+                      float cx, float cy, float cz,
+                      float hx, float hy, float hz,
+                      float qx, float qy, float qz, float qw,
+                      int materialTag);
+
+    /** Convex hull vertices in local space (flat xyz). mass must be > 0. */
+    int addDynamicHull(int userId, float mass,
+                       float cx, float cy, float cz,
+                       float qx, float qy, float qz, float qw,
+                       const std::vector<float>& flatVerts,
+                       int materialTag);
+
+    int getDynamicCount() const;
+
+    /** Cumulative count of addDynamic* calls rejected because MAX_DYNAMICS was reached. */
+    uint32_t getDynamicCapacityDroppedCount() const;
+
+    const std::vector<float>& buildDynamicTransformBuffer();
+
+    const std::vector<float>& buildDynamicIdBuffer();
+
     void step(float dt);
 
     int getDieCount() const;
@@ -176,6 +228,11 @@ private:
     static constexpr int MAX_STATICS = 512;
     static constexpr int STATIC_EVENT_ID_BASE = -2000;
     static constexpr int TABLE_MATERIAL_TAG = 1; // velvet
+    // Collision-event id encoding for dynamic props, well clear of
+    // STATIC_EVENT_ID_BASE's range so idA/idB unambiguously identify which
+    // kind of body was involved (die id >= 0, static <= STATIC_EVENT_ID_BASE,
+    // dynamic prop <= DYNAMIC_EVENT_ID_BASE).
+    static constexpr int DYNAMIC_EVENT_ID_BASE = -1000000;
 
     struct ContainerPlane {
         Vec3 normal;
@@ -186,6 +243,7 @@ private:
     int nextId_;
     std::vector<RigidBody> bodies_;
     std::vector<StaticBody> statics_;
+    std::vector<DynamicBody> dynamics_;
     std::vector<Contact> contacts_;
     std::vector<CollisionEvent> events_;
     std::vector<ContainerPlane> containerPlanes_;
@@ -193,11 +251,14 @@ private:
     mutable std::vector<float> idBuffer_;
     mutable std::vector<float> eventBuffer_;
     mutable std::vector<int32_t> faceValueBuffer_;
+    mutable std::vector<float> dynamicTransformBuffer_;
+    mutable std::vector<float> dynamicIdBuffer_;
     DeterministicRNG rng_;
     bool noDrag_ = false;
     bool containerActive_ = false;
     StepStats lastStepStats_;
     uint32_t staticCapacityDroppedCount_ = 0;
+    uint32_t dynamicCapacityDroppedCount_ = 0;
     bool useBroadphase_ = true;
 
     static constexpr float GRID_CELL_SIZE = 2.2f;
@@ -222,6 +283,7 @@ private:
 
     static void applyStaticMaterial(StaticBody& s, int tag);
     static int staticEventOtherId(int userId);
+    static int dynamicEventOtherId(int userId);
 
     void resolveStaticPlane(RigidBody& b, const Vec3& n, float d, const StaticBody& s);
     void resolveStaticHull(RigidBody& b, const StaticBody& s);
@@ -243,6 +305,32 @@ private:
     void forEachDiePair(const std::function<void(size_t, size_t)>& fn);
     void processDiePair(size_t i, size_t j, StepStats& stats);
     void resolveDieCollisions(float dt, StepStats& stats);
+
+    // -- Dynamic (non-die) rigid-body props -----------------------------
+    static float inertiaScalar(const DynamicBody& b);
+    static CollisionEvent makeEvent(
+        const DynamicBody& primary,
+        int otherId,
+        float impactSpeed,
+        float linearSpeedSq = -1.0f,
+        float angularSpeedSq = -1.0f,
+        int staticColliderId = 0,
+        int materialTag = 0
+    );
+    static void wake(DynamicBody& b);
+    void integrateDynamic(DynamicBody& b, float dt);
+    void checkSleepDynamic(DynamicBody& b, float dt) const;
+
+    void resolveDynamicStaticPlane(DynamicBody& b, const Vec3& n, float d, const StaticBody& s);
+    void resolveDynamicStaticHull(DynamicBody& b, const StaticBody& s);
+    void resolveDynamicStaticOpenCylinder(DynamicBody& b, const StaticBody& s);
+    void resolveDynamicStaticCollisions(DynamicBody& b);
+    void resolveDynamicContainerCollisions(DynamicBody& b);
+    void resolveDynamicTableCollision(DynamicBody& b);
+
+    void resolveDieDynamicContacts(StepStats& stats);
+    void resolveDynamicDynamicContacts(StepStats& stats);
+    void stepDynamics(float dt, StepStats& stats);
 };
 
 } // namespace dice_physics

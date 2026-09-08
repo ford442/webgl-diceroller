@@ -19,6 +19,7 @@ import {
     computeCameraAspect,
 } from './SceneMetrics.js';
 import { guessInitialQualityProfile } from './AdaptiveQuality.js';
+import { createAccentLightRig } from './AccentLightRig.js';
 import { prefersReducedMotion } from './AccessibilityPrefs.js';
 import { createPostRuntimeControls } from './PostRuntimeControls.js';
 
@@ -271,6 +272,17 @@ export async function setupScene(container) {
     scene.add(spotLight);
     scene.add(spotLight.target);
 
+    // Optional rect-area accent rig — WebGPU at the `high` profile only. Returns
+    // an inert handle (and downloads nothing) on WebGL, mobile and XR.
+    const accentLightRig = await createAccentLightRig(scene, {
+        rendererState,
+        profile: initialQuality,
+        reducedMotion,
+        searchParams: params,
+    });
+    scene.userData.accentLightRig = accentLightRig;
+    postConfig.accentLightsEnabled = accentLightRig.enabled;
+
     // Fog for depth
     scene.fog = new THREE.FogExp2(0x111111, 0.015);
 
@@ -397,5 +409,6 @@ export async function setupScene(container) {
         postRuntime,
         rendererState,
         initialQuality,
+        accentLightRig,
     };
 }

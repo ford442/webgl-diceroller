@@ -5,7 +5,8 @@ export function createMiniature(
     scene,
     physicsWorld,
     position = { x: 10, y: -2.75, z: -8 },
-    rotationY = 0
+    rotationY = 0,
+    { scale = 1 } = {}
 ) {
     const baseRadius = 0.4;
     const baseHeight = 0.1;
@@ -13,10 +14,11 @@ export function createMiniature(
     const headRadius = 0.25;
     const totalHeight = baseHeight + bodyHeight + headRadius * 2;
 
-    createProp(scene, physicsWorld, {
+    return createProp(scene, physicsWorld, {
         name: 'Miniature',
         position,
         rotation: rotationY,
+        scale,
         colliders: [
             {
                 type: 'cylinder',

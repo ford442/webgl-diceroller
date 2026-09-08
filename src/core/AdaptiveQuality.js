@@ -8,6 +8,8 @@ export const QUALITY_PROFILES = {
         godRaysEnabled: true,
         shadowLights: 'all',
         pixelRatioCap: 2,
+        // Rect-area accent lights (WebGPU only) — see AccentLightRig.js.
+        extraLights: true,
     },
     medium: {
         id: 'medium',
@@ -16,6 +18,7 @@ export const QUALITY_PROFILES = {
         godRaysEnabled: false,
         shadowLights: 'key',
         pixelRatioCap: 1.5,
+        extraLights: false,
     },
     mobile: {
         id: 'mobile',
@@ -24,6 +27,7 @@ export const QUALITY_PROFILES = {
         godRaysEnabled: false,
         shadowLights: 'key',
         pixelRatioCap: 1.25,
+        extraLights: false,
     },
     xr: {
         id: 'xr',
@@ -32,6 +36,7 @@ export const QUALITY_PROFILES = {
         godRaysEnabled: false,
         shadowLights: 'key',
         pixelRatioCap: 1.0,
+        extraLights: false,
     },
 };
 
@@ -127,6 +132,16 @@ export function setGodRaysVisible(scene, visible) {
     });
 }
 
+/**
+ * Toggle the WebGPU rect-area accent rig, if one was installed on this scene.
+ * A no-op everywhere else, so callers need no renderer checks.
+ * @param {import('three').Scene} scene
+ * @param {boolean} enabled
+ */
+export function setAccentLightsEnabled(scene, enabled) {
+    scene.userData.accentLightRig?.setEnabled?.(enabled);
+}
+
 export function applyShadowLightPolicy(scene, policy) {
     scene.traverse((child) => {
         if (!child.isLight || !child.castShadow) return;
@@ -199,6 +214,10 @@ export function applyQualityProfile({
     if (postRuntime && !postConfig.motionProfileActive) {
         postRuntime.restoreBaseline();
     }
+
+    // A profile downgrade (probe or live) must retire the WebGPU accent rig; an
+    // upgrade may bring it back, but only if it was built in the first place.
+    setAccentLightsEnabled(scene, profile.extraLights === true);
 
     runtimeGovernor?.refreshBaselineFromProfile?.(profile);
 

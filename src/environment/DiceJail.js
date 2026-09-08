@@ -16,10 +16,17 @@ export function createDiceJail(
     const wallH = height - 2 * thickness;
     const halfSize = size / 2;
 
+    // Interior cage region used for both "which dice are held" containment
+    // checks and as the drop target when holding nearby dice.
+    const halfExtents = { x: halfSize - thickness, y: height / 2, z: halfSize - thickness };
+    const interiorCenter = { x: 0, y: height / 2, z: 0 };
+
     return createProp(scene, physicsWorld, {
         name: 'DiceJail',
         position,
         rotation: rotationY,
+        halfExtents,
+        interiorCenter,
         colliders: [
             {
                 type: 'box',
@@ -53,8 +60,11 @@ export function createDiceJail(
             },
         ],
         build({ group }) {
-            const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } =
-                getWoodTextures();
+            const {
+                diffuse: woodDiffuse,
+                bump: woodBump,
+                roughness: woodRoughness,
+            } = getWoodTextures();
 
             const woodMat = new THREE.MeshStandardMaterial({
                 map: woodDiffuse,
@@ -87,8 +97,18 @@ export function createDiceJail(
             group.add(topMesh);
 
             const postRadius = 0.1;
-            const postGeo = new THREE.CylinderGeometry(postRadius, postRadius, height - 2 * thickness, 8);
-            const barGeo = new THREE.CylinderGeometry(barRadius, barRadius, height - 2 * thickness, 8);
+            const postGeo = new THREE.CylinderGeometry(
+                postRadius,
+                postRadius,
+                height - 2 * thickness,
+                8
+            );
+            const barGeo = new THREE.CylinderGeometry(
+                barRadius,
+                barRadius,
+                height - 2 * thickness,
+                8
+            );
 
             const barY = height / 2;
 

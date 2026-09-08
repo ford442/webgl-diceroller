@@ -233,6 +233,10 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         gongResult: context.state.gongData,
         fireplaceLight: context.state.fireplaceLight,
         diceCupProp: context.state.diceCupProp,
+        diceTowerProp: context.state.diceTowerProp,
+        diceTrayProp: context.state.diceTrayProp,
+        diceJailProp: context.state.diceJailProp,
+        characterSheetProp: context.state.characterSheetProp,
         tierRenderStats,
         diceCasePanel,
     };

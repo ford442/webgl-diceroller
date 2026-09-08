@@ -49,7 +49,7 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 - [x] **Phase 3:** Deterministic xorshift64* PRNG + state serialization for replay.
 - [x] **Phase 3:** Collision event buffer for audio/gameplay hooks.
 - [x] **Phase 3:** Hardening — max dice limits, hull vertex limits, memory caps, NaN checks.
-- [x] **Phase 3:** Experimental Web Worker bridge (`WorkerPhysicsBridge.js`).
+- [x] **Phase 3:** Experimental Web Worker bridge (`WorkerPhysicsBridge.ts`).
 - [x] **Phase 5:** Native solver test harness (`npm run test:solver`) — unit tests,
       2000-seed invariant fuzz loop, determinism checks, optional native↔WASM parity.
 
@@ -116,7 +116,7 @@ two reasons:
    (init,    │                                   │ + postMessage (collision events)
    addDie,   ▼                                   │
    impulse) ┌────────────────── physics worker ──┴───────────────────────┐
-            │  dice_physics.worker.js                                      │
+            │  dice_physics.worker.ts                                      │
             │   • owns DicePhysicsEngine (WASM)                            │
             │   • setInterval fixed-timestep loop @ 120 Hz                 │
             │   • copies heap transforms → SAB back buffer, flips `front`  │
@@ -384,6 +384,21 @@ emcmake cmake ../src/wasm   # dice_physics (SIMD → public/wasm/), dice_physics
 emmake make
 ```
 
+Unlike `build.sh` — which compiles and links in a single `em++` invocation, so
+every flag reaches the compiler — CMake compiles each translation unit and
+links separately. Codegen flags therefore have to be applied twice:
+
+| Printer                              | Used for                 | Carries                                                    |
+| ------------------------------------ | ------------------------ | ---------------------------------------------------------- |
+| `emcc_flags.sh --print-link-line`    | `LINK_FLAGS`             | everything, including `-s KEY=VALUE` linker settings       |
+| `emcc_flags.sh --print-compile-line` | `target_compile_options` | the same flags minus `-s` pairs (`-O3 -flto -msimd128`, …) |
+
+`-msimd128` is what defines `__wasm_simd128__`, and `-DDICE_FORCE_SCALAR_SAT`
+is a preprocessor define (both gate `dice_sat.hpp`). Passing them as
+`LINK_FLAGS` only builds a **non-SIMD** binary byte-identical to the scalar
+target. `scripts/verify-emcc-flags-sync.sh` asserts CMake keeps using both
+printers so that regression cannot return.
+
 A `-DCMAKE_BUILD_TYPE=Debug` configure only builds the `dice_physics` target
 (no scalar variant, matching `build.sh --debug`) and writes to the same
 `public/wasm/` tree the SIMD release build uses — CMake prints a `message(STATUS …)`
@@ -646,11 +661,11 @@ const t2 = window.__app.getWasmEngine().getTransforms();
 - [x] Deterministic seed + state serialization for replay.
 - [x] Collision event callbacks for audio.
 - [x] Hardening: max dice (500), max hull verts (64), max static colliders (512, was silently 128 — `addStatic*` now reports drops via `getStaticCapacityDroppedCount()` instead of no-op failing), memory cap (64 MB), NaN checks.
-- [x] Experimental Worker bridge (`src/wasm/WorkerPhysicsBridge.js`).
+- [x] Experimental Worker bridge (`src/wasm/WorkerPhysicsBridge.ts`).
 
 ### Phase 4 (Complete)
 
-- [x] Production physics Web Worker (`dice_physics.worker.js`) hosting the engine.
+- [x] Production physics Web Worker (`dice_physics.worker.ts`) hosting the engine.
 - [x] Self-paced fixed-timestep loop in the worker (main thread no longer steps).
 - [x] Double-buffered **SharedArrayBuffer** transform transport with an `Atomics`
       seqno/front/count/settled header (`workerLayout.js`), tear-free reads.

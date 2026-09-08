@@ -136,4 +136,69 @@ struct StaticBody {
     bool cylinderClosedBottom = false;
 };
 
+// ---------------------------------------------------------------------------
+// Dynamic (non-die) rigid-body props — knockable clutter (boxes/hulls with
+// mass), distinct from dice: caller-supplied id (like StaticBody), small
+// capacity (MAX_DYNAMICS), no face-value/settlement concerns.
+// ---------------------------------------------------------------------------
+
+enum class DynamicShapeType : uint8_t {
+    Box = 0,
+    Hull = 1,
+};
+
+struct DynamicBody {
+    int userId = -1;
+    DynamicShapeType shape = DynamicShapeType::Box;
+    uint8_t materialTag = 0;
+
+    Vec3 position;
+    Vec3 velocity;
+    Quat rotation;
+    Vec3 angularVelocity;
+
+    PolyHull hull;
+    Vec3 halfExtents{}; // Box only; kept so a snapshot can rebuild the hull.
+    float radius = 1.0f;
+
+    float mass    = 1.0f;
+    float invMass = 1.0f;
+    Vec3  invInertia{0, 0, 0};
+
+    float friction = 0.6f;
+    float restitution = 0.2f;
+    float rollingFriction = 0.1f;
+
+    bool  sleeping   = false;
+    float sleepTimer = 0.0f;
+    bool  kinematic  = false;
+
+    void computeInertiaFromHull() {
+        const float sphereI = std::max(0.4f * mass * radius * radius, 1e-8f);
+        const Vec3 sphereInv{1.0f / sphereI, 1.0f / sphereI, 1.0f / sphereI};
+        if (hull.verts.empty()) {
+            invInertia = sphereInv;
+            return;
+        }
+        Vec3 dim = hull.aabbMax - hull.aabbMin;
+        float ix = (1.0f / 12.0f) * mass * (dim.y * dim.y + dim.z * dim.z);
+        float iy = (1.0f / 12.0f) * mass * (dim.x * dim.x + dim.z * dim.z);
+        float iz = (1.0f / 12.0f) * mass * (dim.x * dim.x + dim.y * dim.y);
+        const float minI = 1e-8f;
+        if (ix < minI || iy < minI || iz < minI) {
+            invInertia = sphereInv;
+            return;
+        }
+        invInertia = {1.0f / ix, 1.0f / iy, 1.0f / iz};
+    }
+
+    Vec3 applyInvInertiaWorld(const Vec3& v) const {
+        Vec3 local = rotation.conjugate().rotate(v);
+        local.x *= invInertia.x;
+        local.y *= invInertia.y;
+        local.z *= invInertia.z;
+        return rotation.rotate(local);
+    }
+};
+
 } // namespace dice_physics

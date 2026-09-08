@@ -24,6 +24,7 @@ void DicePhysicsEngine::step(float dt) {
             integrate(b, subDt);
         }
         resolveDieCollisions(subDt, subStats);
+        stepDynamics(subDt, subStats);
         lastStepStats_.pairCandidates += subStats.pairCandidates;
         lastStepStats_.sphereTests += subStats.sphereTests;
         lastStepStats_.satTests += subStats.satTests;
@@ -115,7 +116,7 @@ std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
         const uint8_t* p = static_cast<const uint8_t*>(ptr);
         out.insert(out.end(), p, p + len);
     };
-    uint32_t version = 1;
+    uint32_t version = 2;
     uint32_t count = static_cast<uint32_t>(bodies_.size());
     append(&version, sizeof(version));
     append(&count, sizeof(count));
@@ -129,6 +130,28 @@ std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
         append(&b.sleeping, sizeof(b.sleeping));
         append(&b.sleepTimer, sizeof(b.sleepTimer));
         append(&b.useHull, sizeof(b.useHull));
+    }
+
+    // Dynamic (non-die) props, added in version 2. Box shapes round-trip
+    // fully (halfExtents rebuilds the hull on load); Hull shapes restore
+    // kinematic fields only — callers must re-attach hull geometry after
+    // deserialize, the same limitation die hulls already have above.
+    uint32_t dynCount = static_cast<uint32_t>(dynamics_.size());
+    append(&dynCount, sizeof(dynCount));
+    for (const auto& d : dynamics_) {
+        append(&d.userId, sizeof(d.userId));
+        const uint8_t shape = static_cast<uint8_t>(d.shape);
+        append(&shape, sizeof(shape));
+        append(&d.materialTag, sizeof(d.materialTag));
+        append(&d.position, sizeof(d.position));
+        append(&d.velocity, sizeof(d.velocity));
+        append(&d.rotation, sizeof(d.rotation));
+        append(&d.angularVelocity, sizeof(d.angularVelocity));
+        append(&d.sleeping, sizeof(d.sleeping));
+        append(&d.sleepTimer, sizeof(d.sleepTimer));
+        append(&d.kinematic, sizeof(d.kinematic));
+        append(&d.mass, sizeof(d.mass));
+        append(&d.halfExtents, sizeof(d.halfExtents));
     }
     return out;
 }
@@ -144,7 +167,7 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
     };
     uint32_t version = 0, count = 0;
     if (!read(&version, sizeof(version))) return;
-    if (version != 1) return;
+    if (version != 1 && version != 2) return;
     if (!read(&count, sizeof(count))) return;
     bodies_.clear(); bodies_.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
@@ -166,6 +189,48 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
     }
     nextId_ = 0;
     for (const auto& b : bodies_) nextId_ = std::max(nextId_, b.id + 1);
+
+    dynamics_.clear();
+    if (version >= 2) {
+        uint32_t dynCount = 0;
+        if (read(&dynCount, sizeof(dynCount))) {
+            dynamics_.reserve(dynCount);
+            for (uint32_t i = 0; i < dynCount; ++i) {
+                DynamicBody d;
+                uint8_t shape = 0;
+                Vec3 halfExtents{};
+                if (!read(&d.userId, sizeof(d.userId))) break;
+                if (!read(&shape, sizeof(shape))) break;
+                if (!read(&d.materialTag, sizeof(d.materialTag))) break;
+                if (!read(&d.position, sizeof(d.position))) break;
+                if (!read(&d.velocity, sizeof(d.velocity))) break;
+                if (!read(&d.rotation, sizeof(d.rotation))) break;
+                if (!read(&d.angularVelocity, sizeof(d.angularVelocity))) break;
+                if (!read(&d.sleeping, sizeof(d.sleeping))) break;
+                if (!read(&d.sleepTimer, sizeof(d.sleepTimer))) break;
+                if (!read(&d.kinematic, sizeof(d.kinematic))) break;
+                if (!read(&d.mass, sizeof(d.mass))) break;
+                if (!read(&halfExtents, sizeof(halfExtents))) break;
+                d.shape = static_cast<DynamicShapeType>(shape);
+                d.halfExtents = halfExtents;
+                d.invMass = d.mass > 0.0f ? 1.0f / d.mass : 0.0f;
+                if (d.shape == DynamicShapeType::Box) {
+                    const float hx = halfExtents.x, hy = halfExtents.y, hz = halfExtents.z;
+                    d.hull.build({
+                        {-hx, -hy, -hz}, { hx, -hy, -hz}, { hx,  hy, -hz}, {-hx,  hy, -hz},
+                        {-hx, -hy,  hz}, { hx, -hy,  hz}, { hx,  hy,  hz}, {-hx,  hy,  hz},
+                    });
+                    d.radius = Vec3{hx, hy, hz}.length();
+                } else {
+                    // Hull geometry is not serialized (same gap as die hulls);
+                    // caller must re-attach it before this body can collide.
+                    d.radius = 1.0f;
+                }
+                d.computeInertiaFromHull();
+                dynamics_.push_back(d);
+            }
+        }
+    }
 }
 
 bool DicePhysicsEngine::allBodyStatesFinite() const {

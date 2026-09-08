@@ -5,7 +5,8 @@ export function createSpyglass(
     scene,
     physicsWorld,
     position = { x: 5, y: -2.75, z: 7 },
-    rotationY = Math.PI / 6
+    rotationY = Math.PI / 6,
+    { scale = 1 } = {}
 ) {
     const radius = 0.31;
     const halfLength = 1.65;
@@ -15,6 +16,7 @@ export function createSpyglass(
         position,
         rotation: rotationY,
         footOffsetY: 0.3,
+        scale,
         colliders: [
             {
                 type: 'cylinder',

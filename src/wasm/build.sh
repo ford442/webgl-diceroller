@@ -63,6 +63,7 @@ ENGINE_SOURCES=(
     "${SCRIPT_DIR}/dice_physics/dice_engine_collision_dynamic.cpp"
     "${SCRIPT_DIR}/dice_physics/dice_engine_integrate.cpp"
     "${SCRIPT_DIR}/dice_physics/dice_engine_face_value.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_dynamics.cpp"
 )
 
 write_build_info() {

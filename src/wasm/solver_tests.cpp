@@ -328,6 +328,89 @@ TEST_CASE("Serialize round-trip preserves state") {
     CHECK(engine.serializeState() == restored.serializeState());
 }
 
+TEST_CASE("Dynamic box: a thrown die knocks it") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    PolyHull cube = makeUnitCubeHull();
+    auto cubeFlat = flattenHull(cube);
+
+    // Resting box a couple units away from the die's spawn point.
+    CHECK(engine.addDynamicBox(1, 0.3f, 2.0f, -2.75f + 0.4f, 0.0f,
+        0.4f, 0.4f, 0.4f, 0.0f, 0.0f, 0.0f, 1.0f, 3 /* metal */) == 1);
+
+    const int id = engine.addDie(6, -2.0f, -1.5f, 0.0f);
+    engine.setDieHull(id, cubeFlat);
+    engine.applyImpulse(id, 60.0f, 2.0f, 0.0f);
+
+    float boxStartX = 2.0f;
+    bool moved = false;
+    for (int frame = 0; frame < 240; ++frame) {
+        engine.step(1.0f / 60.0f);
+        CHECK(engine.allBodyStatesFinite());
+        if (std::abs(engine.buildDynamicTransformBuffer()[0] - boxStartX) > 0.2f) {
+            moved = true;
+        }
+    }
+    CHECK(moved);
+    CHECK(engine.getDynamicCapacityDroppedCount() == 0);
+}
+
+TEST_CASE("Dynamic box: settles under gravity on a static collider") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+
+    CHECK(engine.addStaticBox(1, 0.0f, 0.0f, 0.0f, 3.0f, 0.2f, 3.0f,
+        0.0f, 0.0f, 0.0f, 1.0f, 2 /* wood */) == 1);
+    CHECK(engine.addDynamicBox(2, 0.3f, 0.0f, 3.0f, 0.0f,
+        0.3f, 0.3f, 0.3f, 0.0f, 0.0f, 0.0f, 1.0f, 0) == 2);
+
+    for (int frame = 0; frame < 300; ++frame) {
+        engine.step(1.0f / 60.0f);
+        CHECK(engine.allBodyStatesFinite());
+    }
+    const auto& xf = engine.buildDynamicTransformBuffer();
+    REQUIRE(xf.size() == 7);
+    CHECK(xf[1] > 0.15f);   // resting on top of the 0.2-half-height platform
+    CHECK(xf[1] < 0.6f);    // did not tunnel through / fly off
+}
+
+TEST_CASE("Dynamic box serialize round-trip preserves state") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    int id = engine.addDynamicBox(1, 0.5f, 0.0f, 4.0f, 0.0f,
+        0.3f, 0.3f, 0.3f, 0.0f, 0.0f, 0.0f, 1.0f, 3);
+    REQUIRE(id == 1);
+    engine.applyDynamicImpulse(id, 3.0f, 1.0f, -2.0f);
+    engine.applyDynamicTorqueImpulse(id, 0.0f, 4.0f, 0.0f);
+    for (int i = 0; i < 30; ++i) engine.step(1.0f / 60.0f);
+
+    auto bytes = engine.serializeState();
+    DicePhysicsEngine restored;
+    restored.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    restored.deserializeState(bytes);
+    CHECK(bytes == restored.serializeState());
+    CHECK(restored.getDynamicCount() == 1);
+
+    for (int i = 0; i < 30; ++i) {
+        engine.step(1.0f / 60.0f);
+        restored.step(1.0f / 60.0f);
+    }
+    CHECK(engine.serializeState() == restored.serializeState());
+}
+
+TEST_CASE("Dynamic box capacity: exceeding MAX_DYNAMICS reports drops") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    int accepted = 0;
+    for (int i = 0; i < DicePhysicsEngine::MAX_DYNAMICS + 8; ++i) {
+        int id = engine.addDynamicBox(i, 0.2f, static_cast<float>(i) * 0.1f, 2.0f, 0.0f,
+            0.1f, 0.1f, 0.1f, 0.0f, 0.0f, 0.0f, 1.0f, 0);
+        if (id >= 0) accepted++;
+    }
+    CHECK(accepted == DicePhysicsEngine::MAX_DYNAMICS);
+    CHECK(engine.getDynamicCapacityDroppedCount() == 8);
+}
+
 TEST_CASE("Sleep threshold settles low-energy die") {
     DicePhysicsEngine engine;
     engine.init(-15.0f, -2.75f, 18.0f, 18.0f);

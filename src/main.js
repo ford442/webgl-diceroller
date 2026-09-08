@@ -18,6 +18,19 @@ import {
     registerDiceCupController,
     getDiceCupController,
 } from './interaction/DiceCupController.js';
+import {
+    createDiceTowerController,
+    registerDiceTowerController,
+} from './interaction/DiceTowerController.js';
+import {
+    createDiceTrayController,
+    registerDiceTrayController,
+} from './interaction/DiceTrayController.js';
+import {
+    createDiceJailController,
+    registerDiceJailController,
+} from './interaction/DiceJailController.js';
+import { setupCharacterSheetWiring } from './app/CharacterSheetWiring.js';
 import { setInteractablesMirror } from './interactables/InteractableRegistry.js';
 import { createDiceCollisionAudio } from './audio/DiceCollisionAudio.js';
 import { setupScene } from './core/SceneSetup.js';
@@ -143,6 +156,9 @@ let collisionAudio = null;
 const collisionTotal = { value: 0 };
 let diceGameFeel = null;
 let diceCupController = null;
+let diceTowerController = null;
+let diceTrayController = null;
+let diceJailController = null;
 /** @type {{ current: ReturnType<typeof import('./net/RoomSession.js').createRoomSession> | null }} */
 const multiplayerRef = { current: null };
 
@@ -366,6 +382,9 @@ async function init() {
                     app.interaction = inter;
                 },
                 getDiceCupController: () => diceCupController,
+                getDiceTowerController: () => diceTowerController,
+                getDiceTrayController: () => diceTrayController,
+                getDiceJailController: () => diceJailController,
                 getShadowController: () => shadowController,
             }),
             app.renderer
@@ -404,6 +423,31 @@ async function init() {
             canStartCupInteraction: () => !isDragging() && !hasActiveDiceInteraction(),
         });
         registerDiceCupController(diceCupController);
+    }
+
+    if (tierResult.diceTowerProp) {
+        diceTowerController = createDiceTowerController({
+            towerProp: tierResult.diceTowerProp,
+            beginTowerRoll: rollWiring.beginTowerRoll,
+            onFeedback: showCupFeedback,
+        });
+        registerDiceTowerController(diceTowerController);
+    }
+
+    if (tierResult.diceTrayProp) {
+        diceTrayController = createDiceTrayController({
+            trayProp: tierResult.diceTrayProp,
+            onFeedback: showCupFeedback,
+        });
+        registerDiceTrayController(diceTrayController);
+    }
+
+    if (tierResult.diceJailProp) {
+        diceJailController = createDiceJailController({
+            jailProp: tierResult.diceJailProp,
+            onFeedback: showCupFeedback,
+        });
+        registerDiceJailController(diceJailController);
     }
 
     rollWiring.initRollSession({ replaceDiceSet, readAllDiceValues, areDiceSettled });
@@ -484,6 +528,13 @@ async function init() {
             multiplayerRef.current?.getState?.()?.roomCode ?? searchParams.get('room') ?? null,
         getPendingExpression: () => rollWiring.getPendingRollMeta()?.expression ?? null,
     });
+
+    if (tierResult.characterSheetProp) {
+        setupCharacterSheetWiring(app, {
+            appEvents,
+            characterSheetProp: tierResult.characterSheetProp,
+        });
+    }
 
     const { roomParam } = await setupMultiplayer(app, {
         searchParams,

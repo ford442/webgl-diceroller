@@ -53,6 +53,19 @@ const STUB_ENGINE = {
     addStaticPlane: () => -1,
     addStaticConvexHull: () => -1,
     addStaticOpenCylinder: () => -1,
+    clearDynamics: () => {},
+    removeDynamic: () => false,
+    setDynamicKinematic: () => {},
+    setDynamicTransform: () => {},
+    setDynamicVelocity: () => {},
+    applyDynamicImpulse: () => {},
+    applyDynamicTorqueImpulse: () => {},
+    addDynamicBox: () => -1,
+    addDynamicHull: () => -1,
+    getDynamicCount: () => 0,
+    getDynamicCapacityDroppedCount: () => 0,
+    getDynamicTransforms: () => new Float32Array(0),
+    getDynamicIds: () => new Float32Array(0),
     getTransforms: () => new Float32Array(0),
     getDieIds: () => new Float32Array(0),
     getDieCount: () => 0,
@@ -85,6 +98,41 @@ const _searchParams = new URLSearchParams(window.location.search);
 // Public API
 // ---------------------------------------------------------------------------
 
+/**
+ * Embind binds `const std::vector<float>&` as a `VectorFloat` handle, which does
+ * *not* accept a plain JS array — passing one throws
+ * `BindingError: Cannot pass "..." as a VectorFloat`.
+ *
+ * The worker backend already converts flat vertex arrays before calling into its
+ * own module (see dice_physics.worker.ts), so callers such as
+ * staticColliders.ts / dynamicColliders.ts are written against a plain-array
+ * contract. Wrap the two hull entry points on the main-thread engine so it
+ * presents that same contract, and shared collider code stays backend-agnostic.
+ *
+ * @param {any} engine
+ * @param {any} Module
+ */
+function adaptFlatVertexMethods(engine, Module) {
+    for (const method of ['addStaticConvexHull', 'addDynamicHull']) {
+        const original = engine[method];
+        if (typeof original !== 'function') continue;
+
+        engine[method] = function adaptedHullCall(...args) {
+            const index = args.findIndex((arg) => Array.isArray(arg));
+            if (index < 0) return original.apply(this, args);
+
+            const vec = new Module.VectorFloat();
+            try {
+                for (const value of args[index]) vec.push_back(value);
+                args[index] = vec;
+                return original.apply(this, args);
+            } finally {
+                vec.delete?.();
+            }
+        };
+    }
+}
+
 export const loadWasmEngine = async () => {
     if (_initialized) return _available;
 
@@ -103,6 +151,7 @@ export const loadWasmEngine = async () => {
 
         _moduleClass = Module;
         _engine = new Module.DicePhysicsEngine();
+        adaptFlatVertexMethods(_engine, Module);
         _engine.setFlags(parsePhysicsFlags(_searchParams));
         _available = true;
 

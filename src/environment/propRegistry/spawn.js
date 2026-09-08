@@ -11,6 +11,7 @@ import {
 } from './shadowPolicy.js';
 import { INTERACTIVE_NAMES } from './propIndex.js';
 import { selectDecorPoolEntries } from './randomPool.js';
+import { registerDynamicProp, unregisterDynamicProp } from '../DynamicPropState.js';
 
 // Test/debug hook: `?forceProps=Flute,PlayingCards` guarantees those randomPool
 // props spawn regardless of seed, so e2e tests can target their interactions
@@ -109,7 +110,10 @@ export async function spawnProp(entry, context) {
     }
 
     const canStaticMerge =
-        entry.staticMerge !== false && !updateHandle && !INTERACTIVE_NAMES.has(factoryName);
+        entry.staticMerge !== false &&
+        !updateHandle &&
+        !entry.dynamic &&
+        !INTERACTIVE_NAMES.has(factoryName);
     let mergeStats = null;
     if (canStaticMerge) {
         mergeStats = mergePropRecord({ result, updateHandle });
@@ -117,6 +121,8 @@ export async function spawnProp(entry, context) {
             context.cullingSystem.refreshSphere(root);
         }
     }
+
+    if (entry.dynamic && root) registerDynamicProp(root);
 
     const disposers = typeof result?.dispose === 'function' ? [result.dispose] : undefined;
     return { entry, result, updateHandle, disposers, mergeStats };
@@ -129,6 +135,7 @@ export function despawnProp(record, context) {
         // Drop any raycast interaction registered against this prop's root so a
         // re-rolled layout doesn't leave stale clickable entries behind.
         unregisterInteractiveObject(root);
+        unregisterDynamicProp(root);
     }
     disposePropSpawn(record, context.physicsWorld);
 }

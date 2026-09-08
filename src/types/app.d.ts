@@ -1,13 +1,8 @@
+import type { ComposerLike } from './renderer';
 import type { EvaluatedRoll } from './roll';
 import type { DiceReadValue } from './dice';
 
-export interface ComposerLike {
-    render?: () => void;
-    dispose?: () => void;
-    type?: string;
-    setPixelRatio?: (ratio: number) => void;
-    setSize?: (width: number, height: number) => void;
-}
+export type { ComposerLike };
 
 export interface PostConfig {
     bloomEnabled?: boolean;
@@ -58,7 +53,7 @@ export interface PendingRollMeta {
 
 export interface TierLoadCallbacks {
     /** App context — used to mark ready / share quality without window globals. */
-    app?: import('./app').AppContext;
+    app?: AppContext;
     audio?: unknown;
     qualityProfile?: string | unknown | null;
     onRollAll?: () => void;
@@ -213,6 +208,13 @@ export interface AppContextDice {
     rollNotation: ((expression: string, seed?: number | null) => Promise<unknown>) | null;
 }
 
+/** Late-bound by `SessionWiring`; the slot itself is owned by `createAppContext()`. */
+export interface AppContextSession {
+    getSnapshot?: () => unknown;
+    applyRemoteSession?: (msg: unknown) => void;
+    setSeats?: (seats: unknown) => void;
+}
+
 export interface AppContextInteractable {
     trigger: (opts?: unknown) => void;
     getState?: () => Record<string, unknown>;
@@ -264,11 +266,7 @@ export interface AppContext {
     refreshDiceAppearance: (() => void) | null;
     REPLAY_VERSION: number | null;
     multiplayer?: unknown;
-    session?: {
-        getSnapshot?: () => unknown;
-        applyRemoteSession?: (msg: unknown) => void;
-        setSeats?: (seats: unknown) => void;
-    };
+    session: AppContextSession | null;
     xrResultsHud?: unknown;
     /** WebXR seated-table spike API when `?xr` is set. */
     xr?: unknown;

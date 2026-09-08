@@ -26,6 +26,7 @@ set(ENGINE_SOURCES
     dice_physics/dice_engine_collision_dynamic.cpp
     dice_physics/dice_engine_integrate.cpp
     dice_physics/dice_engine_face_value.cpp
+    dice_physics/dice_engine_dynamics.cpp
 )
 
 add_executable(dice_physics
@@ -57,10 +58,27 @@ if(NOT EM_FLAGS_RESULT EQUAL 0)
     message(FATAL_ERROR "emcc_flags.sh --print-link-line failed")
 endif()
 
+execute_process(
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/emcc_flags.sh" --print-compile-line "${EM_PROFILE}"
+    OUTPUT_VARIABLE EM_COMPILE_FLAGS
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE EM_COMPILE_RESULT
+)
+if(NOT EM_COMPILE_RESULT EQUAL 0)
+    message(FATAL_ERROR "emcc_flags.sh --print-compile-line failed")
+endif()
+separate_arguments(EM_COMPILE_FLAGS_LIST NATIVE_COMMAND "${EM_COMPILE_FLAGS}")
+
 set_target_properties(dice_physics PROPERTIES
     SUFFIX ".js"
     LINK_FLAGS "${EM_LINK_FLAGS}"
 )
+
+# Codegen flags must reach the *compiler*, not just the linker: -msimd128 is
+# what defines __wasm_simd128__ (see dice_sat.hpp). Setting them only as
+# LINK_FLAGS silently produced a non-SIMD binary byte-identical to the scalar
+# target.
+target_compile_options(dice_physics PRIVATE ${EM_COMPILE_FLAGS_LIST})
 
 # ---------------------------------------------------------------------------
 # Output location
@@ -91,10 +109,24 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
         message(FATAL_ERROR "emcc_flags.sh --print-link-line release-scalar failed")
     endif()
 
+    execute_process(
+        COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/emcc_flags.sh" --print-compile-line release-scalar
+        OUTPUT_VARIABLE EM_COMPILE_FLAGS_SCALAR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE EM_COMPILE_SCALAR_RESULT
+    )
+    if(NOT EM_COMPILE_SCALAR_RESULT EQUAL 0)
+        message(FATAL_ERROR "emcc_flags.sh --print-compile-line release-scalar failed")
+    endif()
+    separate_arguments(EM_COMPILE_FLAGS_SCALAR_LIST NATIVE_COMMAND "${EM_COMPILE_FLAGS_SCALAR}")
+
     set_target_properties(dice_physics_scalar PROPERTIES
         OUTPUT_NAME "dice_physics"
         SUFFIX ".js"
         LINK_FLAGS "${EM_LINK_FLAGS_SCALAR}"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../../public/wasm-scalar"
     )
+
+    # -DDICE_FORCE_SCALAR_SAT is a preprocessor define — compile-time only.
+    target_compile_options(dice_physics_scalar PRIVATE ${EM_COMPILE_FLAGS_SCALAR_LIST})
 endif()

@@ -19,6 +19,8 @@
         "src/wasm/workerCommands.ts",
         "src/wasm/staticColliders.ts",
         "src/wasm/seededThrowParams.ts",
+        "src/wasm/dice_physics.worker.ts",
+        "src/wasm/WorkerPhysicsBridge.ts",
         "src/roll/**/*.ts",
         "src/net/Protocol.ts",
         "src/net/SignalingClient.ts",

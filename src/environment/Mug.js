@@ -5,7 +5,8 @@ export function createMug(
     scene,
     physicsWorld,
     position = { x: 4, y: -2.75, z: 2 },
-    rotationY = Math.PI / 4
+    rotationY = Math.PI / 4,
+    { scale = 1 } = {}
 ) {
     const radius = 0.5;
     const height = 1.2;
@@ -19,12 +20,15 @@ export function createMug(
         position,
         rotation: rotationY,
         footOffsetY: height / 2,
+        scale,
         colliders: [
             {
                 type: 'cylinder',
                 radius,
                 halfHeight: height / 2,
                 materialTag: STATIC_MATERIAL.DEFAULT,
+                dynamic: true,
+                mass: 0.4,
             },
         ],
         build({ group }) {

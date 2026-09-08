@@ -26,7 +26,7 @@ import {
     getWoodTexturedMaterial,
     getWroughtIronMaterial,
 } from '../core/MaterialPalette.js';
-import { createStaticCollider } from '../core/StaticColliderBridge.js';
+import { createStaticCollider, createDynamicCollider } from '../core/StaticColliderBridge.js';
 export { STATIC_MATERIAL } from '../wasm/staticColliders.js';
 
 export const materials = {
@@ -99,6 +99,54 @@ export function mesh(
     return result;
 }
 
+function scaleVec3Spec(value, factor) {
+    if (!value) return value;
+    if (Array.isArray(value)) return value.map((component) => (component ?? 0) * factor);
+    return {
+        x: (value.x ?? 0) * factor,
+        y: (value.y ?? 0) * factor,
+        z: (value.z ?? 0) * factor,
+    };
+}
+
+/**
+ * Scale a declarative collider spec's lengths by `factor`.
+ *
+ * Colliders are authored in prop-local units, but `StaticColliderBridge` builds
+ * shapes straight from the spec and anchors them to the group's position and
+ * quaternion — `group.scale` is ignored. So a scaled prop has to hand the bridge
+ * pre-scaled dimensions or its collider drifts from its mesh. Rotations are
+ * scale-invariant; mass follows volume (factor^3).
+ *
+ * @param {any} spec
+ * @param {number} factor
+ * @returns {any}
+ */
+export function scaleColliderSpec(spec, factor) {
+    if (!spec || factor === 1) return spec;
+
+    /** @type {any} */
+    const scaled = { ...spec };
+    if (Array.isArray(spec.halfExtents)) {
+        scaled.halfExtents = spec.halfExtents.map((extent) => extent * factor);
+    }
+    if (typeof spec.radius === 'number') scaled.radius = spec.radius * factor;
+    if (typeof spec.halfHeight === 'number') scaled.halfHeight = spec.halfHeight * factor;
+    if (typeof spec.height === 'number') scaled.height = spec.height * factor;
+    if (typeof spec.dist === 'number') scaled.dist = spec.dist * factor;
+    if (typeof spec.mass === 'number') scaled.mass = spec.mass * factor ** 3;
+    if (spec.offset) scaled.offset = scaleVec3Spec(spec.offset, factor);
+    if (Array.isArray(spec.vertices)) {
+        scaled.vertices = spec.vertices.map((vertex) =>
+            [vertex[0] ?? 0, vertex[1] ?? 0, vertex[2] ?? 0].map((c) => c * factor)
+        );
+    }
+    if (Array.isArray(spec.parts)) {
+        scaled.parts = spec.parts.map((part) => scaleColliderSpec(part, factor));
+    }
+    return scaled;
+}
+
 /**
  * Standard prop factory scaffold: group setup, build callback, colliders, scene add.
  * @param {THREE.Scene} scene
@@ -108,6 +156,7 @@ export function mesh(
  *   position?: { x?: number, y?: number, z?: number },
  *   rotation?: number,
  *   footOffsetY?: number,
+ *   scale?: number,
  *   build?: (ctx: { group: THREE.Group, materials: typeof materials, mesh: typeof mesh }) => void,
  *   colliders?: object[],
  *   update?: (...args: any[]) => void,
@@ -124,6 +173,7 @@ export function createProp(
         position = { x: 0, y: 0, z: 0 },
         rotation = 0,
         footOffsetY = 0,
+        scale = 1,
         build,
         colliders = [],
         update,
@@ -134,8 +184,10 @@ export function createProp(
 ) {
     const group = new THREE.Group();
     group.name = name;
-    group.position.set(position.x, position.y + footOffsetY, position.z);
+    // footOffsetY lifts the group by a prop-local distance, so it scales too.
+    group.position.set(position.x, position.y + footOffsetY * scale, position.z);
     group.rotation.y = rotation;
+    if (scale !== 1) group.scale.setScalar(scale);
 
     build?.({ group, materials, mesh });
 
@@ -143,8 +195,11 @@ export function createProp(
 
     let body = null;
     if (colliders.length > 0) {
-        for (const colliderSpec of colliders) {
-            const result = createStaticCollider(physicsWorld, group, colliderSpec);
+        for (const authoredSpec of colliders) {
+            const colliderSpec = scaleColliderSpec(authoredSpec, scale);
+            const result = colliderSpec.dynamic
+                ? createDynamicCollider(physicsWorld, group, colliderSpec)
+                : createStaticCollider(physicsWorld, group, colliderSpec);
             if (!body && result?.body) body = result.body;
         }
     }

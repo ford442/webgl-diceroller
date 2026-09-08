@@ -89,3 +89,44 @@ export const sabSupported = (): boolean =>
     typeof SharedArrayBuffer !== 'undefined' &&
     typeof Atomics !== 'undefined' &&
     (typeof self === 'undefined' ? false : self.crossOriginIsolated === true);
+
+// ---------------------------------------------------------------------------
+// Dynamic (non-die) rigid-body props — a second, separate SharedArrayBuffer.
+//
+// Kept independent of the dice transform SAB above rather than growing its
+// header: dynamic props have their own small lifecycle (userId-addressed,
+// capacity-checked, like static colliders) that shouldn't need to touch dice
+// reset/replay bookkeeping. Same double-buffer discipline: worker writes the
+// back buffer, stores count, then flips front.
+//
+//   ┌────────────────────────────────────────────────┐
+//   │ Int32 header (DYN_HEADER_INTS)                   │
+//   │   [0] front — index (0|1) of the buffer to read   │
+//   │   [1] count — number of dynamic props in front    │
+//   ├────────────────────────────────────────────────┤
+//   │ Buffer 0: ids[MAX_DYNAMICS] (f32)  transforms[MAX_DYNAMICS*7] (f32) │
+//   ├────────────────────────────────────────────────┤
+//   │ Buffer 1: ids[MAX_DYNAMICS] (f32)  transforms[MAX_DYNAMICS*7] (f32) │
+//   └────────────────────────────────────────────────┘
+// ---------------------------------------------------------------------------
+
+export const MAX_DYNAMICS = 64; // must match dice_physics_engine.hpp MAX_DYNAMICS
+export const DYN_STRIDE = 7; // [px,py,pz, qx,qy,qz,qw] per dynamic prop
+
+export const DYN_HEADER_INTS = 2;
+export const DYN_HEADER_BYTES = DYN_HEADER_INTS * 4;
+export const DYN_H_FRONT = 0;
+export const DYN_H_COUNT = 1;
+
+export const DYN_IDS_BYTES = MAX_DYNAMICS * 4;
+export const DYN_XF_BYTES = MAX_DYNAMICS * DYN_STRIDE * 4;
+export const DYN_BUFFER_BYTES = DYN_IDS_BYTES + DYN_XF_BYTES;
+
+/** Full dynamics SharedArrayBuffer size. */
+export const DYNAMICS_SAB_BYTES = DYN_HEADER_BYTES + 2 * DYN_BUFFER_BYTES;
+
+/** Byte offset of the ids region for buffer `b` (0|1). */
+export const dynIdsOffset = (b: 0 | 1): number => DYN_HEADER_BYTES + b * DYN_BUFFER_BYTES;
+/** Byte offset of the transforms region for buffer `b` (0|1). */
+export const dynXfOffset = (b: 0 | 1): number =>
+    DYN_HEADER_BYTES + b * DYN_BUFFER_BYTES + DYN_IDS_BYTES;

@@ -102,15 +102,20 @@ export default [
         rules: {
             ...coreRules,
             ...importRules,
+            // TypeScript already resolves globals from `lib` (Transferable,
+            // MessageEvent, …); eslint's browser globals list does not.
+            'no-undef': 'off',
             '@typescript-eslint/no-explicit-any': 'off',
             '@typescript-eslint/no-unused-vars': 'off',
         },
     }),
-    {
-        files: ['src/wasm/dice_physics.worker.js'],
+    ...tseslint.config({
+        files: ['src/wasm/dice_physics.worker.ts'],
+        extends: [tseslint.configs.recommended],
         languageOptions: {
             ecmaVersion: 2022,
             sourceType: 'module',
+            parser: tseslint.parser,
             globals: {
                 ...globals.worker,
                 ...globals.es2021,
@@ -131,8 +136,13 @@ export default [
         rules: {
             ...coreRules,
             ...importRules,
+            // TypeScript already resolves globals from `lib` (Transferable,
+            // MessageEvent, …); eslint's browser globals list does not.
+            'no-undef': 'off',
+            '@typescript-eslint/no-explicit-any': 'off',
+            '@typescript-eslint/no-unused-vars': 'off',
         },
-    },
+    }),
     {
         files: [
             'scripts/**/*.{js,mjs}',
@@ -196,6 +206,7 @@ export default [
             'src/environment/PropPhysics.js',
             'src/environment/PropLifecycle.js',
             'src/environment/propKit.js',
+            'src/environment/DynamicPropSync.js',
         ],
         rules: {
             'no-restricted-imports': [

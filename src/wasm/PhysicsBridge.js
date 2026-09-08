@@ -25,6 +25,7 @@ import {
     createWasmTableBoundsForEngine,
     removeStaticColliderForEngine,
 } from './staticColliders.js';
+import { addDynamicColliderForEngine, removeDynamicColliderForEngine } from './dynamicColliders.js';
 
 const _params = new URLSearchParams(window.location.search);
 
@@ -93,6 +94,17 @@ export const clearStaticColliders = () => {
 export const createWasmTableBounds = (tableConfig) => {
     if (!active.isWasmAvailable()) return 0;
     return createWasmTableBoundsForEngine(active.getWasmEngine(), tableConfig);
+};
+
+/** Register a declarative dynamic (movable) collider spec in the WASM engine. */
+export const addDynamicCollider = (spec, anchor) => {
+    if (!active.isWasmAvailable()) return -1;
+    return addDynamicColliderForEngine(active.getWasmEngine(), spec, anchor);
+};
+
+export const removeDynamicCollider = (userId) => {
+    if (!active.isWasmAvailable()) return false;
+    return removeDynamicColliderForEngine(active.getWasmEngine(), userId);
 };
 
 /** True when the worker backend is live and using SharedArrayBuffer transport. */

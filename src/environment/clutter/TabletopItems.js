@@ -2,14 +2,10 @@ import * as THREE from 'three';
 import { createStaticCollider } from '../../core/StaticColliderBridge.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
 import {
-    getCeramicMaterial,
-    getCeramicInnerMaterial,
     getDarkLeatherMaterial,
     getBlackAccentMaterial,
     getDarkRedMaterial,
     getInstancedMetalMaterial,
-    getPewterMaterial,
-    getSilverMaterial,
     getWoodMaterial,
 } from '../../core/MaterialPalette.js';
 import { resolvePlacement } from './ClutterPlacement.js';
@@ -23,40 +19,6 @@ function addBoxCollider(physicsWorld, anchor, halfExtents) {
 
 function addCylinderCollider(physicsWorld, anchor, radius, halfHeight) {
     createStaticCollider(physicsWorld, anchor, { type: 'cylinder', radius, halfHeight });
-}
-
-export function createMug(scene, physicsWorld, options = {}) {
-    const mugGroup = new THREE.Group();
-
-    // Cup body
-    const bodyGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
-    const material = getCeramicMaterial();
-    const bodyMesh = new THREE.Mesh(bodyGeo, material);
-    bodyMesh.castShadow = true;
-    bodyMesh.receiveShadow = true;
-    mugGroup.add(bodyMesh);
-
-    // Handle (Torus)
-    const handleGeo = new THREE.TorusGeometry(0.3, 0.08, 16, 32);
-    const handleMesh = new THREE.Mesh(handleGeo, material);
-    handleMesh.position.set(0.5, 0, 0);
-    handleMesh.rotation.set(0, Math.PI / 2, 0);
-    handleMesh.castShadow = true;
-    mugGroup.add(handleMesh);
-
-    // Inner shadow (darkened inside)
-    const innerGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.9, 32);
-    const innerMesh = new THREE.Mesh(innerGeo, getCeramicInnerMaterial());
-    innerMesh.position.y = 0.05;
-    mugGroup.add(innerMesh);
-
-    const placement = resolvePlacement(options, { x: 5, z: 5 });
-    mugGroup.position.set(placement.x, tabletopY(-2.25), placement.z);
-    mugGroup.rotation.y = placement.rotationY;
-    scene.add(mugGroup);
-    options.track?.(mugGroup);
-
-    addCylinderCollider(physicsWorld, mugGroup, 0.5, 0.5);
 }
 
 export function createCoins(scene, physicsWorld, options = {}) {
@@ -140,55 +102,6 @@ export function createBook(scene, physicsWorld, options = {}) {
     options.track?.(mesh);
 
     addBoxCollider(physicsWorld, mesh, [width / 2, height / 2, depth / 2]);
-}
-
-export function createMiniature(scene, physicsWorld, options = {}) {
-    const group = new THREE.Group();
-    group.name = 'MiniaturePawn';
-
-    const material = getPewterMaterial();
-
-    const baseRadius = 0.4;
-    const baseHeight = 0.1;
-    const baseGeo = new THREE.CylinderGeometry(baseRadius, baseRadius, baseHeight, 16);
-    const baseMesh = new THREE.Mesh(baseGeo, material);
-    baseMesh.position.y = baseHeight / 2;
-    baseMesh.castShadow = true;
-    baseMesh.receiveShadow = true;
-    group.add(baseMesh);
-
-    const bodyHeight = 0.8;
-    const bodyRadiusBottom = 0.3;
-    const bodyRadiusTop = 0.15;
-    const bodyGeo = new THREE.CylinderGeometry(bodyRadiusTop, bodyRadiusBottom, bodyHeight, 16);
-    const bodyMesh = new THREE.Mesh(bodyGeo, material);
-    bodyMesh.position.y = baseHeight + bodyHeight / 2;
-    bodyMesh.castShadow = true;
-    bodyMesh.receiveShadow = true;
-    group.add(bodyMesh);
-
-    const headRadius = 0.25;
-    const headGeo = new THREE.SphereGeometry(headRadius, 16, 16);
-    const headMesh = new THREE.Mesh(headGeo, material);
-    headMesh.position.y = baseHeight + bodyHeight + headRadius;
-    headMesh.castShadow = true;
-    headMesh.receiveShadow = true;
-    group.add(headMesh);
-
-    const totalHeight = baseHeight + bodyHeight + headRadius * 2;
-
-    const placement = resolvePlacement(options, { x: -2, z: 2 });
-    group.position.set(placement.x, tabletopY(-2.75) + totalHeight / 2, placement.z);
-    group.rotation.y = placement.rotationY;
-
-    baseMesh.position.y -= totalHeight / 2;
-    bodyMesh.position.y -= totalHeight / 2;
-    headMesh.position.y -= totalHeight / 2;
-
-    scene.add(group);
-    options.track?.(group);
-
-    addCylinderCollider(physicsWorld, group, baseRadius, totalHeight / 2);
 }
 
 export function createD20Holder(scene, physicsWorld, options = {}) {
@@ -320,77 +233,4 @@ export function createPotionBottle(scene, physicsWorld, options = {}) {
     options.track?.(bottleGroup);
 
     addCylinderCollider(physicsWorld, bottleGroup, 0.6, 0.8);
-}
-
-export function createPencil(scene, physicsWorld, options = {}) {
-    const pencilGroup = new THREE.Group();
-
-    const radius = 0.04;
-    const bodyLen = 1.2;
-    const ferruleLen = 0.15;
-    const eraserLen = 0.15;
-    const tipLen = 0.25;
-
-    const yellowMat = new THREE.MeshStandardMaterial({
-        color: 0xffbd2e,
-        roughness: 0.5,
-        metalness: 0.0,
-    });
-    const woodMat = new THREE.MeshStandardMaterial({
-        color: 0xd2b48c,
-        roughness: 0.7,
-        metalness: 0.0,
-    });
-    const metalMat = getSilverMaterial();
-    const pinkMat = new THREE.MeshStandardMaterial({
-        color: 0xff69b4,
-        roughness: 0.8,
-        metalness: 0.0,
-    });
-    const blackMat = getBlackAccentMaterial();
-
-    const bodyGeo = new THREE.CylinderGeometry(radius, radius, bodyLen, 6);
-    const bodyMesh = new THREE.Mesh(bodyGeo, yellowMat);
-    bodyMesh.castShadow = true;
-    bodyMesh.receiveShadow = true;
-    pencilGroup.add(bodyMesh);
-
-    const ferruleGeo = new THREE.CylinderGeometry(radius, radius, ferruleLen, 32);
-    const ferruleMesh = new THREE.Mesh(ferruleGeo, metalMat);
-    ferruleMesh.castShadow = true;
-    ferruleMesh.receiveShadow = true;
-    ferruleMesh.position.y = bodyLen / 2 + ferruleLen / 2;
-    pencilGroup.add(ferruleMesh);
-
-    const eraserGeo = new THREE.CylinderGeometry(radius, radius, eraserLen, 32);
-    const eraserMesh = new THREE.Mesh(eraserGeo, pinkMat);
-    eraserMesh.castShadow = true;
-    eraserMesh.receiveShadow = true;
-    eraserMesh.position.y = bodyLen / 2 + ferruleLen + eraserLen / 2;
-    pencilGroup.add(eraserMesh);
-
-    const tipGeo = new THREE.CylinderGeometry(radius, 0.015, tipLen, 6);
-    const tipMesh = new THREE.Mesh(tipGeo, woodMat);
-    tipMesh.castShadow = true;
-    tipMesh.receiveShadow = true;
-    tipMesh.position.y = -(bodyLen / 2 + tipLen / 2);
-    pencilGroup.add(tipMesh);
-
-    const leadLen = 0.05;
-    const leadGeo = new THREE.CylinderGeometry(0.015, 0, leadLen, 6);
-    const leadMesh = new THREE.Mesh(leadGeo, blackMat);
-    leadMesh.castShadow = true;
-    leadMesh.receiveShadow = true;
-    leadMesh.position.y = -(bodyLen / 2 + tipLen + leadLen / 2);
-    pencilGroup.add(leadMesh);
-
-    const placement = resolvePlacement(options, { x: 0, z: 4.5 });
-    pencilGroup.position.set(placement.x, tabletopY(-2.71), placement.z);
-    pencilGroup.rotation.set(0, placement.rotationY, Math.PI / 2, 'YXZ');
-
-    scene.add(pencilGroup);
-    options.track?.(pencilGroup);
-
-    const totalLen = bodyLen + ferruleLen + eraserLen + tipLen + leadLen;
-    addCylinderCollider(physicsWorld, pencilGroup, radius, totalLen / 2);
 }

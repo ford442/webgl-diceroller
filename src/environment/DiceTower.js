@@ -20,10 +20,20 @@ export function createDiceTower(
     const trayHeight = 2;
     const trayZ = depth / 2 + trayDepth / 2 - thickness;
 
+    // Open top of the shaft, above the zig-zag ramps — the "hopper mouth"
+    // dice are teleported into for a tower drop; gravity + the ramp colliders
+    // do the rest.
+    const hopper = {
+        y: height - 1.0,
+        halfWidth: (rampW / 2) * 0.6,
+        halfDepth: depth / 2 - 1,
+    };
+
     return createProp(scene, physicsWorld, {
         name: 'DiceTower',
         position,
         rotation: rotationY,
+        hopper,
         colliders: [
             {
                 type: 'box',
@@ -85,8 +95,11 @@ export function createDiceTower(
             },
         ],
         build({ group }) {
-            const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } =
-                getWoodTextures();
+            const {
+                diffuse: woodDiffuse,
+                bump: woodBump,
+                roughness: woodRoughness,
+            } = getWoodTextures();
 
             const woodMat = new THREE.MeshStandardMaterial({
                 map: woodDiffuse,
@@ -115,8 +128,22 @@ export function createDiceTower(
             addPart(rampW, rampThick, rampLen, 0, 7, 0.5, -0.6, 0, 0);
             addPart(rampW, rampThick, rampLen + 1, 0, 3, -0.5, 0.6, 0, 0);
             addPart(width, thickness, trayDepth, 0, thickness / 2, trayZ);
-            addPart(thickness, trayHeight, trayDepth, -width / 2 + thickness / 2, trayHeight / 2, trayZ);
-            addPart(thickness, trayHeight, trayDepth, width / 2 - thickness / 2, trayHeight / 2, trayZ);
+            addPart(
+                thickness,
+                trayHeight,
+                trayDepth,
+                -width / 2 + thickness / 2,
+                trayHeight / 2,
+                trayZ
+            );
+            addPart(
+                thickness,
+                trayHeight,
+                trayDepth,
+                width / 2 - thickness / 2,
+                trayHeight / 2,
+                trayZ
+            );
             addPart(
                 width,
                 trayHeight,

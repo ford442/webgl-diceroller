@@ -1,11 +1,13 @@
 import * as THREE from 'three';
-import { createStaticBody, getAmmo } from '../physics.js';
+import { createStaticBody, createPropDynamicBody, getAmmo } from '../physics.js';
 import { destroyPhysicsBody } from '../environment/PropLifecycle.js';
 import {
     addStaticCollider as wasmAddStaticCollider,
+    addDynamicCollider as wasmAddDynamicCollider,
     getWasmEngine,
     isWasmAvailable,
     removeStaticCollider as wasmRemoveStaticCollider,
+    removeDynamicCollider as wasmRemoveDynamicCollider,
 } from '../wasm/PhysicsBridge.js';
 
 // getStaticCapacityDroppedCount() is only synchronously meaningful on the
@@ -26,6 +28,22 @@ function warnOnStaticCapacityDrop(anchor) {
     console.warn(
         `StaticColliderBridge: MAX_STATICS capacity reached — ${dropped} static ` +
             `collider(s) dropped so far (most recently while registering "${label}").`
+    );
+}
+
+// Same "last-seen, not high-water-mark" tracking as warnOnStaticCapacityDrop,
+// for the separate MAX_DYNAMICS cap.
+let lastSeenDynamicCapacityDropped = 0;
+
+function warnOnDynamicCapacityDrop(anchor) {
+    const dropped = getWasmEngine?.()?.getDynamicCapacityDroppedCount?.() ?? 0;
+    if (dropped === lastSeenDynamicCapacityDropped) return;
+    lastSeenDynamicCapacityDropped = dropped;
+    if (!dropped) return;
+    const label = anchor?.name || anchor?.userData?.propName || 'unknown prop';
+    console.warn(
+        `StaticColliderBridge: MAX_DYNAMICS capacity reached — ${dropped} dynamic ` +
+            `prop(s) dropped so far (most recently while registering "${label}").`
     );
 }
 
@@ -251,4 +269,55 @@ export function destroyStaticCollider(physicsWorld, body) {
 
 export function destroyWasmStaticCollider(wasmId) {
     wasmRemoveStaticCollider(wasmId);
+}
+
+function attachWasmDynamicIdToAnchor(anchor, wasmId) {
+    if (wasmId == null || wasmId < 0) return;
+    if (!Array.isArray(anchor.userData.wasmDynamicIds)) {
+        anchor.userData.wasmDynamicIds = [];
+    }
+    anchor.userData.wasmDynamicIds.push(wasmId);
+}
+
+/**
+ * Create a dynamic (movable) collider from a declarative spec (`dynamic: true`
+ * + `mass`). Unlike `createStaticCollider`, compound specs are not flattened
+ * — a single moving rigid body per spec, matching the C++ addDynamicBox /
+ * addDynamicHull surface.
+ *
+ * @returns {{ body?: object, shapes?: object[], wasmId?: number } | null}
+ */
+export function createDynamicCollider(physicsWorld, anchor, spec) {
+    if (!anchor || !spec) return null;
+    if (!spec.mass || spec.mass <= 0) {
+        console.warn(
+            `StaticColliderBridge: dynamic collider requires mass > 0 (anchor "${anchor?.name || 'unknown'}")`
+        );
+        return null;
+    }
+
+    if (getStaticColliderBackend() === 'wasm') {
+        const wasmId = wasmAddDynamicCollider(spec, anchor);
+        if (wasmId < 0) return null;
+        attachWasmDynamicIdToAnchor(anchor, wasmId);
+        anchor.userData.isDynamicProp = true;
+        warnOnDynamicCapacityDrop(anchor);
+        return { wasmId };
+    }
+
+    if (!physicsWorld) return null;
+    const ammo = getAmmo();
+    if (!ammo) return null;
+
+    const shape = buildAmmoShape(ammo, spec);
+    if (!shape) return null;
+    const body = createPropDynamicBody(physicsWorld, anchor, shape, spec.mass);
+    if (!body) return null;
+    attachBodyToAnchor(anchor, body);
+    anchor.userData.isDynamicProp = true;
+    return { body, shapes: [shape] };
+}
+
+export function destroyWasmDynamicCollider(wasmId) {
+    wasmRemoveDynamicCollider(wasmId);
 }

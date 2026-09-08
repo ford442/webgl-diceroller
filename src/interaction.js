@@ -18,6 +18,8 @@ import {
     updateWasmDieGrab,
     endWasmDieGrab,
 } from './interaction/WasmDieGrab.js';
+import { spawnedProps } from './environment/DynamicPropState.js';
+import { propWasmGrabDriver } from './environment/DynamicPropSync.js';
 
 /** @typedef {import('./types/ammo').AmmoRigidBody} AmmoRigidBody */
 /** @typedef {import('./types/ammo').AmmoWorld} AmmoWorld */
@@ -210,6 +212,31 @@ function onPointerDown(x, y, camera, scene, physicsWorld, hooks = {}) {
                 startWasmDieGrab(wasmGrab, draggedItem, point);
             } else {
                 startDrag(object.userData.body, point, physicsWorld);
+            }
+        }
+        return;
+    }
+
+    // Dynamic (knockable) props opt into the same kinematic grab helper dice
+    // use — only reachable on the WASM path (ammo props have no drag/toss
+    // interaction here, matching how dice-drag has an ammo-specific path but
+    // props don't need one for this fallback-only edge case).
+    if (isWasmInteractionMode() && spawnedProps.length > 0) {
+        const propIntersects = raycaster.intersectObjects(spawnedProps, true);
+        if (propIntersects.length > 0) {
+            const intersect = propIntersects[0];
+            /** @type {import('three').Object3D | null} */
+            let object = intersect.object;
+            const point = intersect.point;
+
+            while (object && !object.userData.isDynamicProp && object.parent) {
+                object = object.parent;
+            }
+
+            if (object && object.userData.isDynamicProp) {
+                draggedItem = /** @type {import('three').Mesh} */ (object);
+                hooks.onMotionActivityChange?.(true, 'drag');
+                startWasmDieGrab(wasmGrab, draggedItem, point, propWasmGrabDriver);
             }
         }
     }

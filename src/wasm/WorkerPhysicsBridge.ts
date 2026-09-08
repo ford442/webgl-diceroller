@@ -1,5 +1,5 @@
 /**
- * WorkerPhysicsBridge.js
+ * WorkerPhysicsBridge.ts
  *
  * Production worker-backed physics bridge (Phase 4).  Exposes the *exact same*
  * synchronous API as WasmPhysicsBridge.js so it is a drop-in replacement —
@@ -33,17 +33,56 @@ import {
     CMD_RING_FLOATS,
     CMD_RING_OFFSET,
     sabSupported,
+    MAX_DYNAMICS,
+    DYN_STRIDE,
+    DYN_HEADER_INTS,
+    DYN_H_FRONT,
+    DYN_H_COUNT,
+    dynIdsOffset,
+    dynXfOffset,
+    DYNAMICS_SAB_BYTES,
 } from './workerLayout.js';
 import { parsePhysicsFlags } from './physicsFlags.js';
 import { resolveWasmArtifactDir } from './wasmArtifact.js';
 import { OP, copyIntoRing, countRecords } from './workerCommands.js';
 import { parseCollisionEventBuffer } from './collisionEvents.js';
+import type { CollisionEvent, PhysicsEngine } from './physicsTypes.js';
+import type { SeededDieRef } from './seededThrowParams.js';
+
+interface StepStats {
+    pairCandidates: number;
+    sphereTests: number;
+    satTests: number;
+    contacts: number;
+}
+
+/** Resolver state for an in-flight `_request()`. */
+interface PendingRequest {
+    resolve: (value: ResponsePayload) => void;
+    reject: (reason: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+}
+
+interface ResponsePayload {
+    reqId: number;
+    error?: string;
+    data: ArrayBuffer;
+    byteLength: number;
+}
+
+type CommandPayload = Record<string, unknown>;
 
 // ---------------------------------------------------------------------------
 // Debug / perf counters (surfaced via getWorkerPhysicsStats)
 // ---------------------------------------------------------------------------
 
-const _stats = {
+const _stats: {
+    structuralMsgs: number;
+    batchMsgs: number;
+    batchRecords: number;
+    lastSampleAt: number;
+    msgsPerSecond: number;
+} = {
     structuralMsgs: 0,
     batchMsgs: 0,
     batchRecords: 0,
@@ -51,11 +90,11 @@ const _stats = {
     msgsPerSecond: 0,
 };
 
-function _noteStructuralMsg() {
+function _noteStructuralMsg(): void {
     _stats.structuralMsgs++;
 }
 
-function _noteBatchMsg(recordCount) {
+function _noteBatchMsg(recordCount: number): void {
     _stats.batchMsgs++;
     _stats.batchRecords += recordCount;
 }
@@ -70,7 +109,7 @@ export function getWorkerPhysicsStats() {
         _stats.batchRecords = 0;
         _stats.lastSampleAt = now;
     }
-    let stepStats = null;
+    let stepStats: StepStats | null = null;
     if (_usingSAB && _engine?.header) {
         const h = _engine.header;
         stepStats = {
@@ -90,7 +129,7 @@ export function getWorkerPhysicsStats() {
 }
 
 /** Last-step broadphase / collision counters (worker SAB header or main-thread engine). */
-export function getPhysicsStepStats() {
+export function getPhysicsStepStats(): StepStats | null {
     if (_usingSAB && _engine?.header) {
         const h = _engine.header;
         return {
@@ -109,23 +148,49 @@ const REQUEST_TIMEOUT_MS = 15000;
 // Synchronous proxy mimicking DicePhysicsEngine
 // ---------------------------------------------------------------------------
 
-class WorkerEngineProxy {
-    /** @type {Int32Array | null} */
-    header = null;
+class WorkerEngineProxy implements PhysicsEngine {
+    header: Int32Array | null = null;
+    idsView: [Float32Array, Float32Array] | null = null;
+    xfView: [Float32Array, Float32Array] | null = null;
+    faceValuesView: [Int32Array, Int32Array] | null = null;
+    cmdRing: Float32Array | null = null;
 
-    constructor(worker, sab) {
+    dynHeader: Int32Array | null = null;
+    dynIdsView: [Float32Array, Float32Array] | null = null;
+    dynXfView: [Float32Array, Float32Array] | null = null;
+
+    readonly worker: Worker;
+    readonly sab: SharedArrayBuffer | null;
+    readonly sabDynamics: SharedArrayBuffer | null;
+
+    private _nextId = 0;
+    private _count = 0;
+    private _cmdHead = 0;
+    private _scratch = new Float32Array(1024);
+    private _scratchLen = 0;
+
+    private _snapIds = new Float32Array(0);
+    private _snapXf = new Float32Array(0);
+    private _snapFaceValues = new Int32Array(0);
+    private _snapCount = 0;
+    private _snapSettled = true;
+    private _eventChunks: Float32Array[] = [];
+
+    private _dynSnapIds = new Float32Array(0);
+    private _dynSnapXf = new Float32Array(0);
+    private _dynSnapCount = 0;
+
+    private _pending = new Map<number, PendingRequest>();
+    private _nextReqId = 1;
+
+    constructor(
+        worker: Worker,
+        sab: SharedArrayBuffer | null,
+        sabDynamics: SharedArrayBuffer | null = null
+    ) {
         this.worker = worker;
-
-        this._nextId = 0;
-        this._count = 0;
-
         this.sab = sab;
-        this.cmdRing = null;
-        this._cmdHead = 0;
-
-        // Per-frame scratch (used for accumulation; SAB flush copies from here).
-        this._scratch = new Float32Array(1024);
-        this._scratchLen = 0;
+        this.sabDynamics = sabDynamics;
 
         if (sab) {
             this.header = new Int32Array(sab, 0, HEADER_INTS);
@@ -144,26 +209,24 @@ class WorkerEngineProxy {
             this.cmdRing = new Float32Array(sab, CMD_RING_OFFSET, CMD_RING_FLOATS);
             Atomics.store(this.header, H_CMD_HEAD, 0);
             Atomics.store(this.header, H_CMD_TAIL, 0);
-        } else {
-            this.header = null;
-            this.faceValuesView = null;
         }
 
-        this._snapIds = new Float32Array(0);
-        this._snapXf = new Float32Array(0);
-        this._snapFaceValues = new Int32Array(0);
-        this._snapCount = 0;
-        this._snapSettled = true;
-        this._eventChunks = [];
+        if (sabDynamics) {
+            this.dynHeader = new Int32Array(sabDynamics, 0, DYN_HEADER_INTS);
+            this.dynIdsView = [
+                new Float32Array(sabDynamics, dynIdsOffset(0), MAX_DYNAMICS),
+                new Float32Array(sabDynamics, dynIdsOffset(1), MAX_DYNAMICS),
+            ];
+            this.dynXfView = [
+                new Float32Array(sabDynamics, dynXfOffset(0), MAX_DYNAMICS * DYN_STRIDE),
+                new Float32Array(sabDynamics, dynXfOffset(1), MAX_DYNAMICS * DYN_STRIDE),
+            ];
+        }
 
-        // Async request/response (serializeState, etc.).
-        this._pending = new Map();
-        this._nextReqId = 1;
-
-        worker.onmessage = (e) => this._onMessage(e.data);
+        worker.onmessage = (e: MessageEvent) => this._onMessage(e.data);
     }
 
-    _onMessage({ type, payload }) {
+    private _onMessage({ type, payload }: { type: string; payload: any }): void {
         if (type === 'response' && payload?.reqId != null) {
             const pending = this._pending.get(payload.reqId);
             if (pending) {
@@ -186,6 +249,11 @@ class WorkerEngineProxy {
             case 'events':
                 this._eventChunks.push(payload.events);
                 break;
+            case 'dynamicsSnapshot':
+                this._dynSnapIds = payload.ids;
+                this._dynSnapXf = payload.transforms;
+                this._dynSnapCount = payload.count;
+                break;
             case 'dieAdded':
                 if (payload.expectedId != null && payload.id !== payload.expectedId) {
                     console.warn(
@@ -199,15 +267,19 @@ class WorkerEngineProxy {
         }
     }
 
-    _send(type, payload = {}, transfer = []) {
+    private _send(type: string, payload: CommandPayload = {}, transfer: Transferable[] = []): void {
         this.flushCommandBatch();
         _noteStructuralMsg();
         this.worker.postMessage({ type, payload }, transfer);
     }
 
-    _request(type, payload = {}, transfer = []) {
+    private _request(
+        type: string,
+        payload: CommandPayload = {},
+        transfer: Transferable[] = []
+    ): Promise<ResponsePayload> {
         const reqId = this._nextReqId++;
-        return new Promise((resolve, reject) => {
+        return new Promise<ResponsePayload>((resolve, reject) => {
             const timer = setTimeout(() => {
                 if (this._pending.has(reqId)) {
                     this._pending.delete(reqId);
@@ -219,15 +291,30 @@ class WorkerEngineProxy {
         });
     }
 
-    _ensureScratch(room) {
+    private _ensureScratch(room: number): void {
         if (this._scratchLen + room <= this._scratch.length) return;
         const next = new Float32Array(Math.max(this._scratch.length * 2, this._scratchLen + room));
         next.set(this._scratch.subarray(0, this._scratchLen));
         this._scratch = next;
     }
 
-    _enqueue(opcode, id, a, b, c, d, e, f, g) {
-        const len = opcode === OP.SET_TRANSFORM ? 9 : opcode === OP.SET_VELOCITY ? 8 : 5;
+    private _enqueue(
+        opcode: number,
+        id: number,
+        a: number,
+        b: number,
+        c: number,
+        d = 0,
+        e = 0,
+        f = 0,
+        g = 0
+    ): void {
+        const len =
+            opcode === OP.SET_TRANSFORM || opcode === OP.PROP_SET_TRANSFORM
+                ? 9
+                : opcode === OP.SET_VELOCITY || opcode === OP.PROP_SET_VELOCITY
+                  ? 8
+                  : 5;
         this._ensureScratch(len);
         const i = this._scratchLen;
         this._scratch[i] = opcode;
@@ -245,7 +332,7 @@ class WorkerEngineProxy {
     }
 
     /** Flush accumulated per-frame commands to the worker (call once per frame). */
-    flushCommandBatch() {
+    flushCommandBatch(): void {
         if (this._scratchLen === 0) return;
 
         const batch = this._scratch.subarray(0, this._scratchLen);
@@ -265,7 +352,7 @@ class WorkerEngineProxy {
     }
 
     // --- lifecycle ---------------------------------------------------------
-    init(gravity, tableY, tableHalfW, tableHalfD) {
+    init(gravity: number, tableY: number, tableHalfW: number, tableHalfD: number): void {
         this._send('init', {
             gravity,
             tableY,
@@ -273,10 +360,11 @@ class WorkerEngineProxy {
             tableHalfD,
             flags: parsePhysicsFlags(_searchParams),
             sab: this.sab || null,
+            sabDynamics: this.sabDynamics || null,
         });
     }
 
-    reset() {
+    reset(): void {
         this._scratchLen = 0;
         this._nextId = 0;
         this._count = 0;
@@ -289,7 +377,7 @@ class WorkerEngineProxy {
     }
 
     // --- die management ----------------------------------------------------
-    addDie(sides, x, y, z) {
+    addDie(sides: number, x: number, y: number, z: number): number {
         if (this._count >= MAX_DICE) return -1;
         if (Number.isNaN(x) || Number.isNaN(y) || Number.isNaN(z)) return -1;
         const id = this._nextId++;
@@ -298,54 +386,71 @@ class WorkerEngineProxy {
         return id;
     }
 
-    removeDie(id) {
+    removeDie(id: number): void {
         if (this._count > 0) this._count--;
         this._send('removeDie', { id });
     }
 
-    clearAllDice() {
+    clearAllDice(): void {
         this._count = 0;
         this._send('clearAllDice');
     }
 
-    setDieHull(id, sides) {
+    setDieHull(id: number, sides: number): void {
         this._send('setDieHull', { id, sides });
     }
-    setDieMaterial(id, friction, rollingFriction) {
+    setDieMaterial(id: number, friction: number, rollingFriction: number): void {
         this._send('setDieMaterial', { id, friction, rollingFriction });
     }
-    setDieDrag(id, drag) {
+    setDieDrag(id: number, drag: number): void {
         this._send('setDieDrag', { id, drag });
     }
 
     // --- forces (batched) --------------------------------------------------
-    applyImpulse(id, fx, fy, fz) {
+    applyImpulse(id: number, fx: number, fy: number, fz: number): void {
         this._enqueue(OP.APPLY_IMPULSE, id, fx, fy, fz);
     }
-    applyTorqueImpulse(id, tx, ty, tz) {
+    applyTorqueImpulse(id: number, tx: number, ty: number, tz: number): void {
         this._enqueue(OP.APPLY_TORQUE, id, tx, ty, tz);
     }
 
     // --- state sync (batched) ----------------------------------------------
-    setDieTransform(id, px, py, pz, qx, qy, qz, qw) {
+    setDieTransform(
+        id: number,
+        px: number,
+        py: number,
+        pz: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number
+    ): void {
         this._enqueue(OP.SET_TRANSFORM, id, px, py, pz, qx, qy, qz, qw);
     }
-    setDieVelocity(id, lvx, lvy, lvz, avx, avy, avz) {
+    setDieVelocity(
+        id: number,
+        lvx: number,
+        lvy: number,
+        lvz: number,
+        avx: number,
+        avy: number,
+        avz: number
+    ): void {
         this._enqueue(OP.SET_VELOCITY, id, lvx, lvy, lvz, avx, avy, avz);
     }
-    setDieKinematic(id, kinematic) {
+    setDieKinematic(id: number, kinematic: boolean): void {
         this._send('setDieKinematic', { id, kinematic });
     }
 
-    setContainerActive(active) {
+    setContainerActive(active: boolean): void {
         this._send('setContainerActive', { active: !!active });
     }
 
-    setContainerPlanes(planes) {
+    setContainerPlanes(planes: Float32Array | number[]): void {
         this._send('setContainerPlanes', { planes: Array.from(planes) });
     }
 
-    clearStatics() {
+    clearStatics(): void {
         this._send('clearStatics');
     }
 
@@ -353,12 +458,25 @@ class WorkerEngineProxy {
     // the worker can't report success/id synchronously, so these return the
     // same "unknown" sentinel the interface uses for a failed synchronous call
     // (`false` / `-1`) rather than claim a result we don't have.
-    removeStatic(userId) {
+    removeStatic(userId: number): boolean {
         this._send('removeStatic', { userId });
         return false;
     }
 
-    addStaticBox(userId, cx, cy, cz, hx, hy, hz, qx, qy, qz, qw, materialTag) {
+    addStaticBox(
+        userId: number,
+        cx: number,
+        cy: number,
+        cz: number,
+        hx: number,
+        hy: number,
+        hz: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number,
+        materialTag: number
+    ): number {
         this._send('addStaticBox', {
             userId,
             cx,
@@ -376,12 +494,30 @@ class WorkerEngineProxy {
         return -1;
     }
 
-    addStaticPlane(userId, nx, ny, nz, dist, materialTag) {
+    addStaticPlane(
+        userId: number,
+        nx: number,
+        ny: number,
+        nz: number,
+        dist: number,
+        materialTag: number
+    ): number {
         this._send('addStaticPlane', { userId, nx, ny, nz, dist, materialTag });
         return -1;
     }
 
-    addStaticConvexHull(userId, cx, cy, cz, qx, qy, qz, qw, flatVerts, materialTag) {
+    addStaticConvexHull(
+        userId: number,
+        cx: number,
+        cy: number,
+        cz: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number,
+        flatVerts: number[] | Float32Array,
+        materialTag: number
+    ): number {
         this._send('addStaticConvexHull', {
             userId,
             cx,
@@ -398,16 +534,16 @@ class WorkerEngineProxy {
     }
 
     addStaticOpenCylinder(
-        userId,
-        cx,
-        cy,
-        cz,
-        radius,
-        halfHeight,
-        segments,
-        closedBottom,
-        materialTag
-    ) {
+        userId: number,
+        cx: number,
+        cy: number,
+        cz: number,
+        radius: number,
+        halfHeight: number,
+        segments: number,
+        closedBottom: boolean,
+        materialTag: number
+    ): number {
         this._send('addStaticOpenCylinder', {
             userId,
             cx,
@@ -422,45 +558,182 @@ class WorkerEngineProxy {
         return -1;
     }
 
+    // --- dynamic (non-die) rigid-body props ---------------------------------
+    clearDynamics(): void {
+        this._send('clearDynamics');
+    }
+
+    // Fire-and-forget, like the static-collider commands above: userId is
+    // caller-supplied, so there's no synchronous id to hand back.
+    removeDynamic(userId: number): boolean {
+        this._send('removeDynamic', { userId });
+        return false;
+    }
+
+    setDynamicKinematic(userId: number, kinematic: boolean): void {
+        this._send('setDynamicKinematic', { userId, kinematic: !!kinematic });
+    }
+
+    addDynamicBox(
+        userId: number,
+        mass: number,
+        cx: number,
+        cy: number,
+        cz: number,
+        hx: number,
+        hy: number,
+        hz: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number,
+        materialTag: number
+    ): number {
+        this._send('addDynamicBox', {
+            userId,
+            mass,
+            cx,
+            cy,
+            cz,
+            hx,
+            hy,
+            hz,
+            qx,
+            qy,
+            qz,
+            qw,
+            materialTag,
+        });
+        return -1;
+    }
+
+    addDynamicHull(
+        userId: number,
+        mass: number,
+        cx: number,
+        cy: number,
+        cz: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number,
+        flatVerts: number[] | Float32Array,
+        materialTag: number
+    ): number {
+        this._send('addDynamicHull', {
+            userId,
+            mass,
+            cx,
+            cy,
+            cz,
+            qx,
+            qy,
+            qz,
+            qw,
+            vertices: Array.from(flatVerts),
+            materialTag,
+        });
+        return -1;
+    }
+
+    // --- dynamic prop forces / state sync (batched) -------------------------
+    applyDynamicImpulse(userId: number, fx: number, fy: number, fz: number): void {
+        this._enqueue(OP.PROP_APPLY_IMPULSE, userId, fx, fy, fz);
+    }
+    applyDynamicTorqueImpulse(userId: number, tx: number, ty: number, tz: number): void {
+        this._enqueue(OP.PROP_APPLY_TORQUE, userId, tx, ty, tz);
+    }
+    setDynamicTransform(
+        userId: number,
+        px: number,
+        py: number,
+        pz: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number
+    ): void {
+        this._enqueue(OP.PROP_SET_TRANSFORM, userId, px, py, pz, qx, qy, qz, qw);
+    }
+    setDynamicVelocity(
+        userId: number,
+        lvx: number,
+        lvy: number,
+        lvz: number,
+        avx: number,
+        avy: number,
+        avz: number
+    ): void {
+        this._enqueue(OP.PROP_SET_VELOCITY, userId, lvx, lvy, lvz, avx, avy, avz);
+    }
+
+    getDynamicCount(): number {
+        if (this.dynHeader) return Atomics.load(this.dynHeader, DYN_H_COUNT);
+        return this._dynSnapCount;
+    }
+
+    getDynamicTransforms(): Float32Array {
+        const { dynHeader, dynXfView } = this;
+        if (dynHeader && dynXfView) {
+            const front = Atomics.load(dynHeader, DYN_H_FRONT);
+            const count = Atomics.load(dynHeader, DYN_H_COUNT);
+            return dynXfView[front === 1 ? 1 : 0].subarray(0, count * DYN_STRIDE);
+        }
+        return this._dynSnapXf;
+    }
+
+    getDynamicIds(): Float32Array {
+        const { dynHeader, dynIdsView } = this;
+        if (dynHeader && dynIdsView) {
+            const front = Atomics.load(dynHeader, DYN_H_FRONT);
+            const count = Atomics.load(dynHeader, DYN_H_COUNT);
+            return dynIdsView[front === 1 ? 1 : 0].subarray(0, count);
+        }
+        return this._dynSnapIds;
+    }
+
     // --- simulation --------------------------------------------------------
-    step() {
+    step(): void {
         /* worker-driven */
     }
 
     /** No-op: flags are bundled into init() and applied to the worker's engine there. */
-    setFlags(_flags) {
+    setFlags(_flags: number): void {
         /* sent via init() payload; see `init()` above. */
     }
 
     // --- queries -----------------------------------------------------------
-    getTransforms() {
-        if (this.header) {
-            const front = Atomics.load(this.header, H_FRONT);
-            const count = Atomics.load(this.header, H_COUNT);
-            return this.xfView[front].subarray(0, count * STRIDE);
+    getTransforms(): Float32Array {
+        const { header, xfView } = this;
+        if (header && xfView) {
+            const front = Atomics.load(header, H_FRONT);
+            const count = Atomics.load(header, H_COUNT);
+            return xfView[front === 1 ? 1 : 0].subarray(0, count * STRIDE);
         }
         return this._snapXf;
     }
 
-    getDieIds() {
-        if (this.header) {
-            const front = Atomics.load(this.header, H_FRONT);
-            const count = Atomics.load(this.header, H_COUNT);
-            return this.idsView[front].subarray(0, count);
+    getDieIds(): Float32Array {
+        const { header, idsView } = this;
+        if (header && idsView) {
+            const front = Atomics.load(header, H_FRONT);
+            const count = Atomics.load(header, H_COUNT);
+            return idsView[front === 1 ? 1 : 0].subarray(0, count);
         }
         return this._snapIds;
     }
 
-    getFaceValues() {
-        if (this.faceValuesView && this.header) {
-            const front = Atomics.load(this.header, H_FRONT);
-            const count = Atomics.load(this.header, H_COUNT);
-            return this.faceValuesView[front].subarray(0, count);
+    getFaceValues(): Int32Array {
+        const { header, faceValuesView } = this;
+        if (faceValuesView && header) {
+            const front = Atomics.load(header, H_FRONT);
+            const count = Atomics.load(header, H_COUNT);
+            return faceValuesView[front === 1 ? 1 : 0].subarray(0, count);
         }
         return this._snapFaceValues;
     }
 
-    getDieFaceValue(id) {
+    getDieFaceValue(id: number): number {
         const ids = this.getDieIds();
         const values = this.getFaceValues();
         for (let i = 0; i < ids.length; i++) {
@@ -469,18 +742,18 @@ class WorkerEngineProxy {
         return 0;
     }
 
-    getDieCount() {
+    getDieCount(): number {
         if (this.header) return Atomics.load(this.header, H_COUNT);
         return this._snapCount;
     }
 
-    areAllSettled() {
+    areAllSettled(): boolean {
         if (this.header) return Atomics.load(this.header, H_SETTLED) === 1;
         return this._snapSettled;
     }
 
     /** Last-step broadphase / collision counters (SAB header, when available). */
-    getLastStepStats() {
+    getLastStepStats(): StepStats {
         if (this.header) {
             return {
                 pairCandidates: Atomics.load(this.header, H_PAIR_CANDIDATES),
@@ -492,7 +765,7 @@ class WorkerEngineProxy {
         return { pairCandidates: 0, sphereTests: 0, satTests: 0, contacts: 0 };
     }
 
-    getCollisionEvents() {
+    getCollisionEvents(): Float32Array {
         if (this._eventChunks.length === 0) return new Float32Array(0);
         if (this._eventChunks.length === 1) {
             const only = this._eventChunks[0];
@@ -512,29 +785,29 @@ class WorkerEngineProxy {
     }
 
     // --- determinism -------------------------------------------------------
-    seedRNG(seed) {
+    seedRNG(seed: number): void {
         this._send('seedRNG', { seed });
     }
-    seededThrow(seed, dice, tableSurfaceY) {
+    seededThrow(seed: number, dice: SeededDieRef[], tableSurfaceY: number): void {
         this._send('seededThrow', { seed: seed >>> 0, dice, tableSurfaceY });
     }
-    async serializeStateAsync() {
+    async serializeStateAsync(): Promise<Uint8Array> {
         const res = await this._request('serializeState');
         return new Uint8Array(res.data, 0, res.byteLength);
     }
-    randomFloat() {
+    randomFloat(): number {
         console.warn(
             '[WorkerPhysics] randomFloat() is unavailable synchronously in worker mode; use seededThrow() for deterministic rolls.'
         );
         return Math.random();
     }
-    serializeState() {
+    serializeState(): Uint8Array {
         console.warn(
             '[WorkerPhysics] serializeState() is unavailable synchronously in worker mode; use serializePhysicsState() instead.'
         );
         return new Uint8Array(0);
     }
-    deserializeState(data) {
+    deserializeState(data: Uint8Array): void {
         this._send('deserializeState', { data: Array.from(data) });
     }
 }
@@ -543,18 +816,17 @@ class WorkerEngineProxy {
 // Bridge state
 // ---------------------------------------------------------------------------
 
-/** @type {WorkerEngineProxy | null} */
-let _engine = null;
+let _engine: WorkerEngineProxy | null = null;
 let _available = false;
 let _initialized = false;
 let _usingSAB = false;
 const _searchParams = new URLSearchParams(self.location ? self.location.search : '');
 
-export const flushWorkerCommandBatch = () => {
-    _engine?.flushCommandBatch?.();
+export const flushWorkerCommandBatch = (): void => {
+    _engine?.flushCommandBatch();
 };
 
-export const loadWasmEngine = async () => {
+export const loadWasmEngine = async (): Promise<boolean> => {
     if (_initialized) return _available;
 
     if (_searchParams.has('no-wasm')) {
@@ -564,14 +836,14 @@ export const loadWasmEngine = async () => {
     }
 
     try {
-        const worker = new Worker(new URL('./dice_physics.worker.js', import.meta.url), {
+        const worker = new Worker(new URL('./dice_physics.worker.ts', import.meta.url), {
             type: 'module',
             name: resolveWasmArtifactDir({ searchParams: _searchParams }),
         });
 
-        await new Promise((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error('worker boot timeout')), 15000);
-            const onReady = (e) => {
+            const onReady = (e: MessageEvent) => {
                 if (e.data?.type === 'ready') {
                     cleanup();
                     resolve();
@@ -580,7 +852,7 @@ export const loadWasmEngine = async () => {
                     reject(new Error(e.data.payload?.message || 'worker boot error'));
                 }
             };
-            const onError = (err) => {
+            const onError = (err: ErrorEvent) => {
                 cleanup();
                 reject(err);
             };
@@ -593,9 +865,11 @@ export const loadWasmEngine = async () => {
             worker.addEventListener('error', onError);
         });
 
-        let sab = null;
+        let sab: SharedArrayBuffer | null = null;
+        let sabDynamics: SharedArrayBuffer | null = null;
         if (sabSupported()) {
             sab = new SharedArrayBuffer(SAB_BYTES);
+            sabDynamics = new SharedArrayBuffer(DYNAMICS_SAB_BYTES);
             _usingSAB = true;
         } else {
             console.warn(
@@ -603,7 +877,7 @@ export const loadWasmEngine = async () => {
             );
         }
 
-        _engine = new WorkerEngineProxy(worker, sab);
+        _engine = new WorkerEngineProxy(worker, sab, sabDynamics);
         _available = true;
         console.log(
             `[WorkerPhysics] Worker physics engine loaded (${_usingSAB ? 'SharedArrayBuffer' : 'postMessage'} transport).`
@@ -618,55 +892,65 @@ export const loadWasmEngine = async () => {
     return _available;
 };
 
-export const isWasmAvailable = () => _initialized && _available;
-export const isWasmInitialized = () => _initialized;
-export const isUsingSharedArrayBuffer = () => _usingSAB;
+export const isWasmAvailable = (): boolean => _initialized && _available;
+export const isWasmInitialized = (): boolean => _initialized;
+export const isUsingSharedArrayBuffer = (): boolean => _usingSAB;
 
-export const getWasmEngine = () => {
+export const getWasmEngine = (): PhysicsEngine => {
     if (!_initialized)
         throw new Error('[WorkerPhysics] Engine not initialized. Await loadWasmEngine() first.');
+    if (!_engine)
+        throw new Error('[WorkerPhysics] Engine unavailable — loadWasmEngine() did not succeed.');
     return _engine;
 };
 
-export const loadHullForDie = () => {};
+/**
+ * The live proxy, or null when the worker never came up. Internal helper for
+ * the module-level API below, which no-ops rather than throwing when the
+ * backend is unavailable (`PhysicsBridge` falls back to the main-thread bridge).
+ */
+const activeEngine = (): WorkerEngineProxy | null => (_available ? _engine : null);
 
-export const pollCollisionEvents = () => {
-    if (!_available) return [];
-    const buf = _engine.getCollisionEvents();
-    return parseCollisionEventBuffer(buf);
+export const loadHullForDie = (): void => {};
+
+export const pollCollisionEvents = (): CollisionEvent[] => {
+    const engine = activeEngine();
+    if (!engine) return [];
+    return parseCollisionEventBuffer(engine.getCollisionEvents());
 };
 
-export const seedPhysicsRNG = (seed) => {
-    if (!_available) return;
-    _engine.seedRNG(seed >>> 0);
+export const seedPhysicsRNG = (seed: number): void => {
+    activeEngine()?.seedRNG(seed >>> 0);
 };
 
-export const randomPhysicsFloat = () => {
-    if (!_available) return Math.random();
-    return _engine.randomFloat();
+export const randomPhysicsFloat = (): number => {
+    const engine = activeEngine();
+    if (!engine) return Math.random();
+    return engine.randomFloat();
 };
 
-export const serializePhysicsState = async () => {
-    if (!_available) return new Uint8Array(0);
-    return _engine.serializeStateAsync();
+export const serializePhysicsState = async (): Promise<Uint8Array> => {
+    const engine = activeEngine();
+    if (!engine) return new Uint8Array(0);
+    return engine.serializeStateAsync();
 };
 
-export const seededPhysicsThrow = (seed, dice, tableSurfaceY) => {
-    if (!_available) return;
-    _engine.seededThrow(seed, dice, tableSurfaceY);
+export const seededPhysicsThrow = (
+    seed: number,
+    dice: SeededDieRef[],
+    tableSurfaceY: number
+): void => {
+    activeEngine()?.seededThrow(seed, dice, tableSurfaceY);
 };
 
-export const deserializePhysicsState = (data) => {
-    if (!_available) return;
-    _engine.deserializeState(data);
+export const deserializePhysicsState = (data: Uint8Array): void => {
+    activeEngine()?.deserializeState(data);
 };
 
-export const setContainerActive = (active) => {
-    if (!_available) return;
-    _engine.setContainerActive(active);
+export const setContainerActive = (active: boolean): void => {
+    activeEngine()?.setContainerActive(active);
 };
 
-export const setContainerPlanes = (planes) => {
-    if (!_available) return;
-    _engine.setContainerPlanes(planes);
+export const setContainerPlanes = (planes: Float32Array | number[]): void => {
+    activeEngine()?.setContainerPlanes(planes);
 };

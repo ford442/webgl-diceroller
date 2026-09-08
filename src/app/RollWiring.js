@@ -74,17 +74,17 @@ export function createRollWiring(app, deps) {
         return diceSet;
     }
 
-    function beginCupRoll() {
+    function beginPhysicalReroll(source) {
         pendingRollMeta = {
             seed: null,
             expression: null,
             diceSet: captureDiceSet(),
-            source: 'cup',
+            source,
         };
         rollHandlerRef.lastRoll = {
             seed: null,
             counts: getSpawnedDiceCounts(),
-            source: 'cup',
+            source,
         };
         const shadowController = getShadowController();
         shadowController?.pulse('roll');
@@ -93,7 +93,15 @@ export function createRollWiring(app, deps) {
         hideResults();
         const lampData = getLampData();
         if (lampData) lampData.setRolling(true);
-        emitRollStarted({ source: 'cup' });
+        emitRollStarted({ source });
+    }
+
+    function beginCupRoll() {
+        beginPhysicalReroll('cup');
+    }
+
+    function beginTowerRoll() {
+        beginPhysicalReroll('tower');
     }
 
     async function broadcastFairCommit(seed, expression, diceSet, source) {
@@ -434,6 +442,7 @@ export function createRollWiring(app, deps) {
         rollHandlerRef,
         captureDiceSet,
         beginCupRoll,
+        beginTowerRoll,
         beginRoll,
         initRollSession,
         createNotationHooks,

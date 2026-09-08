@@ -5,7 +5,8 @@ export function createSmokingPipe(
     scene,
     physicsWorld,
     position = { x: -6, y: -2.75, z: 5 },
-    rotation = Math.PI / 8
+    rotation = Math.PI / 8,
+    { scale = 1 } = {}
 ) {
     const smokeParticles = [];
 
@@ -13,6 +14,7 @@ export function createSmokingPipe(
         name: 'SmokingPipe',
         position,
         rotation,
+        scale,
         colliders: [
             {
                 type: 'box',

@@ -19,6 +19,7 @@ import {
     setDiceAppearanceQualityProfile,
 } from '../dice.js';
 import { updateInteraction } from '../interaction.js';
+import { updatePropVisuals } from '../environment/DynamicPropSync.js';
 import { updateAtmosphere } from '../environment/Atmosphere.js';
 import { LampMode } from '../environment/Lamp.js';
 import {
@@ -97,6 +98,7 @@ export function registerFrameCallbacks(scheduler, deps) {
     scheduler.register('postPhysicsSync', 'diceVisualSync', () => {
         if (!isSimulationReady()) return;
         updateDiceVisuals();
+        updatePropVisuals();
     });
 
     scheduler.register('postPhysicsSync', 'collisionAudio', () => {

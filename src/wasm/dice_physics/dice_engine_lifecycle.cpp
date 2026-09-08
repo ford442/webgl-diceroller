@@ -22,17 +22,21 @@ void DicePhysicsEngine::init(float gravity, float tableY, float tableHalfW, floa
     tableHalfW_ = tableHalfW; tableHalfD_ = tableHalfD;
     bodies_.clear(); contacts_.clear(); events_.clear();
     statics_.clear();
+    dynamics_.clear();
     nextId_ = 0;
     gridCols_ = 0;
     gridRows_ = 0;
     dieGridCells_.clear();
     lastStepStats_ = {};
     staticCapacityDroppedCount_ = 0;
+    dynamicCapacityDroppedCount_ = 0;
 }
 
 void DicePhysicsEngine::reset() {
-    bodies_.clear(); contacts_.clear(); events_.clear(); statics_.clear(); nextId_ = 0;
+    bodies_.clear(); contacts_.clear(); events_.clear(); statics_.clear(); dynamics_.clear();
+    nextId_ = 0;
     staticCapacityDroppedCount_ = 0;
+    dynamicCapacityDroppedCount_ = 0;
 }
 
 int DicePhysicsEngine::addDie(int sides, float x, float y, float z) {

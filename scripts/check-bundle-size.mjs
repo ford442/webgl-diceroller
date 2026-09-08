@@ -25,26 +25,45 @@ function gzipSize(buffer) {
 
 const files = (await readdir(distAssets)).filter((name) => name.endsWith('.js')).sort();
 
+const demandLoaded = budgets.demandLoaded ?? [];
+
+/**
+ * Chunks only some sessions ever fetch (WebGPU-only, ?xr-only, ?no-wasm-only).
+ * They are held to their own per-chunk budgets and to `allChunksGzipMax`, but
+ * they are kept out of the every-session total so that adding a conditional
+ * feature cannot silently eat the eager download budget — and so that the eager
+ * number keeps meaning "what a user actually downloads".
+ */
+function demandLoadedReason(file) {
+    const match = demandLoaded.find((entry) => new RegExp(entry.pattern).test(`assets/${file}`));
+    return match?.reason ?? null;
+}
+
 let failed = 0;
 let totalGzip = 0;
+let eagerGzip = 0;
 const rows = [];
 
 for (const file of files) {
     const raw = await readFile(resolve(distAssets, file));
     const gz = await gzipSize(raw);
+    const reason = demandLoadedReason(file);
     totalGzip += gz;
-    rows.push({ file, raw: raw.length, gzip: gz });
+    if (!reason) eagerGzip += gz;
+    rows.push({ file, raw: raw.length, gzip: gz, reason });
 }
 
 console.log('Production JS bundle sizes:\n');
-for (const { file, raw, gzip } of rows) {
+for (const { file, raw, gzip, reason } of rows) {
     console.log(
-        `  ${file.padEnd(42)} ${(raw / 1024).toFixed(1).padStart(7)} KB raw  ${(gzip / 1024).toFixed(1).padStart(6)} KB gzip`
+        `  ${file.padEnd(42)} ${(raw / 1024).toFixed(1).padStart(7)} KB raw  ${(gzip / 1024).toFixed(1).padStart(6)} KB gzip` +
+            (reason ? `  [demand-loaded: ${reason}]` : '')
     );
 }
 
 console.log(
-    `\n  ${'TOTAL'.padEnd(42)} ${' '.repeat(7)}        ${(totalGzip / 1024).toFixed(1).padStart(6)} KB gzip`
+    `\n  ${'EAGER TOTAL'.padEnd(42)} ${' '.repeat(7)}        ${(eagerGzip / 1024).toFixed(1).padStart(6)} KB gzip` +
+        `\n  ${'ALL CHUNKS'.padEnd(42)} ${' '.repeat(7)}        ${(totalGzip / 1024).toFixed(1).padStart(6)} KB gzip`
 );
 
 for (const [name, budget] of Object.entries(budgets.chunks)) {
@@ -63,13 +82,23 @@ for (const [name, budget] of Object.entries(budgets.chunks)) {
     }
 }
 
-if (totalGzip > budgets.totals.jsGzipMax) {
+if (eagerGzip > budgets.totals.jsGzipMax) {
     failed += 1;
     console.error(
-        `\nFAIL: total JS gzip ${totalGzip} B exceeds budget ${budgets.totals.jsGzipMax} B`
+        `\nFAIL: eager JS gzip ${eagerGzip} B exceeds budget ${budgets.totals.jsGzipMax} B`
     );
 } else {
-    console.log(`\nok: total JS gzip ${totalGzip} B <= ${budgets.totals.jsGzipMax} B`);
+    console.log(`\nok: eager JS gzip ${eagerGzip} B <= ${budgets.totals.jsGzipMax} B`);
+}
+
+const allChunksMax = budgets.totals.allChunksGzipMax;
+if (allChunksMax != null) {
+    if (totalGzip > allChunksMax) {
+        failed += 1;
+        console.error(`\nFAIL: all-chunks JS gzip ${totalGzip} B exceeds budget ${allChunksMax} B`);
+    } else {
+        console.log(`\nok: all-chunks JS gzip ${totalGzip} B <= ${allChunksMax} B`);
+    }
 }
 
 if (failed > 0) {

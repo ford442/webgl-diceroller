@@ -11,13 +11,66 @@
  * Structural / rare commands (addDie, init, …) stay on plain postMessage.
  */
 
-import type { PhysicsEngine } from './physicsTypes.js';
+/**
+ * The slice of an engine that command dispatch actually drives. Declared
+ * structurally (rather than taking `PhysicsEngine`) so both the bridge-facing
+ * `PhysicsEngine` and the worker's raw `EmbindPhysicsEngine` — which disagree
+ * on `setContainerPlanes` / `serializeState` — can be dispatched to.
+ */
+export interface PhysicsCommandTarget {
+    applyImpulse(id: number, fx: number, fy: number, fz: number): void;
+    applyTorqueImpulse(id: number, tx: number, ty: number, tz: number): void;
+    setDieTransform(
+        id: number,
+        px: number,
+        py: number,
+        pz: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number
+    ): void;
+    setDieVelocity(
+        id: number,
+        lvx: number,
+        lvy: number,
+        lvz: number,
+        avx: number,
+        avy: number,
+        avz: number
+    ): void;
+    applyDynamicImpulse?(userId: number, fx: number, fy: number, fz: number): void;
+    applyDynamicTorqueImpulse?(userId: number, tx: number, ty: number, tz: number): void;
+    setDynamicTransform?(
+        userId: number,
+        px: number,
+        py: number,
+        pz: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number
+    ): void;
+    setDynamicVelocity?(
+        userId: number,
+        lvx: number,
+        lvy: number,
+        lvz: number,
+        avx: number,
+        avy: number,
+        avz: number
+    ): void;
+}
 
 export const OP = {
     APPLY_IMPULSE: 1,
     APPLY_TORQUE: 2,
     SET_TRANSFORM: 3,
     SET_VELOCITY: 4,
+    PROP_APPLY_IMPULSE: 5,
+    PROP_APPLY_TORQUE: 6,
+    PROP_SET_TRANSFORM: 7,
+    PROP_SET_VELOCITY: 8,
 } as const;
 
 type Opcode = (typeof OP)[keyof typeof OP];
@@ -28,6 +81,10 @@ export const RECORD_LEN: Record<Opcode, number> = {
     [OP.APPLY_TORQUE]: 5,
     [OP.SET_TRANSFORM]: 9,
     [OP.SET_VELOCITY]: 8,
+    [OP.PROP_APPLY_IMPULSE]: 5,
+    [OP.PROP_APPLY_TORQUE]: 5,
+    [OP.PROP_SET_TRANSFORM]: 9,
+    [OP.PROP_SET_VELOCITY]: 8,
 };
 
 const MAX_RECORD_LEN = 9;
@@ -40,7 +97,7 @@ function recordLen(opcode: number): number | undefined {
  * Dispatch every record in a linear command buffer.
  */
 export function dispatchLinear(
-    engine: PhysicsEngine,
+    engine: PhysicsCommandTarget,
     buf: Float32Array,
     start = 0,
     end = buf.length
@@ -82,6 +139,35 @@ export function dispatchLinear(
                     buf[i + 7]
                 );
                 break;
+            case OP.PROP_APPLY_IMPULSE:
+                engine.applyDynamicImpulse?.(id, buf[i + 2], buf[i + 3], buf[i + 4]);
+                break;
+            case OP.PROP_APPLY_TORQUE:
+                engine.applyDynamicTorqueImpulse?.(id, buf[i + 2], buf[i + 3], buf[i + 4]);
+                break;
+            case OP.PROP_SET_TRANSFORM:
+                engine.setDynamicTransform?.(
+                    id,
+                    buf[i + 2],
+                    buf[i + 3],
+                    buf[i + 4],
+                    buf[i + 5],
+                    buf[i + 6],
+                    buf[i + 7],
+                    buf[i + 8]
+                );
+                break;
+            case OP.PROP_SET_VELOCITY:
+                engine.setDynamicVelocity?.(
+                    id,
+                    buf[i + 2],
+                    buf[i + 3],
+                    buf[i + 4],
+                    buf[i + 5],
+                    buf[i + 6],
+                    buf[i + 7]
+                );
+                break;
             default:
                 return records;
         }
@@ -93,7 +179,7 @@ export function dispatchLinear(
 
 /** Drain a ring-buffered command queue from `tail` up to `head` (exclusive). */
 export function drainRing(
-    engine: PhysicsEngine,
+    engine: PhysicsCommandTarget,
     ring: Float32Array,
     head: number,
     tail: number,

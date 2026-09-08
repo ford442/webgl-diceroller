@@ -21,10 +21,16 @@ export function createDiceTray(
     const physHeight = height * 1.5;
     const frontBackWidth = width - 2 * thickness;
 
+    // Interior region used to detect which dice are "in the tray" for
+    // lock/unlock — matches the floor footprint, generous enough in y to
+    // cover a die resting on the velvet.
+    const halfExtents = { x: width / 2 - thickness, y: 1.0, z: depth / 2 - thickness };
+
     return createProp(scene, physicsWorld, {
         name: 'DiceTray',
         position,
         rotation: rotationY,
+        halfExtents,
         colliders: [
             {
                 type: 'box',
@@ -58,8 +64,11 @@ export function createDiceTray(
             },
         ],
         build({ group }) {
-            const { diffuse: woodDiffuse, roughness: woodRoughness, bump: woodBump } =
-                getWoodTextures();
+            const {
+                diffuse: woodDiffuse,
+                roughness: woodRoughness,
+                bump: woodBump,
+            } = getWoodTextures();
 
             const woodMaterial = new THREE.MeshStandardMaterial({
                 map: woodDiffuse,
@@ -122,6 +131,27 @@ export function createDiceTray(
             frontWall.castShadow = true;
             frontWall.receiveShadow = true;
             group.add(frontWall);
+
+            const highlightGeo = new THREE.BoxGeometry(
+                width - thickness * 0.5,
+                0.05,
+                depth - thickness * 0.5
+            );
+            const highlightMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffd54a,
+                emissive: 0xffb300,
+                emissiveIntensity: 0.9,
+                transparent: true,
+                opacity: 0.35,
+                roughness: 0.4,
+            });
+            const highlightMesh = new THREE.Mesh(highlightGeo, highlightMaterial);
+            highlightMesh.name = 'trayLockHighlight';
+            highlightMesh.position.set(0, floorThickness + 0.03, 0);
+            highlightMesh.visible = false;
+            highlightMesh.castShadow = false;
+            highlightMesh.receiveShadow = false;
+            group.add(highlightMesh);
         },
     });
 }

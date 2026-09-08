@@ -173,6 +173,12 @@ export default defineConfig({
         rollupOptions: {
             output: {
                 manualChunks(id) {
+                    // Keep the ~300 KB LTC BRDF tables out of the shared `three`
+                    // chunk: only the WebGPU high-quality accent rig imports them
+                    // (AccentLightRig.js), and it does so dynamically. Letting
+                    // Rollup emit them as their own async chunk means WebGL,
+                    // mobile and XR never download them.
+                    if (id.includes('RectAreaLightTexturesLib')) return;
                     if (id.includes('node_modules/three')) return 'three';
                     // ammo.js only — do not include AmmoDiceBackend here (it would pull dice modules in).
                     if (id.includes('node_modules/ammo.js')) return 'physics';

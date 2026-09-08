@@ -5,6 +5,15 @@ export interface StaticColliderSpecBase {
     materialTag?: StaticMaterialTag;
     offset?: { x?: number; y?: number; z?: number } | number[];
     rotation?: { x?: number; y?: number; z?: number } | number[];
+    /**
+     * Opt this collider into the dynamic (movable) path instead of a static
+     * body. Only 'box' and 'cylinder'/'openCylinder' (synthesized into a
+     * convex prism hull) and 'convexHull' shapes support this — 'plane' does
+     * not. Requires `mass` (> 0).
+     */
+    dynamic?: boolean;
+    /** Body mass; required (> 0) when `dynamic` is true. */
+    mass?: number;
 }
 
 export interface StaticBoxSpec extends StaticColliderSpecBase {
@@ -33,7 +42,4 @@ export interface StaticConvexHullSpec extends StaticColliderSpecBase {
 }
 
 export type StaticColliderSpec =
-    | StaticBoxSpec
-    | StaticPlaneSpec
-    | StaticOpenCylinderSpec
-    | StaticConvexHullSpec;
+    StaticBoxSpec | StaticPlaneSpec | StaticOpenCylinderSpec | StaticConvexHullSpec;

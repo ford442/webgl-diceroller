@@ -95,11 +95,62 @@ export const TIER_PROP_DEFINITIONS = {
     ],
     tier2: [
         factoryEntry('Horseshoe', { randomPool: true }),
-        factoryEntry('DiceTower', { position: { x: 0, y: -3.0, z: -14 }, rotation: 0 }),
-        factoryEntry('DiceTray', { position: { x: 12, y: -2.75, z: 10 }, rotation: Math.PI / 6 }),
+        factoryEntry('DiceTower', {
+            position: { x: 0, y: -3.0, z: -14 },
+            rotation: 0,
+            afterCreate: (result, ctx) => {
+                if (!result) return;
+                ctx.state.diceTowerProp = result;
+                registerInteractiveObject(result.group, () => {
+                    ctx.callbacks.onDiceTowerInteract?.();
+                });
+                registerInteractable('diceTower', {
+                    trigger: () => ctx.callbacks.onDiceTowerInteract?.(),
+                    drop: (idsOrAll) =>
+                        ctx.callbacks.getDiceTowerController?.()?.dropDice(idsOrAll),
+                    getState: () =>
+                        ctx.callbacks.getDiceTowerController?.()?.getState() ?? {
+                            available: false,
+                        },
+                });
+            },
+        }),
+        factoryEntry('DiceTray', {
+            position: { x: 12, y: -2.75, z: 10 },
+            rotation: Math.PI / 6,
+            afterCreate: (result, ctx) => {
+                if (!result) return;
+                ctx.state.diceTrayProp = result;
+                registerInteractiveObject(result.group, () => {
+                    ctx.callbacks.onDiceTrayInteract?.();
+                });
+                registerInteractable('diceTray', {
+                    trigger: () => ctx.callbacks.onDiceTrayInteract?.(),
+                    lock: () => ctx.callbacks.getDiceTrayController?.()?.lock(),
+                    unlock: () => ctx.callbacks.getDiceTrayController?.()?.unlock(),
+                    getState: () =>
+                        ctx.callbacks.getDiceTrayController?.()?.getState() ?? { available: false },
+                });
+            },
+        }),
         factoryEntry('DiceJail', {
             position: { x: -13, y: -2.75, z: -13 },
             rotation: -Math.PI / 4,
+            afterCreate: (result, ctx) => {
+                if (!result) return;
+                ctx.state.diceJailProp = result;
+                registerInteractiveObject(result.group, () => {
+                    ctx.callbacks.onDiceJailInteract?.();
+                });
+                registerInteractable('diceJail', {
+                    trigger: () => ctx.callbacks.onDiceJailInteract?.(),
+                    hold: (idsOrNearby) =>
+                        ctx.callbacks.getDiceJailController?.()?.hold(idsOrNearby),
+                    release: () => ctx.callbacks.getDiceJailController?.()?.release(),
+                    getState: () =>
+                        ctx.callbacks.getDiceJailController?.()?.getState() ?? { available: false },
+                });
+            },
         }),
         factoryEntry('DiceBag', { position: { x: -10, y: -1.95, z: 12 }, rotation: Math.PI / 8 }),
         factoryEntry('DiceCup', {
@@ -194,6 +245,7 @@ export const TIER_PROP_DEFINITIONS = {
             randomPool: true,
             position: { x: -5, y: -2.75, z: 14 },
             rotation: Math.PI / 4,
+            dynamic: true,
             afterCreate: (result, ctx) =>
                 result?.update && ctx.registerUpdate('mug', result.update),
         }),
@@ -247,6 +299,9 @@ export const TIER_PROP_DEFINITIONS = {
             randomPool: true,
             position: { x: 14, y: -2.75, z: 8 },
             rotation: -Math.PI / 6,
+            afterCreate: (result, ctx) => {
+                if (result) ctx.state.characterSheetProp = result;
+            },
         }),
         factoryEntry('BountyPoster', {
             randomPool: true,

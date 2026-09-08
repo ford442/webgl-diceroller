@@ -2,23 +2,11 @@ import * as THREE from 'three';
 import { createStaticCollider } from '../../core/StaticColliderBridge.js';
 import { createFire } from '../Fire.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
-import {
-    getWaxMaterial,
-    getWickMaterial,
-    getWroughtIronMaterial,
-    getDarkLeatherMaterial,
-    getBlackAccentMaterial,
-    getBrassMaterial,
-    getPaperMaterial,
-} from '../../core/MaterialPalette.js';
+import { getWaxMaterial, getWickMaterial, getPaperMaterial } from '../../core/MaterialPalette.js';
 import { resolvePlacement } from './ClutterPlacement.js';
 
 const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
 const randomUnit = (options) => (options?.rng ?? Math.random)();
-
-function addBoxCollider(physicsWorld, anchor, halfExtents) {
-    createStaticCollider(physicsWorld, anchor, { type: 'box', halfExtents });
-}
 
 function addCylinderCollider(physicsWorld, anchor, radius, halfHeight) {
     createStaticCollider(physicsWorld, anchor, { type: 'cylinder', radius, halfHeight });
@@ -124,60 +112,6 @@ export function createCandle(scene, physicsWorld, options = {}) {
     };
 }
 
-export function createKey(scene, physicsWorld, options = {}) {
-    const keyGroup = new THREE.Group();
-    keyGroup.name = 'IronKey';
-
-    const material = getWroughtIronMaterial();
-
-    const bowRadius = 0.3;
-    const bowTube = 0.06;
-    const bowGeo = new THREE.TorusGeometry(bowRadius, bowTube, 8, 16);
-    const bowMesh = new THREE.Mesh(bowGeo, material);
-    bowMesh.rotation.x = Math.PI / 2;
-    bowMesh.castShadow = true;
-    bowMesh.receiveShadow = true;
-    keyGroup.add(bowMesh);
-
-    const shaftLen = 1.0;
-    const shaftRadius = 0.06;
-    const shaftGeo = new THREE.CylinderGeometry(shaftRadius, shaftRadius, shaftLen, 8);
-    const shaftMesh = new THREE.Mesh(shaftGeo, material);
-    shaftMesh.rotation.x = Math.PI / 2;
-    shaftMesh.position.z = bowRadius + shaftLen / 2 - 0.05;
-    shaftMesh.castShadow = true;
-    shaftMesh.receiveShadow = true;
-    keyGroup.add(shaftMesh);
-
-    const collarGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.1, 8);
-    const collarMesh = new THREE.Mesh(collarGeo, material);
-    collarMesh.rotation.x = Math.PI / 2;
-    collarMesh.position.z = bowRadius + 0.2;
-    collarMesh.castShadow = true;
-    keyGroup.add(collarMesh);
-
-    const bitGeo = new THREE.BoxGeometry(0.3, 0.1, 0.2);
-    const bitMesh = new THREE.Mesh(bitGeo, material);
-    bitMesh.position.set(shaftRadius + 0.15, 0, bowRadius + shaftLen - 0.2);
-    bitMesh.castShadow = true;
-    bitMesh.receiveShadow = true;
-    keyGroup.add(bitMesh);
-
-    const bit2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.1), material);
-    bit2.position.set(shaftRadius + 0.1, 0, bowRadius + shaftLen - 0.35);
-    bit2.castShadow = true;
-    bit2.receiveShadow = true;
-    keyGroup.add(bit2);
-
-    const placement = resolvePlacement(options, { x: 2, z: -5 });
-    keyGroup.position.set(placement.x, tabletopY(-2.69), placement.z);
-    keyGroup.rotation.y = placement.rotationY;
-    scene.add(keyGroup);
-    options.track?.(keyGroup);
-
-    addBoxCollider(physicsWorld, keyGroup, [0.3, 0.06, 0.7]);
-}
-
 export function createQuill(scene, physicsWorld, options = {}) {
     const group = new THREE.Group();
     group.name = 'Quill';
@@ -255,147 +189,4 @@ export function createQuill(scene, physicsWorld, options = {}) {
     options.track?.(group);
 
     addCylinderCollider(physicsWorld, group, potRadiusBot, potHeight / 2);
-}
-
-export function createPipe(scene, physicsWorld, options = {}) {
-    const group = new THREE.Group();
-    group.name = 'SmokingPipe';
-
-    const woodMat = getDarkLeatherMaterial();
-    const blackMat = getBlackAccentMaterial();
-
-    const ashMat = new THREE.MeshStandardMaterial({
-        color: 0x333333,
-        roughness: 1.0,
-    });
-
-    const emberMat = new THREE.MeshStandardMaterial({
-        color: 0xff4400,
-        emissive: 0xff2200,
-        emissiveIntensity: 0.5,
-        roughness: 1.0,
-    });
-
-    const points = [];
-    points.push(new THREE.Vector2(0, -0.4));
-    points.push(new THREE.Vector2(0.25, -0.35));
-    points.push(new THREE.Vector2(0.35, -0.1));
-    points.push(new THREE.Vector2(0.35, 0.1));
-    points.push(new THREE.Vector2(0.25, 0.15));
-    points.push(new THREE.Vector2(0.15, 0.15));
-    points.push(new THREE.Vector2(0.15, -0.2));
-    points.push(new THREE.Vector2(0, -0.2));
-
-    const bowlGeo = new THREE.LatheGeometry(points, 16);
-    const bowlMesh = new THREE.Mesh(bowlGeo, woodMat);
-    bowlMesh.castShadow = true;
-    bowlMesh.receiveShadow = true;
-    group.add(bowlMesh);
-
-    const ashGeo = new THREE.CircleGeometry(0.14, 16);
-    const ashMesh = new THREE.Mesh(ashGeo, ashMat);
-    ashMesh.rotation.x = -Math.PI / 2;
-    ashMesh.position.y = 0.1;
-    group.add(ashMesh);
-
-    const emberGeo = new THREE.CircleGeometry(0.05, 8);
-    const emberMesh = new THREE.Mesh(emberGeo, emberMat);
-    emberMesh.rotation.x = -Math.PI / 2;
-    emberMesh.position.y = 0.101;
-    emberMesh.position.x = 0.04;
-    group.add(emberMesh);
-
-    const curve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(0.3, -0.1, 0),
-        new THREE.Vector3(0.6, -0.05, 0),
-        new THREE.Vector3(1.0, 0.1, 0),
-        new THREE.Vector3(1.5, 0.2, 0),
-    ]);
-
-    const stemGeo = new THREE.TubeGeometry(curve, 16, 0.05, 8, false);
-    const stemMesh = new THREE.Mesh(stemGeo, woodMat);
-    stemMesh.castShadow = true;
-    stemMesh.receiveShadow = true;
-    group.add(stemMesh);
-
-    const bitGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.4, 8);
-    const bitMesh = new THREE.Mesh(bitGeo, blackMat);
-    bitMesh.rotation.z = -Math.PI / 2 + 0.2;
-    bitMesh.scale.z = 0.5;
-    bitMesh.position.set(1.7, 0.25, 0);
-    bitMesh.castShadow = true;
-    bitMesh.receiveShadow = true;
-    group.add(bitMesh);
-
-    const placement = resolvePlacement(options, { x: -3.5, z: -5 });
-    group.position.set(placement.x, tabletopY(-2.35), placement.z);
-    group.rotation.y = options.placement ? placement.rotationY : Math.PI / 3;
-    scene.add(group);
-    options.track?.(group);
-
-    addCylinderCollider(physicsWorld, group, 0.35, 0.3);
-}
-
-export function createSpyglass(scene, physicsWorld, options = {}) {
-    const group = new THREE.Group();
-    group.name = 'Spyglass';
-
-    const brassMat = getBrassMaterial();
-
-    const glassMat = new THREE.MeshPhysicalMaterial({
-        color: 0xffffff,
-        metalness: 0,
-        roughness: 0,
-        transmission: 0.9,
-        transparent: true,
-    });
-
-    const leatherMat = getDarkLeatherMaterial();
-
-    const mainLen = 1.5;
-    const mainRad = 0.15;
-    const mainGeo = new THREE.CylinderGeometry(mainRad, mainRad, mainLen, 16);
-    const mainMesh = new THREE.Mesh(mainGeo, leatherMat);
-    mainMesh.castShadow = true;
-    mainMesh.receiveShadow = true;
-    group.add(mainMesh);
-
-    const ringGeo = new THREE.CylinderGeometry(mainRad + 0.01, mainRad + 0.01, 0.1, 16);
-    const ring1 = new THREE.Mesh(ringGeo, brassMat);
-    ring1.position.y = -mainLen / 2 + 0.05;
-    group.add(ring1);
-
-    const ring2 = new THREE.Mesh(ringGeo, brassMat);
-    ring2.position.y = mainLen / 2 - 0.05;
-    group.add(ring2);
-
-    const drawLen = 1.2;
-    const drawRad = 0.12;
-    const drawGeo = new THREE.CylinderGeometry(drawRad, drawRad, drawLen, 16);
-    const drawMesh = new THREE.Mesh(drawGeo, brassMat);
-    drawMesh.position.y = mainLen / 2 + drawLen / 2 - 0.3;
-    drawMesh.castShadow = true;
-    drawMesh.receiveShadow = true;
-    group.add(drawMesh);
-
-    const lensGeo = new THREE.CylinderGeometry(drawRad - 0.01, drawRad - 0.01, 0.02, 16);
-    const lensMesh = new THREE.Mesh(lensGeo, glassMat);
-    lensMesh.position.y = mainLen / 2 + drawLen - 0.3;
-    group.add(lensMesh);
-
-    const eyeRad = 0.08;
-    const eyeLen = 0.2;
-    const eyeGeo = new THREE.CylinderGeometry(eyeRad, eyeRad, eyeLen, 16);
-    const eyeMesh = new THREE.Mesh(eyeGeo, brassMat);
-    eyeMesh.position.y = -mainLen / 2 - 0.1;
-    group.add(eyeMesh);
-
-    const placement = resolvePlacement(options, { x: 0, z: 6 });
-    group.position.set(placement.x, tabletopY(-2.59), placement.z);
-    group.rotation.set(0, placement.rotationY, Math.PI / 2, 'YXZ');
-    scene.add(group);
-    options.track?.(group);
-
-    const totalLen = mainLen + drawLen - 0.3;
-    addCylinderCollider(physicsWorld, group, mainRad, totalLen / 2);
 }

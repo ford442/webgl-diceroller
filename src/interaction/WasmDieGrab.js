@@ -5,14 +5,33 @@ import { applyWasmImpulseForDie, driveDieWasmTransform, setDieWasmKinematic } fr
 export const MAX_DRAG_SPEED = 60;
 
 /**
+ * The engine calls this state machine drives to hold/release a body. Default
+ * is the die driver (below); a dynamic-prop grab passes
+ * `environment/DynamicPropSync.js`'s `propWasmGrabDriver` instead — same
+ * kinematic-while-held / impulse-on-release mechanics for either body kind.
+ * @typedef {Object} WasmGrabDriver
+ * @property {(mesh: import('three').Object3D, kinematic: boolean) => void} setKinematic
+ * @property {(mesh: import('three').Object3D, position: import('three').Vector3, quaternion: import('three').Quaternion) => void} driveTransform
+ * @property {(mesh: import('three').Object3D, impulse: {x:number,y:number,z:number}|null, torque: {x:number,y:number,z:number}|null) => void} applyImpulse
+ */
+
+/** @type {WasmGrabDriver} */
+const DIE_DRIVER = {
+    setKinematic: setDieWasmKinematic,
+    driveTransform: driveDieWasmTransform,
+    applyImpulse: applyWasmImpulseForDie,
+};
+
+/**
  * @typedef {Object} WasmDieGrabState
- * @property {import('three').Mesh | null} mesh
+ * @property {import('three').Object3D | null} mesh
  * @property {boolean} active
  * @property {import('three').Vector3} target
  * @property {boolean} hasTarget
  * @property {import('three').Vector3} prevTarget
  * @property {boolean} hasPrev
  * @property {import('three').Vector3} releaseVel
+ * @property {WasmGrabDriver} driver
  */
 
 /** @returns {WasmDieGrabState} */
@@ -25,17 +44,20 @@ export function createWasmDieGrabState() {
         prevTarget: new THREE.Vector3(),
         hasPrev: false,
         releaseVel: new THREE.Vector3(),
+        driver: DIE_DRIVER,
     };
 }
 
 /**
- * Begin kinematic WASM grab on a die mesh.
+ * Begin a kinematic WASM grab on a die (default) or dynamic-prop mesh.
  * @param {WasmDieGrabState} state
- * @param {import('three').Mesh} mesh
+ * @param {import('three').Object3D} mesh
  * @param {import('three').Vector3} point
+ * @param {WasmGrabDriver} [driver]
  */
-export function startWasmDieGrab(state, mesh, point) {
-    setDieWasmKinematic(mesh, true);
+export function startWasmDieGrab(state, mesh, point, driver = DIE_DRIVER) {
+    state.driver = driver;
+    driver.setKinematic(mesh, true);
     state.mesh = mesh;
     state.active = true;
     state.hasTarget = true;
@@ -73,7 +95,7 @@ export function updateWasmDieGrab(state, deltaTime) {
     state.prevTarget.copy(state.target);
     state.hasPrev = true;
 
-    driveDieWasmTransform(state.mesh, state.target, state.mesh.quaternion);
+    state.driver.driveTransform(state.mesh, state.target, state.mesh.quaternion);
     state.mesh.position.copy(state.target);
 }
 
@@ -87,9 +109,9 @@ export function endWasmDieGrab(state, hooks = {}) {
 
     const mesh = state.mesh;
     if (mesh) {
-        setDieWasmKinematic(mesh, false);
+        state.driver.setKinematic(mesh, false);
         if (state.hasPrev && state.releaseVel.lengthSq() > 0.0001) {
-            applyWasmImpulseForDie(
+            state.driver.applyImpulse(
                 mesh,
                 {
                     x: state.releaseVel.x,
@@ -105,6 +127,7 @@ export function endWasmDieGrab(state, hooks = {}) {
     state.hasTarget = false;
     state.hasPrev = false;
     state.mesh = null;
+    state.driver = DIE_DRIVER;
     state.releaseVel.set(0, 0, 0);
     hooks.onReleased?.();
 }

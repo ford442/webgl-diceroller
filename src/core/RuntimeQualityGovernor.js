@@ -3,7 +3,7 @@
  * Complements the one-shot adaptive profile probe and DPR-only pixel ratio monitor.
  */
 
-import { applyShadowLightPolicy } from './AdaptiveQuality.js';
+import { applyShadowLightPolicy, setAccentLightsEnabled } from './AdaptiveQuality.js';
 
 const FRAME_BUDGET_MS = 32;
 const RECOVERY_FAST_MS = 20;
@@ -12,6 +12,8 @@ const RECOVERY_FAST_STREAK = 180;
 
 const STRESS_STEP_NAMES = [
     'baseline',
+    // The WebGPU rect-area accent rig is pure polish, so it sheds first.
+    'accentLightsOff',
     'chromaticOff',
     'bloomReduced',
     'bloomOff',
@@ -52,6 +54,7 @@ export function createRuntimeQualityGovernor(deps) {
     let disabled = false;
 
     const baseline = {
+        accentLights: postConfig.accentLightsEnabled === true,
         godRaysVisible: postConfig.godRaysEnabled === true,
         shadowLights: postConfig.shadowLightsPolicy ?? 'all',
         spotMapSize: spotLight?.shadow?.mapSize?.x ?? 1024,
@@ -75,27 +78,29 @@ export function createRuntimeQualityGovernor(deps) {
     function applyStressStep(level) {
         const step = Math.max(0, Math.min(STRESS_STEP_NAMES.length - 1, level));
 
-        if (step >= 1) {
+        setAccentLightsEnabled(scene, step < 1 && baseline.accentLights);
+
+        if (step >= 2) {
             postRuntime.setChromaticIntensity(0);
         } else {
             postRuntime.setChromaticIntensity(postRuntime.getBaselineChromaticIntensity());
         }
 
-        if (step >= 3) {
+        if (step >= 4) {
             postRuntime.setBloomBlend(0);
-        } else if (step >= 2) {
+        } else if (step >= 3) {
             postRuntime.setBloomBlend(Math.min(0.35, postRuntime.getBaselineBloomBlend()));
         } else {
             postRuntime.setBloomBlend(postRuntime.getBaselineBloomBlend());
         }
 
-        if (step >= 4) {
+        if (step >= 5) {
             setGodRaysVisible(false);
         } else {
             setGodRaysVisible(baseline.godRaysVisible);
         }
 
-        if (step >= 5) {
+        if (step >= 6) {
             applyShadowLightPolicy(scene, 'key');
             postConfig.shadowLightsPolicy = 'key';
         } else {
@@ -103,7 +108,7 @@ export function createRuntimeQualityGovernor(deps) {
             postConfig.shadowLightsPolicy = baseline.shadowLights;
         }
 
-        if (step >= 6) {
+        if (step >= 7) {
             if (spotLight?.shadow) {
                 spotLight.shadow.mapSize.set(256, 256);
             }
@@ -204,6 +209,9 @@ export function createRuntimeQualityGovernor(deps) {
     }
 
     function refreshBaselineFromProfile(profile) {
+        // Only ever re-arm the rig if one was actually built for this renderer.
+        baseline.accentLights =
+            postConfig.accentLightsEnabled === true && profile?.extraLights === true;
         baseline.godRaysVisible = profile?.godRaysEnabled === true;
         baseline.shadowLights = profile?.shadowLights ?? 'all';
         baseline.spotMapSize = profile?.id === 'high' ? 1024 : 512;

@@ -118,10 +118,34 @@ Shared KTX2/JPG textures, dice GLBs, Draco/Basis transcoders, and other files un
 
 - Shadow opt-out — `SHADOW_DISABLED_PROP_NAMES` disables cast/receive on small decorative props.
 - Far-shadow LOD — props far from table centre drop `castShadow` once at spawn.
-- Static mesh merge — eligible static props batch leaf meshes via [`StaticPropMerger.js`](../src/core/StaticPropMerger.js).
+- Static mesh merge — eligible static props batch leaf meshes via [`StaticPropMerger.js`](../src/core/StaticPropMerger.js). Merged geometry is baked **relative to the prop root**, which stays the physics anchor; props that animate (`update`) or move (`dynamic`) are excluded.
 - Interaction — `afterCreate` registers `registerInteractiveObject` / `registerInteractable` as needed.
 
 **New props** must use [`propKit.js`](../src/environment/propKit.js) (`createProp`, `materials.*`, collider specs via [`StaticColliderBridge.js`](../src/core/StaticColliderBridge.js)). See AGENTS.md “Adding New Environment Props”.
+
+### One prop, two placement paths
+
+Tabletop clutter and named decor are the **same modules**. A prop is authored once
+under `src/environment/<Name>.js` with `createProp`; the two spawn paths differ only
+in how it is placed:
+
+|           | Decor (`PropRegistry`)                       | Clutter (`RandomClutter`)                          |
+| --------- | -------------------------------------------- | -------------------------------------------------- |
+| Entry     | `tierDefinitions.js` `factoryEntry`          | `CLUTTER_REGISTRY`                                 |
+| Call      | `(scene, physicsWorld, position, rotationY)` | `(scene, physicsWorld, { placement, rng, track })` |
+| Placement | authored position                            | seeded slot from `ClutterPlacement.js`             |
+| Scale     | 1                                            | tabletop scale via `asClutter(..., { scale })`     |
+
+[`clutter/adaptProp.js`](../src/environment/clutter/adaptProp.js) `asClutter()` bridges
+the two: it resolves the seeded slot, converts the legacy tabletop `y`, and reports the
+root through `options.track` so the scatter merge and culling systems see it. Anything
+still living only in `clutter/*.js` (coins, candle, book, parchment, quill, tarot,
+poster, gemstone, potion, d20 holder) has no named twin — give it one under
+`src/environment/` rather than adding a second implementation.
+
+`createProp`'s `scale` option scales the group **and** the collider spec
+(`scaleColliderSpec` — lengths and offsets by `scale`, mass by `scale³`), because
+`StaticColliderBridge` builds shapes straight from the spec and ignores `group.scale`.
 
 ## Renderer selection
 
@@ -150,7 +174,7 @@ Post flags (`?no-post`, `?low-post`, `?no-bloom`, `?no-godrays`) apply to both p
 | **WASM `DicePhysicsEngine`** | Authoritative dice simulation when `public/wasm/` is built and `?no-wasm` is absent                                                                                          |
 | **ammo.js**                  | Full fallback when WASM is unavailable (`?no-wasm`): dice bodies, drag, levitation. Also backs hand-built static prop colliders via `environment/PropPhysics.js` when loaded |
 
-Bridges: [`WasmPhysicsBridge.js`](../src/wasm/WasmPhysicsBridge.js), [`WorkerPhysicsBridge.js`](../src/wasm/WorkerPhysicsBridge.js). Dice ammo helpers: [`AmmoDiceBackend.js`](../src/dice/AmmoDiceBackend.js) (lazy-loaded). Flags: `?no-wasm` (sole physics escape hatch), `?worker-physics` — see AGENTS.md and WASM_ENGINE.md.
+Bridges: [`WasmPhysicsBridge.js`](../src/wasm/WasmPhysicsBridge.js), [`WorkerPhysicsBridge.ts`](../src/wasm/WorkerPhysicsBridge.ts). Dice ammo helpers: [`AmmoDiceBackend.js`](../src/dice/AmmoDiceBackend.js) (lazy-loaded). Flags: `?no-wasm` (sole physics escape hatch), `?worker-physics` — see AGENTS.md and WASM_ENGINE.md.
 
 Declarative static colliders go through `StaticColliderBridge` (WASM when available, ammo otherwise); the remaining hand-built prop shapes go through `environment/PropPhysics.js` and exist only when ammo is loaded (WASM static-collider support landed in [issue #237](https://github.com/ford442/webgl-diceroller/issues/237), closed). `DicePhysicsEngine::MAX_STATICS` (512, see [`WASM_ENGINE.md`](WASM_ENGINE.md)) caps the WASM static registry; `addStaticBox`/etc. report drops past that cap via `getStaticCapacityDroppedCount()` rather than silently no-op'ing.
 

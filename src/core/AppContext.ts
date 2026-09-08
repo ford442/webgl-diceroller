@@ -54,6 +54,7 @@ export function createAppContext(options: CreateAppContextOptions = {}): AppCont
         rollHistory: null,
         rollStats: null,
         multiplayer: null,
+        session: null,
         xr: null,
         // Filled by install / late bind for flat-shim parity
         forceShadowRefresh: null,

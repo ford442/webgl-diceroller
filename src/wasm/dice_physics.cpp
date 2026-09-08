@@ -52,6 +52,25 @@ EMSCRIPTEN_BINDINGS(dice_physics) {
         .function("addStaticPlane",       &DicePhysicsEngine::addStaticPlane)
         .function("addStaticConvexHull",  &DicePhysicsEngine::addStaticConvexHull)
         .function("addStaticOpenCylinder",&DicePhysicsEngine::addStaticOpenCylinder)
+        .function("clearDynamics",        &DicePhysicsEngine::clearDynamics)
+        .function("removeDynamic",        &DicePhysicsEngine::removeDynamic)
+        .function("setDynamicKinematic",  &DicePhysicsEngine::setDynamicKinematic)
+        .function("setDynamicTransform",  &DicePhysicsEngine::setDynamicTransform)
+        .function("setDynamicVelocity",   &DicePhysicsEngine::setDynamicVelocity)
+        .function("applyDynamicImpulse",  &DicePhysicsEngine::applyDynamicImpulse)
+        .function("applyDynamicTorqueImpulse", &DicePhysicsEngine::applyDynamicTorqueImpulse)
+        .function("addDynamicBox",        &DicePhysicsEngine::addDynamicBox)
+        .function("addDynamicHull",       &DicePhysicsEngine::addDynamicHull)
+        .function("getDynamicCount",      &DicePhysicsEngine::getDynamicCount)
+        .function("getDynamicCapacityDroppedCount", &DicePhysicsEngine::getDynamicCapacityDroppedCount)
+        .function("getDynamicTransforms",+[](DicePhysicsEngine& e) {
+            const auto& buf = e.buildDynamicTransformBuffer();
+            return val(typed_memory_view(buf.size(), buf.data()));
+        })
+        .function("getDynamicIds",     +[](DicePhysicsEngine& e) {
+            const auto& buf = e.buildDynamicIdBuffer();
+            return val(typed_memory_view(buf.size(), buf.data()));
+        })
         .function("step",              &DicePhysicsEngine::step)
         .function("getDieCount",       &DicePhysicsEngine::getDieCount)
         .function("getLastStepStats",  &DicePhysicsEngine::getLastStepStats)

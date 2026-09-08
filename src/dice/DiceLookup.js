@@ -1,5 +1,17 @@
 import { spawnedDice } from './DiceState.js';
 import { isUsingWasmPhysics } from './DicePhysicsPresets.js';
+import { findSpawnedPropByPhysicsId } from '../environment/DynamicPropSync.js';
+
+// Must match DicePhysicsEngine::DYNAMIC_EVENT_ID_BASE (dice_physics_engine.hpp) —
+// dynamic-prop collision-event ids are encoded as `DYNAMIC_EVENT_ID_BASE - userId`,
+// well clear of the static-collider encoding (`STATIC_EVENT_ID_BASE - userId`,
+// STATIC_EVENT_ID_BASE = -2000) so the two never collide.
+const DYNAMIC_EVENT_ID_BASE = -1000000;
+
+/** Decode a dynamic-prop collision-event id back to its userId, or null. */
+function dynamicPropUserId(id) {
+    return id <= DYNAMIC_EVENT_ID_BASE ? DYNAMIC_EVENT_ID_BASE - id : null;
+}
 
 /** @typedef {import('../types/dice').SpawnedDie} SpawnedDie */
 /** @typedef {import('../types/physics').CollisionEvent} CollisionEvent */
@@ -42,15 +54,29 @@ export function enrichCollisionEventForAudio(event) {
         event.idB === -1
             ? 'velvet'
             : (event.otherSurface ?? (event.idB <= -100 ? 'leather' : 'die'));
-    if (!die?.mesh) {
+    if (die?.mesh) {
+        die.mesh.getWorldPosition(_audioPos);
+        return {
+            ...event,
+            position: { x: _audioPos.x, y: _audioPos.y, z: _audioPos.z },
+            sides: Number.parseInt(die.type.replace('d', ''), 10) || 6,
+            surface: event.surface ?? 'die',
+            otherSurface,
+        };
+    }
+
+    // Neither side was a die (e.g. a dynamic prop settling against a static
+    // collider or another prop) — try a prop position for spatial audio.
+    const propGroup =
+        findSpawnedPropByPhysicsId(dynamicPropUserId(event.idA)) ??
+        findSpawnedPropByPhysicsId(dynamicPropUserId(event.idB));
+    if (!propGroup) {
         return { ...event, otherSurface };
     }
-    die.mesh.getWorldPosition(_audioPos);
+    propGroup.getWorldPosition(_audioPos);
     return {
         ...event,
         position: { x: _audioPos.x, y: _audioPos.y, z: _audioPos.z },
-        sides: Number.parseInt(die.type.replace('d', ''), 10) || 6,
-        surface: event.surface ?? 'die',
         otherSurface,
     };
 }

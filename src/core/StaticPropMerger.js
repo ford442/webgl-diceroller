@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { isPaletteMaterial } from './MaterialPalette.js';
 
 const _matrix = new THREE.Matrix4();
+const _rootInverse = new THREE.Matrix4();
 
 /**
  * Leaf meshes eligible for static batching inside a prop root.
@@ -59,10 +60,17 @@ export function mergeStaticMeshesInRoot(root, { name = 'merged-static' } = {}) {
         return { merged: false, drawCallsSaved: 0, mergedMeshes: 0 };
     }
 
+    // The merged group is re-parented under `root`, so bake each leaf's pose
+    // *relative to the root* — baking matrixWorld here would apply the root's
+    // own transform a second time at render, offsetting merged geometry from
+    // the collider that stays anchored to the root.
+    _rootInverse.copy(root.matrixWorld).invert();
+
     for (const mesh of candidates) {
         mesh.updateWorldMatrix(true, false);
         const geo = mesh.geometry.clone();
-        geo.applyMatrix4(mesh.matrixWorld);
+        _matrix.multiplyMatrices(_rootInverse, mesh.matrixWorld);
+        geo.applyMatrix4(_matrix);
 
         const key = materialKey(mesh.material);
         if (!byMaterial.has(key)) {

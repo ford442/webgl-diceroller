@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { createStaticCollider } from '../../core/StaticColliderBridge.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
-import { getWoodMaterial } from '../../core/MaterialPalette.js';
 import { resolvePlacement } from './ClutterPlacement.js';
 
 const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
@@ -247,104 +246,4 @@ export function createWantedPoster(scene, physicsWorld, options = {}) {
     options.track?.(mesh);
 
     addBoxCollider(physicsWorld, mesh, [width / 2, thickness / 2, height / 2]);
-}
-
-function generateDMChartsTexture() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d');
-
-    ctx.fillStyle = '#fdf5e6';
-    ctx.fillRect(0, 0, 1024, 512);
-
-    ctx.fillStyle = '#000';
-    ctx.font = 'bold 30px serif';
-    ctx.fillText('RANDOM ENCOUNTERS', 50, 50);
-
-    ctx.beginPath();
-    ctx.lineWidth = 2;
-    ctx.moveTo(50, 60);
-    ctx.lineTo(400, 60);
-    ctx.stroke();
-
-    ctx.font = '24px monospace';
-    for (let i = 0; i < 10; i++) {
-        ctx.fillText(`1d20 + ${i}: Goblin Skirmisher`, 50, 90 + i * 30);
-    }
-
-    ctx.font = 'bold 30px serif';
-    ctx.fillText('WEAPON STATS', 500, 50);
-    ctx.beginPath();
-    ctx.moveTo(500, 60);
-    ctx.lineTo(900, 60);
-    ctx.stroke();
-
-    ctx.font = '24px monospace';
-    const weapons = ['Dagger      1d4', 'Shortsword  1d6', 'Longsword   1d8', 'Greataxe    1d12'];
-    weapons.forEach((w, i) => {
-        ctx.fillText(w, 500, 90 + i * 30);
-    });
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    return texture;
-}
-
-export function createDMScreen(scene, physicsWorld, options = {}) {
-    const centerWidth = 8;
-    const wingWidth = 4;
-    const height = 3;
-    const thickness = 0.2;
-
-    const woodMat = getWoodMaterial(0x5c4033);
-
-    const chartsTexture = generateDMChartsTexture();
-    const chartsMat = new THREE.MeshStandardMaterial({
-        map: chartsTexture,
-        roughness: 0.7,
-        metalness: 0.05,
-        color: 0xffffff,
-    });
-
-    const centerGeo = new THREE.BoxGeometry(centerWidth, height, thickness);
-    const wingGeo = new THREE.BoxGeometry(wingWidth, height, thickness);
-
-    // BoxGeometry materials indices:
-    // 0: Right (+x), 1: Left (-x), 2: Top (+y), 3: Bottom (-y), 4: Front (+z), 5: Back (-z)
-    const materials = [woodMat, woodMat, woodMat, woodMat, chartsMat, woodMat];
-
-    const screenY = tabletopY(-1.25);
-    const screenZ = -8;
-
-    const centerMesh = new THREE.Mesh(centerGeo, materials);
-    centerMesh.position.set(0, screenY, screenZ);
-    centerMesh.castShadow = true;
-    centerMesh.receiveShadow = true;
-    scene.add(centerMesh);
-    options.track?.(centerMesh);
-
-    addBoxCollider(physicsWorld, centerMesh, [centerWidth / 2, height / 2, thickness / 2]);
-
-    const angleRad = Math.PI / 6;
-
-    const leftWingMesh = new THREE.Mesh(wingGeo, materials);
-    leftWingMesh.rotation.y = angleRad;
-    const lx = -centerWidth / 2 - (wingWidth / 2) * Math.cos(angleRad);
-    const lz = screenZ + (wingWidth / 2) * Math.sin(angleRad);
-    leftWingMesh.position.set(lx, screenY, lz);
-    scene.add(leftWingMesh);
-    options.track?.(leftWingMesh);
-
-    addBoxCollider(physicsWorld, leftWingMesh, [wingWidth / 2, height / 2, thickness / 2]);
-
-    const rightWingMesh = new THREE.Mesh(wingGeo, materials);
-    rightWingMesh.rotation.y = -angleRad;
-    const rx = centerWidth / 2 + (wingWidth / 2) * Math.cos(angleRad);
-    const rz = screenZ + (wingWidth / 2) * Math.sin(angleRad);
-    rightWingMesh.position.set(rx, screenY, rz);
-    scene.add(rightWingMesh);
-    options.track?.(rightWingMesh);
-
-    addBoxCollider(physicsWorld, rightWingMesh, [wingWidth / 2, height / 2, thickness / 2]);
 }

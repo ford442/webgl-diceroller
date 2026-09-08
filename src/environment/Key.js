@@ -5,7 +5,8 @@ export function createKey(
     scene,
     physicsWorld,
     position = { x: 6, y: -2.75, z: 8 },
-    rotationY = Math.PI / 4
+    rotationY = Math.PI / 4,
+    { scale = 1 } = {}
 ) {
     const shaftLength = 2.0;
     const shaftRadius = 0.15;
@@ -25,6 +26,7 @@ export function createKey(
         name: 'Key',
         position,
         rotation: rotationY,
+        scale,
         colliders: [
             {
                 type: 'box',
