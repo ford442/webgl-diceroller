@@ -4,6 +4,7 @@ import '../Cauldron.js';
 import '../BreadLoaf.js';
 import '../Chalk.js';
 import '../Quill.js';
+import '../GoblinSkull.js';
 
 const environmentModules = import.meta.glob(
     [
