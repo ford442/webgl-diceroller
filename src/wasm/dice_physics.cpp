@@ -84,7 +84,13 @@ EMSCRIPTEN_BINDINGS(dice_physics) {
             const auto& buf = e.buildDieIdBuffer();
             return val(typed_memory_view(buf.size(), buf.data()));
         })
-        .function("seedRNG",           &DicePhysicsEngine::seedRNG)
+        // seedRNG takes uint64_t, which Embind cannot bind without
+        // -sWASM_BIGINT: calling it threw "unbound types: y" at runtime and
+        // broke every seeded throw on the worker path. Every JS caller already
+        // passes `seed >>> 0`, so bind a uint32_t entry point and widen here.
+        .function("seedRNG", +[](DicePhysicsEngine& e, uint32_t s) {
+            e.seedRNG(static_cast<uint64_t>(s));
+        })
         .function("randomFloat",       &DicePhysicsEngine::randomFloat)
         .function("getCollisionEvents",+[](DicePhysicsEngine& e) {
             const auto& buf = e.buildCollisionEventBuffer();

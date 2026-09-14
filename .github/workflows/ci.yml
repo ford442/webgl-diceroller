@@ -61,7 +61,7 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: public/wasm/
+                  path: public/
             - run: npm run build:js
             - run: npx playwright install --with-deps chromium
             - run: npm run verify:bundle-loading
@@ -126,10 +126,16 @@ jobs:
             - run: node scripts/bench-solver-wasm.mjs | tee bench-results.txt
             - run: node scripts/compare-solver-bench.mjs bench-results.txt
             - run: node scripts/compare-solver-simd.mjs
+            # Both dirs: the runtime picks scalar-vs-SIMD at load time and
+            # probes `wasm-scalar/dice_physics.js`. Shipping only `wasm/` left
+            # a 404 in the console of every browser job, which the harnesses
+            # (correctly) treat as a failure.
             - uses: actions/upload-artifact@v6
               with:
                   name: wasm-artifacts
-                  path: public/wasm/
+                  path: |
+                      public/wasm/
+                      public/wasm-scalar/
                   retention-days: 7
             - uses: actions/upload-artifact@v6
               with:
@@ -156,7 +162,7 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: public/wasm/
+                  path: public/
             - run: npm run test:solver
 
     # These verify:* scripts each boot their own throwaway vite dev server
@@ -185,7 +191,7 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: public/wasm/
+                  path: public/
             - run: npx playwright install --with-deps chromium
             - run: npm run ${{ matrix.script }}
 
@@ -222,7 +228,7 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: public/wasm/
+                  path: public/
             - run: npx playwright install --with-deps chromium
             - run: npm run build:js
             # --host 127.0.0.1 is load-bearing: with no --host, vite binds
@@ -255,7 +261,7 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: public/wasm/
+                  path: public/
             - run: npx playwright install --with-deps chromium
             # Required profiles (?webgl&no-post, ?webgl) must capture and match
             # tests/baselines/. The optional ?webgpu capture is skipped on CPU CI

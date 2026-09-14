@@ -30,6 +30,15 @@ async function launchPage(opts = {}) {
         errors.push(err.message);
         if (opts.logConsole !== false) console.log(`[PAGE ERROR] ${err.message}`);
     });
+    // Chromium's console message for a failed fetch is just "Failed to load
+    // resource: ... 404", with no URL — which turns a missing artifact into an
+    // unfalsifiable test failure. Log the URL alongside it. Not pushed into
+    // `errors`: the console message already counts once.
+    page.on('response', (res) => {
+        if (res.status() >= 400 && opts.logConsole !== false) {
+            console.log(`[HTTP ${res.status()}] ${res.url()}`);
+        }
+    });
     return { browser, page, errors };
 }
 
