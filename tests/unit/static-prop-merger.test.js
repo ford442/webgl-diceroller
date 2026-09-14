@@ -37,6 +37,55 @@ function mergedWorldCenter(root, scene) {
 }
 
 describe('mergeStaticMeshesInRoot', () => {
+    it('merges a group whose geometries disagree on index and attributes', () => {
+        // Whether two props with mismatched geometry land in the same material
+        // group depends on the clutter seed, so this surfaced in CI as an
+        // intermittent "All geometries must have compatible attributes" console
+        // error that failed unrelated browser smoke tests — and silently lost
+        // the batching when it happened.
+        const root = new THREE.Group();
+        const material = new THREE.MeshBasicMaterial();
+
+        const indexedWithUv = new THREE.BoxGeometry(1, 1, 1);
+        expect(indexedWithUv.index).not.toBeNull();
+        expect(indexedWithUv.attributes.uv).toBeDefined();
+
+        // Non-indexed, and carrying no uv — the two ways three.js rejects a merge.
+        const nonIndexedNoUv = new THREE.BoxGeometry(1, 1, 1).toNonIndexed();
+        nonIndexedNoUv.deleteAttribute('uv');
+
+        for (const geo of [indexedWithUv, nonIndexedNoUv]) {
+            root.add(new THREE.Mesh(geo, material));
+        }
+
+        const errors = [];
+        const consoleError = console.error;
+        console.error = (...args) => errors.push(args.join(' '));
+        let result;
+        try {
+            result = mergeStaticMeshesInRoot(root);
+        } finally {
+            console.error = consoleError;
+        }
+
+        expect(errors).toEqual([]);
+        expect(result.merged).toBe(true);
+        expect(result.mergedMeshes).toBe(1);
+
+        /** @type {THREE.Mesh[]} */
+        const merged = [];
+        root.traverse((o) => {
+            if (/** @type {THREE.Mesh} */ (o).isMesh && o.userData.mergedStatic) {
+                merged.push(/** @type {THREE.Mesh} */ (o));
+            }
+        });
+        expect(merged).toHaveLength(1);
+        // Both boxes survive: 12 triangles each, de-indexed to 36 verts apiece.
+        expect(merged[0].geometry.attributes.position.count).toBe(72);
+        // uv is dropped, because only one of the two inputs had it.
+        expect(merged[0].geometry.attributes.uv).toBeUndefined();
+    });
+
     it('keeps merged geometry at the pre-merge world position', () => {
         const position = new THREE.Vector3(5, 1, -3);
         const { root, scene } = buildPropRoot({ position });

@@ -9,11 +9,12 @@ const { BASE } = require('./helpers/server');
     page.on('console', (msg) => console.log(`[${msg.type()}] ${msg.text()}`));
 
     await page.goto(`${BASE}/?webgl&no-post&fair-dice&test`, {
-        waitUntil: 'networkidle',
+        // See tests/dicecup.js: 'networkidle' never settles under the render loop.
+        waitUntil: 'load',
         timeout: 60000,
     });
 
-    await page.waitForFunction(() => window.__app?.scene !== undefined, {
+    await page.waitForFunction(() => window.__app?.scene !== undefined, null, {
         timeout: 60000,
     });
     console.log('window.__app.scene is defined');

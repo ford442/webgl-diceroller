@@ -17,7 +17,10 @@ async function main() {
     });
     const page = await browser.newPage();
 
-    await page.goto(URL, { waitUntil: 'networkidle', timeout: 120000 });
+    // 'load', not 'networkidle': the app keeps a render loop running, so the
+    // network never goes idle for the required 500 ms and this times out
+    // nondeterministically. The readiness wait below is the real signal.
+    await page.goto(URL, { waitUntil: 'load', timeout: 120000 });
 
     await page.waitForFunction(() => window.__app?.ready === true, null, {
         timeout: 120000,

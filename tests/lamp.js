@@ -143,7 +143,10 @@ async function runLampTest() {
                 const ready = window.__app?.ready;
                 return scene != null && ready === true;
             },
-            { timeout: 45000 }
+            null,
+            // 150 s to match every other browser smoke test: scene build under
+            // SwiftShader on a CPU-only runner routinely passes 45 s.
+            { timeout: 150000 }
         );
     } catch (_e) {
         console.error('Timeout waiting for window.__app.scene / ready');

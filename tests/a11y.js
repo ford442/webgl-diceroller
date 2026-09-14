@@ -1,28 +1,37 @@
-const { chromium } = require('playwright');
 const { AxeBuilder } = require('@axe-core/playwright');
+const { launchPage } = require('./helpers/browser');
 const { BASE } = require('./helpers/server');
-
-const DEFAULT_ARGS = [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--use-gl=angle',
-    '--use-angle=swiftshader',
-    '--enable-unsafe-swiftshader',
-];
 
 const url = `${BASE}/?webgl&no-post&fair-dice&test`;
 
+// Report what the page was actually doing when `ready` never arrived, instead
+// of just "Timeout 150000ms exceeded".
+async function waitForReady(page) {
+    try {
+        await page.waitForFunction(() => window.__app?.ready === true, null, { timeout: 150000 });
+    } catch (e) {
+        const stage = await page
+            .evaluate(() => ({
+                hasApp: Boolean(window.__app),
+                ready: window.__app?.ready ?? null,
+                hasScene: Boolean(window.__app?.scene),
+                sceneChildren: window.__app?.scene?.children?.length ?? null,
+                rendererType: window.__app?.rendererType ?? null,
+            }))
+            .catch(() => null);
+        throw new Error(`${e.message} — app state: ${JSON.stringify(stage)}`);
+    }
+}
+
 (async () => {
-    const browser = await chromium.launch({ headless: true, args: DEFAULT_ARGS });
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    const errors = [];
-    page.on('pageerror', (err) => errors.push(err.message));
+    // Shared launcher: same swiftshader flags as every other harness, plus
+    // console / pageerror / HTTP-failure logging this script used to lack.
+    // `context: true` because AxeBuilder refuses a page from an implicit one.
+    const { browser, page, errors } = await launchPage({ context: true });
 
     try {
         await page.goto(url, { waitUntil: 'load', timeout: 60000 });
-        await page.waitForFunction(() => window.__app?.ready === true, null, { timeout: 150000 });
+        await waitForReady(page);
 
         const liveRegion = await page.$('#dice-results-live');
         if (!liveRegion) {
