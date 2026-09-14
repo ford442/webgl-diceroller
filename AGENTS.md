@@ -258,7 +258,8 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 - PBR workflow: diffuse, roughness, normal, AO, bump maps.
 - **Runtime loader**: `src/core/TexturePipeline.js` preloads shared sets via `KTX2Loader` (Basis transcoder in `public/basis/`) with automatic JPG fallback when a `.ktx2` sibling is missing.
-- **Conversion**: `npm run convert:props` runs `scripts/convert-textures-to-ktx2.mjs`, encoding JPGs with the `basisu` CLI (`-ktx2`, `-linear` for normal/roughness/bump/AO). Original JPGs remain in `public/images/` for fallback.
+- **Conversion**: `npm run convert:props` runs `scripts/convert-textures-to-ktx2.mjs`, encoding JPGs with the `basisu` CLI (`-ktx2`, `-linear` for normal/roughness/bump/AO). JPGs remain in `public/images/` for fallback.
+- **KTX2-fallback policy**: KTX2 is the path every modern browser actually takes (the Basis transcoder is precached — see `CRITICAL_PRELOADS` in `vite.config.js`); the JPG fallback exists only for the rare KTX2-decode failure. The fallback JPGs are therefore kept at quality 80 (mozjpeg) rather than the near-lossless originals they used to be shipped at — `npm run optimize:fallback-jpgs` (`scripts/reencode-fallback-jpgs.mjs`) re-derives them from whatever is currently in `public/images/`. This cut the shared PBR JPG payload from ~8.5 MB to ~2.1 MB. Re-running `convert:props` after this re-derives KTX2 from the quality-80 JPGs too, which is an accepted tradeoff (basisu's own ETC1S encoding is lossy regardless of source quality).
 - Table uses `table_diff.jpg` / `table_diff.ktx2`, `table_rough`, `table_nor`, `table_ao`.
 - Wood props share `wood_diffuse`, `wood_roughness`, `wood_bump`.
 - Brick walls use `brick_diffuse`, `brick_bump`, `brick_roughness`.
@@ -268,11 +269,11 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 ### Prop Meshes (environment)
 
-- **External mesh sources** are listed in `scripts/prop-asset-manifest.mjs`. Currently only the billiard lamp OBJ (`public/images/lamp/…`) ships as an external file; ~80 other environment props use inline `BufferGeometry` (procedural) and are documented in the manifest but not exported by the conversion pipeline.
-- **Conversion**: `npm run convert:props` runs `scripts/convert-props-to-glb.mjs` (Playwright + `OBJLoader` → `GLTFExporter` → `@gltf-transform` dedup/weld/prune/quantize + Draco), outputting `public/images/props/billiard_lamp.glb` (~344 KB vs ~8.9 MB OBJ).
-- **Runtime loader**: `src/core/PropAssetLoader.js` (`GLTFLoader` + `DRACOLoader`, OBJ fallback). `Lamp.js` uses the visual-wrapper group pattern — never mutate loaded geometry scale directly.
+- **External mesh sources** are listed in `scripts/prop-asset-manifest.mjs`. Currently only the billiard lamp OBJ (`raw_models/lamp/…`, a conversion input — not shipped) ships a derived asset; ~80 other environment props use inline `BufferGeometry` (procedural) and are documented in the manifest but not exported by the conversion pipeline.
+- **Conversion**: `npm run convert:props` runs `scripts/convert-props-to-glb.mjs` (Playwright + `OBJLoader` → `GLTFExporter` → `@gltf-transform` dedup/weld/prune/quantize + Draco), reading `raw_models/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj` (~9.1 MB, kept out of `public/` since it is a build-time input only) and outputting `public/images/props/billiard_lamp.glb` (~344 KB).
+- **Runtime loader**: `src/core/PropAssetLoader.js` (`GLTFLoader` + `DRACOLoader`, no fallback — the GLB is the only shipped path since the prop conversion pipeline landed; a load failure surfaces to the caller). `Lamp.js` uses the visual-wrapper group pattern — never mutate loaded geometry scale directly.
 - **Audit report**: `scripts/prop-asset-audit.json` records before/after byte sizes (re-generated each `convert:props` run).
-- Re-run `npm run convert:props` after editing lamp OBJ or shared JPG textures.
+- Re-run `npm run convert:props` after editing `raw_models/lamp/*.obj` or shared JPG textures.
 
 ### Finish Asset Optimization Pipeline
 

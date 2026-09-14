@@ -160,7 +160,10 @@ export default defineConfig({
         modulePreload: {
             polyfill: true,
             resolveDependencies(filename, deps) {
-                // Never modulepreload lazy renderer / physics chunks.
+                // Never modulepreload lazy renderer / physics chunks. The
+                // 'three.webgpu' / 'three.tsl' / 'physics' / 'ammo' substrings
+                // here are the manualChunks output names above (and their
+                // rollup-generated file prefixes) — keep them in sync.
                 return deps.filter(
                     (dep) =>
                         !dep.includes('three.webgpu') &&
@@ -179,6 +182,24 @@ export default defineConfig({
                     // Rollup emit them as their own async chunk means WebGL,
                     // mobile and XR never download them.
                     if (id.includes('RectAreaLightTexturesLib')) return;
+                    // WebGPU backend + TSL: only reachable via dynamic import
+                    // (SceneSetup.js, AccentLightRig.js, RendererFactory.ts,
+                    // GodRayNodeMaterial.js). Must be split out BEFORE the
+                    // generic 'three' catch-all below, which would otherwise
+                    // match these paths too (they live under node_modules/three)
+                    // and hoist them into the eager chunk every session pays for.
+                    if (id.includes('node_modules/three/build/three.webgpu')) return 'three.webgpu';
+                    if (id.includes('node_modules/three/build/three.tsl')) return 'three.webgpu';
+                    // TSL/Node postprocessing addons (BloomNode, FXAANode, ...):
+                    // only ever reached alongside the dynamic three/webgpu +
+                    // three/tsl import in SceneSetup.js, but their path doesn't
+                    // match the build/ patterns above. Leaving them to fall
+                    // through to the 'three' catch-all put them in the eager
+                    // chunk AND made it statically import from 'three.webgpu'
+                    // (since these files themselves import 'three/webgpu' and
+                    // 'three/tsl'), reintroducing the eager WebGPU payload this
+                    // split exists to remove and creating a chunk cycle.
+                    if (id.includes('node_modules/three/examples/jsm/tsl/')) return 'three.webgpu';
                     if (id.includes('node_modules/three')) return 'three';
                     // ammo.js only — do not include AmmoDiceBackend here (it would pull dice modules in).
                     if (id.includes('node_modules/ammo.js')) return 'physics';

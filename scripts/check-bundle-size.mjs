@@ -69,7 +69,12 @@ console.log(
 for (const [name, budget] of Object.entries(budgets.chunks)) {
     const match = rows.find(({ file }) => new RegExp(budget.pattern).test(`assets/${file}`));
     if (!match) {
-        console.warn(`\nWARN: no file matched budget "${name}" (${budget.pattern})`);
+        if (budget.optional) {
+            console.log(`\nok: no file matched optional budget "${name}" (${budget.pattern})`);
+            continue;
+        }
+        failed += 1;
+        console.error(`\nFAIL: no file matched budgeted chunk "${name}" (${budget.pattern})`);
         continue;
     }
     if (match.gzip > budget.gzipMax) {
