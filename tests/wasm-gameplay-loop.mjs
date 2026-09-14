@@ -13,8 +13,7 @@
  * Prereq: npm run build:js && npm run preview
  */
 import { runTest } from './helpers/browser.js';
-
-const BASE = 'http://localhost:4173';
+import { BASE } from './helpers/server.js';
 const URL = `${BASE}/?webgl&no-post&fair-dice&test`;
 const LOAD_TIMEOUT_MS = 180000;
 const SETTLE_TIMEOUT_MS = 180000;

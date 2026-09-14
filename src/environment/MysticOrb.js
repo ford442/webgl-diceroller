@@ -123,12 +123,7 @@ export function createMysticOrb(
 
             group.add(
                 mesh(
-                    new THREE.CylinderGeometry(
-                        0.5,
-                        pedestalStemRadius,
-                        pedestalTopHeight,
-                        16
-                    ),
+                    new THREE.CylinderGeometry(0.5, pedestalStemRadius, pedestalTopHeight, 16),
                     stoneMat,
                     {
                         position: {
@@ -308,12 +303,7 @@ export function createMysticOrb(
         orbFloatOffset += deltaTime;
         const floatY = Math.sin(orbFloatOffset * 1.5) * 0.05;
         orbMesh.position.y =
-            pedestalBaseHeight +
-            pedestalStemHeight +
-            pedestalTopHeight +
-            orbRadius +
-            0.3 +
-            floatY;
+            pedestalBaseHeight + pedestalStemHeight + pedestalTopHeight + orbRadius + 0.3 + floatY;
         coreMesh.position.copy(orbMesh.position);
         orbLight.position.copy(orbMesh.position);
         orbMesh.rotation.y += deltaTime * orbRotationSpeed;

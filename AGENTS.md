@@ -449,7 +449,9 @@ export function createHorseshoe(
 
 ## Testing Instructions
 
-There is **no formal unit or integration test suite** (no Jest/Vitest runner), but several ad-hoc scripts exist under [`tests/`](tests/) and [`scripts/`](scripts/). Browser smoke tests target the **preview server** (`http://localhost:4173/?no-post`), not the dev server.
+There is **no formal unit or integration test suite** (no Jest/Vitest runner), but several ad-hoc scripts exist under [`tests/`](tests/) and [`scripts/`](scripts/). Browser smoke tests target the **preview server** (`http://127.0.0.1:4173/?no-post`), not the dev server.
+
+> **Always bind and probe `127.0.0.1`, never `localhost`.** `vite` / `vite preview` with no `--host` binds to whatever `localhost` resolves to; on GitHub-hosted runners that is `[::1]`, so a probe against `127.0.0.1` can never connect. Do not hand-roll a server boot — use [`tests/helpers/server.js`](tests/helpers/server.js), which passes `--host 127.0.0.1`, polls readiness, and (importantly) kills vite's whole process group on teardown. Leaking that group is what left two CI jobs hanging for the full six-hour default per run.
 
 ```bash
 # 1. Build and start the preview server in one terminal
@@ -470,7 +472,8 @@ npm run test:a11y             # axe accessibility scan
 npm run test:notation         # Roll notation parser (Node, no browser)
 npm run test:share-roll       # Shareable roll encoding (Node)
 npm run test:simd-support     # WASM SIMD probe + artifact-dir picker (Node)
-node tests/dicecup.js           # DiceCup interactable (needs WASM for available:true)
+npm run test:breadloaf        # BreadLoaf prop in scene graph
+npm run test:dicecup          # DiceCup interactable (needs WASM for available:true)
 
 # Physics / renderer harnesses (scripts/)
 npm run test:solver                 # Native C++ unit + fuzz (see docs/WASM_ENGINE.md)
@@ -481,6 +484,22 @@ npm run verify:bundle-loading       # no ammo chunk / no ammo dice bodies by def
 node scripts/verify-renderer-factory.mjs
 npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when baselines exist)
 ```
+
+### CI notes
+
+- **No GPU on the runners.** CI sets `DICE_CI_NO_WEBGPU=1`; harnesses that probe `?webgpu` (`verify:godrays`, `render-regression`) report that profile as skipped instead of hanging on it. Leave the variable unset locally, where a GPU exists, so the WebGPU path stays a hard requirement.
+- **Screenshots.** Never `page.screenshot()` a live scene — the rAF loop keeps the compositor busy and the call burns its timeout. Use `capturePng()` from [`tests/helpers/browser.js`](tests/helpers/browser.js), which stops the loop, renders one frame, and grabs the surface over CDP.
+- **Refreshing render baselines.** `tests/baselines/*.png` are compared at a 4% pixel-diff tolerance by `scripts/compare-render-baseline.mjs`. When a scene change legitimately moves them, regenerate and commit:
+
+    ```bash
+    npm run build:wasm            # baselines must be captured with WASM physics present
+    npm run baselines:update      # writes tests/baselines/render-regression-*.png
+    git add tests/baselines
+    ```
+
+    Capture on a machine with the same SwiftShader path CI uses; a capture taken without `public/wasm/` present will not match the runner's.
+
+- **Every job has a `timeout-minutes`.** GitHub's default is six hours. Keep new jobs at 15 minutes (30 for emcc / render capture) so a hang fails fast instead of burning the account's CI budget.
 
 - `test:wasm-gameplay-loop`, `test:wasm-authoritative`, and `test:share-roll-replay` all run in CI (`verify-tests` matrix); `verify:worker-replay` runs in the `verify` matrix. All four need the `wasm-artifacts` build (`npm run build:wasm`) to exercise the WASM-authoritative path rather than skipping.
 

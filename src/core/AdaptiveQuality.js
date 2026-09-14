@@ -333,14 +333,17 @@ export function updateAdaptiveQualityProbe(probe, context, state) {
 }
 
 /**
- * @param {object} deps
- * @param {boolean} deps.diceSettled
- * @param {number} deps.externalMotionCount
- * @param {import('../types/app').PostConfig} deps.postConfig
- * @param {{ setThrottleRefresh?: (enabled: boolean) => void } | null} [deps.shadowController]
+ * @param {import('../types/app').MotionProfileDeps & {
+ *   diceSettled: boolean,
+ *   externalMotionCount: number,
+ *   shadowController?: { setThrottleRefresh?: (enabled: boolean) => void } | null,
+ * }} deps
  */
 export function updateMotionProfileState(deps) {
-    const { diceSettled, externalMotionCount, postConfig, shadowController, ...rest } = deps;
+    // postConfig stays inside `rest`: applyMotionProfile() bails out when it is
+    // missing, so destructuring it out here would silently disable the profile.
+    const { diceSettled, externalMotionCount, shadowController, ...rest } = deps;
+    const { postConfig } = rest;
     const motionActive = externalMotionCount > 0 || !diceSettled;
     if (motionActive === postConfig.motionProfileWasActive) return;
     postConfig.motionProfileWasActive = motionActive;

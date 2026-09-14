@@ -22,9 +22,8 @@
  */
 import { chromium } from 'playwright';
 
-const DEFAULT_URL = process.env.PROD_URL
-    || process.env.PRODUCTION_URL
-    || 'https://test.1ink.us/dice-roller/';
+const DEFAULT_URL =
+    process.env.PROD_URL || process.env.PRODUCTION_URL || 'https://test.1ink.us/dice-roller/';
 
 const targetArg = process.argv.find((a) => /^https?:\/\//i.test(a));
 const TARGET = (targetArg || DEFAULT_URL).replace(/\/?$/, '/');
@@ -72,8 +71,8 @@ async function checkHttpHeaders(url) {
     // itself it is optional when everything is same-origin. Report only.
     if (!report.corp) {
         console.log(
-            'INFO: Cross-Origin-Resource-Policy not set on document '
-            + '(ok for same-origin apps; set "same-origin" on CDN assets if needed)'
+            'INFO: Cross-Origin-Resource-Policy not set on document ' +
+                '(ok for same-origin apps; set "same-origin" on CDN assets if needed)'
         );
     } else {
         console.log(`ok: Cross-Origin-Resource-Policy: ${report.corp}`);
@@ -84,11 +83,7 @@ async function checkHttpHeaders(url) {
 
 async function checkBrowserIsolation(url) {
     const browser = await chromium.launch({
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-        ],
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     });
     try {
         const page = await browser.newPage();
@@ -102,28 +97,37 @@ async function checkBrowserIsolation(url) {
         const early = await page.evaluate(() => ({
             crossOriginIsolated: window.crossOriginIsolated === true,
             sharedArrayBuffer: typeof SharedArrayBuffer === 'function',
-            metaCoop: document.querySelector('meta[http-equiv="Cross-Origin-Opener-Policy"]')?.content ?? null,
-            metaCoep: document.querySelector('meta[http-equiv="Cross-Origin-Embedder-Policy"]')?.content ?? null,
+            metaCoop:
+                document.querySelector('meta[http-equiv="Cross-Origin-Opener-Policy"]')?.content ??
+                null,
+            metaCoep:
+                document.querySelector('meta[http-equiv="Cross-Origin-Embedder-Policy"]')
+                    ?.content ?? null,
         }));
 
         // Best-effort: if the app exposes physics after load, confirm SAB transport.
         let worker = null;
         try {
-            await page.waitForFunction(
-                () => window.__app?.ready === true || window.__app?.physicsWorld != null,
-                null,
-                { timeout: 45000 }
-            ).catch(() => {});
+            await page
+                .waitForFunction(
+                    () => window.__app?.ready === true || window.__app?.physicsWorld != null,
+                    null,
+                    { timeout: 45000 }
+                )
+                .catch(() => {});
             worker = await page.evaluate(async () => {
-                const sabOk = window.crossOriginIsolated === true
-                    && typeof SharedArrayBuffer === 'function';
+                const sabOk =
+                    window.crossOriginIsolated === true && typeof SharedArrayBuffer === 'function';
                 return {
                     sceneReady: window.__app?.ready === true,
                     inferredSABAvailable: sabOk,
                 };
             });
         } catch {
-            worker = { sceneReady: false, inferredSABAvailable: early.sharedArrayBuffer && early.crossOriginIsolated };
+            worker = {
+                sceneReady: false,
+                inferredSABAvailable: early.sharedArrayBuffer && early.crossOriginIsolated,
+            };
         }
 
         return { early, worker };
@@ -154,8 +158,8 @@ if (!browserResult.early.crossOriginIsolated) {
     console.error('FAIL: window.crossOriginIsolated === false');
     if (browserResult.early.metaCoop || browserResult.early.metaCoep) {
         console.error(
-            'NOTE: COOP/COEP meta tags were found — they do NOT enable isolation. '
-            + 'Configure HTTP response headers on the host / CDN.'
+            'NOTE: COOP/COEP meta tags were found — they do NOT enable isolation. ' +
+                'Configure HTTP response headers on the host / CDN.'
         );
     }
     failed += 1;

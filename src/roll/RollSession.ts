@@ -37,7 +37,8 @@ export function shouldDeferAutoResults(): boolean {
 }
 
 export function createRollSession(deps: RollSessionDeps) {
-    const waitFrame = deps.waitFrame ?? (() => new Promise<void>((r) => requestAnimationFrame(() => r())));
+    const waitFrame =
+        deps.waitFrame ?? (() => new Promise<void>((r) => requestAnimationFrame(() => r())));
 
     async function roll(
         expression: string,

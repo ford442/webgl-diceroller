@@ -105,7 +105,11 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
             const bandXOffsets = [-width / 3, width / 3];
 
             bandXOffsets.forEach((x) => {
-                const bandBaseGeo = new THREE.BoxGeometry(bandWidth, baseHeight, depth + bandThickness);
+                const bandBaseGeo = new THREE.BoxGeometry(
+                    bandWidth,
+                    baseHeight,
+                    depth + bandThickness
+                );
                 const bandBase = new THREE.Mesh(bandBaseGeo, ironMat);
                 bandBase.position.set(x, baseHeight / 2, 0);
                 bandBase.receiveShadow = true;

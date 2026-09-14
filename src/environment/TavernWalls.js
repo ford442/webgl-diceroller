@@ -322,11 +322,7 @@ function createWindowedWall(
     const dummyMesh = new THREE.Mesh(dummyGeo, new THREE.MeshBasicMaterial({ visible: false }));
     dummyMesh.position.set(xPos, floorY + physHeight / 2, 0);
     group.add(dummyMesh);
-    registerBoxCollider(physicsWorld, dummyMesh, [
-        thickness / 2,
-        physHeight / 2,
-        physDepth / 2,
-    ]);
+    registerBoxCollider(physicsWorld, dummyMesh, [thickness / 2, physHeight / 2, physDepth / 2]);
 
     return godRayUpdate;
 }

@@ -83,9 +83,7 @@ export function createChalice(
                 mesh(new THREE.SphereGeometry(0.12, 16, 16), goldMat, { position: { y: 0.35 } })
             );
 
-            group.add(
-                mesh(new THREE.LatheGeometry(points, 32), goldMat, { position: { y: 0.6 } })
-            );
+            group.add(mesh(new THREE.LatheGeometry(points, 32), goldMat, { position: { y: 0.6 } }));
 
             const gemGeo = new THREE.OctahedronGeometry(0.04, 0);
             const numGems = 4;

@@ -80,7 +80,7 @@ export function createMysticTome(
         yOffset: thickness / 2, // Center of box is elevated by half thickness
         physics: {
             type: 'box',
-            halfExtents: [width / 2, thickness / 2, length / 2]
-        }
+            halfExtents: [width / 2, thickness / 2, length / 2],
+        },
     });
 }

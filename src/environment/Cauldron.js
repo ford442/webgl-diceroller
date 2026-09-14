@@ -106,7 +106,11 @@ export function createCauldron(
             for (let i = 0; i < 2; i++) {
                 group.add(
                     mesh(handleGeo, castIronMat, {
-                        position: { x: (i === 0 ? 1 : -1) * (rimRadius + 0.1), y: rimHeight - 0.2, z: 0 },
+                        position: {
+                            x: (i === 0 ? 1 : -1) * (rimRadius + 0.1),
+                            y: rimHeight - 0.2,
+                            z: 0,
+                        },
                         rotation: { y: Math.PI / 2 },
                     })
                 );

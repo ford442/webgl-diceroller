@@ -1,7 +1,8 @@
 const { runTest } = require('./helpers/browser');
+const { BASE } = require('./helpers/server');
 
 // Using required params as noted in the agent docs: ?webgl&no-post&fair-dice&test
-const url = 'http://localhost:4173/?webgl&no-post&fair-dice&forceProps=Cauldron&test';
+const url = `${BASE}/?webgl&no-post&fair-dice&forceProps=Cauldron&test`;
 
 runTest(
     async (page, errors) => {
@@ -9,11 +10,7 @@ runTest(
         await page.goto(url, { waitUntil: 'load', timeout: 60000 });
 
         console.log('Waiting for scene to be ready...');
-        await page.waitForFunction(
-            () => window.__app?.ready === true,
-            null,
-            { timeout: 150000 }
-        );
+        await page.waitForFunction(() => window.__app?.ready === true, null, { timeout: 150000 });
 
         const inScene = await page.evaluate(() => {
             const scene = window.__app?.scene;

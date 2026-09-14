@@ -1,9 +1,10 @@
 const { runTest } = require('./helpers/browser');
+const { BASE } = require('./helpers/server');
 
 // E2E: the Flute is present AND interactive (clicking plays a melody).
 // `forceProps=Flute` guarantees the randomPool prop spawns regardless of seed.
 // ?webgl forces the stable baseline renderer (headless WebGPU init can stall).
-const url = 'http://localhost:4173/?webgl&no-post&forceProps=Flute&test';
+const url = `${BASE}/?webgl&no-post&forceProps=Flute&test`;
 
 runTest(
     async (page, errors) => {
@@ -13,11 +14,9 @@ runTest(
         console.log('Waiting for the flute interactable to register...');
         // The interactable registers as the prop spawns (mid-load), which is a more
         // reliable signal than waiting for the full scene load.
-        await page.waitForFunction(
-            () => !!window.__app?.interactables?.flute,
-            null,
-            { timeout: 150000 }
-        );
+        await page.waitForFunction(() => !!window.__app?.interactables?.flute, null, {
+            timeout: 150000,
+        });
 
         // Confirm the flute is in the scene graph (scene may not be exposed yet).
         const inScene = await page.evaluate(() => {

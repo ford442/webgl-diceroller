@@ -13,31 +13,11 @@
  * Usage:   node scripts/verify-wasm-interaction.mjs
  */
 import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
-import { setTimeout as sleep } from 'node:timers/promises';
+import { startPreview } from '../tests/helpers/server.js';
 
-const PORT = 4178;
-const BASE = `http://127.0.0.1:${PORT}`;
+const PORT = 4179;
 const PATH = '/?webgl&no-post&fair-dice&test';
 const LOAD_TIMEOUT_MS = 240000;
-
-async function startPreview() {
-    const proc = spawn(
-        'npx',
-        ['vite', 'preview', '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'],
-        { stdio: ['ignore', 'pipe', 'pipe'] }
-    );
-    for (let i = 0; i < 120; i++) {
-        await sleep(500);
-        try {
-            if ((await fetch(`${BASE}/`)).ok) return proc;
-        } catch {
-            // retry
-        }
-    }
-    proc.kill('SIGKILL');
-    throw new Error('preview server did not start');
-}
 
 let failed = 0;
 function check(ok, okMessage, failMessage) {
@@ -50,7 +30,8 @@ function check(ok, okMessage, failMessage) {
     return ok;
 }
 
-const preview = await startPreview();
+const preview = await startPreview({ port: PORT });
+const BASE = preview.base;
 
 try {
     const browser = await chromium.launch({
@@ -231,7 +212,7 @@ try {
     await page.close();
     await browser.close();
 } finally {
-    preview.kill('SIGTERM');
+    await preview.close();
 }
 
 if (failed > 0) {

@@ -64,7 +64,8 @@ export function parseDiceParam(raw: string | null | undefined): DiceCounts | nul
         if (colon < 0) continue;
         const type = trimmed.slice(0, colon).trim();
         const count = Number.parseInt(trimmed.slice(colon + 1), 10);
-        if (!DICE_TYPES.includes(type as DiceType) || !Number.isFinite(count) || count < 0) continue;
+        if (!DICE_TYPES.includes(type as DiceType) || !Number.isFinite(count) || count < 0)
+            continue;
         counts[type as DiceType] = Math.min(10, count);
     }
 

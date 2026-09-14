@@ -53,9 +53,7 @@ export function createAmulet(
             group.add(mesh(ringGeometry, goldMaterial));
 
             const backingGeometry = new THREE.CylinderGeometry(radius, radius, thickness * 0.5, 32);
-            group.add(
-                mesh(backingGeometry, goldMaterial, { position: { y: -thickness * 0.5 } })
-            );
+            group.add(mesh(backingGeometry, goldMaterial, { position: { y: -thickness * 0.5 } }));
 
             const gemGeometry = new THREE.CylinderGeometry(
                 radius * 0.7,

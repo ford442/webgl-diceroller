@@ -125,7 +125,10 @@ export function createDrinkingHorn(
             capMesh.position.copy(ptStart);
             capMesh.lookAt(ptStart.clone().sub(tanStart));
 
-            const rimMesh = mesh(new THREE.TorusGeometry(radiusBase + 0.02, 0.05, 16, 32), brassMat);
+            const rimMesh = mesh(
+                new THREE.TorusGeometry(radiusBase + 0.02, 0.05, 16, 32),
+                brassMat
+            );
             rimMesh.position.copy(ptStart);
             rimMesh.lookAt(ptStart.clone().add(tanStart));
 
@@ -150,11 +153,10 @@ export function createDrinkingHorn(
             tipMesh.position.add(tanEnd.clone().multiplyScalar(0.15));
 
             const standGroup = new THREE.Group();
-            const standBase = mesh(
-                new THREE.TorusGeometry(0.4, 0.05, 16, 32),
-                brassMat,
-                { rotation: { x: Math.PI / 2 }, position: { y: -0.5 } }
-            );
+            const standBase = mesh(new THREE.TorusGeometry(0.4, 0.05, 16, 32), brassMat, {
+                rotation: { x: Math.PI / 2 },
+                position: { y: -0.5 },
+            });
             standGroup.add(standBase);
 
             const legGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.6, 8);

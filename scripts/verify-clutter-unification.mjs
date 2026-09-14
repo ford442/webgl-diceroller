@@ -16,6 +16,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { runTest } = require('../tests/helpers/browser.js');
+const { BASE } = require('../tests/helpers/server.js');
 
 const SHARED_PROP_NAMES = [
     'EnhancedMug',
@@ -28,7 +29,7 @@ const SHARED_PROP_NAMES = [
 ];
 
 // A fixed seed + max clutter count so every registry entry gets a fair chance.
-const URL = 'http://localhost:4173/?webgl&no-post&test&layout-seed=8&clutter-count=10&density=high';
+const URL = `${BASE}/?webgl&no-post&test&layout-seed=8&clutter-count=10&density=high`;
 
 runTest(async (page, errors) => {
     await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 });

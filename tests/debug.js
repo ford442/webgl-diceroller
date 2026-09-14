@@ -1,4 +1,5 @@
 const { launchPage } = require('./helpers/browser');
+const { BASE } = require('./helpers/server');
 
 (async () => {
     const { browser, page } = await launchPage({
@@ -7,7 +8,7 @@ const { launchPage } = require('./helpers/browser');
 
     page.on('console', (msg) => console.log(`[${msg.type()}] ${msg.text()}`));
 
-    await page.goto('http://localhost:4173/?webgl&no-post&fair-dice&test', {
+    await page.goto(`${BASE}/?webgl&no-post&fair-dice&test`, {
         waitUntil: 'networkidle',
         timeout: 60000,
     });

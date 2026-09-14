@@ -99,7 +99,11 @@ export interface AmmoTransform {
 }
 
 export interface AmmoModule {
-    btVector3: new (x?: number, y?: number, z?: number) => AmmoVector3 & { x(): number; y(): number; z(): number };
+    btVector3: new (
+        x?: number,
+        y?: number,
+        z?: number
+    ) => AmmoVector3 & { x(): number; y(): number; z(): number };
     btQuaternion: new (x: number, y: number, z: number, w: number) => unknown;
     btTransform: new () => AmmoTransform;
     btDefaultCollisionConfiguration: new () => unknown;

@@ -5,8 +5,8 @@
  * Prereq: npm run build:js && npm run preview
  */
 const { runTest } = require('./helpers/browser');
+const { BASE } = require('./helpers/server');
 
-const BASE = 'http://localhost:4173';
 const URL = `${BASE}/?webgl&no-post&test`;
 const LOAD_TIMEOUT_MS = 180000;
 const SETTLE_TIMEOUT_MS = 180000;

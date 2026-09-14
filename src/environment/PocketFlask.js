@@ -29,7 +29,10 @@ export function createPocketFlask(
             const flaskMat = materials.pewter();
             const capMat = materials.steel();
 
-            const bodyMesh = mesh(new THREE.CylinderGeometry(width / 2, width / 2, height, 32), flaskMat);
+            const bodyMesh = mesh(
+                new THREE.CylinderGeometry(width / 2, width / 2, height, 32),
+                flaskMat
+            );
             bodyMesh.scale.set(1, 1, depth / width);
             group.add(bodyMesh);
 

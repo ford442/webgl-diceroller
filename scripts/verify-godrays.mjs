@@ -1,40 +1,39 @@
 // Visual / smoke check for god rays under both renderers.
 // Boots the vite dev server, loads ?webgl and ?webgpu, captures console
 // errors and the active backend, and writes a screenshot for each.
+//
+// CPU-only runners (GitHub Actions) cannot finish a WebGPU load: the WebGL2
+// TSL backend throws `Cannot read properties of undefined (reading 'buffers')`
+// under SwiftShader and the page never becomes screenshot-able. Set
+// DICE_CI_NO_WEBGPU=1 (CI does) to report that profile as skipped instead of
+// failing the run; locally, where a GPU exists, it stays a hard requirement.
 import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { startDev } from '../tests/helpers/server.js';
+import { capturePng } from '../tests/helpers/browser.js';
 
-const WGPU_ARGS = [
+// Same software-rasteriser flags the other browser harnesses use (see
+// tests/helpers/browser.js), plus the WebGPU opt-ins. Without
+// --enable-unsafe-swiftshader the WebGL2 context comes up but never presents a
+// frame, and page.screenshot() hangs until its timeout.
+const CHROME_ARGS = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--use-gl=angle',
+    '--use-angle=swiftshader',
+    '--enable-unsafe-swiftshader',
     '--enable-unsafe-webgpu',
     '--enable-features=Vulkan',
-    '--use-angle=swiftshader',
-    '--use-gl=angle',
     '--ignore-gpu-blocklist',
 ];
 
 const PORT = 5193;
-const BASE = `http://localhost:${PORT}`;
+const SKIP_WEBGPU = process.env.DICE_CI_NO_WEBGPU === '1';
+const GOTO_TIMEOUT_MS = 60000;
+const SETTLE_MS = 6000;
 
-async function startVite() {
-    const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {
-        cwd: process.cwd(),
-        stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    for (let i = 0; i < 60; i++) {
-        await sleep(500);
-        try {
-            const res = await fetch(`${BASE}/`);
-            if (res.ok) return proc;
-        } catch {
-            /* not up yet */
-        }
-    }
-    proc.kill('SIGKILL');
-    throw new Error('vite start timeout');
-}
-
-async function probe(browser, query, file) {
+async function probe(browser, base, query, file) {
     const page = await browser.newPage({ viewport: { width: 800, height: 800 } });
     const errors = [];
     page.on('console', (m) => {
@@ -42,43 +41,70 @@ async function probe(browser, query, file) {
     });
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 
-    await page.goto(`${BASE}/${query}&test`, { waitUntil: 'load' });
-    await sleep(6000); // let renderer init + a few animation frames run
+    try {
+        await page.goto(`${base}/${query}&test`, {
+            waitUntil: 'load',
+            timeout: GOTO_TIMEOUT_MS,
+        });
+        await sleep(SETTLE_MS); // let renderer init + a few animation frames run
 
-    const info = await page
-        .evaluate(() => {
-            const app = window.__app;
-            const scene = app?.scene;
-            const stats = app?.stats;
-            const post = app?.postConfig;
-            return {
-                backend:
-                    /** @type {{ post?: { rendererType?: string } } | null | undefined} */ (
-                        stats
-                    )?.post?.rendererType ??
-                    /** @type {{ rendererType?: string } | undefined} */ (
-                        scene?.userData?.rendererState
-                    )?.rendererType ??
-                    'unknown',
-                godRays: post?.godRaysEnabled ?? null,
-                hasFactory: Boolean(scene?.userData?.godRayMaterialFactory),
-            };
-        })
-        .catch(() => ({ backend: 'unknown', godRays: null }));
+        const info = await page
+            .evaluate(() => {
+                const app = window.__app;
+                const scene = app?.scene;
+                const stats = app?.stats;
+                const post = app?.postConfig;
+                return {
+                    backend:
+                        /** @type {{ post?: { rendererType?: string } } | null | undefined} */ (
+                            stats
+                        )?.post?.rendererType ??
+                        /** @type {{ rendererType?: string } | undefined} */ (
+                            scene?.userData?.rendererState
+                        )?.rendererType ??
+                        'unknown',
+                    godRays: post?.godRaysEnabled ?? null,
+                    hasFactory: Boolean(scene?.userData?.godRayMaterialFactory),
+                };
+            })
+            .catch(() => ({ backend: 'unknown', godRays: null, hasFactory: false }));
 
-    await page.screenshot({ path: file });
-    await page.close();
-    return { ...info, errors };
+        await capturePng(page, file);
+        return { ok: true, ...info, errors };
+    } catch (error) {
+        return { ok: false, reason: error.message, errors };
+    } finally {
+        await page.close().catch(() => {});
+    }
 }
 
-const vite = await startVite();
-const browser = await chromium.launch({ args: WGPU_ARGS });
+const vite = await startDev({ port: PORT });
+const browser = await chromium.launch({ args: CHROME_ARGS });
+let failed = false;
 try {
-    const webgl = await probe(browser, '?webgl&test', 'godrays-webgl.png');
-    const webgpu = await probe(browser, '?webgpu&test', 'godrays-webgpu.png');
+    const webgl = await probe(browser, vite.base, '?webgl&test', 'godrays-webgl.png');
     console.log('WEBGL :', JSON.stringify(webgl));
-    console.log('WEBGPU:', JSON.stringify(webgpu));
+    if (!webgl.ok) {
+        console.error(`FAIL: the ?webgl profile did not complete — ${webgl.reason}`);
+        failed = true;
+    }
+
+    if (SKIP_WEBGPU) {
+        console.log('WEBGPU: skipped (DICE_CI_NO_WEBGPU=1 — no GPU on this runner)');
+    } else {
+        const webgpu = await probe(browser, vite.base, '?webgpu&test', 'godrays-webgpu.png');
+        console.log('WEBGPU:', JSON.stringify(webgpu));
+        if (!webgpu.ok) {
+            console.error(
+                `FAIL: the ?webgpu profile did not complete — ${webgpu.reason}. ` +
+                    'Set DICE_CI_NO_WEBGPU=1 on machines without a GPU.'
+            );
+            failed = true;
+        }
+    }
 } finally {
-    await browser.close();
-    vite.kill('SIGTERM');
+    await browser.close().catch(() => {});
+    await vite.close();
 }
+
+process.exit(failed ? 1 : 0);

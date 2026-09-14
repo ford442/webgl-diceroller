@@ -1,12 +1,7 @@
 import * as THREE from 'three';
 import { createProp, materials, mesh } from './propKit.js';
 
-export function createQuill(
-    scene,
-    physicsWorld,
-    position = { x: 0, y: 0, z: 0 },
-    rotation = 0
-) {
+export function createQuill(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }, rotation = 0) {
     return createProp(scene, physicsWorld, {
         name: 'Quill',
         position,

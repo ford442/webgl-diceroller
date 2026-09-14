@@ -1,5 +1,6 @@
 const fs = require('fs');
 const { launchPage } = require('./helpers/browser');
+const { BASE, HOST } = require('./helpers/server');
 
 /**
  * Verification script for the fixed billiard lamp.
@@ -112,9 +113,9 @@ async function runLampTest() {
 
     // Use the verification server started by our test harness (port 8123 serves dist/)
     const urls = [
-        'http://127.0.0.1:4173/?webgl&no-post&fair-dice&test',
-        'http://127.0.0.1:5173/?webgl&no-post&fair-dice&test',
-        'http://127.0.0.1:8123/?webgl&no-post&fair-dice&test',
+        `${BASE}/?webgl&no-post&fair-dice&test`,
+        `http://${HOST}:5173/?webgl&no-post&fair-dice&test`,
+        `http://${HOST}:8123/?webgl&no-post&fair-dice&test`,
     ];
     let loaded = false;
     for (const url of urls) {

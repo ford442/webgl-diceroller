@@ -2,12 +2,10 @@
 // under WebGPURenderer? Bypasses the app's physics init (which needs WASM).
 // Drops a temporary module under src/ so Vite transforms its bare imports.
 import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
-import { setTimeout as sleep } from 'node:timers/promises';
+import { startDev } from '../tests/helpers/server.js';
 import { writeFile, rm } from 'node:fs/promises';
 
 const PORT = 5194;
-const BASE = `http://localhost:${PORT}`;
 const TEST_MODULE = new URL('../src/__godray_test.js', import.meta.url);
 const ARGS = [
     '--enable-unsafe-webgpu',
@@ -51,23 +49,10 @@ export async function run() {
 }
 `;
 
-async function startVite() {
-    const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    for (let i = 0; i < 60; i++) {
-        await sleep(500);
-        try {
-            if ((await fetch(`${BASE}/`)).ok) return proc;
-        } catch {}
-    }
-    proc.kill('SIGKILL');
-    throw new Error('vite timeout');
-}
-
 await writeFile(TEST_MODULE, TEST_SRC);
 console.log('[verify] starting vite...');
-const vite = await startVite();
+const vite = await startDev({ port: PORT });
+const BASE = vite.base;
 console.log('[verify] vite up, launching browser...');
 const browser = await chromium.launch({ args: ARGS });
 console.log('[verify] browser launched');
@@ -91,6 +76,6 @@ try {
     console.log('ERRORS:', JSON.stringify(errors));
 } finally {
     await browser.close();
-    vite.kill('SIGTERM');
+    await vite.close();
     await rm(TEST_MODULE, { force: true });
 }

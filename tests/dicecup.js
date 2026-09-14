@@ -7,8 +7,9 @@
  *   node tests/dicecup.js
  */
 const { chromium } = require('playwright');
+const { BASE } = require('./helpers/server');
 
-const URL = process.env.DICE_URL || 'http://localhost:4173/?webgl&no-post&fair-dice&test';
+const URL = process.env.DICE_URL || `${BASE}/?webgl&no-post&fair-dice&test`;
 
 async function main() {
     const browser = await chromium.launch({

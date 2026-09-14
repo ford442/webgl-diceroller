@@ -59,13 +59,25 @@ export function createCrown(
         ],
         build({ group }) {
             group.add(
-                mesh(new THREE.CylinderGeometry(radiusBottom + 0.05, radiusBottom, 0.3, 32), goldMat, {
-                    position: { y: 0.15 + yShift },
-                })
+                mesh(
+                    new THREE.CylinderGeometry(radiusBottom + 0.05, radiusBottom, 0.3, 32),
+                    goldMat,
+                    {
+                        position: { y: 0.15 + yShift },
+                    }
+                )
             );
 
             const domeMesh = mesh(
-                new THREE.SphereGeometry(radiusBottom - 0.05, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2),
+                new THREE.SphereGeometry(
+                    radiusBottom - 0.05,
+                    32,
+                    16,
+                    0,
+                    Math.PI * 2,
+                    0,
+                    Math.PI / 2
+                ),
                 velvetMat,
                 { position: { y: 0.2 + yShift } }
             );
@@ -78,14 +90,10 @@ export function createCrown(
                 const px = Math.cos(angle) * radiusBottom;
                 const pz = Math.sin(angle) * radiusBottom;
 
-                const spikeMesh = mesh(
-                    new THREE.ConeGeometry(0.15, height - 0.2, 16),
-                    goldMat,
-                    {
-                        position: { x: px, y: 0.3 + (height - 0.2) / 2 + yShift, z: pz },
-                        rotation: { x: 0, y: -angle + Math.PI / 2, z: 0.2 },
-                    }
-                );
+                const spikeMesh = mesh(new THREE.ConeGeometry(0.15, height - 0.2, 16), goldMat, {
+                    position: { x: px, y: 0.3 + (height - 0.2) / 2 + yShift, z: pz },
+                    rotation: { x: 0, y: -angle + Math.PI / 2, z: 0.2 },
+                });
 
                 const isRuby = i % 2 === 0;
                 const gemMesh = mesh(
@@ -97,18 +105,14 @@ export function createCrown(
                 group.add(spikeMesh);
 
                 group.add(
-                    mesh(
-                        new THREE.BoxGeometry(0.15, 0.15, 0.05),
-                        isRuby ? sapphireMat : rubyMat,
-                        {
-                            position: {
-                                x: Math.cos(angle) * (radiusBottom + 0.06),
-                                y: 0.15 + yShift,
-                                z: Math.sin(angle) * (radiusBottom + 0.06),
-                            },
-                            rotation: { y: -angle + Math.PI / 2 },
-                        }
-                    )
+                    mesh(new THREE.BoxGeometry(0.15, 0.15, 0.05), isRuby ? sapphireMat : rubyMat, {
+                        position: {
+                            x: Math.cos(angle) * (radiusBottom + 0.06),
+                            y: 0.15 + yShift,
+                            z: Math.sin(angle) * (radiusBottom + 0.06),
+                        },
+                        rotation: { y: -angle + Math.PI / 2 },
+                    })
                 );
             }
 
