@@ -33,7 +33,9 @@ function createStubContext2D(canvas) {
     );
 }
 
-HTMLCanvasElement.prototype.getContext = function getContext(type) {
+// Cast through `any`: the stub only implements the '2d' overload, which does
+// not satisfy the full overloaded getContext() signature.
+/** @type {any} */ (HTMLCanvasElement.prototype).getContext = function getContext(type) {
     if (type === '2d') return createStubContext2D(this);
     return null;
 };

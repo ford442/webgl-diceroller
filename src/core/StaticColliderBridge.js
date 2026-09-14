@@ -96,7 +96,7 @@ function addEuler(base, delta) {
 
 /**
  * Flatten compound specs into leaf colliders with merged local pose.
- * @param {StaticColliderSpec | { type: string, parts?: StaticColliderSpec[], offset?: object, rotation?: object, materialTag?: number }} spec
+ * @param {StaticColliderSpec | { type: string, parts?: StaticColliderSpec[], offset?: object, rotation?: object, materialTag?: import('../types/staticCollider').StaticMaterialTag }} spec
  * @returns {StaticColliderSpec[]}
  */
 export function flattenColliderSpecs(spec) {

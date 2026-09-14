@@ -18,7 +18,23 @@ import { TABLE_SURFACE_Y } from './SceneMetrics.js';
  * - The runtime governor drops the rig first under frame-time stress.
  */
 
-/** Rect-area panels, authored against TavernWalls.js geometry. */
+/**
+ * Rect-area panels, authored against TavernWalls.js geometry.
+ *
+ * `position` / `lookAt` are tuples, not `number[]`: they are spread into
+ * `Vector3.set(x, y, z)` / `Object3D.lookAt(x, y, z)`, which take a fixed
+ * arity.
+ *
+ * @type {{
+ *   name: string,
+ *   color: number,
+ *   intensity: number,
+ *   width: number,
+ *   height: number,
+ *   position: [number, number, number],
+ *   lookAt: [number, number, number],
+ * }[]}
+ */
 const ACCENT_LIGHTS = [
     {
         // Window aperture in the left wall: inner face x = -20, opening is
