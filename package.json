@@ -43,6 +43,8 @@
         "test:cauldron": "node tests/cauldron.js",
         "test:flute": "node tests/flute.js",
         "test:playingcards": "node tests/playingcards.js",
+        "test:breadloaf": "node tests/breadloaf.js",
+        "test:dicecup": "node tests/dicecup.js",
         "test:mobile-touch": "node tests/mobile-touch.js",
         "test:unit": "vitest run",
         "test:notation": "tsx tests/notation.test.mjs",

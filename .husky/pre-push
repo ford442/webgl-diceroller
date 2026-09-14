@@ -1,0 +1,8 @@
+# The pre-commit lint-staged hook only sees commits made from a local checkout.
+# Commits authored from Codespaces, the web editor, or an agent PR flow bypass
+# it entirely, which is how 45 files drifted out of Prettier's format and five
+# tsc errors reached main. Re-run the three fast static gates on the way out so
+# nothing unformatted or untyped can be pushed.
+#
+# Skip for a one-off with: git push --no-verify
+npm run lint && npm run format:check && npm run typecheck

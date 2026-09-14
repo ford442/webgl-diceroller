@@ -11,39 +11,54 @@ concurrency:
 
 env:
     EMSDK_VERSION: '3.1.61'
+    # GitHub-hosted runners have no GPU. The WebGL2 TSL backend never finishes
+    # loading under SwiftShader (see AGENTS.md), so harnesses that probe
+    # `?webgpu` report and skip that profile instead of hanging on it.
+    DICE_CI_NO_WEBGPU: '1'
+
+# Every job below carries an explicit timeout-minutes. GitHub's default is
+# SIX HOURS, and a hung Playwright harness used to burn all of it (twice per
+# run). Actions has no workflow-level default for this, so it is per job:
+# 15 minutes for everything, 30 for the two that legitimately take longer
+# (emcc build, render capture).
 
 jobs:
     build-js:
         name: Build (vite)
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-node@v4
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
               with:
-                  node-version: 20
+                  node-version: 24
                   cache: npm
             - run: npm ci
             - run: npm run build:js
             - run: npm run check:bundle-size
+            - run: npm run check:cycles
             - run: npm run test:unit
             - run: npm run test:notation
             - run: npm run test:share-roll
+            - run: npm run test:multiplayer-protocol
             - run: npm run test:simd-support
+            - run: npm run audit:prop-colliders
             - run: npm run verify:renderer-factory
 
     bundle-loading:
         name: Verify (lazy chunk loading)
         needs: build-wasm
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-node@v4
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
               with:
-                  node-version: 20
+                  node-version: 24
                   cache: npm
             - run: npm ci
             - name: Download WASM artifacts
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
                   path: public/wasm/
@@ -55,11 +70,12 @@ jobs:
         name: Verify (PWA + crossOriginIsolated)
         needs: build-js
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-node@v4
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
               with:
-                  node-version: 20
+                  node-version: 24
                   cache: npm
             - run: npm ci
             - run: npm run build:js
@@ -69,11 +85,12 @@ jobs:
     typecheck:
         name: Typecheck (tsc --noEmit)
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-node@v4
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
               with:
-                  node-version: 20
+                  node-version: 24
                   cache: npm
             - run: npm ci
             - run: npm run typecheck
@@ -82,11 +99,12 @@ jobs:
     lint:
         name: Lint (ESLint + Prettier)
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-node@v4
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
               with:
-                  node-version: 20
+                  node-version: 24
                   cache: npm
             - run: npm ci
             - run: npm run lint
@@ -95,9 +113,10 @@ jobs:
     build-wasm:
         name: Build (WASM / emcc)
         runs-on: ubuntu-latest
+        timeout-minutes: 30
         steps:
-            - uses: actions/checkout@v4
-            - uses: mymindstorm/setup-emsdk@v14
+            - uses: actions/checkout@v5
+            - uses: mymindstorm/setup-emsdk@v15
               with:
                   version: ${{ env.EMSDK_VERSION }}
                   actions-cache-folder: emsdk-cache
@@ -107,12 +126,12 @@ jobs:
             - run: node scripts/bench-solver-wasm.mjs | tee bench-results.txt
             - run: node scripts/compare-solver-bench.mjs bench-results.txt
             - run: node scripts/compare-solver-simd.mjs
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v6
               with:
                   name: wasm-artifacts
                   path: public/wasm/
                   retention-days: 7
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v6
               with:
                   name: solver-bench
                   path: bench-results.txt
@@ -121,29 +140,32 @@ jobs:
     test-solver:
         name: Native solver unit + fuzz
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
             - run: FUZZ_SEEDS=2000 npm run test:solver
 
     test-solver-wasm-parity:
         name: Native ↔ WASM serialize parity
         needs: build-wasm
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
             - name: Download WASM artifacts
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
                   path: public/wasm/
             - run: npm run test:solver
 
     # These verify:* scripts each boot their own throwaway vite dev server
-    # (see scripts/verify-*.mjs), so no separate preview server is needed here.
+    # (see tests/helpers/server.js), so no separate preview server is needed here.
     verify:
         name: Verify (${{ matrix.script }})
         needs: build-wasm
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         strategy:
             fail-fast: false
             matrix:
@@ -153,14 +175,14 @@ jobs:
                     - verify:godrays
                     - verify:wasm-primitives
         steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-node@v4
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
               with:
-                  node-version: 20
+                  node-version: 24
                   cache: npm
             - run: npm ci
             - name: Download WASM artifacts
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
                   path: public/wasm/
@@ -173,6 +195,7 @@ jobs:
         name: Verify (${{ matrix.script }})
         needs: build-wasm
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         strategy:
             fail-fast: false
             matrix:
@@ -181,27 +204,33 @@ jobs:
                     - test:cauldron
                     - test:flute
                     - test:playingcards
+                    - test:breadloaf
+                    - test:dicecup
                     - test:wasm-authoritative
                     - test:wasm-gameplay-loop
                     - test:share-roll-replay
                     - test:a11y
+                    - verify:clutter-unification
         steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-node@v4
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
               with:
-                  node-version: 20
+                  node-version: 24
                   cache: npm
             - run: npm ci
             - name: Download WASM artifacts
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
                   path: public/wasm/
             - run: npx playwright install --with-deps chromium
             - run: npm run build:js
+            # --host 127.0.0.1 is load-bearing: with no --host, vite binds
+            # whatever `localhost` resolves to, which is [::1] on GitHub
+            # runners, and the 127.0.0.1 probe below can never connect.
             - name: Start preview server on :4173
               run: |
-                  npx vite preview --port 4173 --strictPort &
+                  npx vite preview --host 127.0.0.1 --port 4173 --strictPort &
                   for i in $(seq 1 60); do
                     curl -sf http://127.0.0.1:4173/ > /dev/null && exit 0
                     sleep 1
@@ -214,28 +243,30 @@ jobs:
         name: Render regression (webgl baselines enforced; webgpu soft-fail)
         needs: build-wasm
         runs-on: ubuntu-latest
+        timeout-minutes: 30
         steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-node@v4
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
               with:
-                  node-version: 20
+                  node-version: 24
                   cache: npm
             - run: npm ci
             - name: Download WASM artifacts
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
                   path: public/wasm/
             - run: npx playwright install --with-deps chromium
             # Required profiles (?webgl&no-post, ?webgl) must capture and match
-            # tests/baselines/. Optional ?webgpu capture is best-effort on CPU CI.
+            # tests/baselines/. The optional ?webgpu capture is skipped on CPU CI
+            # (DICE_CI_NO_WEBGPU=1) since it can never complete there.
             - name: Capture golden frames
               run: node scripts/render-regression.mjs
             - name: Compare against stored baselines (tests/baselines/)
               run: node scripts/compare-render-baseline.mjs
             - name: Upload screenshots
               if: always()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v6
               with:
                   name: render-regression-screenshots
                   path: render-regression-*.png
