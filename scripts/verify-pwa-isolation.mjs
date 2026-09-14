@@ -18,8 +18,13 @@ try {
     });
     const page = await browser.newPage();
 
+    // 'load', not 'networkidle': the app keeps a render loop running and the
+    // service worker keeps fetching precached assets, so the network never
+    // goes idle for the required 500 ms. None of the assertions below need it
+    // — they read crossOriginIsolated and the SW controller, both of which are
+    // waited for explicitly.
     await page.goto(`${BASE}/?webgl&no-post&fair-dice`, {
-        waitUntil: 'networkidle',
+        waitUntil: 'load',
         timeout: 120000,
     });
 
@@ -49,7 +54,17 @@ try {
             console.error('FAIL: service worker did not take control within 60s');
         });
 
-    await page.reload({ waitUntil: 'networkidle' });
+    // Same here, and this one had no timeout override at all, so it took
+    // Playwright's 30 s default and failed the job intermittently once the SW
+    // was active.
+    await page.reload({ waitUntil: 'load', timeout: 120000 });
+    await page
+        .waitForFunction(() => navigator.serviceWorker.controller != null, null, {
+            timeout: 60000,
+        })
+        .catch(() => {
+            /* asserted below */
+        });
 
     const afterSw = await page.evaluate(() => ({
         isolated: window.crossOriginIsolated === true,
