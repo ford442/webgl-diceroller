@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 /**
  * Batch-converts shared JPG PBR textures to KTX2 (Basis ETC1S) using basisu.
- * Original JPGs are kept for runtime fallback via TexturePipeline.
+ * The JPGs are kept for runtime fallback via TexturePipeline, re-encoded at
+ * quality 80 (see scripts/reencode-fallback-jpgs.mjs) since KTX2 is the path
+ * every modern target actually takes — re-running this script re-derives
+ * KTX2 from those quality-80 JPGs, which is an acceptable tradeoff for this
+ * pipeline (basisu's own ETC1S encoding is lossy regardless of source).
  *
  * Usage: node scripts/convert-textures-to-ktx2.mjs
  */

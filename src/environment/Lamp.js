@@ -100,11 +100,7 @@ export async function createLamp() {
 
     let object;
     try {
-        object = await loadPropMesh(publicAssetUrl('images/props/billiard_lamp.glb'), {
-            fallbackObjUrl: publicAssetUrl(
-                'images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj'
-            ),
-        });
+        object = await loadPropMesh(publicAssetUrl('images/props/billiard_lamp.glb'));
     } catch (e) {
         console.error('Failed to load lamp model:', e);
         // Return a safe stub so the rest of the app doesn't crash

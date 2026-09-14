@@ -8,7 +8,7 @@ export const PROP_MESH_SOURCES = [
     {
         id: 'billiard_lamp',
         label: 'Billiard Lamp',
-        srcRel: 'public/images/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj',
+        srcRel: 'raw_models/lamp/RenderStuff_Breckenridge_triple_billiard_lamp.obj',
         outRel: 'public/images/props/billiard_lamp.glb',
         loader: 'obj',
         runtimeModule: 'src/environment/Lamp.js',

@@ -1,9 +1,10 @@
 {
-    "description": "Gzip byte budgets for production JS chunks (see scripts/check-bundle-size.mjs).",
-    "threeChunkComment": "WebGL + WebGPU three currently land in ONE `three` chunk (the manualChunks rule in vite.config.js does not split them), so the `three` budget covers what used to be `three` (195000) + `three.webgpu` (180000), with a little headroom. Splitting them again — so ?webgl never downloads the WebGPU build — is tracked in the bundle-payload issue; when that lands, restore the two separate budgets.",
+    "description": "Gzip byte budgets for production JS chunks (see scripts/check-bundle-size.mjs); totals.deploySizeMaxBytes is the raw dist/ size budget (see scripts/check-deploy-size.mjs).",
+    "threeChunkComment": "`three` and `three.webgpu` are split again as of the WebGPU-chunk-collapse fix (manualChunks in vite.config.js routes node_modules/three/build/three.webgpu(.js), three.tsl(.js), and the examples/jsm/tsl/* addon nodes to their own 'three.webgpu' chunk before the generic node_modules/three catch-all — those addon nodes matter too: they statically import 'three/webgpu' and 'three/tsl', so leaving them in the eager chunk reintroduced both eager bytes and a chunk cycle). `three` covers the WebGL-path build of three + three's examples/jsm loaders/controls, real post-split size ~233-239 KB gzip; the budget below adds headroom pending a real tree-shake audit (three-stdlib is a listed dependency but is currently unused anywhere in src/ — dead weight worth dropping, tracked separately). `three.webgpu` is demand-loaded (see below) — WebGPU sessions only, never fetched by ?webgl (enforced by verify:bundle-loading and by static module-graph inspection: the 'three' chunk has zero imports from 'three.webgpu').",
     "chunks": {
         "index": { "pattern": "^assets/index-.*\\.js$", "gzipMax": 175000 },
-        "three": { "pattern": "^assets/three-[^.]+\\.js$", "gzipMax": 430000 },
+        "three": { "pattern": "^assets/three-[^.]+\\.js$", "gzipMax": 260000 },
+        "three.webgpu": { "pattern": "^assets/three\\.webgpu-.*\\.js$", "gzipMax": 195000 },
         "physics": { "pattern": "^assets/physics-.*\\.js$", "gzipMax": 310000 },
         "rectAreaLtc": {
             "pattern": "^assets/RectAreaLightTexturesLib-.*\\.js$",
@@ -24,10 +25,15 @@
             "pattern": "^assets/AmmoDiceBackend-.*\\.js$",
             "reason": "ammo.js dice fallback; ?no-wasm only"
         },
-        { "pattern": "^assets/Xr.*\\.js$", "reason": "WebXR seated spike; ?xr only" }
+        { "pattern": "^assets/Xr.*\\.js$", "reason": "WebXR seated spike; ?xr only" },
+        {
+            "pattern": "^assets/three\\.webgpu-.*\\.js$",
+            "reason": "WebGPU backend + TSL; WebGPU sessions only"
+        }
     ],
     "totals": {
-        "jsGzipMax": 900000,
-        "allChunksGzipMax": 1050000
+        "jsGzipMax": 730000,
+        "allChunksGzipMax": 1050000,
+        "deploySizeMaxBytes": 15728640
     }
 }

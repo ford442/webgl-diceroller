@@ -1,8 +1,7 @@
 {
     "dependencies": {
         "ammo.js": "^0.0.10",
-        "three": "^0.181.2",
-        "three-stdlib": "^2.36.1"
+        "three": "^0.181.2"
     },
     "scripts": {
         "dev": "vite",
@@ -10,6 +9,7 @@
         "build": "npm run build:wasm && vite build",
         "build:js": "node scripts/generate-pwa-icons.mjs && vite build",
         "check:bundle-size": "node scripts/check-bundle-size.mjs",
+        "check:deploy-size": "node scripts/check-deploy-size.mjs",
         "check:cycles": "madge --circular --extensions js,ts src/",
         "verify:bundle-loading": "node scripts/verify-bundle-loading.mjs",
         "audit:prop-colliders": "node scripts/prop-collider-audit.mjs",
@@ -23,6 +23,7 @@
         "build:wasm_colab": "bash src/wasm/build_colab.sh",
         "convert:dice": "node scripts/convert-dice-to-glb.mjs",
         "convert:props": "node scripts/convert-props.mjs",
+        "optimize:fallback-jpgs": "node scripts/reencode-fallback-jpgs.mjs",
         "verify:worker-physics": "node scripts/verify-worker-physics.mjs",
         "verify:worker-replay": "node scripts/verify-worker-replay.mjs",
         "verify:godrays": "node scripts/verify-godrays.mjs",
