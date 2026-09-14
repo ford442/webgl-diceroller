@@ -19,6 +19,12 @@ import { acquireDiceMesh, releaseDiceMesh } from './DiceModels.js';
  * @param {Record<string, number> | Array<string | SpawnedDie> | null} [config]
  */
 export const spawnObjects = (scene, world, config = null) => {
+    // No physics engine, no dice: every spawn path (initial load, and later
+    // UI-driven updateDiceSet() calls) funnels through here, so guarding only
+    // the call site in LoadingTiers.js would still let a dice-count change
+    // spawn static, non-simulated meshes once WASM is unavailable.
+    if (!isUsingWasmPhysics()) return;
+
     let diceToSpawn = [];
     if (config && !Array.isArray(config)) {
         Object.keys(config).forEach((type) => {

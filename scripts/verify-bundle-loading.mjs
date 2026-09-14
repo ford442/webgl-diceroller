@@ -18,9 +18,11 @@ function scriptRequests(urls, pattern) {
 
 async function collectScripts(page, path) {
     const urls = [];
+    const consoleMessages = [];
     page.on('request', (req) => {
         if (req.resourceType() === 'script') urls.push(req.url());
     });
+    page.on('console', (msg) => consoleMessages.push(msg.text()));
     await page.goto(`${BASE}${path}`, { waitUntil: 'domcontentloaded', timeout: 120000 });
     // Tier 0 completes before the full decorative pass; that's enough for renderer
     // and physics lazy chunks to have been requested.
@@ -32,7 +34,7 @@ async function collectScripts(page, path) {
         { timeout: 240000 }
     );
     await sleep(3000);
-    return urls;
+    return { urls, consoleMessages };
 }
 
 const preview = await startPreview({ port: PORT });
@@ -47,7 +49,7 @@ try {
     // WebGL baseline: no three.webgpu chunk
     {
         const page = await browser.newPage();
-        const urls = await collectScripts(page, '/?webgl&no-post&fair-dice&test&no-wasm');
+        const { urls } = await collectScripts(page, '/?webgl&no-post&fair-dice&test&no-wasm');
         const webgpu = scriptRequests(urls, /three\.webgpu/i);
         if (webgpu.length) {
             failed += 1;
@@ -62,7 +64,10 @@ try {
     // the honest failure banner and spawn zero dice, not a different engine.
     {
         const page = await browser.newPage();
-        const urls = await collectScripts(page, '/?webgl&no-post&fair-dice&test&no-wasm');
+        const { urls, consoleMessages } = await collectScripts(
+            page,
+            '/?webgl&no-post&fair-dice&test&no-wasm'
+        );
         const physics = scriptRequests(urls, /\/physics-[^/]+\.js/i);
         if (physics.length) {
             failed += 1;
@@ -86,6 +91,20 @@ try {
             console.error(`FAIL: ?no-wasm spawned ${dieCount} die/dice with no physics engine`);
         } else {
             console.log('ok: ?no-wasm spawned no dice');
+        }
+
+        // The overlay itself fades out and is removed ~3s after
+        // showLoadFailure() runs (see PhysicsBootstrap.js), so by the time
+        // collectScripts() returns the DOM node is very likely already gone —
+        // assert the console warning it logs instead, which is stable.
+        const sawFailureBanner = consoleMessages.some((text) =>
+            text.includes('Physics engine unavailable')
+        );
+        if (!sawFailureBanner) {
+            failed += 1;
+            console.error('FAIL: ?no-wasm did not log the physics-unavailable warning');
+        } else {
+            console.log('ok: ?no-wasm logged the physics-unavailable warning');
         }
         await page.close();
     }

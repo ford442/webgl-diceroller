@@ -405,6 +405,7 @@ export function createRollWiring(app, deps) {
                     console.warn(
                         '[ShareableRoll] WASM physics is not available; no dice to replay. Run `npm run build:wasm` first.'
                     );
+                    return;
                 }
                 if ('diceCounts' in replayRequest && replayRequest.diceCounts) {
                     updateDiceSet(getScene(), getPhysicsWorld(), replayRequest.diceCounts);

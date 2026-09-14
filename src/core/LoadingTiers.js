@@ -11,7 +11,6 @@ import { initUI, createCrosshair } from '../ui.js';
 import { createDiceCasePanel } from '../ui/DiceCasePanel.js';
 import { initResultsUI } from '../results.js';
 import { initInteraction } from '../interaction.js';
-import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
 import {
     TIER_PROP_DEFINITIONS,
     DECORATIVE_TIER_ENTRIES,
@@ -125,12 +124,10 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         envMap: scene.environment ?? null,
         qualityProfile: callbacks.qualityProfile ?? null,
     });
-    // No physics engine, no dice: a static tavern with dice models loaded (for
-    // the case-panel preview) but none spawned beats silently running a
-    // different simulation.
-    if (isWasmAvailable()) {
-        spawnObjects(scene, physicsWorld);
-    }
+    // spawnObjects() no-ops without WASM (see DiceSpawn.js): dice models stay
+    // loaded for the case-panel preview, but no dice are spawned into the
+    // scene — a static tavern beats silently running a different simulation.
+    spawnObjects(scene, physicsWorld);
 
     updateLoadingText('Setting up game...');
     updateLoadingBar(40);
