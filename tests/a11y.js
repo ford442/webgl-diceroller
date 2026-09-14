@@ -26,7 +26,8 @@ async function waitForReady(page) {
 (async () => {
     // Shared launcher: same swiftshader flags as every other harness, plus
     // console / pageerror / HTTP-failure logging this script used to lack.
-    const { browser, page, errors } = await launchPage();
+    // `context: true` because AxeBuilder refuses a page from an implicit one.
+    const { browser, page, errors } = await launchPage({ context: true });
 
     try {
         await page.goto(url, { waitUntil: 'load', timeout: 60000 });

@@ -34,6 +34,47 @@ function disposeMeshGeometry(mesh) {
 }
 
 /**
+ * `mergeGeometries()` requires every input to agree on both index presence and
+ * attribute set; when they disagree it logs
+ * "All geometries must have compatible attributes" and returns null. Whether
+ * that happens here depends on which props the clutter seed spawned into the
+ * same material group, so it showed up as an intermittent console error across
+ * the whole browser suite (and silently lost the batching).
+ *
+ * Normalise the group instead: drop to the attributes every geometry has, and
+ * de-index everything if the group is mixed. Dropping an attribute only
+ * affects the merged copy, and any attribute missing from one member could not
+ * have survived the merge anyway.
+ *
+ * @param {import('three').BufferGeometry[]} geometries
+ * @returns {import('three').BufferGeometry[]}
+ */
+function normalizeForMerge(geometries) {
+    const shared = geometries.reduce((acc, geo) => {
+        const names = new Set(Object.keys(geo.attributes));
+        return acc === null ? names : new Set([...acc].filter((n) => names.has(n)));
+    }, /** @type {Set<string> | null} */ (null));
+
+    const mixedIndex = geometries.some((g) => Boolean(g.index) !== Boolean(geometries[0].index));
+
+    return geometries.map((geo) => {
+        let out = geo;
+        for (const name of Object.keys(out.attributes)) {
+            if (!shared?.has(name)) {
+                if (out === geo) out = geo.clone();
+                out.deleteAttribute(name);
+            }
+        }
+        if (mixedIndex && out.index) {
+            const deindexed = out.toNonIndexed();
+            if (out !== geo) out.dispose();
+            out = deindexed;
+        }
+        return out;
+    });
+}
+
+/**
  * Merge static leaf meshes inside a single prop root, grouped by material.
  * Physics bodies on the root are untouched; only visual leaf meshes collapse.
  *
@@ -90,7 +131,11 @@ export function mergeStaticMeshesInRoot(root, { name = 'merged-static' } = {}) {
             continue;
         }
 
-        const mergedGeo = mergeGeometries(geometries, false);
+        const normalized = normalizeForMerge(geometries);
+        const mergedGeo = mergeGeometries(normalized, false);
+        normalized.forEach((g, i) => {
+            if (g !== geometries[i]) g.dispose();
+        });
         geometries.forEach((g) => g.dispose());
         if (!mergedGeo) continue;
 

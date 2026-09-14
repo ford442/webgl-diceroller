@@ -18,7 +18,11 @@ async function launchPage(opts = {}) {
         headless: opts.headless ?? true,
         args: opts.args ?? DEFAULT_ARGS,
     });
-    const page = await browser.newPage();
+    // `browser.newPage()` creates an implicit context, which AxeBuilder
+    // rejects ("Please use browser.newContext()"). Callers that inject
+    // axe-core pass `context: true`.
+    const context = opts.context ? await browser.newContext() : null;
+    const page = context ? await context.newPage() : await browser.newPage();
     const errors = [];
     page.on('console', (msg) => {
         if (msg.type() === 'error') {
