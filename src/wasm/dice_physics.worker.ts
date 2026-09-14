@@ -346,14 +346,8 @@ function handleInit(payload: CommandPayload): void {
             faceValuesView[b] = new Int32Array(payload.sab, faceValuesOffset(b), MAX_DICE);
         }
         cmdRing = new Float32Array(payload.sab, CMD_RING_OFFSET, CMD_RING_FLOATS);
-        // Deliberately NOT resetting H_CMD_HEAD / H_CMD_TAIL here. The bridge
-        // zeroes both when it creates the SAB, before it posts 'init', and it
-        // owns HEAD from then on. Because 'init' is delivered asynchronously,
-        // the main thread can enqueue (addDie, impulses) and advance HEAD
-        // before this handler runs; zeroing HEAD here dropped those commands
-        // and left the producer's local head ahead of the shared one for the
-        // rest of the session, so the worker's die count stayed 0 and the
-        // simulation never stepped. The worker only ever advances TAIL.
+        Atomics.store(header, H_CMD_HEAD, 0);
+        Atomics.store(header, H_CMD_TAIL, 0);
     }
     if (payload.sabDynamics) {
         dynHeader = new Int32Array(payload.sabDynamics, 0, DYN_HEADER_INTS);
@@ -388,13 +382,12 @@ function handle(type: string, payload: CommandPayload): void {
             }
             break;
         case 'reset':
-            // drainCommandQueue() has already advanced TAIL to HEAD. Zeroing
-            // them here races the bridge the same way handleInit did: the
-            // bridge zeroes both and resets its own head *before* sending
-            // 'reset', so by now HEAD may legitimately be non-zero again, and
-            // resetting it would make the worker re-drain stale ring slots.
             drainCommandQueue();
             eng.reset();
+            if (header) {
+                Atomics.store(header, H_CMD_HEAD, 0);
+                Atomics.store(header, H_CMD_TAIL, 0);
+            }
             publish();
             break;
         case 'addDie': {
