@@ -178,8 +178,8 @@ export function createRenderStats({
                 ? 'WASM'
                 : wasm.available
                   ? 'WASM(idle)'
-                  : 'ammo'
-            : 'ammo';
+                  : 'none'
+            : 'none';
         const diceLabel = dice
             ? `${dice.count} dice${dice.count ? (dice.settled ? ' · settled' : ' · moving') : ''}`
             : '';

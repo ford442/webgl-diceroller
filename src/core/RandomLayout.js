@@ -91,7 +91,7 @@ export function createLayoutManager({
         for (const root of clutterHandles) {
             cullingSystem?.unregister(root);
         }
-        despawnRandomClutter(clutterHandles, physicsWorld);
+        despawnRandomClutter(clutterHandles);
         clutterHandles = [];
         clutterUpdateHandle?.dispose?.();
         clutterUpdateHandle = null;

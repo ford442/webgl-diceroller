@@ -11,24 +11,6 @@ export let nextAudioBodyId = 1;
 /** @type {Record<string, import('three').Mesh[]>} */
 export const diceMeshPool = {};
 
-/** Reusable Ammo btTransform — allocated lazily in DiceSync. */
-export let sharedAmmoTransform = null;
-
-export function setSharedAmmoTransform(transform) {
-    sharedAmmoTransform = transform;
-}
-
-/** @type {typeof import('./AmmoDiceBackend.js') | null} */
-export let ammoDiceBackend = null;
-
-export function setAmmoDiceBackend(backend) {
-    ammoDiceBackend = backend;
-}
-
-export function getAmmoDiceBackend() {
-    return ammoDiceBackend;
-}
-
 export function clearSpawnedDice() {
     spawnedDice = [];
 }

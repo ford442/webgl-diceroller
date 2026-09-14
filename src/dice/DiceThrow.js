@@ -12,7 +12,7 @@ import {
     createSeededRng,
 } from '../wasm/seededThrowParams.js';
 import { TABLE_SURFACE_Y } from '../core/SceneMetrics.js';
-import { spawnedDice, getAmmoDiceBackend } from './DiceState.js';
+import { spawnedDice } from './DiceState.js';
 import { isUsingWasmPhysics, getSecureRandom } from './DicePhysicsPresets.js';
 import { applyWasmImpulseForDie } from './DiceSync.js';
 
@@ -26,12 +26,10 @@ const MAX_FLICK_IMPULSE = 28;
 
 /**
  * @param {import('three').Scene} scene
- * @param {import('../types/ammo').AmmoWorld | null | undefined} world
+ * @param {unknown} world unused — kept for call-site compatibility
  * @param {number | null} [seed]
  */
 export const throwDice = (scene, world, seed = null) => {
-    const ammoBackend = getAmmoDiceBackend();
-    const transform = ammoBackend?.createAmmoThrowTransform() ?? null;
     const engine = isUsingWasmPhysics() ? getWasmEngine() : null;
 
     const useDeterministic = seed !== null;
@@ -118,26 +116,7 @@ export const throwDice = (scene, world, seed = null) => {
                 engine.applyTorqueImpulse(die.wasmId, spinX, spinY, spinZ);
             }
         }
-
-        if (ammoBackend && die.body && transform) {
-            ammoBackend.applyAmmoThrowImpulse(die, transform, {
-                x,
-                y,
-                z,
-                q,
-                forceX,
-                forceY,
-                forceZ,
-                spinX,
-                spinY,
-                spinZ,
-            });
-        }
     });
-
-    if (transform && ammoBackend) {
-        ammoBackend.destroyAmmoThrowTransform(transform);
-    }
 };
 
 export function applyFlickImpulseToDice(
@@ -170,14 +149,9 @@ export function applyFlickImpulseToDice(
         -normOriginX * strength * 0.08
     );
 
-    const ammoBackend = getAmmoDiceBackend();
     spawnedDice.forEach((die) => {
         if (isUsingWasmPhysics() && die.wasmId != null) {
             applyWasmImpulseForDie(die.mesh, _flickImpulse, _flickTorque);
-            return;
-        }
-        if (ammoBackend && die.body) {
-            ammoBackend.applyAmmoFlickImpulse(die, _flickImpulse, _flickTorque);
         }
     });
 }

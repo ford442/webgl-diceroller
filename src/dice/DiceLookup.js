@@ -23,7 +23,7 @@ function dynamicPropUserId(id) {
 export const findSpawnedDieByMesh = (mesh) => spawnedDice.find((die) => die.mesh === mesh) || null;
 
 /**
- * Map a physics collision id (WASM die id or ammo audioBodyId) back to a spawned die.
+ * Map a physics collision id (WASM die id, or legacy audioBodyId) back to a spawned die.
  * @param {number} id
  * @returns {SpawnedDie | null}
  */

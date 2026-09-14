@@ -1,14 +1,14 @@
 /**
- * WASM-first physics bring-up: initialise the custom WASM engine, then the
- * ammo fallback world (skipped once WASM is authoritative). Shows the
- * loading-overlay error state and returns `null` on failure so main.js can
- * bail out of init() the same way the inline version did.
+ * WASM-only physics bring-up. WASM is required — there is no ammo.js
+ * fallback. If the engine fails to load (`?no-wasm`, missing/broken
+ * artifacts, an environment that never compiled `public/wasm/`), this shows
+ * an honest error banner and reports `wasmAvailable: false`; main.js still
+ * finishes loading the tavern environment (table, walls, props), it just
+ * skips spawning dice, since a static tavern with no dice is a better
+ * product than a silently different physics engine.
  */
 
-import { initPhysics, shouldLoadAmmoPhysics } from '../physics.js';
-import * as physicsSession from '../physics.js';
 import { loadWasmEngine, isWasmAvailable, getWasmEngine } from '../wasm/PhysicsBridge.js';
-import { setAmmoDiceBackend } from '../dice/DiceState.js';
 
 export function showLoadFailure(message) {
     const loadingText = document.getElementById('loading-text');
@@ -25,34 +25,22 @@ export function showLoadFailure(message) {
 
 /**
  * @param {import('../types/app').AppContext} app
- * @returns {Promise<{ wasmAvailable: boolean, physicsWorld: import('../types/ammo').AmmoWorld | null } | null>}
+ * @returns {Promise<{ wasmAvailable: boolean }>}
  */
 export async function bootstrapPhysics(app) {
     const wasmAvailable = await loadWasmEngine();
     app.physics.getWasmEngine = getWasmEngine;
     app.physics.isWasmAvailable = isWasmAvailable;
-    if (wasmAvailable) {
-        const eng = getWasmEngine();
-        eng.init(-15.0, -2.75, 18.0, 18.0);
-        console.log('[WasmPhysics] Engine initialized and ready.');
+
+    if (!wasmAvailable) {
+        console.warn('Physics engine unavailable — loading a static tavern with no dice.');
+        showLoadFailure('Physics engine failed to load — no dice this session. Check console.');
+        return { wasmAvailable };
     }
 
-    const requireAmmo = shouldLoadAmmoPhysics(wasmAvailable);
-    try {
-        const physicsWorld = await initPhysics({ requireAmmo });
-        app.physicsWorld = physicsWorld;
-        app.physics.world = physicsWorld;
-        app.physics.getWasmEngine = getWasmEngine;
-        app.physics.isWasmAvailable = isWasmAvailable;
-        if (requireAmmo) {
-            const backend = await import('../dice/AmmoDiceBackend.js');
-            backend.bindPhysicsModule(physicsSession);
-            setAmmoDiceBackend(backend);
-        }
-        return { wasmAvailable, physicsWorld };
-    } catch (e) {
-        console.error('Failed to initialize physics', e);
-        showLoadFailure('Error: Physics failed to load. Check console.');
-        return null;
-    }
+    const eng = getWasmEngine();
+    eng.init(-15.0, -2.75, 18.0, 18.0);
+    console.log('[WasmPhysics] Engine initialized and ready.');
+
+    return { wasmAvailable };
 }

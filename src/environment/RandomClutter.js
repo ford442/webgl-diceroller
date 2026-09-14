@@ -189,10 +189,10 @@ export function createRandomClutter(scene, physicsWorld, options = {}) {
     };
 }
 
-export function despawnRandomClutter(handles, physicsWorld) {
+export function despawnRandomClutter(handles) {
     if (!Array.isArray(handles)) return;
     for (const root of handles) {
         unregisterDynamicProp(root);
-        disposeObject3D(root, physicsWorld);
+        disposeObject3D(root);
     }
 }

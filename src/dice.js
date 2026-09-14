@@ -35,8 +35,6 @@ export {
 
 export {
     updateDiceVisuals,
-    prepareDieForAmmoInteraction,
-    syncDieBodyStateToWasm,
     syncDieMeshStateToWasm,
     applyWasmImpulseForDie,
     driveDieWasmTransform,

@@ -25,9 +25,6 @@ export const TIER_PROP_DEFINITIONS = {
                 if (isWasmAvailable()) {
                     createWasmTableBounds(tableConfig);
                 }
-                if (ctx.physicsWorld) {
-                    ctx.createFloorAndWalls(ctx.scene, ctx.physicsWorld, tableConfig);
-                }
                 return tableConfig;
             },
         }),

@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { getWasmEngine } from '../wasm/PhysicsBridge.js';
-import { spawnedDice, getAmmoDiceBackend } from './DiceState.js';
-import { isUsingWasmPhysics, needsAmmoDiceBackend } from './diceAmmoFlags.js';
+import { getWasmEngine, isWasmAvailable } from '../wasm/PhysicsBridge.js';
+import { spawnedDice } from './DiceState.js';
 
 const searchParams = new URLSearchParams(window.location.search);
 
-export { isUsingWasmPhysics, needsAmmoDiceBackend };
+/** WASM is the only dice physics backend; kept as a named check since callers
+ * read it as "is the engine live yet", not "which backend". */
+export const isUsingWasmPhysics = () => isWasmAvailable();
 
 export const DEFAULT_MASS_BIAS_RATIO = 0.0075;
 
@@ -49,10 +50,7 @@ export function estimateInertiaScalar(geometry, mass) {
 }
 
 export function getCenterOfMassOffset(die) {
-    const offset =
-        die?.centerOfMassOffset ??
-        die?.body?._centerOfMassOffset ??
-        die?.mesh?.userData?.centerOfMassOffset;
+    const offset = die?.centerOfMassOffset ?? die?.mesh?.userData?.centerOfMassOffset;
     if (!offset) return null;
     return offset;
 }
@@ -81,36 +79,27 @@ export function getBodyPositionFromGeometry(position, quaternion, offset) {
     };
 }
 
-export const applyDiceMassBiases = ({
-    deltaTime = 1 / 60,
-    applyAmmo = true,
-    applyWasm = true,
-} = {}) => {
+export const applyDiceMassBiases = ({ deltaTime = 1 / 60 } = {}) => {
     if (!useMassBias()) return;
+    if (!isUsingWasmPhysics()) return;
 
-    const ammoBackend = applyAmmo ? getAmmoDiceBackend() : null;
+    const engine = getWasmEngine();
     const gravityForce = new THREE.Vector3(0, -15, 0);
     const worldOffset = new THREE.Vector3();
     const torque = new THREE.Vector3();
 
     spawnedDice.forEach((die) => {
-        if (!die.massBiasOffset) return;
+        if (!die.massBiasOffset || die.wasmId == null) return;
 
         worldOffset.copy(die.massBiasOffset).applyQuaternion(die.mesh.quaternion);
         torque.crossVectors(worldOffset, gravityForce).multiplyScalar(die.physicsPreset?.mass ?? 5);
         if (torque.lengthSq() < 1e-8) return;
 
-        if (ammoBackend && die.body) {
-            ammoBackend.applyAmmoMassBiasTorque(die, torque, deltaTime);
-        }
-
-        if (applyWasm && isUsingWasmPhysics() && die.wasmId != null) {
-            getWasmEngine().applyTorqueImpulse(
-                die.wasmId,
-                torque.x * deltaTime,
-                torque.y * deltaTime,
-                torque.z * deltaTime
-            );
-        }
+        engine.applyTorqueImpulse(
+            die.wasmId,
+            torque.x * deltaTime,
+            torque.y * deltaTime,
+            torque.z * deltaTime
+        );
     });
 };

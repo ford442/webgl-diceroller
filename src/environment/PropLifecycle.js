@@ -1,5 +1,3 @@
-import { getPropAmmo } from './PropPhysics.js';
-
 import { isPaletteMaterial } from '../core/MaterialPalette.js';
 
 function resolveRootObject(result) {
@@ -9,30 +7,8 @@ function resolveRootObject(result) {
     return null;
 }
 
-export function destroyPhysicsBody(physicsWorld, body) {
-    if (!body || !physicsWorld) return;
-    const ammo = getPropAmmo();
-    if (!ammo) return;
-
-    physicsWorld.removeRigidBody(body);
-    const motionState = body.getMotionState?.();
-    if (motionState) ammo.destroy(motionState);
-    ammo.destroy(body);
-}
-
-export function disposeObject3D(root, physicsWorld) {
+export function disposeObject3D(root) {
     if (!root?.isObject3D) return;
-
-    const bodies = new Set();
-    root.traverse((obj) => {
-        if (obj.userData?.physicsBody) bodies.add(obj.userData.physicsBody);
-        // InstancedMesh-style props store their per-instance static bodies here.
-        if (Array.isArray(obj.userData?.physicsBodies)) {
-            for (const body of obj.userData.physicsBodies) {
-                if (body) bodies.add(body);
-            }
-        }
-    });
 
     root.parent?.remove(root);
 
@@ -50,13 +26,9 @@ export function disposeObject3D(root, physicsWorld) {
             material?.dispose?.();
         }
     });
-
-    for (const body of bodies) {
-        destroyPhysicsBody(physicsWorld, body);
-    }
 }
 
-export function disposePropSpawn(record, physicsWorld) {
+export function disposePropSpawn(record) {
     if (!record) return;
 
     record.updateHandle?.dispose?.();
@@ -65,17 +37,13 @@ export function disposePropSpawn(record, physicsWorld) {
     const result = record.result;
     if (!result) return;
 
-    if (result.physicsBody || result.body) {
-        destroyPhysicsBody(physicsWorld, result.physicsBody ?? result.body);
-    }
-
     const root = resolveRootObject(result);
-    if (root) disposeObject3D(root, physicsWorld);
-    else if (result.isObject3D) disposeObject3D(result, physicsWorld);
+    if (root) disposeObject3D(root);
+    else if (result.isObject3D) disposeObject3D(result);
 
     if (Array.isArray(result.disposableRoots)) {
         for (const extra of result.disposableRoots) {
-            disposeObject3D(extra, physicsWorld);
+            disposeObject3D(extra);
         }
     }
 }

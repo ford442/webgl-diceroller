@@ -5,7 +5,6 @@
  * camera controller, ...) are only assigned after registration happens.
  */
 
-import { stepPhysics, pollAmmoCollisionEvents } from '../physics.js';
 import { getWasmEngine, isWasmAvailable, flushWorkerCommandBatch } from '../wasm/PhysicsBridge.js';
 import {
     updateDiceVisuals,
@@ -38,7 +37,6 @@ export function registerFrameCallbacks(scheduler, deps) {
     const {
         app,
         isSimulationReady,
-        getPhysicsWorld,
         getCamera,
         getRenderer,
         getComposer,
@@ -75,22 +73,9 @@ export function registerFrameCallbacks(scheduler, deps) {
     scheduler.register('physicsStep', 'dicePhysics', ({ deltaTime }) => {
         if (!isSimulationReady()) return;
 
-        const useWasm = isWasmAvailable();
-        const physicsWorld = getPhysicsWorld();
+        applyDiceMassBiases({ deltaTime });
 
-        // Dice run on WASM whenever it is live; ammo steps only on the
-        // `?no-wasm` fallback, where physicsWorld is the sole dice simulation.
-        const shouldStepAmmo = Boolean(physicsWorld) && !useWasm;
-        applyDiceMassBiases({
-            deltaTime,
-            applyAmmo: shouldStepAmmo,
-            applyWasm: useWasm,
-        });
-
-        if (shouldStepAmmo) {
-            stepPhysics(physicsWorld, deltaTime);
-        }
-        if (useWasm) {
+        if (isWasmAvailable()) {
             getWasmEngine().step(deltaTime);
         }
     });
@@ -104,11 +89,7 @@ export function registerFrameCallbacks(scheduler, deps) {
     scheduler.register('postPhysicsSync', 'collisionAudio', () => {
         if (!isSimulationReady()) return;
 
-        const physicsWorld = getPhysicsWorld();
-        const events = [...pollPhysicsCollisionEvents()];
-        if (physicsWorld) {
-            events.push(...pollAmmoCollisionEvents(physicsWorld));
-        }
+        const events = pollPhysicsCollisionEvents();
         addCollisionTotal(events.length);
         for (const ev of events) {
             const audioEv = enrichCollisionEventForAudio(ev);

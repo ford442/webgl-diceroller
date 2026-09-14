@@ -1,6 +1,7 @@
 /**
- * Preview smoke: the default runtime must keep all frame systems active when
- * WASM is authoritative and Ammo therefore leaves physicsWorld null.
+ * Preview smoke: the default runtime must keep all frame systems active with
+ * WASM as the sole physics backend (ammo.js was retired; physicsWorld is
+ * always null now).
  *
  * Prereq: npm run build:js && npm run preview
  */
@@ -36,7 +37,7 @@ runTest(async (page, _errors) => {
         return false;
     }
     if (!backend.physicsWorldIsNull) {
-        console.error('FAIL: authoritative WASM path unexpectedly initialized Ammo');
+        console.error('FAIL: physicsWorld should always be null — ammo.js was retired');
         return false;
     }
     if (backend.diceCount === 0) {

@@ -1,13 +1,13 @@
 {
     "dependencies": {
-        "ammo.js": "^0.0.10",
         "three": "^0.181.2"
     },
     "scripts": {
         "dev": "vite",
         "prepare": "husky",
         "build": "npm run build:wasm && vite build",
-        "build:js": "node scripts/generate-pwa-icons.mjs && vite build",
+        "build:js": "node scripts/check-wasm-artifacts.mjs && node scripts/generate-pwa-icons.mjs && vite build",
+        "build:js:allow-missing-wasm": "node scripts/check-wasm-artifacts.mjs --allow-missing-wasm && node scripts/generate-pwa-icons.mjs && vite build",
         "check:bundle-size": "node scripts/check-bundle-size.mjs",
         "check:deploy-size": "node scripts/check-deploy-size.mjs",
         "check:cycles": "madge --circular --extensions js,ts src/",

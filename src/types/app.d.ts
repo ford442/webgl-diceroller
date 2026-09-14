@@ -195,7 +195,8 @@ export interface AppEvents {
 }
 
 export interface AppContextPhysics {
-    world: import('./ammo').AmmoWorld | null;
+    /** ammo.js was retired; this legacy slot is always null now. */
+    world: null;
     getWasmEngine: (() => import('./physics').PhysicsEngine) | null;
     isWasmAvailable: (() => boolean) | null;
 }
@@ -233,7 +234,8 @@ export interface AppContext {
     renderer: import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer | null;
     THREE: typeof import('three') | null;
     scheduler: ReturnType<typeof import('../core/FrameScheduler.js').createFrameScheduler> | null;
-    physicsWorld: import('./ammo').AmmoWorld | null;
+    /** ammo.js was retired; this legacy slot is always null now. */
+    physicsWorld: null;
     physics: AppContextPhysics;
     dice: AppContextDice;
     interaction: ReturnType<typeof import('../interaction.js').initInteraction> | null;

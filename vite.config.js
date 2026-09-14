@@ -160,16 +160,11 @@ export default defineConfig({
         modulePreload: {
             polyfill: true,
             resolveDependencies(filename, deps) {
-                // Never modulepreload lazy renderer / physics chunks. The
-                // 'three.webgpu' / 'three.tsl' / 'physics' / 'ammo' substrings
-                // here are the manualChunks output names above (and their
-                // rollup-generated file prefixes) — keep them in sync.
+                // Never modulepreload the lazy WebGPU/TSL chunk. The
+                // 'three.webgpu' / 'three.tsl' substrings here are the
+                // manualChunks output name above — keep them in sync.
                 return deps.filter(
-                    (dep) =>
-                        !dep.includes('three.webgpu') &&
-                        !dep.includes('three.tsl') &&
-                        !dep.includes('/physics-') &&
-                        !dep.includes('/ammo-')
+                    (dep) => !dep.includes('three.webgpu') && !dep.includes('three.tsl')
                 );
             },
         },
@@ -201,8 +196,6 @@ export default defineConfig({
                     // split exists to remove and creating a chunk cycle.
                     if (id.includes('node_modules/three/examples/jsm/tsl/')) return 'three.webgpu';
                     if (id.includes('node_modules/three')) return 'three';
-                    // ammo.js only — do not include AmmoDiceBackend here (it would pull dice modules in).
-                    if (id.includes('node_modules/ammo.js')) return 'physics';
                 },
             },
         },

@@ -36,7 +36,7 @@ runTest(async (page, _errors) => {
         return false;
     }
     if (!backend.physicsWorldIsNull) {
-        console.error('FAIL: authoritative WASM path unexpectedly initialized Ammo');
+        console.error('FAIL: physicsWorld should always be null — ammo.js was retired');
         return false;
     }
     console.log('✓ WASM is available with physicsWorld === null');
