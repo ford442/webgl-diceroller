@@ -14,7 +14,7 @@ const { BASE } = require('./helpers/server');
         timeout: 60000,
     });
 
-    await page.waitForFunction(() => window.__app?.scene !== undefined, {
+    await page.waitForFunction(() => window.__app?.scene !== undefined, null, {
         timeout: 60000,
     });
     console.log('window.__app.scene is defined');

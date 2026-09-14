@@ -38,7 +38,7 @@ async function main() {
     try {
         const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
         await page.goto(`${BASE}/${QUERY}`, { waitUntil: 'domcontentloaded', timeout: 120000 });
-        await page.waitForFunction(() => window.__app?.ready === true, { timeout: 120000 });
+        await page.waitForFunction(() => window.__app?.ready === true, null, { timeout: 120000 });
 
         await page.evaluate((seed) => {
             window.__app?.replayRoll?.(seed);

@@ -76,10 +76,10 @@ function baselineFile(id) {
 
 async function stabilizeScene(page) {
     await page
-        .waitForFunction(() => window.__app?.scene !== undefined, { timeout: 45000 })
+        .waitForFunction(() => window.__app?.scene !== undefined, null, { timeout: 45000 })
         .catch(() => {});
     await page
-        .waitForFunction(() => window.__app?.ready === true, { timeout: 90000 })
+        .waitForFunction(() => window.__app?.ready === true, null, { timeout: 90000 })
         .catch(() => {});
 
     // Pin camera, strip UI/particles, freeze lights — golden frames should

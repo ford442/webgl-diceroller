@@ -12,7 +12,7 @@ const LOAD_TIMEOUT_MS = 120000;
 const SETTLE_TIMEOUT_MS = 180000;
 
 async function waitForReplaySettled(page) {
-    await page.waitForFunction(() => window.__app?.ready === true, {
+    await page.waitForFunction(() => window.__app?.ready === true, null, {
         timeout: LOAD_TIMEOUT_MS,
     });
     const wasmReady = await page.evaluate(() => window.__app?.isWasmAvailable?.() === true);
@@ -24,6 +24,7 @@ async function waitForReplaySettled(page) {
             const settled = window.__app?.areDiceSettled;
             return typeof settled === 'function' && settled() === true;
         },
+        null,
         { timeout: SETTLE_TIMEOUT_MS }
     );
     await page.waitForTimeout(500);
