@@ -89,7 +89,9 @@ export function computeChiSquared(observedCounts: number[], sides: number): numb
     return observedCounts.reduce((sum, count) => sum + (count - expected) ** 2 / expected, 0);
 }
 
-function serializeStore(store: Map<string, DieStatsEntry>): Record<string, SerializedDieStatsEntry> {
+function serializeStore(
+    store: Map<string, DieStatsEntry>
+): Record<string, SerializedDieStatsEntry> {
     const payload: Record<string, SerializedDieStatsEntry> = {};
     for (const [dieType, entry] of store.entries()) {
         payload[dieType] = {

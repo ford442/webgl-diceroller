@@ -23,8 +23,11 @@ export function createLute(scene, physicsWorld, position = { x: 0, y: 0, z: 0 },
             },
         ],
         build({ group }) {
-            const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } =
-                getWoodTextures();
+            const {
+                diffuse: woodDiffuse,
+                bump: woodBump,
+                roughness: woodRoughness,
+            } = getWoodTextures();
 
             const woodMaterial = new THREE.MeshStandardMaterial({
                 map: woodDiffuse,
@@ -101,11 +104,7 @@ export function createLute(scene, physicsWorld, position = { x: 0, y: 0, z: 0 },
             const pegboxLen = 0.8;
             const pegboxMesh = mesh(new THREE.BoxGeometry(0.4, 0.2, pegboxLen), darkWoodMaterial);
             const pegboxZ = -1.2 - neckLen;
-            pegboxMesh.position.set(
-                0,
-                -0.2,
-                pegboxZ - (pegboxLen / 2) * Math.cos(Math.PI / 3)
-            );
+            pegboxMesh.position.set(0, -0.2, pegboxZ - (pegboxLen / 2) * Math.cos(Math.PI / 3));
             pegboxMesh.rotation.x = -Math.PI / 3;
             group.add(pegboxMesh);
 

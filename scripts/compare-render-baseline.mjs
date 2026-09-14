@@ -37,7 +37,10 @@ const PAIRS = [
 ];
 
 async function loadRGBA(filePath) {
-    const { data, info } = await sharp(filePath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const { data, info } = await sharp(filePath)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
     return { data, width: info.width, height: info.height };
 }
 
@@ -77,9 +80,7 @@ for (const { baseline, candidate, required } of PAIRS) {
     if (!existsSync(baseline)) {
         const msg = `no baseline at ${baseline}`;
         if (required) {
-            console.error(
-                `FAIL: ${msg}. Capture with UPDATE_BASELINES=1 and commit the PNG.`
-            );
+            console.error(`FAIL: ${msg}. Capture with UPDATE_BASELINES=1 and commit the PNG.`);
             anyFail = true;
         } else {
             console.log(
@@ -95,8 +96,9 @@ for (const { baseline, candidate, required } of PAIRS) {
             `OK ${candidate}: diff ${(result.diffRatio * 100).toFixed(2)}% <= ${DIFF_THRESHOLD * 100}%`
         );
     } else {
-        const detail = result.reason
-            ?? `diff ${(result.diffRatio * 100).toFixed(2)}% > ${DIFF_THRESHOLD * 100}%`;
+        const detail =
+            result.reason ??
+            `diff ${(result.diffRatio * 100).toFixed(2)}% > ${DIFF_THRESHOLD * 100}%`;
         if (required) {
             console.error(`FAIL ${candidate}: ${detail}`);
             anyFail = true;

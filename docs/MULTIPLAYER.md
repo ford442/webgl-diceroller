@@ -59,25 +59,25 @@ The Worker routes each room code to a Durable Object (`RoomDurableObject`). Pers
 
 Default wire version: `PROTOCOL_VERSION = 1` ([`src/net/Protocol.ts`](src/net/Protocol.ts)). With `?fair-commit`, clients negotiate v2.
 
-| type | direction | purpose |
-| ---- | --------- | ------- |
-| `hello` / `welcome` | both | identity, `protocolVersion`, `solverBuildId` |
-| `table-sync` | host → guest | dice counts, presence, optional `lastRoll` |
-| `roll` | host → guests | v1: cleartext `seed`, notation, diceCounts |
-| `commit` / `commit-ack` / `reveal` | host ↔ guests | v2 commit-reveal (see above) |
-| `session-sync` | host → guests | initiative seats, current actor, last expression |
-| `presence` | host → guests | `buildDicePresencePayload` fields |
-| `ping` / `pong` | both | liveness |
-| `error` | both | `commit_mismatch`, version/build mismatch |
+| type                               | direction     | purpose                                          |
+| ---------------------------------- | ------------- | ------------------------------------------------ |
+| `hello` / `welcome`                | both          | identity, `protocolVersion`, `solverBuildId`     |
+| `table-sync`                       | host → guest  | dice counts, presence, optional `lastRoll`       |
+| `roll`                             | host → guests | v1: cleartext `seed`, notation, diceCounts       |
+| `commit` / `commit-ack` / `reveal` | host ↔ guests | v2 commit-reveal (see above)                     |
+| `session-sync`                     | host → guests | initiative seats, current actor, last expression |
+| `presence`                         | host → guests | `buildDicePresencePayload` fields                |
+| `ping` / `pong`                    | both          | liveness                                         |
+| `error`                            | both          | `commit_mismatch`, version/build mismatch        |
 
 Signaling Worker relays SDP/ICE (`signal`), peer join/leave, and `room-snapshot` on reconnect. Host pushes `room-state` over the signaling WebSocket for DO persistence.
 
 ### Mismatch errors
 
-| Error | Meaning |
-| ----- | ------- |
-| `solver_build_mismatch` | WASM `git_sha` differs — run `npm run build:wasm` on all clients |
-| `protocol_version_mismatch` | Mixed v1/v2 or different app builds |
+| Error                       | Meaning                                                          |
+| --------------------------- | ---------------------------------------------------------------- |
+| `solver_build_mismatch`     | WASM `git_sha` differs — run `npm run build:wasm` on all clients |
+| `protocol_version_mismatch` | Mixed v1/v2 or different app builds                              |
 
 ## COOP / COEP
 
@@ -114,15 +114,15 @@ Cup pours (`seed == null`) are not broadcast. Guests cannot roll (UI hint: “On
 
 ## Code map
 
-| Path | Role |
-| ---- | ---- |
-| [`signaling/`](signaling/) | Cloudflare Worker + `RoomDurableObject` |
-| [`src/net/Protocol.ts`](src/net/Protocol.ts) | Message codec |
-| [`src/net/CommitReveal.ts`](src/net/CommitReveal.ts) | SHA-256 commit-reveal |
-| [`src/net/SignalingClient.ts`](src/net/SignalingClient.ts) | HTTP/WS to Worker |
-| [`src/net/PeerMesh.js`](src/net/PeerMesh.js) | Star WebRTC + DataChannels |
-| [`src/net/RoomSession.js`](src/net/RoomSession.js) | Host/guest session |
-| [`src/session/SessionState.ts`](src/session/SessionState.ts) | Initiative / turn snapshot |
-| [`src/app/SessionWiring.js`](src/app/SessionWiring.js) | Session strip + `AppEvents` |
-| [`src/ui/MultiplayerPanel.js`](src/ui/MultiplayerPanel.js) | Create / join UI |
-| [`src/ui/SessionStrip.js`](src/ui/SessionStrip.js) | Desktop turn strip |
+| Path                                                         | Role                                    |
+| ------------------------------------------------------------ | --------------------------------------- |
+| [`signaling/`](signaling/)                                   | Cloudflare Worker + `RoomDurableObject` |
+| [`src/net/Protocol.ts`](src/net/Protocol.ts)                 | Message codec                           |
+| [`src/net/CommitReveal.ts`](src/net/CommitReveal.ts)         | SHA-256 commit-reveal                   |
+| [`src/net/SignalingClient.ts`](src/net/SignalingClient.ts)   | HTTP/WS to Worker                       |
+| [`src/net/PeerMesh.js`](src/net/PeerMesh.js)                 | Star WebRTC + DataChannels              |
+| [`src/net/RoomSession.js`](src/net/RoomSession.js)           | Host/guest session                      |
+| [`src/session/SessionState.ts`](src/session/SessionState.ts) | Initiative / turn snapshot              |
+| [`src/app/SessionWiring.js`](src/app/SessionWiring.js)       | Session strip + `AppEvents`             |
+| [`src/ui/MultiplayerPanel.js`](src/ui/MultiplayerPanel.js)   | Create / join UI                        |
+| [`src/ui/SessionStrip.js`](src/ui/SessionStrip.js)           | Desktop turn strip                      |

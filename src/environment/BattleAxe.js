@@ -41,12 +41,7 @@ export function createBattleAxe(
         bladeWidth / 2 + 0.5,
         -bladeHeight / 2 - 0.5
     );
-    shape.quadraticCurveTo(
-        bladeWidth / 2 - 0.2,
-        0,
-        bladeWidth / 2 + 0.5,
-        bladeHeight / 2 + 0.5
-    );
+    shape.quadraticCurveTo(bladeWidth / 2 - 0.2, 0, bladeWidth / 2 + 0.5, bladeHeight / 2 + 0.5);
     shape.quadraticCurveTo(bladeWidth / 2, bladeHeight / 2, 0.5, 0.5);
     shape.lineTo(-0.5, 0.5);
     shape.quadraticCurveTo(
@@ -55,12 +50,7 @@ export function createBattleAxe(
         -bladeWidth / 2 - 0.5,
         bladeHeight / 2 + 0.5
     );
-    shape.quadraticCurveTo(
-        -bladeWidth / 2 + 0.2,
-        0,
-        -bladeWidth / 2 - 0.5,
-        -bladeHeight / 2 - 0.5
-    );
+    shape.quadraticCurveTo(-bladeWidth / 2 + 0.2, 0, -bladeWidth / 2 - 0.5, -bladeHeight / 2 - 0.5);
     shape.quadraticCurveTo(-bladeWidth / 2, -bladeHeight / 2, -0.5, -0.5);
     shape.lineTo(0, -0.5);
 
@@ -92,11 +82,11 @@ export function createBattleAxe(
                 group.rotateY(rotationY);
             }
 
-            group.add(mesh(new THREE.CylinderGeometry(handleRad, handleRad, handleLen, 16), woodMaterial));
-
             group.add(
-                mesh(headGeo, steelMaterial, { position: { y: handleLen / 2 - 1.0 } })
+                mesh(new THREE.CylinderGeometry(handleRad, handleRad, handleLen, 16), woodMaterial)
             );
+
+            group.add(mesh(headGeo, steelMaterial, { position: { y: handleLen / 2 - 1.0 } }));
         },
     });
 }

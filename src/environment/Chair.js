@@ -17,17 +17,16 @@ export function createChair(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
         colliders: [
             {
                 type: 'box',
-                halfExtents: [
-                    seatWidth / 2,
-                    seatHeight / 2 + backHeight / 2,
-                    seatDepth / 2,
-                ],
+                halfExtents: [seatWidth / 2, seatHeight / 2 + backHeight / 2, seatDepth / 2],
                 offset: { y: totalHeight / 2 },
             },
         ],
         build({ group }) {
-            const { diffuse: woodDiffuse, bump: woodBump, roughness: woodRoughness } =
-                getWoodTextures();
+            const {
+                diffuse: woodDiffuse,
+                bump: woodBump,
+                roughness: woodRoughness,
+            } = getWoodTextures();
 
             const material = new THREE.MeshStandardMaterial({
                 map: woodDiffuse,

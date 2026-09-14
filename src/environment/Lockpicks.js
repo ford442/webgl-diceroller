@@ -78,9 +78,7 @@ export function createLockpicks(
 
 function createHookPick(bladeMat, handleMat) {
     const pick = new THREE.Group();
-    pick.add(
-        mesh(new THREE.BoxGeometry(0.12, 0.8, 0.04), handleMat, { position: { y: -0.4 } })
-    );
+    pick.add(mesh(new THREE.BoxGeometry(0.12, 0.8, 0.04), handleMat, { position: { y: -0.4 } }));
     pick.add(
         mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.6, 8), bladeMat, { position: { y: 0.3 } })
     );
@@ -94,12 +92,8 @@ function createHookPick(bladeMat, handleMat) {
 
 function createRakePick(bladeMat, handleMat) {
     const pick = new THREE.Group();
-    pick.add(
-        mesh(new THREE.BoxGeometry(0.12, 0.8, 0.04), handleMat, { position: { y: -0.4 } })
-    );
-    pick.add(
-        mesh(new THREE.BoxGeometry(0.03, 0.6, 0.02), bladeMat, { position: { y: 0.3 } })
-    );
+    pick.add(mesh(new THREE.BoxGeometry(0.12, 0.8, 0.04), handleMat, { position: { y: -0.4 } }));
+    pick.add(mesh(new THREE.BoxGeometry(0.03, 0.6, 0.02), bladeMat, { position: { y: 0.3 } }));
     for (let i = 0; i < 3; i++) {
         pick.add(
             mesh(new THREE.ConeGeometry(0.02, 0.06, 8), bladeMat, {

@@ -78,11 +78,9 @@ export function createPocketWatch(
             );
 
             group.add(
-                mesh(
-                    new THREE.CylinderGeometry(radius - 0.02, radius - 0.02, 0.05, 32),
-                    glassMat,
-                    { position: { y: thickness / 2 + 0.05 } }
-                )
+                mesh(new THREE.CylinderGeometry(radius - 0.02, radius - 0.02, 0.05, 32), glassMat, {
+                    position: { y: thickness / 2 + 0.05 },
+                })
             );
 
             group.add(

@@ -58,14 +58,7 @@ export function createBookshelf(
             for (let i = 1; i < numShelves; i++) {
                 const y = i * shelfSpacing;
                 group.add(meshHelper(topBotGeo, wood, { position: { y } }));
-                populateShelf(
-                    group,
-                    y,
-                    width - thickness * 2,
-                    depth - thickness,
-                    books,
-                    paper
-                );
+                populateShelf(group, y, width - thickness * 2, depth - thickness, books, paper);
             }
 
             populateShelf(

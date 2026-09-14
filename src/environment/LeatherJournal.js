@@ -71,14 +71,14 @@ export function createLeatherJournal(
             const ribbonWidth = 0.3;
             const ribbonLength = 1.0;
             group.add(
-                mesh(
-                    new THREE.BoxGeometry(ribbonWidth, 0.01, ribbonLength),
-                    ribbonMat,
-                    {
-                        position: { x: 0.5, y: -height / 2 + 0.05, z: depth / 2 + ribbonLength / 2 - 0.1 },
-                        rotation: { x: -0.2 },
-                    }
-                )
+                mesh(new THREE.BoxGeometry(ribbonWidth, 0.01, ribbonLength), ribbonMat, {
+                    position: {
+                        x: 0.5,
+                        y: -height / 2 + 0.05,
+                        z: depth / 2 + ribbonLength / 2 - 0.1,
+                    },
+                    rotation: { x: -0.2 },
+                })
             );
         },
     });

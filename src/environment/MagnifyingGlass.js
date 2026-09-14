@@ -44,15 +44,26 @@ export function createMagnifyingGlass(
             });
 
             group.add(
-                mesh(new THREE.CylinderGeometry(handleRadius, handleRadius, handleLength, 16), woodMat, {
-                    rotation: { x: Math.PI / 2 },
-                    position: { z: -(handleLength / 2) - connectorLength - rimOuterRadius + zOffset },
-                })
+                mesh(
+                    new THREE.CylinderGeometry(handleRadius, handleRadius, handleLength, 16),
+                    woodMat,
+                    {
+                        rotation: { x: Math.PI / 2 },
+                        position: {
+                            z: -(handleLength / 2) - connectorLength - rimOuterRadius + zOffset,
+                        },
+                    }
+                )
             );
 
             group.add(
                 mesh(
-                    new THREE.CylinderGeometry(connectorRadius, connectorRadius, connectorLength, 16),
+                    new THREE.CylinderGeometry(
+                        connectorRadius,
+                        connectorRadius,
+                        connectorLength,
+                        16
+                    ),
                     brassMat,
                     {
                         rotation: { x: Math.PI / 2 },

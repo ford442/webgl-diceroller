@@ -48,11 +48,10 @@ export function createGong(
             );
             group.add(gongMesh);
 
-            bossMesh = mesh(
-                new THREE.CylinderGeometry(0.35, 0.35, 0.12, 24),
-                brassMat,
-                { rotation: { z: Math.PI / 2 }, position: { x: 0.02 } }
-            );
+            bossMesh = mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.12, 24), brassMat, {
+                rotation: { z: Math.PI / 2 },
+                position: { x: 0.02 },
+            });
             group.add(bossMesh);
 
             const frameWidth = 3.5;

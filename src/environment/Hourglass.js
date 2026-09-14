@@ -40,12 +40,8 @@ export function createHourglass(
             });
 
             const plateGeo = new THREE.CylinderGeometry(radius, radius, plateHeight, 6);
-            group.add(
-                mesh(plateGeo, woodMat, { position: { y: height / 2 - plateHeight / 2 } })
-            );
-            group.add(
-                mesh(plateGeo, woodMat, { position: { y: -height / 2 + plateHeight / 2 } })
-            );
+            group.add(mesh(plateGeo, woodMat, { position: { y: height / 2 - plateHeight / 2 } }));
+            group.add(mesh(plateGeo, woodMat, { position: { y: -height / 2 + plateHeight / 2 } }));
 
             const rodGeo = new THREE.CylinderGeometry(0.05, 0.05, height - plateHeight * 2, 8);
             for (let i = 0; i < 3; i++) {

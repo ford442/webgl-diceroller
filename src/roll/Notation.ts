@@ -654,13 +654,7 @@ export function getRerollRespawnSpecs(
 }
 
 export type ExpressionChip =
-    | 'advantage'
-    | 'disadvantage'
-    | 'explode'
-    | 'compound'
-    | 'reroll1'
-    | 'percentile'
-    | 'clear';
+    'advantage' | 'disadvantage' | 'explode' | 'compound' | 'reroll1' | 'percentile' | 'clear';
 
 /**
  * Rewrite helpers for mobile-friendly UI chips (no raw typing required).

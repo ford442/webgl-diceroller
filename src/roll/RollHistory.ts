@@ -32,7 +32,10 @@ export interface RollHistoryOptions {
 }
 
 export interface RollHistory {
-    appendRoll: (diceResults: DiceResult[] | null | undefined, meta?: RollHistoryMeta) => RollHistoryEntry | null;
+    appendRoll: (
+        diceResults: DiceResult[] | null | undefined,
+        meta?: RollHistoryMeta
+    ) => RollHistoryEntry | null;
     getEntries: () => RollHistoryEntry[];
     clear: () => void;
     exportAsText: () => string;

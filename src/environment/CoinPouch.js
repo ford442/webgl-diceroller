@@ -52,7 +52,9 @@ export function createCoinPouch(
         build({ group }) {
             const yShift = -height / 2;
 
-            group.add(mesh(new THREE.LatheGeometry(points, 32), leatherMat, { position: { y: yShift } }));
+            group.add(
+                mesh(new THREE.LatheGeometry(points, 32), leatherMat, { position: { y: yShift } })
+            );
 
             group.add(
                 mesh(new THREE.TorusGeometry(0.32, 0.04, 8, 32), stringMat, {

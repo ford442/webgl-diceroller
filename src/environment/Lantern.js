@@ -77,27 +77,17 @@ export function createLantern(
             );
 
             group.add(
-                mesh(
-                    new THREE.CylinderGeometry(0.1, 0.2, ventHeight, 8),
-                    metalMat,
-                    {
-                        position: {
-                            y: baseHeight + bodyHeight + capHeight + ventHeight / 2 - halfHeight,
-                        },
-                    }
-                )
+                mesh(new THREE.CylinderGeometry(0.1, 0.2, ventHeight, 8), metalMat, {
+                    position: {
+                        y: baseHeight + bodyHeight + capHeight + ventHeight / 2 - halfHeight,
+                    },
+                })
             );
 
             group.add(
                 mesh(new THREE.TorusGeometry(0.25, 0.03, 8, 16), metalMat, {
                     position: {
-                        y:
-                            baseHeight +
-                            bodyHeight +
-                            capHeight +
-                            ventHeight +
-                            0.15 -
-                            halfHeight,
+                        y: baseHeight + bodyHeight + capHeight + ventHeight + 0.15 - halfHeight,
                     },
                 })
             );

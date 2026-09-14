@@ -64,18 +64,27 @@ function analyzeFile(filePath, src) {
     const factoryMatch = src.match(/export function (create[A-Za-z0-9_]+)/);
     const factory = factoryMatch?.[1] ?? '(none)';
 
-    const usesPropKit = /from ['"]\.\/propKit\.js['"]/.test(src) || /from ['"]\.\.\/propKit\.js['"]/.test(src);
+    const usesPropKit =
+        /from ['"]\.\/propKit\.js['"]/.test(src) || /from ['"]\.\.\/propKit\.js['"]/.test(src);
     const usesStaticBridge = /createStaticCollider/.test(src);
     const usesCreateProp = /\bcreateProp\s*\(/.test(src) && !rel.endsWith('propKit.js');
     const usesPropPhysics =
-        /from ['"]\.\/PropPhysics\.js['"]/.test(src) || /from ['"]\.\.\/PropPhysics\.js['"]/.test(src);
+        /from ['"]\.\/PropPhysics\.js['"]/.test(src) ||
+        /from ['"]\.\.\/PropPhysics\.js['"]/.test(src);
     const usesPhysicsJs = /from ['"]\.\.\/physics\.js['"]/.test(src);
 
     const colliderTypes = [];
     for (const type of ['box', 'cylinder', 'openCylinder', 'plane', 'convexHull', 'compound']) {
         if (new RegExp(`type:\\s*['"]${type}['"]`).test(src)) colliderTypes.push(type);
     }
-    for (const ammo of ['btBoxShape', 'btCylinderShape', 'btSphereShape', 'btCompoundShape', 'btStaticPlaneShape', 'btConvexHullShape']) {
+    for (const ammo of [
+        'btBoxShape',
+        'btCylinderShape',
+        'btSphereShape',
+        'btCompoundShape',
+        'btStaticPlaneShape',
+        'btConvexHullShape',
+    ]) {
         if (src.includes(ammo)) colliderTypes.push(ammo);
     }
 
@@ -115,7 +124,19 @@ const targetPct = targetProps.length ? Math.round((targetMigrated / targetProps.
 if (jsonOut) {
     console.log(
         JSON.stringify(
-            { summary: { propKitCount, legacyCount, visualCount, migratedPct, targetPct, targetMigrated, targetTotal: targetProps.length, total: props.length }, rows },
+            {
+                summary: {
+                    propKitCount,
+                    legacyCount,
+                    visualCount,
+                    migratedPct,
+                    targetPct,
+                    targetMigrated,
+                    targetTotal: targetProps.length,
+                    total: props.length,
+                },
+                rows,
+            },
             null,
             2
         )
@@ -129,11 +150,13 @@ console.log(`propKit (migrated):  ${propKitCount}`);
 console.log(`legacy-ammo:           ${legacyCount}`);
 console.log(`visual-only:           ${visualCount}`);
 console.log(`migration coverage:    ${migratedPct}% (all factories)`);
-console.log(`tabletop prop coverage: ${targetPct}% (${targetMigrated}/${targetProps.length} excl. environment shell)`);
+console.log(
+    `tabletop prop coverage: ${targetPct}% (${targetMigrated}/${targetProps.length} excl. environment shell)`
+);
 console.log('');
 
 const byCategory = {
-    'propKit': [],
+    propKit: [],
     'legacy-ammo': [],
     'visual-only': [],
 };
@@ -142,7 +165,9 @@ for (const row of props) byCategory[row.category].push(row);
 for (const [cat, list] of Object.entries(byCategory)) {
     console.log(`\n## ${cat} (${list.length})`);
     for (const row of list.sort((a, b) => a.file.localeCompare(b.file))) {
-        const hooks = [row.hasUpdate && 'update', row.hasInteract && 'interact'].filter(Boolean).join(',');
+        const hooks = [row.hasUpdate && 'update', row.hasInteract && 'interact']
+            .filter(Boolean)
+            .join(',');
         const types = row.colliderTypes.length ? row.colliderTypes.join('|') : '—';
         console.log(`  ${row.factory.padEnd(22)} ${row.file}`);
         console.log(`    colliders: ${types}${hooks ? `  hooks: ${hooks}` : ''}`);
