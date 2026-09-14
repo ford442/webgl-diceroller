@@ -1,5 +1,6 @@
 const { chromium } = require('playwright');
 const { AxeBuilder } = require('@axe-core/playwright');
+const { BASE } = require('./helpers/server');
 
 const DEFAULT_ARGS = [
     '--no-sandbox',
@@ -10,7 +11,7 @@ const DEFAULT_ARGS = [
     '--enable-unsafe-swiftshader',
 ];
 
-const url = 'http://localhost:4173/?webgl&no-post&fair-dice&test';
+const url = `${BASE}/?webgl&no-post&fair-dice&test`;
 
 (async () => {
     const browser = await chromium.launch({ headless: true, args: DEFAULT_ARGS });
@@ -21,11 +22,7 @@ const url = 'http://localhost:4173/?webgl&no-post&fair-dice&test';
 
     try {
         await page.goto(url, { waitUntil: 'load', timeout: 60000 });
-        await page.waitForFunction(
-            () => window.__app?.ready === true,
-            null,
-            { timeout: 150000 }
-        );
+        await page.waitForFunction(() => window.__app?.ready === true, null, { timeout: 150000 });
 
         const liveRegion = await page.$('#dice-results-live');
         if (!liveRegion) {

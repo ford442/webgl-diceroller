@@ -14,14 +14,14 @@
 //
 // Output: render-regression-{profile}.png in cwd (+ JSON summary on stdout).
 import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { startDev } from '../tests/helpers/server.js';
+import { capturePng } from '../tests/helpers/browser.js';
 import { copyFile, mkdir } from 'node:fs/promises';
-import { existsSync, writeFileSync, unlinkSync } from 'node:fs';
+import { existsSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
 const PORT = 5195;
-const BASE = `http://127.0.0.1:${PORT}`;
 const LAYOUT_SEED = 4242;
 const VIEWPORT = { width: 640, height: 480 };
 const CAMERA = { pos: [0, 6, 14], lookAt: [0, 0, 0] };
@@ -61,33 +61,17 @@ const PROFILES = [
     },
 ];
 
+// CPU-only runners cannot finish a WebGPU load (see AGENTS.md); skipping the
+// optional profile there saves minutes of capture that only ever soft-fails.
+const ACTIVE_PROFILES =
+    process.env.DICE_CI_NO_WEBGPU === '1' ? PROFILES.filter((p) => p.id !== 'webgpu') : PROFILES;
+
 function outFile(id) {
     return `render-regression-${id}.png`;
 }
 
 function baselineFile(id) {
     return path.join(BASELINE_DIR, outFile(id));
-}
-
-async function startVite() {
-    const proc = spawn(
-        'npx',
-        ['vite', '--host', '127.0.0.1', '--port', String(PORT), '--strictPort', '--open', 'false'],
-        {
-            stdio: 'ignore',
-            env: { ...process.env, BROWSER: 'none' },
-        }
-    );
-    for (let i = 0; i < 90; i++) {
-        await sleep(500);
-        try {
-            if ((await fetch(`${BASE}/`)).ok) return proc;
-        } catch {
-            // retry
-        }
-    }
-    proc.kill('SIGKILL');
-    throw new Error('vite timeout');
 }
 
 async function stabilizeScene(page) {
@@ -152,37 +136,6 @@ async function stabilizeScene(page) {
     await sleep(800);
 }
 
-async function capturePng(page, file) {
-    // Stop the rAF loop so the compositor isn't fighting a 60fps SwiftShader
-    // redraw during screenshot (Playwright can time out waiting for "idle").
-    await page
-        .evaluate(() => {
-            const app = window.__app;
-            const r = app?.renderer;
-            if (!r) return;
-            r.setAnimationLoop(null);
-            if (app?.scene && app?.camera) r.render(app.scene, app.camera);
-        })
-        .catch(() => {});
-
-    const session = await page.context().newCDPSession(page);
-    try {
-        const { data } = await session.send('Page.captureScreenshot', {
-            format: 'png',
-            fromSurface: true,
-            captureBeyondViewport: false,
-        });
-        try {
-            unlinkSync(file);
-        } catch {
-            /* no prior file */
-        }
-        writeFileSync(file, Buffer.from(data, 'base64'));
-    } finally {
-        await session.detach().catch(() => {});
-    }
-}
-
 async function probe(browser, profile) {
     const page = await browser.newPage({ viewport: VIEWPORT });
     const errors = [];
@@ -209,12 +162,14 @@ async function probe(browser, profile) {
         const info = await page
             .evaluate(() => {
                 const app = window.__app;
-                const r = /** @type {import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer | undefined} */ (
-                    app?.renderer ?? undefined
-                );
-                const render = /** @type {{ calls?: number; drawCalls?: number; triangles?: number }} */ (
-                    r?.info?.render ?? {}
-                );
+                const r =
+                    /** @type {import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer | undefined} */ (
+                        app?.renderer ?? undefined
+                    );
+                const render =
+                    /** @type {{ calls?: number; drawCalls?: number; triangles?: number }} */ (
+                        r?.info?.render ?? {}
+                    );
                 const memory = /** @type {{ geometries?: number; textures?: number }} */ (
                     r?.info?.memory ?? {}
                 );
@@ -263,13 +218,14 @@ async function probe(browser, profile) {
     }
 }
 
-const vite = await startVite();
+const vite = await startDev({ port: PORT });
+const BASE = vite.base;
 const browser = await chromium.launch({ args: CHROME_ARGS });
 const results = {};
 let hardFail = false;
 
 try {
-    for (const profile of PROFILES) {
+    for (const profile of ACTIVE_PROFILES) {
         console.error(`[capture] ${profile.id} ${profile.query}`);
         const result = await probe(browser, profile);
         results[profile.id] = result;
@@ -324,11 +280,7 @@ try {
     console.log(JSON.stringify(report, null, 2));
 } finally {
     await Promise.race([browser.close(), sleep(3000)]).catch(() => {});
-    try {
-        vite.kill('SIGKILL');
-    } catch {
-        /* already dead */
-    }
+    await vite.close();
 }
 
 if (hardFail) {

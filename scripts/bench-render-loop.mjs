@@ -7,11 +7,10 @@
  *   node scripts/bench-render-loop.mjs --query='?webgl&no-post&fair-dice&test&pr=2'
  */
 import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { startDev } from '../tests/helpers/server.js';
 
 const PORT = 5196;
-const BASE = `http://127.0.0.1:${PORT}`;
 const DEFAULT_QUERY = '?webgl&fair-dice&test&pr=2';
 const SAMPLE_MS = 10000;
 const ROLL_SEED = 42424242;
@@ -28,29 +27,9 @@ const CHROME_ARGS = [
     '--enable-unsafe-swiftshader',
 ];
 
-async function startVite() {
-    const proc = spawn(
-        'npx',
-        ['vite', '--host', '127.0.0.1', '--port', String(PORT), '--strictPort', '--open', 'false'],
-        {
-            stdio: 'ignore',
-            env: { ...process.env, BROWSER: 'none' },
-        }
-    );
-    for (let i = 0; i < 90; i++) {
-        await sleep(500);
-        try {
-            if ((await fetch(`${BASE}/`)).ok) return proc;
-        } catch {
-            // retry
-        }
-    }
-    proc.kill('SIGKILL');
-    throw new Error('vite timeout');
-}
-
 async function main() {
-    const vite = await startVite();
+    const vite = await startDev({ port: PORT });
+    const BASE = vite.base;
     const browser = await chromium.launch({
         headless: true,
         args: CHROME_ARGS,
@@ -110,7 +89,7 @@ async function main() {
         console.log(JSON.stringify(summary, null, 2));
     } finally {
         await browser.close();
-        vite.kill('SIGTERM');
+        await vite.close();
     }
 }
 

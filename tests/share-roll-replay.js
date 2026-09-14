@@ -5,8 +5,8 @@
  * Prereq: npx vite build && npm run preview
  */
 const { launchPage } = require('./helpers/browser');
+const { BASE } = require('./helpers/server');
 
-const BASE = 'http://localhost:4173';
 const REPLAY_QUERY = '?webgl&no-post&fair-dice&test&seed=42424242&dice=d20:1,d6:1&v=1';
 const LOAD_TIMEOUT_MS = 120000;
 const SETTLE_TIMEOUT_MS = 180000;
@@ -15,9 +15,7 @@ async function waitForReplaySettled(page) {
     await page.waitForFunction(() => window.__app?.ready === true, {
         timeout: LOAD_TIMEOUT_MS,
     });
-    const wasmReady = await page.evaluate(
-        () => window.__app?.isWasmAvailable?.() === true
-    );
+    const wasmReady = await page.evaluate(() => window.__app?.isWasmAvailable?.() === true);
     if (!wasmReady) {
         return { skipped: true, reason: 'WASM physics not available (run npm run build:wasm)' };
     }

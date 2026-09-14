@@ -5,29 +5,10 @@
  * that pulls ammo back in.
  */
 import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { startPreview } from '../tests/helpers/server.js';
 
 const PORT = 4177;
-const BASE = `http://127.0.0.1:${PORT}`;
-
-async function startPreview() {
-    const proc = spawn(
-        'npx',
-        ['vite', 'preview', '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'],
-        { stdio: ['ignore', 'pipe', 'pipe'] }
-    );
-    for (let i = 0; i < 120; i++) {
-        await sleep(500);
-        try {
-            if ((await fetch(`${BASE}/`)).ok) return proc;
-        } catch {
-            // retry
-        }
-    }
-    proc.kill('SIGKILL');
-    throw new Error('preview server did not start');
-}
 
 function scriptRequests(urls, pattern) {
     return urls.filter((u) => pattern.test(u));
@@ -52,7 +33,8 @@ async function collectScripts(page, path) {
     return urls;
 }
 
-const preview = await startPreview();
+const preview = await startPreview({ port: PORT });
+const BASE = preview.base;
 let failed = 0;
 
 try {
@@ -79,9 +61,7 @@ try {
     {
         const page = await browser.newPage();
         const urls = await collectScripts(page, '/?webgl&no-post&fair-dice&test');
-        const wasmActive = await page.evaluate(
-            () => window.__app?.physicsWorld == null
-        );
+        const wasmActive = await page.evaluate(() => window.__app?.physicsWorld == null);
         const physics = scriptRequests(urls, /\/physics-[^/]+\.js/i);
         if (!wasmActive) {
             console.log('skip: WASM engine inactive in this build — ammo physics chunk expected');
@@ -126,7 +106,7 @@ try {
 
     await browser.close();
 } finally {
-    preview.kill('SIGTERM');
+    await preview.close();
 }
 
 if (failed > 0) {

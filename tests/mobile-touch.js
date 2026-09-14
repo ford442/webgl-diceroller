@@ -1,7 +1,8 @@
 const { runTest } = require('./helpers/browser');
+const { BASE } = require('./helpers/server');
 
 // Mobile smoke: portrait viewport, forced touch path, responsive aspect + adaptive quality hooks.
-const url = 'http://localhost:4173/?webgl&no-post&fair-dice&touch&fill&test';
+const url = `${BASE}/?webgl&no-post&fair-dice&touch&fill&test`;
 
 runTest(
     async (page, errors) => {
@@ -11,11 +12,7 @@ runTest(
         console.log(`Navigating to ${url} ...`);
         await page.goto(url, { waitUntil: 'load', timeout: 60000 });
 
-        await page.waitForFunction(
-            () => window.__app?.ready === true,
-            null,
-            { timeout: 150000 }
-        );
+        await page.waitForFunction(() => window.__app?.ready === true, null, { timeout: 150000 });
 
         const state = await page.evaluate(() => {
             const app = window.__app;

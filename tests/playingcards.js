@@ -1,9 +1,10 @@
 const { runTest } = require('./helpers/browser');
+const { BASE } = require('./helpers/server');
 
 // E2E: PlayingCards are present AND interactive (clicking draws/flips a card).
 // `forceProps=PlayingCards` guarantees the randomPool prop spawns regardless of seed.
 // ?webgl forces the stable baseline renderer (headless WebGPU init can stall).
-const url = 'http://localhost:4173/?webgl&no-post&forceProps=PlayingCards&test';
+const url = `${BASE}/?webgl&no-post&forceProps=PlayingCards&test`;
 
 runTest(
     async (page, errors) => {
@@ -11,12 +12,9 @@ runTest(
         await page.goto(url, { waitUntil: 'load', timeout: 60000 });
 
         console.log('Waiting for the playingCards interactable to register...');
-        await page.waitForFunction(
-            () =>
-                !!window.__app?.interactables?.playingCards,
-            null,
-            { timeout: 150000 }
-        );
+        await page.waitForFunction(() => !!window.__app?.interactables?.playingCards, null, {
+            timeout: 150000,
+        });
 
         const inScene = await page.evaluate(() => {
             const scene = window.__app?.scene;

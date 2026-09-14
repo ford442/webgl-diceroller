@@ -1,7 +1,8 @@
 const { runTest } = require('./helpers/browser');
+const { BASE } = require('./helpers/server');
 const fs = require('fs');
 
-const url = 'http://localhost:4173/?webgl&no-post&fair-dice&forceProps=BreadLoaf&test';
+const url = `${BASE}/?webgl&no-post&fair-dice&forceProps=BreadLoaf&test`;
 
 runTest(async (page, _errors) => {
     console.log(`Navigating to ${url} ...`);

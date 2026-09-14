@@ -1,4 +1,5 @@
 const { chromium } = require('playwright');
+const fs = require('node:fs');
 
 const DEFAULT_ARGS = [
     '--no-sandbox',
@@ -47,4 +48,39 @@ async function runTest(fn, opts = {}) {
     }
 }
 
-module.exports = { launchPage, runTest, DEFAULT_ARGS };
+// Screenshot a live WebGL/WebGPU page without hanging.
+//
+// page.screenshot() waits for the compositor to go idle, which never happens
+// while a 60 fps SwiftShader rAF loop is redrawing — the call just burns its
+// timeout. Stopping the loop, rendering one last frame, and grabbing the
+// surface over CDP captures the same pixels and returns immediately.
+async function capturePng(page, file) {
+    await page
+        .evaluate(() => {
+            const app = window.__app;
+            const r = app?.renderer;
+            if (!r) return;
+            r.setAnimationLoop(null);
+            if (app?.scene && app?.camera) r.render(app.scene, app.camera);
+        })
+        .catch(() => {});
+
+    const session = await page.context().newCDPSession(page);
+    try {
+        const { data } = await session.send('Page.captureScreenshot', {
+            format: 'png',
+            fromSurface: true,
+            captureBeyondViewport: false,
+        });
+        try {
+            fs.unlinkSync(file);
+        } catch {
+            /* no prior file */
+        }
+        fs.writeFileSync(file, Buffer.from(data, 'base64'));
+    } finally {
+        await session.detach().catch(() => {});
+    }
+}
+
+module.exports = { launchPage, runTest, capturePng, DEFAULT_ARGS };

@@ -10,12 +10,10 @@
 //
 // Mirrors scripts/verify-wasm-primitives.mjs.
 import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
-import { setTimeout as sleep } from 'node:timers/promises';
+import { startDev } from '../tests/helpers/server.js';
 import { writeFile, rm } from 'node:fs/promises';
 
 const PORT = 5197;
-const BASE = `http://localhost:${PORT}`;
 const TEST_MODULE = new URL('../src/__worker_phys_test.js', import.meta.url);
 
 const TEST_SRC = `
@@ -132,23 +130,10 @@ export async function run() {
 }
 `;
 
-async function startVite() {
-    const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    for (let i = 0; i < 60; i++) {
-        await sleep(500);
-        try {
-            if ((await fetch(`${BASE}/`)).ok) return proc;
-        } catch {}
-    }
-    proc.kill('SIGKILL');
-    throw new Error('vite timeout');
-}
-
 await writeFile(TEST_MODULE, TEST_SRC);
 console.log('[verify] starting vite...');
-const vite = await startVite();
+const vite = await startDev({ port: PORT });
+const BASE = vite.base;
 console.log('[verify] vite up, launching browser...');
 const browser = await chromium.launch();
 console.log('[verify] browser launched');
@@ -177,7 +162,7 @@ try {
     console.log('ERRORS:', JSON.stringify(errors.slice(0, 5)));
 } finally {
     await browser.close();
-    vite.kill('SIGTERM');
+    await vite.close();
     await rm(TEST_MODULE, { force: true });
 }
 
