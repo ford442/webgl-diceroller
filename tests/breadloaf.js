@@ -1,4 +1,4 @@
-const { runTest } = require('./helpers/browser');
+const { runTest, capturePng } = require('./helpers/browser');
 const { BASE } = require('./helpers/server');
 const fs = require('fs');
 
@@ -40,12 +40,21 @@ runTest(async (page, _errors) => {
         return null;
     });
 
-    if (dataUrl) {
-        const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
-        fs.writeFileSync('/home/jules/verification/breadloaf.png', base64Data, 'base64');
-        console.log('Saved /home/jules/verification/breadloaf.png via canvas.');
-    } else {
-        await page.screenshot({ path: '/home/jules/verification/breadloaf.png' });
-        console.log('Saved /home/jules/verification/breadloaf.png via page.screenshot.');
+    // The screenshot is a debugging aid, not the assertion — the scene-graph
+    // check above is. Write it beside the repo (BREADLOAF_SHOT overrides) and
+    // never fail the test on it; this used to hardcode an absolute path from
+    // one contributor's machine, which no other machine has.
+    const shotPath = process.env.BREADLOAF_SHOT || 'breadloaf.png';
+    try {
+        if (dataUrl) {
+            fs.writeFileSync(shotPath, dataUrl.replace(/^data:image\/png;base64,/, ''), 'base64');
+        } else {
+            await capturePng(page, shotPath);
+        }
+        console.log(`Saved ${shotPath}`);
+    } catch (e) {
+        console.log(`(screenshot skipped: ${e.message})`);
     }
+
+    return true;
 });
