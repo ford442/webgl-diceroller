@@ -263,10 +263,11 @@ class Parser {
         let dropCount = 0;
 
         if (m[4]) {
-            const mode = m[4][1] as 'h' | 'l';
+            const keepDrop = m[4].toLowerCase();
+            const mode = keepDrop[1] as 'h' | 'l';
             const n = m[5] ? Number.parseInt(m[5], 10) : 1;
             if (n < 1) throw new NotationError(`Invalid keep/drop count in "${tok}"`);
-            if (m[4].startsWith('k')) {
+            if (keepDrop.startsWith('k')) {
                 keep = mode;
                 keepCount = n;
             } else {

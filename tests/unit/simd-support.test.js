@@ -46,6 +46,10 @@ describe('WASM SIMD probe', () => {
     it('treats a missing validate function as unsupported', () => {
         expect(supportsWasmSimd(null)).toBe(false);
     });
+
+    it('treats an omitted or undefined validate as native detection', () => {
+        expect(supportsWasmSimd(undefined)).toBe(supportsWasmSimd());
+    });
 });
 
 describe('resolveWasmArtifactDir', () => {
