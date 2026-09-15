@@ -9,7 +9,7 @@ import {
     throwDice,
     updateDiceSet,
     getSpawnedDiceCounts,
-    getDiceAppearanceConfig,
+    getActiveDiceSet,
     spawnedDice,
 } from '../dice.js';
 import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
@@ -303,7 +303,7 @@ export function createRollWiring(app, deps) {
     function getLastRollShareUrl() {
         const last = rollHandlerRef.lastRoll;
         if (last?.seed == null) return null;
-        return buildShareableRollUrl(last.seed, last.counts, undefined, getDiceAppearanceConfig(), {
+        return buildShareableRollUrl(last.seed, last.counts, undefined, getActiveDiceSet(), {
             expression: last.expression ?? null,
             system: last.system ?? null,
         });

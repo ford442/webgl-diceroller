@@ -6,7 +6,6 @@
 
 import {
     getSpawnedDiceCounts,
-    getDiceAppearanceConfig,
     applyDicePresencePayload,
     buildDicePresencePayload,
 } from '../dice.js';
@@ -39,7 +38,7 @@ export async function setupMultiplayer(app, deps) {
         solverBuildId,
         useFairCommit,
         getDiceCounts: () => getSpawnedDiceCounts(),
-        getPresencePayload: () => buildDicePresencePayload(getDiceAppearanceConfig()),
+        getPresencePayload: () => buildDicePresencePayload(),
         getSessionSnapshot: () => app.session?.getSnapshot?.() ?? null,
         applyPresencePayload: (payload) => {
             applyDicePresencePayload(payload);

@@ -262,7 +262,8 @@ export interface AppContext {
     rerollTableLayout: ((overrides?: unknown) => Promise<unknown>) | null;
     getTableLayoutConfig: (() => unknown) | null;
     getLastRollShareUrl: (() => string | null) | null;
-    getDiceAppearanceConfig: (() => unknown) | null;
+    getActiveDiceSet: (() => unknown) | null;
+    setDieAppearance: ((dieKey: string, patch: unknown) => unknown) | null;
     getDicePresencePayload: (() => unknown) | null;
     applyDicePresencePayload: ((payload: unknown) => void) | null;
     refreshDiceAppearance: (() => void) | null;

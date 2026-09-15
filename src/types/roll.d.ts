@@ -10,6 +10,8 @@ export interface DiceGroup {
     /** Faces <= this are rerolled once. */
     rerollMax: number | null;
     percentile: boolean;
+    /** Fudge/Fate die: a d6 hull showing -1, 0, +1 twice over. */
+    fudge?: boolean;
 }
 
 export interface ParsedRoll {

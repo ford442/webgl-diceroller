@@ -197,10 +197,13 @@ export function createDefaultMaterialSpec(dieKey: string): MaterialSpec {
     };
 }
 
-export function createDefaultFaceMarkingSpec(dieKey: string): FaceMarkingSpec {
+export function createDefaultFaceMarkingSpec(_dieKey: string): FaceMarkingSpec {
     return {
         style: 'inlaid',
-        glyphs: dieKey === 'd6' ? 'pips' : 'numerals',
+        // Numerals across the board: that is what the shipped hulls carry, and a
+        // default that disagreed with the mesh would draw its glyphs twice.
+        // Pips are a choice the foundry offers, not the default.
+        glyphs: 'numerals',
         font: 'default',
         depth: 0.35,
         underlineSixNine: false,

@@ -7,6 +7,12 @@
  */
 
 import {
+    LEGACY_LOOK_PARAM,
+    LEGACY_LOOK_PARAM_ALIAS,
+    applyLegacyDiceLook,
+    parseLegacyDiceLook,
+} from './LegacyDiceLook.js';
+import {
     DICE_SET_VERSION,
     canonicalizeDiceSet,
     computeDiceSetId,
@@ -143,12 +149,24 @@ export function persistDiceSet(set: DiceSet): DiceSet {
 
 /**
  * Resolve the active set: URL token wins over storage, storage over defaults.
+ *
+ * A URL carrying only the v0 `?dice-look=` short code is not ignored — it is
+ * overlaid on whatever the browser already has, so links minted before v1 still
+ * tint the table without clobbering the rest of the stored set.
  */
 export function resolveDiceSet(searchParams?: URLSearchParams | null): DiceSet {
     const params =
         searchParams ??
         new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-    return parseDiceSetFromParams(params) ?? loadStoredDiceSet() ?? createDefaultDiceSet();
+
+    const fromUrl = parseDiceSetFromParams(params);
+    if (fromUrl) return fromUrl;
+
+    const base = loadStoredDiceSet() ?? createDefaultDiceSet();
+    const legacyLook = parseLegacyDiceLook(
+        params.get(LEGACY_LOOK_PARAM) ?? params.get(LEGACY_LOOK_PARAM_ALIAS)
+    );
+    return legacyLook ? applyLegacyDiceLook(base, legacyLook) : base;
 }
 
 // ---------------------------------------------------------------------------

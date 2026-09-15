@@ -1,4 +1,10 @@
-import { serializeDiceAppearance, parseDiceAppearanceParam } from '../dice/DiceAppearanceConfig.js';
+import type { DiceSet } from '../dice/DiceSetFormat.js';
+import {
+    LEGACY_LOOK_PARAM,
+    LEGACY_LOOK_PARAM_ALIAS,
+    diceSetFromLegacyLook,
+} from '../dice/LegacyDiceLook.js';
+import { DICE_SET_PARAM, decodeDiceSet, encodeDiceSet } from '../dice/ShareableDiceSet.js';
 
 /** URL replay format version — bump when solver/throw semantics change. */
 export const REPLAY_VERSION = 1;
@@ -8,14 +14,6 @@ export const DICE_TYPES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'] as const;
 export type DiceType = (typeof DICE_TYPES)[number];
 
 export type DiceCounts = Record<DiceType, number>;
-
-export interface DiceAppearanceEntry {
-    preset: string;
-    bodyColor: string;
-    pipColor: string;
-}
-
-export type DiceAppearanceConfig = Partial<Record<DiceType, DiceAppearanceEntry>>;
 
 export interface ShareableRollParams {
     seed: number;
@@ -105,11 +103,19 @@ export function parseShareableRollParams(
     };
 }
 
+/**
+ * Build a link that replays a roll, carrying the dice it was rolled with.
+ *
+ * Appearance travels as `?dice-set=` — the whole descriptor, hashed — rather
+ * than the v0 `?dice-look=` triple, so a shared link reproduces markings and
+ * numbering, not just two colours. Old links are still read (see
+ * `parseShareableRollDiceSet`); none are written.
+ */
 export function buildShareableRollUrl(
     seed: number,
     counts: Partial<Record<string, number>>,
     baseUrl?: string,
-    appearance: DiceAppearanceConfig | null = null,
+    diceSet: DiceSet | null = null,
     extras: ShareableRollExtras = {}
 ): string {
     const url = new URL(
@@ -121,9 +127,10 @@ export function buildShareableRollUrl(
     if (dice) url.searchParams.set('dice', dice);
     else url.searchParams.delete('dice');
 
-    const look = appearance ? serializeDiceAppearance(appearance) : null;
-    if (look) url.searchParams.set('dice-look', look);
-    else url.searchParams.delete('dice-look');
+    if (diceSet) url.searchParams.set(DICE_SET_PARAM, encodeDiceSet(diceSet));
+    else url.searchParams.delete(DICE_SET_PARAM);
+    url.searchParams.delete(LEGACY_LOOK_PARAM);
+    url.searchParams.delete(LEGACY_LOOK_PARAM_ALIAS);
 
     const expression = extras.expression?.trim();
     if (expression) url.searchParams.set('expr', expression);
@@ -136,4 +143,15 @@ export function buildShareableRollUrl(
     return url.toString();
 }
 
-export { parseDiceAppearanceParam, serializeDiceAppearance };
+/**
+ * The dice a shared roll was made with: the v1 descriptor when the link has one,
+ * otherwise the v0 short code lifted into a set, otherwise nothing.
+ */
+export function parseShareableRollDiceSet(searchParams: URLSearchParams): DiceSet | null {
+    return (
+        decodeDiceSet(searchParams.get(DICE_SET_PARAM)) ??
+        diceSetFromLegacyLook(
+            searchParams.get(LEGACY_LOOK_PARAM) ?? searchParams.get(LEGACY_LOOK_PARAM_ALIAS)
+        )
+    );
+}

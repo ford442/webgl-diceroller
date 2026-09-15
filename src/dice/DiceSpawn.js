@@ -1,6 +1,6 @@
 import { getWasmEngine, loadHullForDie } from '../wasm/PhysicsBridge.js';
 import { TABLE_SURFACE_Y } from '../core/SceneMetrics.js';
-import { spawnedDice, clearSpawnedDice, allocateAudioBodyId, diceModels } from './DiceState.js';
+import { spawnedDice, clearSpawnedDice, allocateAudioBodyId } from './DiceState.js';
 import {
     PHYSICS_PRESETS,
     getDieSides,
@@ -9,7 +9,8 @@ import {
     getSecureRandom,
     estimateInertiaScalar,
 } from './DicePhysicsPresets.js';
-import { acquireDiceMesh, releaseDiceMesh } from './DiceModels.js';
+import { acquireDiceMesh, ensureDressedTemplate, releaseDiceMesh } from './DiceModels.js';
+import { getDieShape } from './DiceSetRuntime.js';
 
 /** @typedef {import('../types/dice').SpawnedDie} SpawnedDie */
 
@@ -39,10 +40,14 @@ export const spawnObjects = (scene, world, config = null) => {
 
     diceToSpawn.forEach((spec, index) => {
         const type = spec.type;
-        const template = diceModels[type];
+        // A derived type (dF, d100) has no mesh of its own — it rides its shape's
+        // hull, and physics only ever hears about the shape.
+        const shape = getDieShape(type);
+        const template = ensureDressedTemplate(type);
         if (!template) return;
 
         const mesh = acquireDiceMesh(type);
+        if (!mesh) return;
 
         const x = (getSecureRandom() - 0.5) * 4;
         const y = TABLE_SURFACE_Y + 5.75 + index * 0.5 + getSecureRandom() * 1;
@@ -58,7 +63,7 @@ export const spawnObjects = (scene, world, config = null) => {
 
         scene.add(mesh);
 
-        const physicsPreset = PHYSICS_PRESETS[type] ?? PHYSICS_PRESETS.d6;
+        const physicsPreset = PHYSICS_PRESETS[shape] ?? PHYSICS_PRESETS.d6;
         const centerOfMassOffset = useMassBias()
             ? (template.userData.massBiasOffset?.clone() ?? null)
             : null;
@@ -72,7 +77,7 @@ export const spawnObjects = (scene, world, config = null) => {
         let wasmId = null;
         if (isUsingWasmPhysics()) {
             const engine = getWasmEngine();
-            const sides = getDieSides(type);
+            const sides = getDieSides(shape);
             wasmId = engine.addDie(sides, x, y, z);
             engine.setDieMaterial(wasmId, physicsPreset.friction, physicsPreset.rollingFriction);
             engine.setDieDrag(wasmId, physicsPreset.dragFactor ?? 0);
@@ -162,8 +167,9 @@ export const syncAllDiceToWasm = () => {
     engine.clearAllDice();
 
     spawnedDice.forEach((die) => {
-        const sides = getDieSides(die.type);
-        const physicsPreset = die.physicsPreset ?? PHYSICS_PRESETS[die.type] ?? PHYSICS_PRESETS.d6;
+        const shape = getDieShape(die.type);
+        const sides = getDieSides(shape);
+        const physicsPreset = die.physicsPreset ?? PHYSICS_PRESETS[shape] ?? PHYSICS_PRESETS.d6;
         die.wasmId = engine.addDie(
             sides,
             die.mesh.position.x,

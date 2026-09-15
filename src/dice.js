@@ -7,18 +7,31 @@ export { spawnedDice } from './dice/DiceState.js';
 export { diceModels, diceTypes, loadDiceModels } from './dice/DiceModels.js';
 export {
     initDiceAppearance,
-    getDiceAppearanceConfig,
-    setDieTypeAppearance,
+    setDieAppearance,
     setDiceAppearanceQualityProfile,
     refreshDiceAppearance,
+    disposeDiceAppearance,
+    ensureDressedTemplate,
     applyDicePresencePayload,
     buildDicePresencePayload,
+    getActiveDiceSet,
 } from './dice/DiceModels.js';
+
+export {
+    getDieEntry,
+    getDieShape,
+    listDieKeys,
+    resolveDieFaceValue,
+    setActiveDiceSet,
+    subscribeDiceSet,
+    updateDieEntry,
+} from './dice/DiceSetRuntime.js';
 
 export { PHYSICS_PRESETS, applyDiceMassBiases } from './dice/DicePhysicsPresets.js';
 
 export {
     readDiceValue,
+    readNaturalDiceValue,
     readAllDiceValues,
     getDiceValueDebugSnapshot,
     areDiceSettled,

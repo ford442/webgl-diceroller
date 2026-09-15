@@ -7,9 +7,13 @@ stored, sent over multiplayer presence, and read by a headless consumer.
 
 - `src/dice/DiceSetFormat.ts` — the types, defaults, normalisation and hash.
 - `src/dice/ShareableDiceSet.ts` — URL token, `localStorage`, presence payload.
+- `src/dice/DiceFaceGlyphs.ts` — which glyph each face shows.
+- `src/dice/DiceShadingParams.ts` — the numbers the two material twins shade from.
+- `src/dice/LegacyDiceLook.ts` — decoder for the v0 `?dice-look=` short code.
+- `src/dice/DiceSetRuntime.ts` — the live set: resolve, patch, notify, presence.
 
-Both modules are dependency-free and import cleanly in Node with no renderer in
-the module graph.
+All of these are dependency-free and import cleanly in Node with no renderer in
+the module graph. The renderer side is `DiceMaterials` and its two twins.
 
 ## Shape
 
@@ -75,23 +79,82 @@ byte-for-byte and keeps its id.
 
 ## Compatibility with v0
 
-The v0 `{ preset, bodyColor, pipColor }` config in `DiceAppearanceConfig.js`
-still works. `loadStoredDiceSet()` reads the old `dice-roller-appearance` key
-and migrates it when no v1 set is present, and `toLegacyAppearanceConfig()`
-projects a set back onto the v0 shape for `DiceMaterials` and the per-type
-short code. `normalizeMaterialSpec` also accepts `pipColor` as a spelling of
-`markingColor`, so old payloads decode without loss.
+`DiceAppearanceConfig.js` is gone — v1 is the only appearance system — but every
+v0 payload it could produce is still read. `loadStoredDiceSet()` reads the old
+`dice-roller-appearance` key and migrates it when no v1 set is present,
+`resolveDiceSet()` overlays a v0 `?dice-look=` token onto whatever the browser
+already has, and `toLegacyAppearanceConfig()` projects a set back onto the v0
+shape for anything that still speaks it. Share links carry `?dice-set=`; none
+are written with the v0 short code any more. `normalizeMaterialSpec` also
+accepts `pipColor` as a spelling of `markingColor`, so old payloads decode
+without loss.
 
 Every parser is total: `normalizeDiceSet()` never throws and fills each gap
 with that die's curated default.
 
-## Not yet wired
+## How a set reaches the table
 
-The descriptor is ahead of the renderer, deliberately.
+`DiceSetRuntime` owns the live set. Nothing else keeps a copy: the renderer, the
+dice case, presence and share links all read it, and `updateDieEntry()` is the
+only way it changes. Every consumer that used to take a
+`{ preset, bodyColor, pipColor }` triple now takes a `DiceSetEntry`.
 
-- `faces` (style, glyph set, font, depth) is carried and hashed but not yet
-  consumed — that needs the MSDF atlas and the TSL material work.
-- `body.translucency` and `body.inclusion` are likewise descriptor-only.
-- The derived die types are expressible but not yet selectable: notation's
-  `SUPPORTED_SIDES` and the spawn path still need to read `DIE_TYPE_CATALOG`
-  before `dF` or `d2` can be rolled at the table.
+### Markings are data
+
+Face markings are drawn by the die material, not carried by the mesh:
+
+1. `planFaceGlyphs(entry)` turns `numbering` + `faces.glyphs` into one glyph per
+   natural face — numerals, pips, or the Fudge `+ / 0 / −` set, falling back to
+   numerals for any value a glyph set cannot express.
+2. `DiceGlyphAtlas` rasterises each distinct glyph once into a signed-distance
+   atlas, built at runtime from the `faces.font` key. Changing the font, the
+   glyph set or the numbering rebuilds that texture; it never fetches an asset.
+3. `DiceFaceFrames` derives each face's centre, inradius and an upright tangent
+   frame from the hull's own triangles, so the material can find which face a
+   fragment is on and where the glyph sits.
+4. The material samples the atlas and shades the result. `faces.style` is three
+   parameter sets of one material — `engraved` cuts and shadows, `inlaid` fills
+   and dips, `painted` fills flat — not three meshes.
+
+`body.translucency` maps onto transmission and thickness (composed with whatever
+the preset already asked for), and `body.inclusion` is a domain-warped noise term
+in the body colour: `swirl`, `galaxy` and `glitter` cost no extra geometry.
+
+### Two twins, one descriptor
+
+- `DiceFaceMarkingMaterial.js` — GLSL, patched into `MeshPhysicalMaterial` for
+  `WebGLRenderer`.
+- `DiceFaceMarkingNodeMaterial.js` — TSL `MeshPhysicalNodeMaterial` for
+  `WebGPURenderer`, lazily imported so the WebGL path never loads the node system.
+
+Both read `diceShadingParams(entry)`, so neither can drift into shading the same
+descriptor differently. `setDiceMaterialBackend()` picks one; nothing outside
+`DiceMaterials` knows which.
+
+### Derived die types are rollable
+
+`DIE_TYPE_CATALOG` is now the only list of which dice exist. Notation's supported
+sides are derived from it (so `d2`, `d3` and `d5` parse), `dF` is spelled out in
+the grammar, and the spawn path maps a die key to the hull it rides on before it
+talks to physics. The engine and the face-normal clusterer still speak natural
+faces; `readDiceValue()` resolves those through `resolveFaceValue` so a dF that
+settles on natural face 6 reports `+1`.
+
+## Still owed to the asset pipeline
+
+The shipped hulls carry their numerals as recessed geometry, in a second draw
+group. Two consequences:
+
+- Where the descriptor asks for exactly what the mesh was authored with —
+  numerals, natural numbering, the default font — the material uses that relief
+  directly (`canUseBakedMarkings`). That is why the default set renders
+  identically to before this change.
+- Where it asks for anything else, the atlas draws the real glyphs and the
+  material flattens the stale relief's _marking_ group back into its face. The
+  recess itself is body geometry, so a faint ghost of the authored numerals
+  remains under a non-default glyph plan.
+
+Re-exporting the hulls with flat faces (and per-face UV islands, to skip the
+runtime projection) removes that ghost. It needs the Blender/Collada sources
+re-authored, so it is asset work, not renderer work — and it is the last thing
+standing between the descriptor and the table.
