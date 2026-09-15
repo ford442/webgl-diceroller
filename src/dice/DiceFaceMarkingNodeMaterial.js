@@ -100,16 +100,9 @@ export async function loadDiceFaceMarkingNodeMaterialFactory() {
      * One material instance per draw group, both from the same entry — see
      * `DiceFaceMarkingMaterial` for why the split has to be per-triangle.
      */
-    function buildDiceNodeMaterial(entry, template, options, isBakedGroup) {
+    function buildDiceNodeMaterial(entry, options, isBakedGroup, binding) {
         const params = diceShadingParams(entry, { highQuality: options.highQuality });
-
-        const hasBaked = template?.geometry?.userData?.hasBakedMarkings === true;
-        const useBaked = canUseBakedMarkings(entry, hasBaked);
-        const frames = useBaked ? [] : computeFaceFrames(template);
-        const atlas = frames.length
-            ? buildGlyphAtlas(collectGlyphKeys(entry), { font: entry.faces.font })
-            : null;
-        const glyphs = atlas ? planFaceGlyphs(entry) : [];
+        const { frames, atlas, glyphs } = binding;
         const atlasMode = Boolean(atlas);
 
         // Fixed-length uniform arrays: unused slots carry centre.w = 0, i.e.
@@ -323,25 +316,34 @@ export async function loadDiceFaceMarkingNodeMaterialFactory() {
             .mul(params.emissiveIntensity)
             .mul(coverage());
 
-        return { material, atlas };
+        return material;
     }
 
     return function createDiceFaceMarkingNodeMaterial(entry, template, options = {}) {
         const hasBaked = template?.geometry?.userData?.hasBakedMarkings === true;
-        const built = hasBaked
+
+        // Frames, glyph plan and atlas belong to the die, not to a draw group:
+        // built once here and shared, so the two materials do not rasterise the
+        // same glyphs into two textures and then both try to dispose them.
+        const useBaked = canUseBakedMarkings(entry, hasBaked);
+        const frames = useBaked ? [] : computeFaceFrames(template);
+        const atlas = frames.length
+            ? buildGlyphAtlas(collectGlyphKeys(entry), { font: entry.faces.font })
+            : null;
+        const binding = { frames, atlas, glyphs: atlas ? planFaceGlyphs(entry) : [] };
+
+        const materials = hasBaked
             ? [
-                  buildDiceNodeMaterial(entry, template, options, false),
-                  buildDiceNodeMaterial(entry, template, options, true),
+                  buildDiceNodeMaterial(entry, options, false, binding),
+                  buildDiceNodeMaterial(entry, options, true, binding),
               ]
-            : [buildDiceNodeMaterial(entry, template, options, false)];
+            : [buildDiceNodeMaterial(entry, options, false, binding)];
 
         return {
-            materials: built.map((entryBuild) => entryBuild.material),
+            materials,
             dispose: () => {
-                built.forEach((entryBuild) => {
-                    entryBuild.atlas?.dispose();
-                    entryBuild.material.dispose();
-                });
+                atlas?.dispose();
+                materials.forEach((material) => material.dispose());
             },
         };
     };

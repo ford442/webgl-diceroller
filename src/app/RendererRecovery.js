@@ -13,6 +13,7 @@ import {
     syncComposerPixelRatio,
 } from '../core/RendererFactory.js';
 import { AppEvent } from '../core/AppEvents.js';
+import { setDiceRenderer } from '../dice.js';
 
 export function createShadowController(getRenderer, sceneRef) {
     const state = {
@@ -296,6 +297,9 @@ export function setupRendererRecovery(container, deps) {
                 app.usingWebGPU = nextState?.usingWebGPU === true;
                 app.usingWebGL = nextState?.usingWebGL !== false;
                 app.rendererFallbackReason = nextState?.fallbackReason ?? null;
+                // The dice material twins are renderer-specific; a swap that
+                // changed backend must re-dress them before the next frame.
+                await setDiceRenderer(nextState.renderer);
 
                 container.appendChild(nextState.renderer.domElement);
                 if (deps.animate) nextState.renderer.setAnimationLoop(deps.animate);
