@@ -7,7 +7,11 @@ import {
     getRendererPreference,
     getWebGlRendererParameters,
     getWebGpuRendererParameters,
+    getWebGpuRequiredFeatures,
+    wantsWebGpuTimestampQuery,
     WEBGPU_REQUIRED_LIMITS,
+    WEBGPU_CURATED_FEATURES,
+    WEBGPU_TIMESTAMP_QUERY_FEATURE,
     isXrRequested,
     getXrSnapDegrees,
 } from '../src/core/RendererFactory.js';
@@ -98,6 +102,50 @@ assert(getXrSnapDegrees(new URLSearchParams('xr-snap=5')) === 15, 'xr-snap clamp
         'WebGPU requiredLimits uses documented floor'
     );
 }
+
+// Curated WebGPU requiredFeatures: never grabs everything the adapter has.
+{
+    const fullFeatureSet = new Set([
+        'timestamp-query',
+        'float32-filterable',
+        'texture-compression-bc',
+    ]);
+    const noneRequested = getWebGpuRequiredFeatures(fullFeatureSet, { wantTimestampQuery: false });
+    assert(
+        noneRequested.length === WEBGPU_CURATED_FEATURES.length,
+        'requiredFeatures stays at the documented (currently empty) floor when timestamp query is not wanted'
+    );
+
+    const withTimestamp = getWebGpuRequiredFeatures(fullFeatureSet, { wantTimestampQuery: true });
+    assert(
+        withTimestamp.includes(WEBGPU_TIMESTAMP_QUERY_FEATURE),
+        'requiredFeatures includes timestamp-query when wanted and supported'
+    );
+    assert(
+        withTimestamp.length === WEBGPU_CURATED_FEATURES.length + 1,
+        'requiredFeatures adds exactly one feature for timestamp query, not the whole adapter set'
+    );
+
+    const noAdapterSupport = getWebGpuRequiredFeatures(new Set(), { wantTimestampQuery: true });
+    assert(
+        !noAdapterSupport.includes(WEBGPU_TIMESTAMP_QUERY_FEATURE),
+        'requiredFeatures never requests a feature the adapter does not report (requestDevice would reject)'
+    );
+}
+
+// ?debug-perf / ?gpu-timer opt into WebGPU timestamp tracking; neither by default.
+assert(
+    wantsWebGpuTimestampQuery(new URLSearchParams('')) === false,
+    'no timestamp query by default'
+);
+assert(
+    wantsWebGpuTimestampQuery(new URLSearchParams('debug-perf')) === true,
+    '?debug-perf opts into timestamp query'
+);
+assert(
+    wantsWebGpuTimestampQuery(new URLSearchParams('gpu-timer')) === true,
+    '?gpu-timer opts into timestamp query'
+);
 
 if (failed > 0) {
     console.error(`\n${failed} assertion(s) failed`);
