@@ -56,16 +56,13 @@ source "${SCRIPT_DIR}/emcc_flags.inc.sh"
 
 # DicePhysicsEngine member functions live in separate .cpp translation units
 # (see docs/WASM_ENGINE.md); dice_physics.cpp only holds the Embind bindings.
-ENGINE_SOURCES=(
-    "${SCRIPT_DIR}/dice_physics/dice_engine_lifecycle.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_step.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_collision_static.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_collision_dynamic.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_integrate.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_face_value.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_dynamics.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_solver.cpp"
-)
+# The source list itself lives in engine_sources.txt (single source of truth
+# shared with build_solver_test.sh and CMakeLists.txt).
+ENGINE_SOURCES=()
+while IFS= read -r rel; do
+    [[ -z "${rel}" || "${rel}" == \#* ]] && continue
+    ENGINE_SOURCES+=("${SCRIPT_DIR}/${rel}")
+done < "${SCRIPT_DIR}/engine_sources.txt"
 
 write_build_info() {
     local out_dir="$1"

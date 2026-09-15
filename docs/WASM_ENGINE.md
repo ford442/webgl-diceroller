@@ -296,13 +296,24 @@ Source layout:
 | `dice_physics.cpp`                               | Emscripten Embind exports for the WASM build (links against the `.cpp` files above)                    |
 | `solver_tests.cpp`                               | doctest unit + fuzz harness (`--dump-serialize`, `--bench`); also links against the `.cpp` files above |
 | `emcc_flags.inc.sh`                              | Single source of truth for Emscripten link flags                                                       |
+| `engine_sources.txt`                             | Single source of truth for the `dice_physics/dice_engine_*.cpp` list — read by `build.sh`, `build_solver_test.sh`, and `CMakeLists.txt` |
 | `build_solver_test.sh`                           | Native compile + run script; always writes `build-native/compile_commands.json`                        |
-| `.clangd`                                        | Points clangd at `build-native/compile_commands.json`                                                  |
+| `generate-clangd-db.sh`                          | Merges `build-native/compile_commands.json` with an emcc-configured `build-emcc/compile_commands.json` into `compile_commands.json` (`npm run wasm:clangd-db`) |
+| `.clangd`                                        | Points clangd at the merged `compile_commands.json` (`CompilationDatabase: .`)                          |
 | `CMakeLists.txt`                                 | Local IDE / advanced-user build (SIMD + scalar targets) — **not** the CI build; see below              |
 
-`build.sh`, `build_solver_test.sh`, and `CMakeLists.txt` each list the same
-`dice_physics/dice_engine_*.cpp` sources independently — keep the three
-lists in sync when adding a new module.
+Add a new engine module to `engine_sources.txt` once — `build.sh`,
+`build_solver_test.sh`, and `CMakeLists.txt` all read that list, so there is
+no second (or third) place to remember to update.
+
+By default clangd only sees the *native* compile commands, so
+`__EMSCRIPTEN__` / `__wasm_simd128__` branches in engine sources read as
+dead code in the editor. Run `npm run wasm:clangd-db` (needs an EMSDK on
+`PATH`, or checked out at `/root/emsdk`) to additionally configure
+`build-emcc/` via `emcmake cmake` and merge its compile commands in; without
+an EMSDK the script still produces a working native-only db instead of
+failing, so clangd keeps functioning, just without the emcc-only branches
+resolved.
 
 ### Runtime flags
 

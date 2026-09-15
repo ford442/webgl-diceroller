@@ -21,16 +21,13 @@ CXXFLAGS=(-std=c++17 -O2 -Wall -Wextra -Wpedantic -I"${SCRIPT_DIR}")
 
 # DicePhysicsEngine member functions live in separate .cpp translation units
 # (see docs/WASM_ENGINE.md); solver_tests.cpp only needs the class declaration.
-ENGINE_SOURCES=(
-    "${SCRIPT_DIR}/dice_physics/dice_engine_lifecycle.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_step.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_collision_static.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_collision_dynamic.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_integrate.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_face_value.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_dynamics.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_solver.cpp"
-)
+# The source list itself lives in engine_sources.txt (single source of truth
+# shared with build.sh and CMakeLists.txt).
+ENGINE_SOURCES=()
+while IFS= read -r rel; do
+    [[ -z "${rel}" || "${rel}" == \#* ]] && continue
+    ENGINE_SOURCES+=("${SCRIPT_DIR}/${rel}")
+done < "${SCRIPT_DIR}/engine_sources.txt"
 ALL_SOURCES=("${SCRIPT_DIR}/solver_tests.cpp" "${ENGINE_SOURCES[@]}")
 
 mkdir -p "${BUILD_DIR}"

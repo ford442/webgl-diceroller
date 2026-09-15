@@ -103,3 +103,18 @@ echo "ok: emcc release flags in sync (shell == CMake printer)"
 echo "ok: required size/determinism flags present; -ffast-math absent"
 echo "ok: release has -msimd128; scalar does not"
 echo "ok: compile lines carry codegen flags and differ between SIMD and scalar"
+
+# --- engine_sources.txt: every dice_physics/*.cpp module is registered, and
+# every registered module still exists. Catches the "added a .cpp, forgot to
+# list it" link-time surprise before it reaches a build. ---
+ENGINE_SOURCES_TXT="${WASM_DIR}/engine_sources.txt"
+mapfile -t LISTED < <(grep -vE '^\s*(#|$)' "${ENGINE_SOURCES_TXT}")
+for rel in "${LISTED[@]}"; do
+    [[ -f "${WASM_DIR}/${rel}" ]] || fail "engine_sources.txt lists '${rel}', which does not exist"
+done
+while IFS= read -r -d '' cpp; do
+    rel="dice_physics/$(basename "${cpp}")"
+    printf '%s\n' "${LISTED[@]}" | grep -qxF "${rel}" \
+        || fail "${cpp} is not listed in engine_sources.txt"
+done < <(find "${WASM_DIR}/dice_physics" -maxdepth 1 -name '*.cpp' -print0)
+echo "ok: engine_sources.txt matches dice_physics/*.cpp exactly"

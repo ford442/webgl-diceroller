@@ -16,19 +16,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ---------------------------------------------------------------------------
 # Source files — dice_physics.cpp (Embind bindings) + the DicePhysicsEngine
-# member-function translation units. Keep this list in sync with the
-# ENGINE_SOURCES arrays in build.sh and build_solver_test.sh.
+# member-function translation units. The list itself lives in
+# engine_sources.txt (single source of truth shared with build.sh and
+# build_solver_test.sh) — add a new engine .cpp there, not here.
 # ---------------------------------------------------------------------------
-set(ENGINE_SOURCES
-    dice_physics/dice_engine_lifecycle.cpp
-    dice_physics/dice_engine_step.cpp
-    dice_physics/dice_engine_collision_static.cpp
-    dice_physics/dice_engine_collision_dynamic.cpp
-    dice_physics/dice_engine_integrate.cpp
-    dice_physics/dice_engine_face_value.cpp
-    dice_physics/dice_engine_dynamics.cpp
-    dice_physics/dice_engine_solver.cpp
-)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/engine_sources.txt" ENGINE_SOURCES_RAW)
+set(ENGINE_SOURCES "")
+foreach(line IN LISTS ENGINE_SOURCES_RAW)
+    string(STRIP "${line}" line)
+    if(line STREQUAL "" OR line MATCHES "^#")
+        continue()
+    endif()
+    list(APPEND ENGINE_SOURCES "${line}")
+endforeach()
 
 add_executable(dice_physics
     dice_physics.cpp
