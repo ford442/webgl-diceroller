@@ -36,6 +36,16 @@ export function isHighQualityProfile(profile) {
 let nodeMaterialFactory = null;
 let nodeMaterialLoad = null;
 let backend = 'webgl';
+let degradation = null;
+
+/**
+ * Why the dice are not shading the way the descriptor asked, or `null` when
+ * they are. Surfaced so `?renderer-info` can report it rather than leaving a
+ * silently plainer die on the table.
+ */
+export function getDiceMaterialDegradation() {
+    return degradation;
+}
 
 /**
  * Which twin a renderer needs.
@@ -63,17 +73,27 @@ export function backendForRenderer(renderer) {
  */
 export async function setDiceMaterialBackend(next) {
     backend = next === 'webgpu' ? 'webgpu' : 'webgl';
-    if (backend !== 'webgpu') return;
+    if (backend !== 'webgpu') {
+        degradation = null;
+        return;
+    }
 
     nodeMaterialLoad ??= loadDiceFaceMarkingNodeMaterialFactory().then(
         (factory) => {
             nodeMaterialFactory = factory;
         },
         (error) => {
-            // A missing node backend is not worth a blank table: fall back to the
-            // GLSL twin, which a WebGPU renderer can still consume via its
-            // WebGL fallback path.
-            console.warn('[DiceMaterials] node material unavailable; using GLSL twin', error);
+            // `WebGPURenderer` adapts a plain material, so the body still shades
+            // and a hull's own baked markings still read — but it never runs
+            // `onBeforeCompile`, so the GLSL twin's atlas glyphs are lost. Say so
+            // rather than leaving an unexplained plainer die on the table.
+            degradation = 'webgpu-node-materials-unavailable';
+            console.warn(
+                '[DiceMaterials] three/tsl failed to load; dice fall back to the GLSL twin, ' +
+                    'whose atlas glyphs WebGPU cannot compile. Markings will be missing for any ' +
+                    'die whose descriptor differs from what its hull was authored with.',
+                error
+            );
             nodeMaterialLoad = null;
         }
     );

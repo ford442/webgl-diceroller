@@ -13,6 +13,7 @@ export {
     disposeDiceAppearance,
     setDiceRenderer,
     ensureDressedTemplate,
+    getDieTemplate,
     buildPreviewMaterials,
     applyDicePresencePayload,
     buildDicePresencePayload,

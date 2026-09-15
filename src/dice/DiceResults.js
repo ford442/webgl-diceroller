@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getWasmEngine } from '../wasm/PhysicsBridge.js';
-import { diceModels, spawnedDice, diceTypes } from './DiceState.js';
+import { spawnedDice, diceTypes } from './DiceState.js';
+import { getDieTemplate } from './DiceModels.js';
 import { isUsingWasmPhysics } from './DicePhysicsPresets.js';
 import { getDieQuaternion } from './DiceTransformRead.js';
 import { getWasmFaceValueForDie } from './DiceFaceValueRead.js';
@@ -11,7 +12,7 @@ const _localUp = new THREE.Vector3();
 
 /** Legacy visual-mesh face clusterer (debug fallback when the WASM engine value is 0). */
 export const readDiceValueVisual = (die) => {
-    const model = diceModels[die.type];
+    const model = getDieTemplate(die.type);
     if (!model) return null;
 
     const faceNormals = model.userData.faceNormals;
@@ -98,7 +99,7 @@ const debugEnabled =
 
 export const getDiceValueDebugSnapshot = () =>
     spawnedDice.map((die) => {
-        const model = diceModels[die.type];
+        const model = getDieTemplate(die.type);
         const faceNormals = model?.userData?.faceNormals ?? [];
         const faceValues = model?.userData?.faceValues ?? [];
         const engineValue = isUsingWasmPhysics() ? readNaturalDiceValue(die) : null;

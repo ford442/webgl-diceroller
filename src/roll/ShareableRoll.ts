@@ -1,4 +1,4 @@
-import type { DiceSet } from '../dice/DiceSetFormat.js';
+import { DIE_SHAPE_IDS, DIE_TYPE_CATALOG, type DiceSet } from '../dice/DiceSetFormat.js';
 import {
     LEGACY_LOOK_PARAM,
     LEGACY_LOOK_PARAM_ALIAS,
@@ -9,11 +9,23 @@ import { DICE_SET_PARAM, decodeDiceSet, encodeDiceSet } from '../dice/ShareableD
 /** URL replay format version — bump when solver/throw semantics change. */
 export const REPLAY_VERSION = 1;
 
-export const DICE_TYPES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'] as const;
+/**
+ * Die keys a shared roll can carry, derived from the catalog rather than listed.
+ *
+ * The shapes come first so an existing link keeps its ordering, but a derived
+ * type is just as rollable — a `4dF` roll has to survive a share link, and would
+ * silently serialise to nothing if this stayed a hand-written list of hulls.
+ */
+export const DICE_TYPES = [
+    ...DIE_SHAPE_IDS,
+    ...Object.keys(DIE_TYPE_CATALOG).filter(
+        (key) => !(DIE_SHAPE_IDS as readonly string[]).includes(key)
+    ),
+] as const;
 
-export type DiceType = (typeof DICE_TYPES)[number];
+export type DiceType = string;
 
-export type DiceCounts = Record<DiceType, number>;
+export type DiceCounts = Record<string, number>;
 
 export interface ShareableRollParams {
     seed: number;
@@ -55,6 +67,7 @@ export function parseDiceParam(raw: string | null | undefined): DiceCounts | nul
     if (!raw?.trim()) return null;
 
     const counts = Object.fromEntries(DICE_TYPES.map((type) => [type, 0])) as DiceCounts;
+    let named = 0;
     for (const part of raw.split(',')) {
         const trimmed = part.trim();
         if (!trimmed) continue;
@@ -62,11 +75,17 @@ export function parseDiceParam(raw: string | null | undefined): DiceCounts | nul
         if (colon < 0) continue;
         const type = trimmed.slice(0, colon).trim();
         const count = Number.parseInt(trimmed.slice(colon + 1), 10);
-        if (!DICE_TYPES.includes(type as DiceType) || !Number.isFinite(count) || count < 0)
+        if (
+            !(DICE_TYPES as readonly string[]).includes(type) ||
+            !Number.isFinite(count) ||
+            count < 0
+        )
             continue;
-        counts[type as DiceType] = Math.min(10, count);
+        counts[type] = Math.min(10, count);
+        named++;
     }
 
+    if (named === 0) return null;
     const total = DICE_TYPES.reduce((sum, type) => sum + counts[type], 0);
     return total > 0 ? counts : null;
 }
