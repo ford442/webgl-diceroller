@@ -11,26 +11,6 @@
         "lib": ["ES2022", "DOM", "WebWorker"],
         "types": ["node"]
     },
-    "include": [
-        "src/types/**/*.d.ts",
-        "src/wasm/physicsTypes.d.ts",
-        "src/wasm/physicsFlags.ts",
-        "src/wasm/workerLayout.ts",
-        "src/wasm/workerCommands.ts",
-        "src/wasm/staticColliders.ts",
-        "src/wasm/seededThrowParams.ts",
-        "src/wasm/dice_physics.worker.ts",
-        "src/wasm/WorkerPhysicsBridge.ts",
-        "src/roll/**/*.ts",
-        "src/net/Protocol.ts",
-        "src/net/SignalingClient.ts",
-        "src/net/CommitReveal.ts",
-        "src/net/protocolFlags.ts",
-        "src/session/SessionState.ts",
-        "src/core/AppEvents.ts",
-        "src/core/AppContext.ts",
-        "src/core/FrameScheduler.ts",
-        "src/core/RendererFactory.ts"
-    ],
+    "include": ["src/**/*.ts", "src/types/**/*.d.ts", "src/global.d.ts"],
     "exclude": ["node_modules", "dist", "public"]
 }

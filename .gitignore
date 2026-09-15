@@ -1,6 +1,7 @@
 node_modules/
 dist/
 verification/
+coverage/
 *.log
 /render-regression-*.png
 /godrays-*.png

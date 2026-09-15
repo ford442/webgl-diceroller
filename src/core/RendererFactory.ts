@@ -242,7 +242,14 @@ export async function describeWebGpuLimitMismatches(
     requiredLimits: Record<string, number> = WEBGPU_REQUIRED_LIMITS
 ): Promise<string | null> {
     try {
-        const gpu = typeof navigator !== 'undefined' ? navigator.gpu : undefined;
+        // Cast locally rather than relying on the ambient `Navigator.gpu`
+        // augmentation (src/global.d.ts) — under tsconfig.strict.json's
+        // broader lib/type set that augmentation resolves through a
+        // fragile @types/node conditional type and loses its shape.
+        const nav = typeof navigator !== 'undefined' ? navigator : undefined;
+        const gpu = (
+            nav as { gpu?: { requestAdapter(opts?: unknown): Promise<{ limits: unknown } | null> } }
+        )?.gpu;
         if (!gpu?.requestAdapter) return 'navigator.gpu.requestAdapter missing';
         const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
         if (!adapter) return 'no WebGPU adapter';

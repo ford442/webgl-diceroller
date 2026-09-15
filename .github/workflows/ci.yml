@@ -41,11 +41,7 @@ jobs:
             - run: npm run check:bundle-size
             - run: npm run check:deploy-size
             - run: npm run check:cycles
-            - run: npm run test:unit
-            - run: npm run test:notation
-            - run: npm run test:share-roll
-            - run: npm run test:multiplayer-protocol
-            - run: npm run test:simd-support
+            - run: npm run test:unit:coverage
             - run: npm run audit:prop-colliders
             - run: npm run verify:renderer-factory
 
@@ -220,6 +216,7 @@ jobs:
                     - test:wasm-gameplay-loop
                     - test:share-roll-replay
                     - test:a11y
+                    - test:mobile-touch
                     - verify:clutter-unification
         steps:
             - uses: actions/checkout@v5
