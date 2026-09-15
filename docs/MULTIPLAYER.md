@@ -57,6 +57,17 @@ The Worker routes each room code to a Durable Object (`RoomDurableObject`). Pers
 
 Rebuild-required UX: any behavioural solver change bumps `SOLVER_REVISION` in `dice_contacts.hpp` (and therefore `solver_revision` in `build-info.json`). Clients send that identity at join; a guest on an older WASM build is rejected with `solver_build_mismatch` until they load a matching `npm run build:wasm` artifact. That is the intended safety net for seeded replay — do not work around it by clearing the room id.
 
+### Solver revision history
+
+| Revision | Change |
+| -------- | ------ |
+| 4        | `WARM_START_FACTOR` enabled (0.0 → 0.85): manifold points now carry forward 85% of the prior substep's accumulated normal/friction impulse instead of solving cold every substep. Settle time and stack behaviour changed; goldens regenerated (`tests/fixtures/solver-golden.json`, `solver_tests.cpp`). |
+| 3        | Solver v2: persistent contact manifolds, islands, speculative contacts (pre-dates this table). |
+
+### Seed width (`seedRNG`)
+
+`seedRNG` takes a `uint64_t` on the native/WASM engine side (`-s WASM_BIGINT=1`; the Embind binding no longer narrows to `uint32_t`). The public `seedPhysicsRNG()`/worker bridge entry points still accept a JS `number` and widen it losslessly to a `BigInt` before crossing into WASM — the `seed >>> 0` truncation at the WASM boundary is gone. The commit-reveal wire format (`CommitReveal.ts`) and `RoomSession`/`Protocol.ts` seed field are unchanged for this revision (still a 32-bit `number`): widening what multiplayer peers negotiate as "the seed" is a protocol-version change, not a solver-engine one, and is tracked separately.
+
 ## Protocol (DataChannel JSON)
 
 Default wire version: `PROTOCOL_VERSION = 1` ([`src/net/Protocol.ts`](src/net/Protocol.ts)). With `?fair-commit`, clients negotiate v2.

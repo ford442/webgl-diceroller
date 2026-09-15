@@ -20,7 +20,13 @@ static constexpr int POSITION_ITERATIONS = 2;
 static constexpr float CONTACT_SLOP = 0.008f;
 static constexpr float BAUMGARTE = 0.05f;
 static constexpr float RESTITUTION_THRESHOLD = 6.0f;
-static constexpr float WARM_START_FACTOR = 0.0f;
+// Carry forward this fraction of last substep's accumulated normal/friction
+// impulses into a manifold point that matches by featureId. 0.85 (rather
+// than 1.0) damps the "double warm-start" spike a bouncing contact can
+// otherwise inherit while a stack settles. Was 0.0 (fully cold every
+// substep) while solver v2's manifold/island rewrite stabilized; re-enabling
+// it changes settle time and bumps SOLVER_REVISION — see MULTIPLAYER.md.
+static constexpr float WARM_START_FACTOR = 0.85f;
 static constexpr float MAX_LINEAR_SPEED = 80.0f;
 static constexpr float MAX_ANGULAR_SPEED = 80.0f;
 static constexpr float LINEAR_DAMPING = 0.05f;
@@ -31,7 +37,7 @@ static constexpr float SLEEP_SPEED_THRESHOLD = 0.15f;
 static constexpr float SLEEP_DELAY = 0.5f;
 
 /** Snapshot + solver protocol. Bump when manifolds / impulses change behaviour. */
-static constexpr uint32_t SOLVER_REVISION = 3;
+static constexpr uint32_t SOLVER_REVISION = 4;
 
 enum class ManifoldKind : uint8_t {
     DieDie = 0,

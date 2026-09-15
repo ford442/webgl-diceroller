@@ -455,8 +455,11 @@ TEST_CASE("Golden traces: seed and parity hashes are stable") {
     runParity(p1);
     runParity(p2);
     CHECK(p1.hashSerializedState() == p2.hashSerializedState());
-    CHECK(p1.hashSerializedState() == 0x16a0c37d01d80318ULL);
-    CHECK(a.hashSerializedState() == 0x4f98b38ccd2d733cULL);
+    // Hashes below are SOLVER_REVISION-pinned; regenerate with
+    // `solver_tests --dump-golden` (see scripts/compare-solver-golden.mjs and
+    // tests/fixtures/solver-golden.json) whenever SOLVER_REVISION bumps.
+    CHECK(p1.hashSerializedState() == 0xb8d505d0f307ead7ULL);
+    CHECK(a.hashSerializedState() == 0x5cace3a515f7c61dULL);
 }
 
 TEST_CASE("Determinism: same seed yields identical serialize output") {
