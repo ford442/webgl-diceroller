@@ -64,6 +64,7 @@ ENGINE_SOURCES=(
     "${SCRIPT_DIR}/dice_physics/dice_engine_integrate.cpp"
     "${SCRIPT_DIR}/dice_physics/dice_engine_face_value.cpp"
     "${SCRIPT_DIR}/dice_physics/dice_engine_dynamics.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_solver.cpp"
 )
 
 write_build_info() {
@@ -74,6 +75,8 @@ write_build_info() {
     emcc_full_version="$(em++ --version 2>/dev/null | head -n1 || echo unknown)"
     emcc_version="$(echo "${emcc_full_version}" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo unknown)"
     git_sha="$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    local solver_revision
+    solver_revision="$(grep -E 'SOLVER_REVISION' "${SCRIPT_DIR}/dice_physics/dice_contacts.hpp" | head -n1 | grep -oE '[0-9]+' | tail -n1 || echo 0)"
     built_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     js_bytes="$(wc -c < "${out_dir}/dice_physics.js" | tr -d ' ')"
     wasm_bytes="$(wc -c < "${out_dir}/dice_physics.wasm" | tr -d ' ')"
@@ -119,6 +122,7 @@ write_build_info() {
   "emcc_full_version": $(printf '%s' "${emcc_full_version}" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().strip()))'),
   "flags": ${flags_json},
   "git_sha": "${git_sha}",
+  "solver_revision": ${solver_revision},
   "built_at": "${built_at}",
   "artifacts": {
     "js_bytes": ${js_bytes},

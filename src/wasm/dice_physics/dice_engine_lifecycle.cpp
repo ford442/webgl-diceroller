@@ -20,7 +20,7 @@ void DicePhysicsEngine::setFlags(uint32_t flags) {
 void DicePhysicsEngine::init(float gravity, float tableY, float tableHalfW, float tableHalfD) {
     gravity_ = gravity; tableY_ = tableY;
     tableHalfW_ = tableHalfW; tableHalfD_ = tableHalfD;
-    bodies_.clear(); contacts_.clear(); events_.clear();
+    bodies_.clear(); manifolds_.clear(); events_.clear();
     statics_.clear();
     dynamics_.clear();
     nextId_ = 0;
@@ -33,7 +33,7 @@ void DicePhysicsEngine::init(float gravity, float tableY, float tableHalfW, floa
 }
 
 void DicePhysicsEngine::reset() {
-    bodies_.clear(); contacts_.clear(); events_.clear(); statics_.clear(); dynamics_.clear();
+    bodies_.clear(); manifolds_.clear(); events_.clear(); statics_.clear(); dynamics_.clear();
     nextId_ = 0;
     staticCapacityDroppedCount_ = 0;
     dynamicCapacityDroppedCount_ = 0;
@@ -62,7 +62,7 @@ void DicePhysicsEngine::removeDie(int id) {
         bodies_.end());
 }
 
-void DicePhysicsEngine::clearAllDice() { bodies_.clear(); contacts_.clear(); events_.clear(); }
+void DicePhysicsEngine::clearAllDice() { bodies_.clear(); manifolds_.clear(); events_.clear(); }
 
 void DicePhysicsEngine::setDieMaterial(int id, float friction, float rollingFriction) {
     for (auto& b : bodies_) {

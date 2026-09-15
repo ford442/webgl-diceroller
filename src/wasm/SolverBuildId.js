@@ -20,7 +20,7 @@ export async function loadSolverBuildId(searchParams) {
         if (!res.ok) return 'unknown';
         const data = await res.json();
         const sha = String(data?.git_sha || '').trim();
-        cachedSolverBuildId = sha || 'unknown';
+        cachedSolverBuildId = `${data?.solver_revision ?? 0}:${sha || 'unknown'}`;
         return cachedSolverBuildId;
     } catch {
         cachedSolverBuildId = 'unknown';

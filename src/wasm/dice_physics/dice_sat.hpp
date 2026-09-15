@@ -146,12 +146,17 @@ inline void projectHullOntoAxis(const Vec3* pts, int count, const Vec3& axis,
 #endif
 }
 
-inline bool satTest(const PolyHull& ha, const Vec3& posA, const Quat& rotA,
-                    const PolyHull& hb, const Vec3& posB, const Quat& rotB,
-                    Vec3& outNormal, float& outPenetration, Vec3& outContact) {
+inline bool satTestFromWorld(
+    const PolyHull& ha, const Vec3& posA, const Quat& rotA, const Vec3* wa,
+    const PolyHull& hb, const Vec3& posB, const Quat& rotB, const Vec3* wb,
+    Vec3& outNormal, float& outPenetration, Vec3& outContact,
+    uint32_t* outFeatureId = nullptr, bool* outNormalFromA = nullptr,
+    float speculativeMargin = 1e-3f
+) {
     const int MAX_AXES = 256;
     Vec3 axes[MAX_AXES];
     int axisCount = 0;
+    int bestAxis = 0;
 
     for (const auto& n : ha.faceNormals) axes[axisCount++] = rotA.rotate(n);
     for (const auto& n : hb.faceNormals) axes[axisCount++] = rotB.rotate(n);
@@ -171,14 +176,17 @@ inline bool satTest(const PolyHull& ha, const Vec3& posA, const Quat& rotA,
         }
     }
 
-    Vec3 wa[32], wb[32];
+    if (axisCount <= 0) return false;
+
     int na = static_cast<int>(ha.verts.size());
     int nb = static_cast<int>(hb.verts.size());
-    transformHullVerts(ha.verts.data(), na, rotA, posA, wa);
-    transformHullVerts(hb.verts.data(), nb, rotB, posB, wb);
 
     outPenetration = 1e20f;
     bool normalFromA = true;
+    const Vec3 deltaCenters = posB - posA;
+    const float deltaLen = deltaCenters.length();
+    const Vec3 deltaDir = deltaLen > 1e-6f ? deltaCenters * (1.0f / deltaLen) : Vec3{0, 1, 0};
+    float bestAlign = -1.0f;
 
     for (int ai = 0; ai < axisCount; ++ai) {
         const Vec3& axis = axes[ai];
@@ -187,29 +195,56 @@ inline bool satTest(const PolyHull& ha, const Vec3& posA, const Quat& rotA,
         projectHullOntoAxis(wa, na, axis, minA, maxA);
         projectHullOntoAxis(wb, nb, axis, minB, maxB);
         float overlap = std::min(maxA, maxB) - std::max(minA, minB);
-        if (overlap < -1e-3f) return false;
-        if (overlap < outPenetration) {
+        if (overlap < -speculativeMargin) return false;
+        const float align = std::abs(Vec3::dot(axis, deltaDir));
+        const bool strictlyBetter = overlap < outPenetration - 1e-4f;
+        const bool tieBreak = std::abs(overlap - outPenetration) <= 1e-4f && align > bestAlign;
+        if (strictlyBetter || tieBreak) {
             outPenetration = overlap;
             outNormal = axis;
             normalFromA = (maxA - minA) < (maxB - minB);
+            bestAxis = ai;
+            bestAlign = align;
         }
     }
 
     if (Vec3::dot(outNormal, posB - posA) < 0) outNormal = outNormal * -1.0f;
 
     float deepest = -1e20f;
+    int supportIndex = 0;
     if (normalFromA) {
         for (int i = 0; i < nb; ++i) {
             float d = Vec3::dot(wb[i] - posA, outNormal);
-            if (d > deepest) { deepest = d; outContact = wb[i]; }
+            if (d > deepest) { deepest = d; outContact = wb[i]; supportIndex = i; }
         }
     } else {
         for (int i = 0; i < na; ++i) {
             float d = Vec3::dot(wa[i] - posB, outNormal * -1.0f);
-            if (d > deepest) { deepest = d; outContact = wa[i]; }
+            if (d > deepest) { deepest = d; outContact = wa[i]; supportIndex = i; }
         }
     }
+    if (outFeatureId) {
+        *outFeatureId = (static_cast<uint32_t>(bestAxis) << 16) |
+                        (static_cast<uint32_t>(supportIndex) & 0xFFFFu);
+    }
+    if (outNormalFromA) *outNormalFromA = normalFromA;
     return true;
+}
+
+inline bool satTest(const PolyHull& ha, const Vec3& posA, const Quat& rotA,
+                    const PolyHull& hb, const Vec3& posB, const Quat& rotB,
+                    Vec3& outNormal, float& outPenetration, Vec3& outContact,
+                    uint32_t* outFeatureId = nullptr, bool* outNormalFromA = nullptr,
+                    float speculativeMargin = 1e-3f) {
+    Vec3 wa[64], wb[64];
+    int na = static_cast<int>(ha.verts.size());
+    int nb = static_cast<int>(hb.verts.size());
+    if (na > 64 || nb > 64) return false;
+    transformHullVerts(ha.verts.data(), na, rotA, posA, wa);
+    transformHullVerts(hb.verts.data(), nb, rotB, posB, wb);
+    return satTestFromWorld(ha, posA, rotA, wa, hb, posB, rotB, wb,
+                            outNormal, outPenetration, outContact,
+                            outFeatureId, outNormalFromA, speculativeMargin);
 }
 
 inline void sphereContact(const RigidBody& a, const RigidBody& b,

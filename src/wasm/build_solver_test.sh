@@ -29,6 +29,7 @@ ENGINE_SOURCES=(
     "${SCRIPT_DIR}/dice_physics/dice_engine_integrate.cpp"
     "${SCRIPT_DIR}/dice_physics/dice_engine_face_value.cpp"
     "${SCRIPT_DIR}/dice_physics/dice_engine_dynamics.cpp"
+    "${SCRIPT_DIR}/dice_physics/dice_engine_solver.cpp"
 )
 ALL_SOURCES=("${SCRIPT_DIR}/solver_tests.cpp" "${ENGINE_SOURCES[@]}")
 
@@ -103,6 +104,9 @@ NODE
 
 echo "[test:solver] Running unit + fuzz tests..."
 (cd "${REPO_ROOT}" && "${BIN}")
+
+echo "[test:solver] Checking golden traces..."
+node "${REPO_ROOT}/scripts/compare-solver-golden.mjs" "${BIN}"
 
 if [ -f "${REPO_ROOT}/public/wasm/dice_physics.wasm" ]; then
     echo "[test:solver] WASM artifacts found — running native↔WASM parity check..."

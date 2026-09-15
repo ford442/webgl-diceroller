@@ -14,12 +14,13 @@
 #pragma once
 
 #include <cstdint>
-#include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "dice_physics/dice_math.hpp"
 #include "dice_physics/dice_types.hpp"
+#include "dice_physics/dice_contacts.hpp"
 #include "dice_physics/dice_sat.hpp"
 
 namespace dice_physics {
@@ -186,6 +187,7 @@ public:
     std::vector<std::pair<size_t, size_t>> collectDiePairsForTesting(bool useBroadphase);
 
     bool areAllSettled() const;
+    bool hasDice() const { return !bodies_.empty(); }
 
     const std::vector<float>& buildTransformBuffer();
 
@@ -201,6 +203,10 @@ public:
     std::vector<uint8_t> serializeState() const;
 
     void deserializeState(const std::vector<uint8_t>& data);
+
+    uint64_t hashSerializedState() const;
+
+    float maxTablePenetration() const;
 
     // Test / fuzz invariant helpers
     bool allBodyStatesFinite() const;
@@ -244,7 +250,7 @@ private:
     std::vector<RigidBody> bodies_;
     std::vector<StaticBody> statics_;
     std::vector<DynamicBody> dynamics_;
-    std::vector<Contact> contacts_;
+    std::vector<ContactManifold> manifolds_;
     std::vector<CollisionEvent> events_;
     std::vector<ContainerPlane> containerPlanes_;
     mutable std::vector<float> transformBuffer_;
@@ -285,26 +291,56 @@ private:
     static int staticEventOtherId(int userId);
     static int dynamicEventOtherId(int userId);
 
-    void resolveStaticPlane(RigidBody& b, const Vec3& n, float d, const StaticBody& s);
-    void resolveStaticHull(RigidBody& b, const StaticBody& s);
-    void resolveStaticOpenCylinder(RigidBody& b, const StaticBody& s);
-    void resolveStaticCollisions(RigidBody& b, float dt);
-    void resolveContainerCollisions(RigidBody& b, float dt);
-    void resolveTableCollision(RigidBody& b, float dt);
+    void resolveStaticPlane(RigidBody& b, const Vec3& n, float d, const StaticBody& s, float spec);
+    void resolveStaticHull(RigidBody& b, const StaticBody& s, float spec);
+    void resolveStaticOpenCylinder(RigidBody& b, const StaticBody& s, float spec);
+    void generateStaticContacts(RigidBody& b, size_t dieIndex, float spec);
+    void generateContainerContacts(RigidBody& b, size_t dieIndex, float spec);
+    void generateTableContacts(RigidBody& b, size_t dieIndex, float spec);
+    void generateWallContacts(RigidBody& b, size_t dieIndex, float spec);
 
     static void wake(RigidBody& b);
     void integrate(RigidBody& b, float dt);
     void checkSleep(RigidBody& b, float dt) const;
+    void refreshDieDerived(RigidBody& b) const;
+    void refreshDynamicDerived(DynamicBody& b) const;
 
     void ensureDieGridDimensions();
     int bodyCellXMin(float x, float radius) const;
     int bodyCellXMax(float x, float radius) const;
     int bodyCellZMin(float z, float radius) const;
     int bodyCellZMax(float z, float radius) const;
-    void rebuildDieGrid();
-    void forEachDiePair(const std::function<void(size_t, size_t)>& fn);
-    void processDiePair(size_t i, size_t j, StepStats& stats);
-    void resolveDieCollisions(float dt, StepStats& stats);
+    void rebuildDieGrid(float expand);
+    template <typename Fn>
+    void forEachDiePair(Fn&& fn, float expand = 0.0f);
+    void processDiePair(size_t i, size_t j, StepStats& stats, float spec);
+    void generateDieDieContacts(float spec, StepStats& stats);
+
+    ContactManifold* matchManifold(ManifoldKind kind, int idA, int idB, int aux);
+    void commitManifoldPoints(ContactManifold& m, ContactPoint* pts, int count, const Vec3& normal);
+    void addPlaneContacts(
+        ManifoldKind kind, int idA, int idB, int aux,
+        int indexA, int indexB,
+        const Vec3& normal, float planeD,
+        const std::vector<Vec3>& worldVerts, const Vec3& fallbackPoint, float fallbackRadius,
+        float spec, float friction, float restitution
+    );
+    void addSatContacts(
+        ManifoldKind kind, int idA, int idB, int aux,
+        int indexA, int indexB,
+        const PolyHull& ha, const Vec3& posA, const Quat& rotA, const std::vector<Vec3>& wa,
+        const PolyHull& hb, const Vec3& posB, const Quat& rotB, const std::vector<Vec3>& wb,
+        float spec, float friction, float restitution, StepStats* stats
+    );
+    void generateContacts(float dt, StepStats& stats);
+    void warmStartManifolds();
+    void prepareVelocityConstraints(float dt);
+    void solveVelocityConstraints(float dt);
+    void solvePositionConstraints();
+    void solveContacts(float dt);
+    void updateIslandSleep(float dt);
+    float speculativeFor(const Vec3& velocity, float dt) const;
+    bool bindViews(ContactManifold& m, BodyView& a, BodyView& b, WorldAnchor& world);
 
     // -- Dynamic (non-die) rigid-body props -----------------------------
     static float inertiaScalar(const DynamicBody& b);
@@ -321,16 +357,64 @@ private:
     void integrateDynamic(DynamicBody& b, float dt);
     void checkSleepDynamic(DynamicBody& b, float dt) const;
 
-    void resolveDynamicStaticPlane(DynamicBody& b, const Vec3& n, float d, const StaticBody& s);
-    void resolveDynamicStaticHull(DynamicBody& b, const StaticBody& s);
-    void resolveDynamicStaticOpenCylinder(DynamicBody& b, const StaticBody& s);
-    void resolveDynamicStaticCollisions(DynamicBody& b);
-    void resolveDynamicContainerCollisions(DynamicBody& b);
-    void resolveDynamicTableCollision(DynamicBody& b);
+    void resolveDynamicStaticPlane(DynamicBody& b, const Vec3& n, float d, const StaticBody& s, float spec);
+    void resolveDynamicStaticHull(DynamicBody& b, const StaticBody& s, float spec);
+    void resolveDynamicStaticOpenCylinder(DynamicBody& b, const StaticBody& s, float spec);
+    void generateDynamicStaticContacts(DynamicBody& b, size_t dynIndex, float spec);
+    void generateDynamicContainerContacts(DynamicBody& b, size_t dynIndex, float spec);
+    void generateDynamicTableContacts(DynamicBody& b, size_t dynIndex, float spec);
+    void generateDynamicWallContacts(DynamicBody& b, size_t dynIndex, float spec);
 
-    void resolveDieDynamicContacts(StepStats& stats);
-    void resolveDynamicDynamicContacts(StepStats& stats);
-    void stepDynamics(float dt, StepStats& stats);
+    void generateDieDynamicContacts(float spec, StepStats& stats);
+    void generateDynamicDynamicContacts(float spec, StepStats& stats);
 };
+
+template <typename Fn>
+void DicePhysicsEngine::forEachDiePair(Fn&& fn, float expand) {
+    if (!useBroadphase_ || bodies_.size() < 2) {
+        for (size_t i = 0; i < bodies_.size(); ++i) {
+            for (size_t j = i + 1; j < bodies_.size(); ++j) {
+                fn(i, j);
+            }
+        }
+        return;
+    }
+
+    rebuildDieGrid(expand);
+    for (int cz = 0; cz < gridRows_; ++cz) {
+        for (int cx = 0; cx < gridCols_; ++cx) {
+            const auto& cell = dieGridCells_[static_cast<size_t>(cz * gridCols_ + cx)];
+
+            for (size_t ai = 0; ai < cell.size(); ++ai) {
+                for (size_t bi = ai + 1; bi < cell.size(); ++bi) {
+                    fn(cell[ai], cell[bi]);
+                }
+            }
+
+            for (int dz = 0; dz <= 1; ++dz) {
+                const int dxStart = dz == 0 ? 1 : -1;
+                for (int dx = dxStart; dx <= 1; ++dx) {
+                    if (dx == 0 && dz == 0) continue;
+                    const int nx = cx + dx;
+                    const int nz = cz + dz;
+                    if (nx < 0 || nx >= gridCols_ || nz < 0 || nz >= gridRows_) continue;
+                    if (nz < cz || (nz == cz && nx <= cx)) continue;
+
+                    const auto& neighbor =
+                        dieGridCells_[static_cast<size_t>(nz * gridCols_ + nx)];
+                    for (size_t a : cell) {
+                        for (size_t b : neighbor) {
+                            if (a < b) {
+                                fn(a, b);
+                            } else if (b < a) {
+                                fn(b, a);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 } // namespace dice_physics

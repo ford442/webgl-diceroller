@@ -264,6 +264,11 @@ npm run test:solver
 FUZZ_SEEDS=500 npm run test:solver
 ```
 
+`test:solver` also runs `scripts/compare-solver-golden.mjs` against
+`tests/fixtures/solver-golden.json` (FNV-1a of `serializeState()` after named
+scenarios). Behavioural solver changes must bump `SOLVER_REVISION` in
+`dice_contacts.hpp` and update that fixture via `solver_tests --dump-golden`.
+
 When `public/wasm/dice_physics.wasm` is present (after `npm run build:wasm`), the
 same script also runs a native↔WASM `serializeState()` parity check (fixed-literal
 scenario; no PRNG) via `scripts/compare-solver-wasm.mjs`.
@@ -283,11 +288,13 @@ Source layout:
 | `dice_physics/dice_math.hpp`                     | `Vec3`, `Quat`, `Mat3`, `PolyHull`                                                                     |
 | `dice_physics/dice_types.hpp`                    | `RigidBody`, `Contact`, `CollisionEvent`, `StaticBody`, etc.                                           |
 | `dice_physics/dice_sat.hpp`                      | SAT narrowphase helpers + `DeterministicRNG` (header-only; shared by multiple TUs)                     |
+| `dice_physics/dice_contacts.hpp`                 | Manifold types, sequential-impulse constants, `SOLVER_REVISION`                                        |
 | `dice_physics/dice_engine_lifecycle.cpp`         | Engine construction, per-die setters, static-collider registration                                     |
 | `dice_physics/dice_engine_step.cpp`              | `step()`, buffer builders, serialize/deserialize, invariant helpers                                    |
-| `dice_physics/dice_engine_collision_static.cpp`  | Static-collider + container-plane collision resolution                                                 |
-| `dice_physics/dice_engine_collision_dynamic.cpp` | Die–die broadphase grid, narrowphase, and contact solver                                               |
-| `dice_physics/dice_engine_integrate.cpp`         | Per-body integration, table/floor collision, sleep bookkeeping                                         |
+| `dice_physics/dice_engine_collision_static.cpp`  | Shared helpers (radius, events, static materials) — contact generation is in `dice_engine_solver.cpp`  |
+| `dice_physics/dice_engine_collision_dynamic.cpp` | Die–die grid helpers used by tests                                                                     |
+| `dice_physics/dice_engine_integrate.cpp`         | Per-body integration, exponential damping, sleep bookkeeping                                           |
+| `dice_physics/dice_engine_solver.cpp`            | Persistent manifolds, sequential impulse, speculative contacts, island sleep                           |
 | `dice_physics/dice_engine_face_value.cpp`        | Engine-authoritative die face settlement                                                               |
 | `dice_physics.cpp`                               | Emscripten Embind exports for the WASM build (links against the `.cpp` files above)                    |
 | `solver_tests.cpp`                               | doctest unit + fuzz harness (`--dump-serialize`, `--bench`); also links against the `.cpp` files above |

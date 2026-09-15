@@ -48,6 +48,10 @@ struct RigidBody {
     float sleepTimer  = 0.0f;
     bool  kinematic   = false;
 
+    std::vector<Vec3> worldVerts;
+    std::vector<Vec3> worldFaceNormals;
+    std::vector<Vec3> worldEdgeDirs;
+
     std::vector<FaceEntry> faceTable;
 
     void computeInertiaFromHull() {
@@ -172,6 +176,10 @@ struct DynamicBody {
     bool  sleeping   = false;
     float sleepTimer = 0.0f;
     bool  kinematic  = false;
+
+    std::vector<Vec3> worldVerts;
+    std::vector<Vec3> worldFaceNormals;
+    std::vector<Vec3> worldEdgeDirs;
 
     void computeInertiaFromHull() {
         const float sphereI = std::max(0.4f * mass * radius * radius, 1e-8f);
