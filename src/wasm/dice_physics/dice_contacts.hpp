@@ -37,7 +37,7 @@ static constexpr float SLEEP_SPEED_THRESHOLD = 0.15f;
 static constexpr float SLEEP_DELAY = 0.5f;
 
 /** Snapshot + solver protocol. Bump when manifolds / impulses change behaviour. */
-static constexpr uint32_t SOLVER_REVISION = 6;
+static constexpr uint32_t SOLVER_REVISION = 7;
 
 enum class ManifoldKind : uint8_t {
     DieDie = 0,
@@ -103,15 +103,24 @@ struct BodyView {
     const Quat* rotation = nullptr;
     float invMass = 0.0f;
     Vec3 invInertia{};
+    // R * diag(invInertia) * R^T for the current `rotation`, set once by
+    // viewDie/viewDyn at BodyView construction time (see inertiaWorldMat3 in
+    // dice_sat.hpp — computed here rather than in RigidBody/DynamicBody
+    // themselves because a BodyView is always freshly rebuilt from the live
+    // body right before use, so there is no separate cache-invalidation path
+    // to keep in sync; a body-resident cache would need updating at every
+    // site that mutates rotation or invInertia, which is easy to miss).
+    // solveVelocityConstraints rebuilds a BodyView once per (iteration,
+    // manifold) and then calls applyInvInertiaWorld up to ~3x per contact
+    // point against it — precomputing this here turns each of those calls
+    // into one Mat3::mul instead of two quaternion rotates re-deriving the
+    // same rotation.
+    Mat3 invInertiaWorldMat = Mat3::diagonal(0.0f, 0.0f, 0.0f);
     bool kinematic = true;
 
     Vec3 applyInvInertiaWorld(const Vec3& v) const {
         if (!rotation || kinematic) return {};
-        Vec3 local = rotation->conjugate().rotate(v);
-        local.x *= invInertia.x;
-        local.y *= invInertia.y;
-        local.z *= invInertia.z;
-        return rotation->rotate(local);
+        return invInertiaWorldMat.mul(v);
     }
 
     void applyImpulse(const Vec3& impulse, const Vec3& r) {

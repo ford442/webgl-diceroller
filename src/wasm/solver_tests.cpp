@@ -150,6 +150,52 @@ TEST_CASE("Quaternion integration stays unit length") {
     }
 }
 
+TEST_CASE("inertiaWorldMat3 matches the quaternion double-rotate it replaces") {
+    // BodyView::applyInvInertiaWorld used to do
+    // rot.rotate(invInertiaLocal-scaled rot.conjugate().rotate(v)) on every
+    // call; it now does inertiaWorldMat3(rot, invInertiaLocal).mul(v) once
+    // per BodyView construction. Same math, different FP operation order
+    // (hence the SOLVER_REVISION bump), so this checks the two formulas
+    // agree within float tolerance across many rotations/vectors/inertias
+    // rather than assuming the algebra transcribed correctly.
+    auto oldFormula = [](const Quat& rot, const Vec3& invInertiaLocal, const Vec3& v) {
+        Vec3 local = rot.conjugate().rotate(v);
+        local.x *= invInertiaLocal.x;
+        local.y *= invInertiaLocal.y;
+        local.z *= invInertiaLocal.z;
+        return rot.rotate(local);
+    };
+
+    DeterministicRNG rng;
+    rng.seed(0xB0D7710Aull);
+    for (int i = 0; i < 5000; ++i) {
+        Quat rot{
+            rng.nextFloat() * 2.0f - 1.0f,
+            rng.nextFloat() * 2.0f - 1.0f,
+            rng.nextFloat() * 2.0f - 1.0f,
+            rng.nextFloat() * 2.0f - 1.0f,
+        };
+        rot = rot.normalized();
+        Vec3 invInertia{
+            rng.nextFloat() * 5.0f,
+            rng.nextFloat() * 5.0f,
+            rng.nextFloat() * 5.0f,
+        };
+        Vec3 v{
+            rng.nextFloat() * 20.0f - 10.0f,
+            rng.nextFloat() * 20.0f - 10.0f,
+            rng.nextFloat() * 20.0f - 10.0f,
+        };
+
+        Vec3 want = oldFormula(rot, invInertia, v);
+        Vec3 got = inertiaWorldMat3(rot, invInertia).mul(v);
+
+        CHECK(got.x == doctest::Approx(want.x).epsilon(1e-4));
+        CHECK(got.y == doctest::Approx(want.y).epsilon(1e-4));
+        CHECK(got.z == doctest::Approx(want.z).epsilon(1e-4));
+    }
+}
+
 TEST_CASE("PRNG golden sequence") {
     DeterministicRNG rng;
     rng.seed(0x123456789ABCDEF0ULL);
@@ -458,8 +504,8 @@ TEST_CASE("Golden traces: seed and parity hashes are stable") {
     // Hashes below are SOLVER_REVISION-pinned; regenerate with
     // `solver_tests --dump-golden` (see scripts/compare-solver-golden.mjs and
     // tests/fixtures/solver-golden.json) whenever SOLVER_REVISION bumps.
-    CHECK(p1.hashSerializedState() == 0xb8d505d0f307ead7ULL);
-    CHECK(a.hashSerializedState() == 0x5cace3a515f7c61dULL);
+    CHECK(p1.hashSerializedState() == 0x9a82c5d0872fd75fULL);
+    CHECK(a.hashSerializedState() == 0xc3127461c4a976f0ULL);
 }
 
 TEST_CASE("Determinism: same seed yields identical serialize output") {

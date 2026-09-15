@@ -23,6 +23,7 @@ BodyView viewDie(RigidBody& b) {
     v.rotation = &b.rotation;
     v.invMass = b.kinematic ? 0.0f : b.invMass;
     v.invInertia = b.invInertia;
+    v.invInertiaWorldMat = inertiaWorldMat3(b.rotation, b.invInertia);
     v.kinematic = b.kinematic;
     return v;
 }
@@ -35,6 +36,7 @@ BodyView viewDyn(DynamicBody& b) {
     v.rotation = &b.rotation;
     v.invMass = b.kinematic ? 0.0f : b.invMass;
     v.invInertia = b.invInertia;
+    v.invInertiaWorldMat = inertiaWorldMat3(b.rotation, b.invInertia);
     v.kinematic = b.kinematic;
     return v;
 }

@@ -38,6 +38,40 @@ inline Mat3 mat3FromQuat(const Quat& q) {
     };
 }
 
+/**
+ * World-space inverse-inertia tensor R * diag(invInertiaLocal) * R^T, as a
+ * dense Mat3 (symmetric, but stored dense to match Mat3::mul). Mathematically
+ * equivalent to the two-quaternion-rotate form (`rot.rotate(invInertiaLocal
+ * scaled rot.conjugate().rotate(v))`, see BodyView::applyInvInertiaWorld in
+ * dice_contacts.hpp before this existed) for a fixed rotation applied to many
+ * vectors — the sequential-impulse solver calls this ~VELOCITY_ITERATIONS
+ * times per contact point per substep with a rotation that doesn't change
+ * across those calls (integrate() only updates it once, before contact
+ * solving starts), so computing R once per BodyView construction and reusing
+ * it as a single Mat3::mul beats re-deriving it via two quaternion rotates
+ * on every call.
+ *
+ * R*D*R^T with diagonal D = sum_k D_kk * outer(col_k(R), col_k(R)); expanded
+ * directly here rather than through a generic 3x3 matrix multiply.
+ */
+inline Mat3 inertiaWorldMat3(const Quat& rot, const Vec3& invInertiaLocal) {
+    const Mat3 R = mat3FromQuat(rot);
+    const Vec3 col0{R.m[0], R.m[3], R.m[6]};
+    const Vec3 col1{R.m[1], R.m[4], R.m[7]};
+    const Vec3 col2{R.m[2], R.m[5], R.m[8]};
+
+    Mat3 out = Mat3::diagonal(0.0f, 0.0f, 0.0f);
+    auto addWeightedOuter = [&out](const Vec3& c, float w) {
+        out.m[0] += w * c.x * c.x; out.m[1] += w * c.x * c.y; out.m[2] += w * c.x * c.z;
+        out.m[3] += w * c.y * c.x; out.m[4] += w * c.y * c.y; out.m[5] += w * c.y * c.z;
+        out.m[6] += w * c.z * c.x; out.m[7] += w * c.z * c.y; out.m[8] += w * c.z * c.z;
+    };
+    addWeightedOuter(col0, invInertiaLocal.x);
+    addWeightedOuter(col1, invInertiaLocal.y);
+    addWeightedOuter(col2, invInertiaLocal.z);
+    return out;
+}
+
 inline void transformHullVerts(const Vec3* local, int count, const Quat& rot, const Vec3& pos,
                                Vec3* out) {
 #if defined(__wasm_simd128__) && !defined(DICE_FORCE_SCALAR_SAT)
