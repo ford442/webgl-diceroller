@@ -344,7 +344,8 @@ export interface EmbindPhysicsEngine {
     };
     getStaticCapacityDroppedCount?(): number;
     areAllSettled(): boolean;
-    seedRNG(seed: number): void;
+    /** uint64_t on the C++/WASM side (-s WASM_BIGINT=1) — pass a bigint, not a number; see seedUtil.ts. */
+    seedRNG(seed: bigint): void;
     randomFloat(): number;
     getCollisionEvents(): Float32Array;
     serializeState(): EmbindVector<number>;

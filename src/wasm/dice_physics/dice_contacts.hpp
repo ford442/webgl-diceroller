@@ -37,7 +37,7 @@ static constexpr float SLEEP_SPEED_THRESHOLD = 0.15f;
 static constexpr float SLEEP_DELAY = 0.5f;
 
 /** Snapshot + solver protocol. Bump when manifolds / impulses change behaviour. */
-static constexpr uint32_t SOLVER_REVISION = 4;
+static constexpr uint32_t SOLVER_REVISION = 5;
 
 enum class ManifoldKind : uint8_t {
     DieDie = 0,

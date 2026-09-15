@@ -21,6 +21,7 @@ import { parsePhysicsFlags } from './physicsFlags.js';
 import { parseCollisionEventBuffer } from './collisionEvents.js';
 import { instantiateDicePhysicsModule, WASM_SCALAR_DIR } from './wasmArtifact.js';
 import { applyFaceTableForDie } from './faceTableLoader.js';
+import { toRngSeedBigInt } from './seedUtil.js';
 
 // ---------------------------------------------------------------------------
 // No-op stub
@@ -225,7 +226,7 @@ export const pollCollisionEvents = () => {
  */
 export const seedPhysicsRNG = (seed) => {
     if (!_available) return;
-    _engine.seedRNG(seed >>> 0);
+    _engine.seedRNG(toRngSeedBigInt(seed));
 };
 
 export const randomPhysicsFloat = () => {

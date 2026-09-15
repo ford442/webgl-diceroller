@@ -784,12 +784,16 @@ class WorkerEngineProxy implements PhysicsEngine {
         return merged;
     }
 
-    // --- determinism -------------------------------------------------------
+    // --- determinism ---------------------------------------------------
+    // Sent to the worker as a plain number (postMessage structured-clones it
+    // losslessly for any JS safe integer); the worker widens to the bigint
+    // Embind's seedRNG(uint64_t) requires right before the WASM call (see
+    // seedUtil.ts) — no `>>> 0` truncation here.
     seedRNG(seed: number): void {
         this._send('seedRNG', { seed });
     }
     seededThrow(seed: number, dice: SeededDieRef[], tableSurfaceY: number): void {
-        this._send('seededThrow', { seed: seed >>> 0, dice, tableSurfaceY });
+        this._send('seededThrow', { seed, dice, tableSurfaceY });
     }
     async serializeStateAsync(): Promise<Uint8Array> {
         const res = await this._request('serializeState');
@@ -920,7 +924,7 @@ export const pollCollisionEvents = (): CollisionEvent[] => {
 };
 
 export const seedPhysicsRNG = (seed: number): void => {
-    activeEngine()?.seedRNG(seed >>> 0);
+    activeEngine()?.seedRNG(seed);
 };
 
 export const randomPhysicsFloat = (): number => {

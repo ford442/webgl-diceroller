@@ -61,12 +61,13 @@ Rebuild-required UX: any behavioural solver change bumps `SOLVER_REVISION` in `d
 
 | Revision | Change |
 | -------- | ------ |
+| 5        | `seedRNG` bound directly as `uint64_t` via Embind (`-s WASM_BIGINT=1`) instead of a `uint32_t` shim that silently truncated (`seed >>> 0`) every seed crossing the JS↔WASM boundary. The RNG algorithm and native engine (already `uint64_t`-seeded) are unchanged, so golden *hashes* are unchanged — only how far a seed's bits survive the trip into WASM. Bumped so a guest still on a pre-WASM_BIGINT build (which would silently re-truncate a wide seed) gets `solver_build_mismatch` instead of quietly diverging. See "Seed width" below. |
 | 4        | `WARM_START_FACTOR` enabled (0.0 → 0.85): manifold points now carry forward 85% of the prior substep's accumulated normal/friction impulse instead of solving cold every substep. Settle time and stack behaviour changed; goldens regenerated (`tests/fixtures/solver-golden.json`, `solver_tests.cpp`). |
 | 3        | Solver v2: persistent contact manifolds, islands, speculative contacts (pre-dates this table). |
 
 ### Seed width (`seedRNG`)
 
-`seedRNG` takes a `uint64_t` on the native/WASM engine side (`-s WASM_BIGINT=1`; the Embind binding no longer narrows to `uint32_t`). The public `seedPhysicsRNG()`/worker bridge entry points still accept a JS `number` and widen it losslessly to a `BigInt` before crossing into WASM — the `seed >>> 0` truncation at the WASM boundary is gone. The commit-reveal wire format (`CommitReveal.ts`) and `RoomSession`/`Protocol.ts` seed field are unchanged for this revision (still a 32-bit `number`): widening what multiplayer peers negotiate as "the seed" is a protocol-version change, not a solver-engine one, and is tracked separately.
+`seedRNG` takes a `uint64_t` on the native/WASM engine side (`-s WASM_BIGINT=1`; the Embind binding no longer narrows to `uint32_t`). The public `seedPhysicsRNG()`/worker bridge entry points still accept a JS `number`; `seedUtil.ts`'s `toRngSeedBigInt()` widens it losslessly to a `BigInt` right before the WASM call — the `seed >>> 0` truncation that used to happen at (or before) the WASM boundary is gone. The commit-reveal wire format (`CommitReveal.ts`) and `RoomSession`/`Protocol.ts` seed field are unchanged for this revision (still a 32-bit `number`): widening what multiplayer peers negotiate as "the seed" is a protocol-version change, not a solver-engine one, and is tracked separately.
 
 ## Protocol (DataChannel JSON)
 
