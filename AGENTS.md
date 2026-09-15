@@ -10,14 +10,14 @@ This is a **WebGL-based 3D dice roller application** built with Three.js. It sim
 
 ## Technology Stack
 
-| Component       | Technology                                                                                         |
-| --------------- | -------------------------------------------------------------------------------------------------- |
-| 3D Engine       | Three.js (`^0.181.2`)                                                                              |
-| Physics         | Custom `DicePhysicsEngine` WASM (SAT polyhedral) + ammo.js (`^0.0.10`) fallback/interaction bridge |
-| Build Tool      | Vite (`^7.3.1`)                                                                                    |
-| Rendering       | WebGPURenderer by default (auto-fallback to WebGLRenderer); `?webgl` forces the WebGL baseline     |
-| Module System   | ES Modules                                                                                         |
-| Test Automation | Playwright (`^1.58.2`, ad-hoc Node.js scripts only)                                                |
+| Component       | Technology                                                                                     |
+| --------------- | ---------------------------------------------------------------------------------------------- |
+| 3D Engine       | Three.js (`^0.181.2`)                                                                          |
+| Physics         | Custom `DicePhysicsEngine` WASM (SAT polyhedral) — the only backend; ammo.js was retired       |
+| Build Tool      | Vite (`^7.3.1`)                                                                                |
+| Rendering       | WebGPURenderer by default (auto-fallback to WebGLRenderer); `?webgl` forces the WebGL baseline |
+| Module System   | ES Modules                                                                                     |
+| Test Automation | Playwright (`^1.58.2`, ad-hoc Node.js scripts only)                                            |
 
 ## Project Structure
 
@@ -26,7 +26,6 @@ webgl-diceroller/
 ├── src/                        # Main source code
 │   ├── main.js                 # Entry point: scene setup, render loop, camera, loading tiers
 │   ├── dice.js                 # Dice public API barrel (implementation under src/dice/)
-│   ├── physics.js              # ammo.js physics initialization and helpers
 │   ├── core/                   # FrameScheduler, LoadingTiers, RendererFactory, textures, culling
 │   ├── interaction.js          # Mouse/raycaster interaction (drag, levitate)
 │   ├── interaction/            # Dice cup + shared WasmDieGrab helper
@@ -98,12 +97,11 @@ npm run format              # Prettier write
 npm run format:check        # Prettier check (CI)
 ```
 
-- `npm run dev` still works without compiled WASM artifacts; the bridge falls back to ammo.js automatically.
-- `?no-wasm` is the **only** physics escape hatch: it forces the full ammo fallback even if `public/wasm/` exists.
-- **Every other session** (including the default) never loads the ammo.js chunk and never creates an ammo rigid body for a die. Dice simulation, drag, levitation, and flicks run entirely in the WASM worker.
-- The `?dual-physics`, `?ammo-drag`, and `?wasm-drag` flags were removed with the Phase 5 cut-over; there is no dual-authority sync left in `src/dice/`.
-- `?worker-physics` (experimental) runs the WASM engine inside a Web Worker.
-- `?no-drag` disables quadratic air resistance on both ammo.js and WASM paths.
+- ammo.js was retired — WASM is the only physics backend, and there is no fallback rigid-body implementation left in `src/`. `?no-wasm` (or missing/broken `public/wasm/` artifacts) no longer loads a different simulation; it forces `WasmPhysicsBridge.js`'s existing no-op JS stub, `isWasmAvailable()` reports `false`, and `PhysicsBootstrap.showLoadFailure()` shows an honest error banner. The tavern (table, walls, props) still loads and `window.__app.ready` still becomes `true` — dice are simply never spawned.
+- `npm run dev` without compiled WASM artifacts (`public/wasm/`) hits that same failure path. Run `npm run build:wasm` (needs Emscripten) first to get real physics locally.
+- The `?dual-physics`, `?ammo-drag`, and `?wasm-drag` flags were removed earlier and remain gone; there is no dual-authority sync in `src/dice/`.
+- `?worker-physics` (no value) is an explicit opt-in for the (already-default) worker backend; `?no-worker` / `?worker-physics=off` forces the main-thread WASM bridge instead.
+- `?no-drag` disables quadratic air resistance.
 - `?fair-dice` disables the pipping COM bias.
 - Render/perf flags:
     - WebGPU is the default; `?webgpu` / `?wgpu` are redundant but still force it explicitly.
@@ -139,7 +137,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MU
 ### Audio system
 
 - `src/audio/DiceCollisionAudio.js` synthesises all tavern audio with the Web Audio API (no external sound assets): dice collisions, prop accents, ambient bed, and a flute melody hook.
-- Collision events from WASM (`pollPhysicsCollisionEvents`) and ammo.js (`pollAmmoCollisionEvents`) are enriched in `dice.js` (`enrichCollisionEventForAudio`) with world position, die sides, and surface hints before playback.
+- Collision events from WASM (`pollPhysicsCollisionEvents`) are enriched in `dice.js` (`enrichCollisionEventForAudio`) with world position, die sides, and surface hints before playback.
 - Kinetic energy `E_k = 1/2*m*v^2 + 1/2*I*omega^2` drives volume and brightness; material voices distinguish die-on-die clack, velvet table thump, leather cup rattle, metal/glass props.
 - Impacts route through HRTF `PannerNode`s at the die position; the listener follows the camera each frame. Per-pair cooldowns and a `maxVoices` cap prevent machine-gun stacking.
 - Die sides map to playback pitch (d20 lower than d4). Prop one-shots (gong, bell, cauldron bubble, skull bone knock, lamp click) share the same master gain.
@@ -158,7 +156,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MU
 - WebGL post pipeline: `RenderPass` → `UnrealBloomPass` → `ShaderPass(VignetteShader)` → `OutputPass`.
 - WebGPU post pipeline: TSL `PostProcessing` scene pass with bloom, vignette, and a subtle chromatic aberration pass in high quality mode.
 - Loads a PMREM environment map from `TavernEnvironment.js` for PBR reflections.
-- Loads `src/wasm/WasmPhysicsBridge.js` asynchronously. When WASM is available (default), the custom engine is authoritative for dice simulation, drag, and levitation. The ammo.js chunk loads only for `?no-wasm` (or when WASM artifacts are missing) via `shouldLoadAmmoPhysics()` and the lazy `src/dice/AmmoDiceBackend.js` module.
+- Loads `src/wasm/PhysicsBridge.js` asynchronously — the custom WASM engine is the only dice simulation, drag, and levitation backend. `?no-wasm` (or missing/broken `public/wasm/` artifacts) forces the bridge's no-op JS stub instead of a different engine: no dice spawn and `PhysicsBootstrap.showLoadFailure()` shows an error, while the rest of the tavern still loads.
 - Implements **tiered async loading** with a loading overlay and progress bar:
     - **Tier 0 (Critical, 10–40%):** Physics engine, core environment (walls, room, table, candle), dice models, UI, interaction. Rendering starts immediately after this tier.
     - **Tier 1 (Important, 55–70%):** Furniture and background props (bookshelf, chairs, chest, rug, atmosphere, billiard lamp, floating candles, runecircle).
@@ -175,42 +173,22 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MU
 ### `src/dice.js` (barrel) and `src/dice/`
 
 - Public API re-exported from focused modules: `DiceModels.js` (load/pool), `DiceSpawn.js`, `DiceThrow.js`, `DiceResults.js`, `DiceSync.js`, `DicePhysicsPresets.js`.
-- Ammo dice bodies live in `AmmoDiceBackend.js`, dynamically imported only when `needsAmmoDiceBackend()` — i.e. when the WASM engine is not live (`?no-wasm` or missing artifacts).
 - Loads Draco-compressed glTF (`.glb`) dice models from `public/images/dice/` using `GLTFLoader` + `DRACOLoader`.
-- `spawnObjects(scene, world, config)` — spawns WASM dice; an ammo body is created only on the `?no-wasm` fallback.
-- `updateDiceVisuals()` — reads the WASM transform buffer; on the ammo fallback it reads ammo transforms through `AmmoDiceBackend`. There is no per-die `physicsAuthority` any more: the backend is a whole-session choice.
+- `spawnObjects(scene, world, config)` — spawns WASM dice (the `world` param is unused, kept for call-site compatibility). `LoadingTiers.js` only calls this when `isWasmAvailable()`, so no dice mesh exists at all when physics failed to load.
+- `updateDiceVisuals()` — reads the WASM transform buffer.
 - `throwDice(scene, world, seed)` — WASM-authoritative throws; seeded replay uses the WASM PRNG/worker path.
-- `clearDice(scene, world)` — removes dice and tears down WASM ids; ammo heap cleanup via `AmmoDiceBackend` when loaded.
-
-### `src/physics.js`
-
-- `initPhysics()` — initializes the ammo.js world with gravity `(0, -15, 0)`.
-- `stepPhysics(world, deltaTime)` — steps simulation with 4 substeps at 1/60s.
-- `createFloorAndWalls(scene, world, tableConfig)` — creates static physics bounds from `Table.js` config (floor, invisible walls, lips).
-- `spawnDicePhysics(world, mesh, shape, position, rotation)` — spawns a dice rigid body with:
-    - mass = 5
-    - friction = 0.6
-    - rollingFriction = 0.1
-    - restitution = 0.2
-    - damping = 0.05 linear / 0.1 angular
-    - collision margin = 0.01
-    - activation state = 4 (`DISABLE_DEACTIVATION`)
-- `createConvexHullShape(mesh)` — clones geometry, merges vertices with `BufferGeometryUtils.mergeVertices`, iterates positions to build an `Ammo.btConvexHullShape`.
-- `createStaticBody(world, mesh, shape)` — creates a mass-0 static rigid body from a mesh transform.
-- All temporary Ammo.js objects (`btVector3`, `btTransform`, `btRigidBodyConstructionInfo`, etc.) are explicitly destroyed after use to prevent WASM heap leaks.
-- Exports `getAmmo()` for other modules to access the initialized Ammo instance. Prop modules must not call it directly — they go through `src/environment/PropPhysics.js` (`getPropAmmo` / `createPropStaticBody`), the single ammo seam for props.
+- `clearDice(scene, world)` — removes dice and tears down WASM ids.
 
 ### `src/interaction.js`
 
-- `initInteraction(camera, scene, physicsWorld)` — sets up `Raycaster`, pre-warms shaders for levitation effects (hidden sphere + light at y=-1000, compiled then disposed after 500ms).
+- `initInteraction(camera, scene, physicsWorld)` — sets up `Raycaster`, pre-warms shaders for levitation effects (hidden sphere + light at y=-1000, compiled then disposed after 500ms). The `physicsWorld` param is unused, kept for call-site compatibility.
 - `registerInteractiveObject(mesh, callback)` — API for static props (e.g., lamp, skull, gong) to receive click events.
 - Left-click on a die starts WASM kinematic drag by default (`setDieKinematic` + `setDieVelocity` toward the cursor). Mouse movement updates the die inside the WASM worker.
 - Double-clicking a die (within 300ms) triggers **levitation** in WASM: the die rises with a blue glow (`0x0088ff` PointLight), spins, then is released with a random throw after 1.5s.
-- **Ammo fallback (`?no-wasm` only):** drag + levitation route through ammo.js `btPoint2PointConstraint` / kinematic flags. Unreachable whenever the WASM engine is live.
 - **Dice cup (`DiceCup` prop):** WASM-only scoop/shake/pour ritual. Click the cup to scoop nearby dice, hold and wiggle to rattle (interior container planes + muffled leather audio), release or press `T` to pour onto the velvet zone. Cup pours use `seed = null` and are excluded from share URLs. Test hook: `window.__app.interactables.diceCup`.
 - The WASM control primitives live in `src/dice.js`: `driveDieWasmTransform`, `setDieWasmVelocity`, `getDieWasmTransform` (alongside `applyWasmImpulseForDie`).
 - `getHoveredDie(camera, normX, normY)` — returns the die under the cursor for hover cursor changes.
-- `updateInteraction(deltaTime)` — activates dragged bodies (ammo) or drives the WASM drag, and updates levitation state each frame.
+- `updateInteraction(deltaTime)` — drives the active WASM grab and updates levitation state each frame.
 
 ### `src/ui.js`
 
@@ -232,7 +210,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 - Props that need per-frame animation provide an `update(deltaTime, elapsedTime)` function.
 - `LoadingTiers.js` wires these into `FrameScheduler` through the prop registry; do not add ad-hoc per-frame calls in `main.js`.
 - Interactive props return callbacks (e.g., `interact`, `toggleGlow`) that are registered in the prop entry’s `afterCreate` hook.
-- Legacy physics-enabled props build invisible collision meshes with `createPropStaticBody()` / `getPropAmmo()` from [`PropPhysics.js`](src/environment/PropPhysics.js). **Migration complete:** registered props use `createProp` + declarative `colliders` via [`StaticColliderBridge.js`](src/core/StaticColliderBridge.js) (WASM default). `PropPhysics.js` remains only as the ammo implementation behind the bridge for `?no-wasm`.
+- Registered props use `createProp` + declarative `colliders` via [`StaticColliderBridge.js`](src/core/StaticColliderBridge.js), which registers every collider type (box, plane, cylinder/openCylinder, convexHull, compound) directly on the WASM engine — there is no other collider backend.
 - Shadows are aggressively optimized: small decorative props are listed in `SHADOW_DISABLED_PROP_NAMES` in `src/environment/PropRegistry.js`.
 
 ### Rendering Notes
@@ -312,8 +290,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 - Real dice lose material to recessed numbers, so the low-number face ("1") is heaviest and the high-number face is lightest.
 - `src/dice.js` computes a centre-of-mass offset toward the "1" face equal to `0.75%` of the die's bounding-box height (`DEFAULT_MASS_BIAS_RATIO`).
-- In the ammo.js fallback path, `AmmoDiceBackend.spawnAmmoDieBody` / `spawnDicePhysics` may build a `btCompoundShape` for COM bias.
-- In the WASM path, `applyDiceMassBiases` applies a gravity torque that approximates the same effect.
+- `applyDiceMassBiases` applies a gravity torque impulse to each die's WASM body that approximates the effect.
 - Toggle:
     - `?fair-dice` disables the bias entirely (perfect Platonic-solid COM).
     - `?bias-ratio=0.01` overrides the default magnitude (clamped to `[0, 0.05]`).
@@ -322,20 +299,19 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 - Dice experience velocity-squared drag in addition to linear/angular damping and collision friction.
 - `src/dice.js` defines a per-type `dragFactor` in `PHYSICS_PRESETS`.
-- `src/physics.js` → `stepPhysics` applies `applyAmmoQuadraticDrag` before each simulation step (`F_drag ~ -Cd * |v|^2 * v_hat`).
-- The WASM engine applies the same drag in `DicePhysicsEngine::integrate` via `setDieDrag`.
+- The WASM engine applies drag in `DicePhysicsEngine::integrate` via `setDieDrag` (`F_drag ~ -Cd * |v|^2 * v_hat`).
 - Disable with `?no-drag` for testing idealised friction-only behaviour.
 
 ### Adding New Environment Props
 
-**New props must use `propKit`.** The prop catalogue migration to declarative colliders is complete; ESLint blocks `PropPhysics` imports in `src/environment/**`.
+**New props must use `propKit`.** The prop catalogue migration to declarative colliders is complete; `PropPhysics.js` and `physics.js` no longer exist — colliders always go through `StaticColliderBridge.js`.
 
 #### Authoring recipe
 
 1. Create `src/environment/PropName.js` using `createProp` from [`src/environment/propKit.js`](src/environment/propKit.js).
 2. Export a factory: `(scene, physicsWorld?, position?, rotation?, options?)`. Accept `{ scale = 1 } = {}` as the fifth argument and pass it to `createProp` if the prop should also be usable as tabletop clutter.
 3. Build geometry inside the `build({ group, materials, mesh })` callback; use `materials.*` from the kit (backed by [`MaterialPalette.js`](src/core/MaterialPalette.js)) instead of inline `MeshStandardMaterial`.
-4. Declare colliders as a spec array — routed through [`StaticColliderBridge.js`](src/core/StaticColliderBridge.js), not direct `getPropAmmo` / `createPropStaticBody` calls.
+4. Declare colliders as a spec array — routed through [`StaticColliderBridge.js`](src/core/StaticColliderBridge.js).
 5. Return `{ group }` plus optional `update`, `interact`, `body`, etc.
 6. Register in the appropriate tier in [`PropRegistry.js`](src/environment/PropRegistry.js).
 7. Wire `afterCreate` for per-frame updates or click handlers.
@@ -374,7 +350,7 @@ the spec and ignores `group.scale`.
 // Box — half-extents in group-local space
 colliders: [{ type: 'box', halfExtents: [1.0, 0.15, 1.0] }];
 
-// Cylinder — ammo Y-axis convention; rotate to match mesh orientation
+// Cylinder — Y-axis convention; rotate to match mesh orientation
 colliders: [
     {
         type: 'cylinder',
@@ -427,7 +403,7 @@ export function createHorseshoe(
 
 - **New props:** `propKit` + `materials.*` + `StaticColliderBridge` collider specs (required).
 - **Existing props:** convert when you edit them for other reasons; no mass migration pass.
-- **Do not** import `getPropAmmo`, `btBoxShape`, or `createPropStaticBody` in new or migrated prop modules (and never import `physics.js` from a prop).
+- **Do not** hand-build collision shapes in a prop module — declare them as a spec array through `StaticColliderBridge`; there is no ammo/`physics.js` seam left to bypass it with.
 
 #### Registry checklist (unchanged)
 
@@ -438,9 +414,8 @@ export function createHorseshoe(
 
 ### Memory Management
 
-- When removing dice, always call `Ammo.destroy()` on `body.getMotionState()` and `body` itself.
+- When removing dice, `clearDice`/`updateDiceSet` remove the WASM engine's die id (`engine.removeDie`) alongside releasing the mesh.
 - When removing dice visuals, call `geometry.dispose()` and `material.dispose()`.
-- Reusable transforms (`_sharedTransform`, `_levitationTransform`) are used in `updateDiceVisuals` and `updateLevitation` to minimize Ammo.js heap churn.
 
 ### Shadow Best Practices
 
@@ -481,7 +456,7 @@ npm run test:solver                 # Native C++ unit + fuzz (see docs/WASM_ENGI
 node scripts/verify-wasm-primitives.mjs
 npm run verify:wasm-interaction     # drag + levitation on the WASM-only path (needs a build)
 npm run verify:worker-replay        # Worker-module replay determinism (seededPhysicsThrow) — isolated from the app UI
-npm run verify:bundle-loading       # no ammo chunk / no ammo dice bodies by default
+npm run verify:bundle-loading       # ?webgl never fetches three.webgpu; ?no-wasm spawns no dice
 node scripts/verify-renderer-factory.mjs
 npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when baselines exist)
 ```
@@ -548,9 +523,9 @@ Setup is just `npm install` (the startup update script). Run `npm run test:solve
 Running/verifying the app in this headless, software-rendered, WASM-absent environment has a few non-obvious gotchas:
 
 - **Use the `?webgl` baseline path.** There is no GPU, so WebGPU is unavailable. The default renderer falls back to the Three.js WebGL2 _TSL_ backend, which throws `Cannot read properties of undefined (reading 'buffers')` under SwiftShader and never finishes loading. Forcing `?webgl` (the classic `WebGLRenderer`) renders fine.
-- **Add `?fair-dice` when WASM is not compiled.** Emscripten is not installed, so there are no `public/wasm/` artifacts and physics uses the ammo.js fallback. The default pipping-bias path then calls `btCompoundShape.recalculateLocalAabb()`, which the bundled `ammo.js@0.0.10` build does not expose — this throws `Failed to load scene tiers: TypeError: ...recalculateLocalAabb is not a function` and the scene never becomes ready. `?fair-dice` disables the COM-bias compound-shape path and the scene loads (`window.__app.ready === true` under `&test`). Building the WASM module (`npm run build:wasm`, needs Emscripten) is the alternative that routes the bias through the WASM engine instead.
-- So a reliable local URL is e.g. `http://localhost:5173/?webgl&no-post&fair-dice&test&renderer-info` (dev) or the same on `:4173` (preview). Trigger a roll programmatically with `window.__app.replayRoll(seed)` or via the top-right "Roll All" button / `R` key.
+- **No WASM here means no dice, not a different engine.** Emscripten is not installed, so there are no `public/wasm/` artifacts; ammo.js was retired, so there is no rigid-body fallback any more either. `PhysicsBootstrap.showLoadFailure()` shows an error banner and the scene still finishes loading and becomes ready (`window.__app.ready === true` under `&test`) as a static tavern with zero dice. `?fair-dice` is unrelated to this now — it only disables the pipping COM-bias torque and has nothing to do with whether the scene loads. Building the WASM module (`npm run build:wasm`, needs Emscripten) is the only way to get real dice/physics in this environment.
+- So a reliable local URL is e.g. `http://localhost:5173/?webgl&no-post&test&renderer-info` (dev) or the same on `:4173` (preview) — dice just won't be present without a WASM build. Trigger a roll programmatically with `window.__app.replayRoll(seed)` or via the top-right "Roll All" button / `R` key once WASM is built.
 - **Multiplayer (optional):** run `npm run signal:dev` (Cloudflare Worker on `:8787`), then `VITE_SIGNALING_URL=http://127.0.0.1:8787 npm run dev`. See [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md). Guests need WASM for deterministic replay.
 - **Browser WebGL needs software flags.** Launch Chrome/Chromium with `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`; rendering is slow but functional.
-- **`npm run build` fails here** because it runs `build:wasm` first (needs Emscripten at `/root/emsdk`). To build only the frontend bundle, run `npx vite build` (succeeds and is what `npm run preview` serves).
+- **`npm run build` fails here** because it runs `build:wasm` first (needs Emscripten at `/root/emsdk`). To build only the frontend bundle, run `npm run build:js:allow-missing-wasm` (plain `npm run build:js` now fails fast if `public/wasm/` is missing, which is exactly this environment) — that's what `npm run preview` then serves, with no dice.
 - **Dev server + low-resource browsers:** Vite dev serves 160+ unbundled ES modules, which can trip `net::ERR_INSUFFICIENT_RESOURCES` in a resource-constrained browser. Playwright's chromium and the bundled preview server (fewer requests) both load fine.

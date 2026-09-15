@@ -79,15 +79,15 @@ Playwright URLs should include `&test`, e.g. `?webgl&no-post&fair-dice&test`.
 
 [`FrameScheduler`](../src/core/FrameScheduler.js) executes systems in a fixed order with optional priorities within each phase:
 
-| Phase             | Typical work                                                   |
-| ----------------- | -------------------------------------------------------------- |
-| `preStep`         | Input, camera prep                                             |
-| `physicsStep`     | Fixed 1/60 s WASM and/or ammo step (may run multiple substeps) |
-| `postPhysicsSync` | `updateDiceVisuals()`, collision event polling                 |
-| `updates`         | Prop animations, interaction, dice-case preview, atmosphere    |
-| `preRender`       | Culling, shadow-map refresh hooks                              |
-| `render`          | Composer / TSL post stack                                      |
-| `postRender`      | Debug overlays, adaptive quality                               |
+| Phase             | Typical work                                                |
+| ----------------- | ----------------------------------------------------------- |
+| `preStep`         | Input, camera prep                                          |
+| `physicsStep`     | Fixed 1/60 s WASM step (may run multiple substeps)          |
+| `postPhysicsSync` | `updateDiceVisuals()`, collision event polling              |
+| `updates`         | Prop animations, interaction, dice-case preview, atmosphere |
+| `preRender`       | Culling, shadow-map refresh hooks                           |
+| `render`          | Composer / TSL post stack                                   |
+| `postRender`      | Debug overlays, adaptive quality                            |
 
 Systems register via `scheduler.register(phase, name, fn, { priority })`. Prop `update` callbacks and interactables hook into `updates` through [`LoadingTiers.js`](../src/core/LoadingTiers.js) and [`PropRegistry.js`](../src/environment/PropRegistry.js) `afterCreate` handlers — avoid ad-hoc per-frame calls in `main.js`.
 
@@ -110,7 +110,7 @@ Shared KTX2/JPG textures, dice GLBs, Draco/Basis transcoders, and other files un
 
 [`PropRegistry.js`](../src/environment/PropRegistry.js) is the catalogue and spawn pipeline for environment props.
 
-**Factory discovery** — `import.meta.glob` in [`factories.js`](../src/environment/propRegistry/factories.js) collects every `createXxx` export from `src/environment/*.js` into `PROP_FACTORIES`, excluding the `PropRegistry.js` barrel and helper modules (`propKit`, `PropPhysics`, `PropLifecycle`).
+**Factory discovery** — `import.meta.glob` in [`factories.js`](../src/environment/propRegistry/factories.js) collects every `createXxx` export from `src/environment/*.js` into `PROP_FACTORIES`, excluding the `PropRegistry.js` barrel and helper modules (`propKit`, `PropLifecycle`).
 
 **Spawn** — `spawnProp(entry, context)` either calls `entry.call(context)` or invokes the factory with `(scene, physicsWorld, position, rotation)`. Positions with legacy tabletop `y ≈ -2.75` are adjusted via `toCurrentTabletopY()` from [`SceneMetrics.js`](../src/core/SceneMetrics.js).
 
@@ -167,16 +167,19 @@ Post flags (`?no-post`, `?low-post`, `?no-bloom`, `?no-godrays`) apply to both p
 
 **God rays** — scene-space moonlight beams in [`TavernWalls.js`](../src/environment/TavernWalls.js): WebGL uses [`GodRayShader.js`](../src/shaders/GodRayShader.js); WebGPU uses [`GodRayNodeMaterial.js`](../src/shaders/GodRayNodeMaterial.js). Toggle with `?no-godrays`.
 
-## Physics (dual backend)
+## Physics
 
-| Backend                      | Role                                                                                                                                                                         |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **WASM `DicePhysicsEngine`** | Authoritative dice simulation when `public/wasm/` is built and `?no-wasm` is absent                                                                                          |
-| **ammo.js**                  | Full fallback when WASM is unavailable (`?no-wasm`): dice bodies, drag, levitation. Also backs hand-built static prop colliders via `environment/PropPhysics.js` when loaded |
+WASM `DicePhysicsEngine` is the only physics backend — ammo.js was retired. It is
+authoritative for dice simulation, drag, and levitation whenever `public/wasm/`
+is built and loads successfully. If it isn't (`?no-wasm`, or missing/broken
+artifacts), `WasmPhysicsBridge.js`'s existing no-op JS stub takes over,
+`isWasmAvailable()` reports `false`, `PhysicsBootstrap.showLoadFailure()` shows
+an error banner, and the tavern still loads with zero dice — an honest failure
+mode rather than a second, differently-behaving engine.
 
-Bridges: [`WasmPhysicsBridge.js`](../src/wasm/WasmPhysicsBridge.js), [`WorkerPhysicsBridge.ts`](../src/wasm/WorkerPhysicsBridge.ts). Dice ammo helpers: [`AmmoDiceBackend.js`](../src/dice/AmmoDiceBackend.js) (lazy-loaded). Flags: `?no-wasm` (sole physics escape hatch), `?worker-physics` — see AGENTS.md and WASM_ENGINE.md.
+Bridges: [`WasmPhysicsBridge.js`](../src/wasm/WasmPhysicsBridge.js) (main-thread), [`WorkerPhysicsBridge.ts`](../src/wasm/WorkerPhysicsBridge.ts) (default), selected by [`PhysicsBridge.js`](../src/wasm/PhysicsBridge.js). Flags: `?no-wasm` (forces the no-op stub), `?no-worker` / `?worker-physics=off` (forces the main-thread bridge) — see AGENTS.md and WASM_ENGINE.md.
 
-Declarative static colliders go through `StaticColliderBridge` (WASM when available, ammo otherwise); the remaining hand-built prop shapes go through `environment/PropPhysics.js` and exist only when ammo is loaded (WASM static-collider support landed in [issue #237](https://github.com/ford442/webgl-diceroller/issues/237), closed). `DicePhysicsEngine::MAX_STATICS` (512, see [`WASM_ENGINE.md`](WASM_ENGINE.md)) caps the WASM static registry; `addStaticBox`/etc. report drops past that cap via `getStaticCapacityDroppedCount()` rather than silently no-op'ing.
+Declarative static and dynamic colliders go through [`StaticColliderBridge.js`](../src/core/StaticColliderBridge.js), which registers every collider type (box, plane, cylinder/openCylinder, convexHull, compound) directly on the WASM engine — there is no other collider backend. `DicePhysicsEngine::MAX_STATICS` (512, see [`WASM_ENGINE.md`](WASM_ENGINE.md)) caps the WASM static registry; `addStaticBox`/etc. report drops past that cap via `getStaticCapacityDroppedCount()` rather than silently no-op'ing.
 
 ## Key directories
 

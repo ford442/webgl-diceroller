@@ -1,14 +1,11 @@
 /**
  * Visual sync + grab-driver primitives for dynamic (movable) props — the
  * prop-side counterpart of dice/DiceSync.js. A dynamic prop's THREE.Group
- * root carries its physics handle in userData (`wasmDynamicIds` for the WASM
- * path, `physicsBody` for the `?no-wasm` ammo fallback), set by
+ * root carries its physics handle in userData (`wasmDynamicIds`), set by
  * StaticColliderBridge.js's createDynamicCollider().
  */
 import { getWasmEngine } from '../wasm/PhysicsBridge.js';
 import { isUsingWasmPhysics } from '../dice/DicePhysicsPresets.js';
-import { sharedAmmoTransform, setSharedAmmoTransform } from '../dice/DiceState.js';
-import { getPropAmmo } from './PropPhysics.js';
 import { spawnedProps } from './DynamicPropState.js';
 
 const DYN_TRANSFORM_STRIDE = 7;
@@ -35,56 +32,34 @@ function wasmIdForGroup(group) {
 }
 
 export const updatePropVisuals = () => {
-    if (spawnedProps.length === 0) return;
+    if (spawnedProps.length === 0 || !isUsingWasmPhysics()) return;
 
-    if (isUsingWasmPhysics()) {
-        const engine = getWasmEngine();
-        if (typeof engine.getDynamicTransforms !== 'function') return;
-        const transforms = engine.getDynamicTransforms();
-        const ids = engine.getDynamicIds();
-        if (!ids || !ids.length) return;
-
-        for (const group of spawnedProps) {
-            const targetId = wasmIdForGroup(group);
-            if (targetId == null) continue;
-
-            let offset = -1;
-            for (let i = 0; i < ids.length; i++) {
-                if (Math.round(ids[i]) === targetId) {
-                    offset = i * DYN_TRANSFORM_STRIDE;
-                    break;
-                }
-            }
-            if (offset < 0 || offset + (DYN_TRANSFORM_STRIDE - 1) >= transforms.length) continue;
-
-            group.position.set(
-                transforms[offset + 0],
-                transforms[offset + 1],
-                transforms[offset + 2]
-            );
-            group.quaternion.set(
-                transforms[offset + 3],
-                transforms[offset + 4],
-                transforms[offset + 5],
-                transforms[offset + 6]
-            );
-        }
-        return;
-    }
-
-    const Ammo = getPropAmmo();
-    if (!Ammo) return;
-    if (!sharedAmmoTransform) setSharedAmmoTransform(new Ammo.btTransform());
+    const engine = getWasmEngine();
+    if (typeof engine.getDynamicTransforms !== 'function') return;
+    const transforms = engine.getDynamicTransforms();
+    const ids = engine.getDynamicIds();
+    if (!ids || !ids.length) return;
 
     for (const group of spawnedProps) {
-        const body = group.userData.physicsBody;
-        const motionState = body?.getMotionState?.();
-        if (!motionState) continue;
-        motionState.getWorldTransform(sharedAmmoTransform);
-        const origin = sharedAmmoTransform.getOrigin();
-        const rotation = sharedAmmoTransform.getRotation();
-        group.position.set(origin.x(), origin.y(), origin.z());
-        group.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
+        const targetId = wasmIdForGroup(group);
+        if (targetId == null) continue;
+
+        let offset = -1;
+        for (let i = 0; i < ids.length; i++) {
+            if (Math.round(ids[i]) === targetId) {
+                offset = i * DYN_TRANSFORM_STRIDE;
+                break;
+            }
+        }
+        if (offset < 0 || offset + (DYN_TRANSFORM_STRIDE - 1) >= transforms.length) continue;
+
+        group.position.set(transforms[offset + 0], transforms[offset + 1], transforms[offset + 2]);
+        group.quaternion.set(
+            transforms[offset + 3],
+            transforms[offset + 4],
+            transforms[offset + 5],
+            transforms[offset + 6]
+        );
     }
 };
 

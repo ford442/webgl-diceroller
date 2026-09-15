@@ -23,7 +23,7 @@ Open two browsers:
 2. Guest: open the invite URL (or paste the code and **Join**).
 3. Host rolls `3d6+2` (notation) or **Roll All** — guest should settle to the same face values.
 
-Requires WASM on both clients (`npm run build:wasm` / artifacts in `public/wasm/`). Guests without WASM see an error and will not apply remote rolls (ammo would diverge).
+Requires WASM on both clients (`npm run build:wasm` / artifacts in `public/wasm/`). Guests without WASM see an error and will not apply remote rolls — there is no fallback engine to diverge on any more.
 
 Override signaling at runtime with `?signal=http://127.0.0.1:8787` (useful without rebuilding).
 

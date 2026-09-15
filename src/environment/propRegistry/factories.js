@@ -7,13 +7,7 @@ import '../Quill.js';
 import '../GoblinSkull.js';
 
 const environmentModules = import.meta.glob(
-    [
-        '../*.js',
-        '!../PropRegistry.js',
-        '!../propKit.js',
-        '!../PropPhysics.js',
-        '!../PropLifecycle.js',
-    ],
+    ['../*.js', '!../PropRegistry.js', '!../propKit.js', '!../PropLifecycle.js'],
     { eager: true }
 );
 

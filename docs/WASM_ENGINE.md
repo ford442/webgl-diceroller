@@ -1,11 +1,13 @@
 # WASM Physics Engine — Integration Guide
 
-> **Status:** Phases 1–6 complete (see [Roadmap](#roadmap)) — the WASM engine
+> **Status:** Phases 1–7 complete (see [Roadmap](#roadmap)) — the WASM engine
 > runs in a production Web Worker by default, exchanging transforms over a
 > double-buffered SharedArrayBuffer (with a postMessage fallback), with SAT
 > polyhedral collision, deterministic replay, collision events, build-time
-> hull extraction, broadphase, and SIMD all in place. Ammo.js remains only as
-> the `?no-wasm` fallback.
+> hull extraction, broadphase, and SIMD all in place. ammo.js has been fully
+> retired — it is no longer a dependency, and `?no-wasm` forces the physics
+> bridge's own no-op stub (no dice, honest failure banner) rather than a
+> different engine.
 
 ## Table of Contents
 
@@ -26,7 +28,7 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 
 ### Why WASM?
 
-| Concern              | Current (ammo.js)                   | WASM Engine                      |
+| Concern              | ammo.js (retired)                   | WASM Engine                      |
 | -------------------- | ----------------------------------- | -------------------------------- |
 | Execution speed      | ~JS speed (Bullet WASM via ammo.js) | Near-native via Emscripten       |
 | Bundle size          | ~2 MB (full Bullet Physics)         | ~16 KB gzipped (tailored solver) |
@@ -69,8 +71,6 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 │  • User input (mouse, keyboard)                 │
 │  • UI (dice picker, results overlay)            │
 │  • Asset loading (glTF + Draco models)          │
-│  • ammo.js fallback world + interaction         │
-│    constraints (drag, levitation)               │
 │  • Collision-event → audio callbacks            │
 └───────────────────┬─────────────────────────────┘
                     │  Float32Array transforms
@@ -91,16 +91,13 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 
 ### Integration Model
 
-The WASM engine owns **all** dice simulation when the compiled module is
-available — including drag, levitation, and flicks. `ammo.js` still exists for
-two reasons:
-
-- Browser/build fallback when the WASM artifacts are absent or `?no-wasm` is
-  set. That fallback is complete: ammo dice bodies, ammo drag constraints, and
-  ammo levitation.
-- Hand-built static prop colliders, behind `src/environment/PropPhysics.js`.
-  These only exist when ammo is loaded; on the default path props are
-  visual-only (declarative specs go to WASM via `StaticColliderBridge`).
+The WASM engine owns **all** dice simulation and every prop collider — drag,
+levitation, flicks, and static/dynamic colliders alike, via
+`StaticColliderBridge`. There is no other backend: `ammo.js` was retired as a
+dependency. When the WASM artifacts are absent or `?no-wasm` is set, the
+physics bridge's own no-op JS stub takes over — `PhysicsBootstrap` shows an
+honest failure banner and the tavern loads with zero dice, rather than a
+second, differently-behaving simulation.
 
 ### Worker topology (Phase 4 default)
 
@@ -306,8 +303,9 @@ lists in sync when adding a new module.
   transport when the page is cross-origin isolated (COOP/COEP set).
 - `?no-worker` (or `?worker-physics=off`) runs the WASM engine **in-process** on
   the main thread (the legacy `WasmPhysicsBridge` path).
-- `?no-wasm` is the sole physics escape hatch: it forces the JS/ammo fallback
-  path (dice bodies, drag, levitation) even if `public/wasm/` is present.
+- `?no-wasm` forces `WasmPhysicsBridge.js`'s no-op JS stub even if `public/wasm/`
+  is present: no dice spawn, and `PhysicsBootstrap.showLoadFailure()` shows an
+  honest error. There is no fallback engine any more — ammo.js was retired.
 - `?worker-physics` is the explicit opt-in alias for the now-default worker path.
 
 The `?dual-physics`, `?ammo-drag`, and `?wasm-drag` flags were removed in the
@@ -530,12 +528,7 @@ so `getWasmEngine().step(dt)` on the main thread is a documented no-op there.
 
 ```js
 scheduler.register('physicsStep', 'dicePhysics', ({ deltaTime }) => {
-    const useWasm = isWasmAvailable();
-    // ammo only steps on the `?no-wasm` fallback; WASM (worker or in-process
-    // via `?no-worker`) is the default and only physics path otherwise.
-    const shouldStepAmmo = Boolean(physicsWorld) && !useWasm;
-    if (shouldStepAmmo) stepPhysics(physicsWorld, deltaTime);
-    if (useWasm && !isUsingWorkerPhysics()) getWasmEngine().step(deltaTime);
+    if (isWasmAvailable() && !isUsingWorkerPhysics()) getWasmEngine().step(deltaTime);
 });
 
 scheduler.register('postPhysicsSync', 'diceVisualSync', () => {
@@ -543,17 +536,17 @@ scheduler.register('postPhysicsSync', 'diceVisualSync', () => {
 });
 ```
 
-`src/dice.js` mirrors dice lifecycle events into WASM (and ammo only on the
-`?no-wasm` fallback) and loads hulls:
+`src/dice.js` mirrors dice lifecycle events into WASM and loads hulls. If WASM
+never became available, no dice are spawned in the first place
+(`LoadingTiers.js` only calls `spawnObjects()` when `isWasmAvailable()`):
 
 - `spawnObjects()` registers each die in WASM, calls `loadHullForDie(wasmId, sides)`, and stores the returned ID.
 - `throwDice(scene, world, seed)` supports deterministic throws when `seed !== null`.
-- `updateDiceVisuals()` reads `engine.getTransforms()` (or the worker's SharedArrayBuffer front buffer) unless a die is under active ammo-driven interaction.
+- `updateDiceVisuals()` reads `engine.getTransforms()` (or the worker's SharedArrayBuffer front buffer).
 - `clearDice()` and `updateDiceSet()` remove the corresponding WASM entries.
 
 `src/interaction.js` gives dragged/levitating dice **WASM kinematic control**
-(`setDieKinematic`) — the only path while WASM is live; ammo drag/levitation
-only runs on the `?no-wasm` fallback.
+(`setDieKinematic`) — the only interaction path there is now.
 
 Collision events are polled and turned into an `AppEvent` in
 `SchedulerSetup.js` during `postPhysicsSync` — audio is wired, not a TODO:
@@ -726,3 +719,14 @@ const t2 = window.__app.getWasmEngine().getTransforms();
 - [x] `StepStats` + `getLastStepStats()` exposed to JS; worker SAB header slots for `?debug-perf`.
 - [x] Bench harness: native `--bench` + `bench_json` lines (10/50/100/200 dice); `scripts/bench-solver-wasm.mjs`; CI artifact + warn-only `compare-solver-bench.mjs`.
 - [x] `scripts/compare-solver-simd.mjs` — scalar vs SIMD WASM serialize parity on fixed-literal scenario.
+
+### Phase 7 (ammo.js fully retired)
+
+- [x] `ammo.js` dropped as a dependency; `src/physics.js` and `src/types/ammo.d.ts` deleted.
+- [x] `src/dice/AmmoDiceBackend.js` and `src/dice/diceAmmoFlags.js` deleted; every dice-side ammo branch (`DiceThrow.js`, `DiceSync.js`, `DiceTransformRead.js`, `DicePhysicsPresets.js`, `DiceSpawn.js`, `DiceResults.js`) collapsed to the WASM-only path.
+- [x] `src/environment/PropPhysics.js` deleted; `StaticColliderBridge.js` registers every collider type (box, plane, cylinder/openCylinder, convexHull, compound) on the WASM engine directly — there was no gap to port, since WASM already covered every shape the ammo branch did.
+- [x] `src/interaction.js`'s ammo `btPoint2PointConstraint` drag and ammo levitation branches deleted; WASM kinematic grab is the only interaction path.
+- [x] `?no-wasm` no longer loads a different simulation: it forces `WasmPhysicsBridge.js`'s existing no-op stub. `PhysicsBootstrap.bootstrapPhysics()` never aborts init() on failure — `LoadingTiers.js` still builds the full tavern (table, walls, props) and only skips `spawnObjects()`, so the scene still reaches `ready: true` with zero dice.
+- [x] `build:js` fails fast if `public/wasm/dice_physics.{js,wasm}` are missing (`scripts/check-wasm-artifacts.mjs`); `build:js:allow-missing-wasm` is the explicit escape hatch for frontend-only environments (Cursor Cloud, a Codespace without Emscripten).
+- [x] `vite.config.js`'s `physics` manualChunks rule, the `ammo.js` budget entries, and the `/physics-` / `/ammo-` `modulePreload.resolveDependencies` filters removed — there is no ammo chunk to filter any more.
+- [x] `npm run verify:bundle-loading` asserts `?no-wasm` fetches no physics fallback chunk and spawns zero dice (there is nothing left to fetch).

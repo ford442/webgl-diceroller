@@ -119,17 +119,10 @@ export interface RollDieStats {
 
 export interface RollSessionDeps {
     scene: import('three').Scene;
-    world: import('../types/ammo').AmmoWorld | null;
-    replaceDiceSet: (
-        scene: import('three').Scene,
-        world: import('../types/ammo').AmmoWorld | null,
-        specs: DieSpec[]
-    ) => void;
-    throwDice: (
-        scene: import('three').Scene,
-        world: import('../types/ammo').AmmoWorld | null,
-        seed?: number | null
-    ) => void;
+    /** ammo.js was retired; this legacy param is always null now. */
+    world: null;
+    replaceDiceSet: (scene: import('three').Scene, world: null, specs: DieSpec[]) => void;
+    throwDice: (scene: import('three').Scene, world: null, seed?: number | null) => void;
     readAllDiceValues: () => Array<{
         type: string;
         value: number | null;

@@ -137,5 +137,5 @@ export function despawnProp(record, context) {
         unregisterInteractiveObject(root);
         unregisterDynamicProp(root);
     }
-    disposePropSpawn(record, context.physicsWorld);
+    disposePropSpawn(record);
 }

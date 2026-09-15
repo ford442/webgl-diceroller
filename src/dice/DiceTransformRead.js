@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { getWasmEngine } from '../wasm/PhysicsBridge.js';
-import { getAmmoDiceBackend } from './DiceState.js';
-import { isUsingWasmPhysics } from './diceAmmoFlags.js';
+import { isUsingWasmPhysics } from './DicePhysicsPresets.js';
 
 export const WASM_TRANSFORM_STRIDE = 7;
 
@@ -34,15 +33,6 @@ export function getWasmTransformForDie(wasmId) {
 }
 
 export function getDieQuaternion(die) {
-    if (!isUsingWasmPhysics() && die?.body) {
-        const transform = getAmmoDiceBackend()?.getAmmoTransform(die);
-        if (transform) {
-            const rotation = transform.getRotation();
-            _readQ.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
-            return _readQ;
-        }
-    }
-
     if (isUsingWasmPhysics() && die?.wasmId != null) {
         const wasmTransform = getWasmTransformForDie(die.wasmId);
         if (wasmTransform) {

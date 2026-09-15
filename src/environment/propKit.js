@@ -193,20 +193,19 @@ export function createProp(
 
     scene.add(group);
 
-    let body = null;
     if (colliders.length > 0) {
         for (const authoredSpec of colliders) {
             const colliderSpec = scaleColliderSpec(authoredSpec, scale);
-            const result = colliderSpec.dynamic
-                ? createDynamicCollider(physicsWorld, group, colliderSpec)
-                : createStaticCollider(physicsWorld, group, colliderSpec);
-            if (!body && result?.body) body = result.body;
+            if (colliderSpec.dynamic) {
+                createDynamicCollider(physicsWorld, group, colliderSpec);
+            } else {
+                createStaticCollider(physicsWorld, group, colliderSpec);
+            }
         }
     }
 
-    /** @type {{ group: THREE.Group, body?: unknown, update?: (...args: any[]) => void, interact?: (...args: any[]) => void, dispose?: (...args: any[]) => void, [extra: string]: any }} */
+    /** @type {{ group: THREE.Group, update?: (...args: any[]) => void, interact?: (...args: any[]) => void, dispose?: (...args: any[]) => void, [extra: string]: any }} */
     const propResult = { group, ...extras };
-    if (body) propResult.body = body;
     if (update) propResult.update = update;
     if (interact) propResult.interact = interact;
     if (dispose) propResult.dispose = dispose;

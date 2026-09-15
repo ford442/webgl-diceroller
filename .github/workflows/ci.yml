@@ -34,7 +34,10 @@ jobs:
                   node-version: 24
                   cache: npm
             - run: npm ci
-            - run: npm run build:js
+            # This job doesn't build WASM (build-wasm runs in parallel, not as
+            # a dependency, to keep this job fast) — the bundle/lint-shaped
+            # checks below don't need real physics.
+            - run: npm run build:js:allow-missing-wasm
             - run: npm run check:bundle-size
             - run: npm run check:deploy-size
             - run: npm run check:cycles
@@ -79,7 +82,7 @@ jobs:
                   node-version: 24
                   cache: npm
             - run: npm ci
-            - run: npm run build:js
+            - run: npm run build:js:allow-missing-wasm
             - run: npx playwright install --with-deps chromium
             - run: npm run verify:pwa-isolation
 

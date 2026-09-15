@@ -1,7 +1,6 @@
-import * as THREE from 'three';
 import { getWasmEngine, pollCollisionEvents } from '../wasm/PhysicsBridge.js';
-import { spawnedDice, getAmmoDiceBackend } from './DiceState.js';
-import { getGeometryPositionFromBodyTransform, isUsingWasmPhysics } from './DicePhysicsPresets.js';
+import { spawnedDice } from './DiceState.js';
+import { isUsingWasmPhysics } from './DicePhysicsPresets.js';
 import { findSpawnedDieByMesh } from './DiceLookup.js';
 import { getWasmTransformForDie, WASM_TRANSFORM_STRIDE } from './DiceTransformRead.js';
 
@@ -53,82 +52,41 @@ function syncWasmTransformForDie(die, options = {}) {
 }
 
 export const updateDiceVisuals = () => {
-    const ammoBackend = getAmmoDiceBackend();
+    if (!isUsingWasmPhysics()) return;
 
-    if (isUsingWasmPhysics()) {
-        const transforms = getWasmEngine().getTransforms();
-        const ids =
-            typeof getWasmEngine().getDieIds === 'function' ? getWasmEngine().getDieIds() : null;
-
-        spawnedDice.forEach((die) => {
-            if (die.wasmId == null) return;
-
-            let offset = -1;
-            if (ids?.length) {
-                for (let i = 0; i < ids.length; i++) {
-                    if (Math.round(ids[i]) === die.wasmId) {
-                        offset = i * WASM_TRANSFORM_STRIDE;
-                        break;
-                    }
-                }
-            } else {
-                offset = spawnedDice.indexOf(die) * WASM_TRANSFORM_STRIDE;
-            }
-
-            if (offset < 0 || offset + (WASM_TRANSFORM_STRIDE - 1) >= transforms.length) return;
-
-            die.mesh.position.set(
-                transforms[offset + 0],
-                transforms[offset + 1],
-                transforms[offset + 2]
-            );
-            die.mesh.quaternion.set(
-                transforms[offset + 3],
-                transforms[offset + 4],
-                transforms[offset + 5],
-                transforms[offset + 6]
-            );
-        });
-
-        return;
-    }
-
-    if (!ammoBackend) return;
+    const transforms = getWasmEngine().getTransforms();
+    const ids =
+        typeof getWasmEngine().getDieIds === 'function' ? getWasmEngine().getDieIds() : null;
 
     spawnedDice.forEach((die) => {
-        const transform = ammoBackend.getAmmoTransform(die);
-        if (!transform) return;
-        const origin = transform.getOrigin();
-        const rotation = transform.getRotation();
-        const quaternion = new THREE.Quaternion(
-            rotation.x(),
-            rotation.y(),
-            rotation.z(),
-            rotation.w()
+        if (die.wasmId == null) return;
+
+        let offset = -1;
+        if (ids?.length) {
+            for (let i = 0; i < ids.length; i++) {
+                if (Math.round(ids[i]) === die.wasmId) {
+                    offset = i * WASM_TRANSFORM_STRIDE;
+                    break;
+                }
+            }
+        } else {
+            offset = spawnedDice.indexOf(die) * WASM_TRANSFORM_STRIDE;
+        }
+
+        if (offset < 0 || offset + (WASM_TRANSFORM_STRIDE - 1) >= transforms.length) return;
+
+        die.mesh.position.set(
+            transforms[offset + 0],
+            transforms[offset + 1],
+            transforms[offset + 2]
         );
-        const position = getGeometryPositionFromBodyTransform(die, origin, quaternion);
-        die.mesh.position.set(position.x, position.y, position.z);
-        die.mesh.quaternion.copy(quaternion);
+        die.mesh.quaternion.set(
+            transforms[offset + 3],
+            transforms[offset + 4],
+            transforms[offset + 5],
+            transforms[offset + 6]
+        );
     });
-};
-
-/**
- * Push the current mesh transform into the die's ammo body before an ammo-side
- * interaction (drag / levitation). Only reachable on the `?no-wasm` fallback —
- * WASM sessions have no ammo body to prepare.
- */
-export const prepareDieForAmmoInteraction = (mesh) => {
-    const die = findSpawnedDieByMesh(mesh);
-    const ammoBackend = getAmmoDiceBackend();
-    if (!die?.body || !ammoBackend) return;
-    ammoBackend.syncBodyTransformFromMesh(die, true);
-};
-
-export const syncDieBodyStateToWasm = (mesh) => {
-    const die = findSpawnedDieByMesh(mesh);
-    const ammoBackend = getAmmoDiceBackend();
-    if (!die || !ammoBackend) return;
-    ammoBackend.syncDieStateFromAmmoToWasm(die, syncWasmTransformForDie);
 };
 
 export const syncDieMeshStateToWasm = (mesh) => {

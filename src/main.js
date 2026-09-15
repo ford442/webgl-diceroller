@@ -163,7 +163,7 @@ let diceJailController = null;
 const multiplayerRef = { current: null };
 
 function isSimulationReady() {
-    return isWasmAvailable() || app.physicsWorld != null;
+    return isWasmAvailable();
 }
 
 function showCupFeedback(message) {
@@ -342,9 +342,10 @@ async function init() {
     app.renderer.setAnimationLoop(animate);
 
     // Initialize Physics — awaited here but the render loop above is already running,
-    // so the browser paints every frame while WASM compiles/allocates.
+    // so the browser paints every frame while WASM compiles/allocates. A failed
+    // load does not abort init(): the tavern environment still loads below,
+    // just without dice (see PhysicsBootstrap.js).
     const physicsBoot = await bootstrapPhysics(app);
-    if (!physicsBoot) return;
     if (physicsBoot.wasmAvailable) {
         syncAllDiceToWasm();
     }

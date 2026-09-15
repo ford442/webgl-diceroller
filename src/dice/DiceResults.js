@@ -8,7 +8,7 @@ import { getWasmFaceValueForDie } from './DiceFaceValueRead.js';
 const _invQ = new THREE.Quaternion();
 const _localUp = new THREE.Vector3();
 
-/** Legacy visual-mesh face clusterer (debug / ammo fallback only). */
+/** Legacy visual-mesh face clusterer (debug fallback when the WASM engine value is 0). */
 export const readDiceValueVisual = (die) => {
     const model = diceModels[die.type];
     if (!model) return null;
@@ -122,23 +122,9 @@ export const getDiceValueDebugSnapshot = () =>
 
 export const areDiceSettled = () => {
     if (spawnedDice.length === 0) return true;
+    if (!isUsingWasmPhysics()) return true;
 
-    if (isUsingWasmPhysics()) {
-        const wasmDice = spawnedDice.filter((die) => die.wasmId != null);
-        if (wasmDice.length > 0 && !getWasmEngine().areAllSettled()) return false;
-        return true;
-    }
-
-    let allStable = true;
-    spawnedDice.forEach((die) => {
-        if (!die.body) return;
-        const linear = die.body.getLinearVelocity();
-        const angular = die.body.getAngularVelocity();
-        const velSq = linear.x() * linear.x() + linear.y() * linear.y() + linear.z() * linear.z();
-        const angSq =
-            angular.x() * angular.x() + angular.y() * angular.y() + angular.z() * angular.z();
-        if (velSq > 1.0 || angSq > 1.0) allStable = false;
-    });
-
-    return allStable;
+    const wasmDice = spawnedDice.filter((die) => die.wasmId != null);
+    if (wasmDice.length > 0 && !getWasmEngine().areAllSettled()) return false;
+    return true;
 };

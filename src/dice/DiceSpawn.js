@@ -1,18 +1,11 @@
 import { getWasmEngine, loadHullForDie } from '../wasm/PhysicsBridge.js';
 import { TABLE_SURFACE_Y } from '../core/SceneMetrics.js';
-import {
-    spawnedDice,
-    clearSpawnedDice,
-    allocateAudioBodyId,
-    diceModels,
-    getAmmoDiceBackend,
-} from './DiceState.js';
+import { spawnedDice, clearSpawnedDice, allocateAudioBodyId, diceModels } from './DiceState.js';
 import {
     PHYSICS_PRESETS,
     getDieSides,
     isUsingWasmPhysics,
     useMassBias,
-    needsAmmoDiceBackend,
     getSecureRandom,
     estimateInertiaScalar,
 } from './DicePhysicsPresets.js';
@@ -22,11 +15,16 @@ import { acquireDiceMesh, releaseDiceMesh } from './DiceModels.js';
 
 /**
  * @param {import('three').Scene} scene
- * @param {import('../types/ammo').AmmoWorld | null | undefined} world
+ * @param {unknown} world unused — kept for call-site compatibility
  * @param {Record<string, number> | Array<string | SpawnedDie> | null} [config]
  */
 export const spawnObjects = (scene, world, config = null) => {
-    const ammoBackend = getAmmoDiceBackend();
+    // No physics engine, no dice: every spawn path (initial load, and later
+    // UI-driven updateDiceSet() calls) funnels through here, so guarding only
+    // the call site in LoadingTiers.js would still let a dice-count change
+    // spawn static, non-simulated meshes once WASM is unavailable.
+    if (!isUsingWasmPhysics()) return;
+
     let diceToSpawn = [];
     if (config && !Array.isArray(config)) {
         Object.keys(config).forEach((type) => {
@@ -68,23 +66,6 @@ export const spawnObjects = (scene, world, config = null) => {
         const audioBodyId = allocateAudioBodyId();
         const inertiaScalar = estimateInertiaScalar(template.geometry, physicsPreset.mass);
 
-        // Ammo dice bodies exist only in the `?no-wasm` fallback; the default
-        // WASM path never creates a rigid body for a die.
-        let body = null;
-        if (needsAmmoDiceBackend() && ammoBackend && world) {
-            body = ammoBackend.spawnAmmoDieBody(
-                world,
-                mesh,
-                template,
-                { x, y, z },
-                mesh.rotation,
-                physicsPreset,
-                centerOfMassOffset,
-                { type, audioBodyId, inertiaScalar }
-            );
-        }
-
-        mesh.userData.body = body;
         mesh.userData.isDie = true;
         mesh.userData.physicsPreset = physicsPreset;
 
@@ -110,7 +91,6 @@ export const spawnObjects = (scene, world, config = null) => {
 
         spawnedDice.push({
             mesh,
-            body,
             type,
             wasmId,
             physicsPreset,
@@ -131,14 +111,10 @@ export const replaceDiceSet = (scene, world, specs) => {
     spawnObjects(scene, world, specs);
 };
 
-export const clearDice = (scene, world) => {
-    const ammoBackend = getAmmoDiceBackend();
+export const clearDice = (scene, _world) => {
     const engine = isUsingWasmPhysics() ? getWasmEngine() : null;
     spawnedDice.forEach((die) => {
         releaseDiceMesh(scene, die.type, die.mesh);
-        if (ammoBackend && world && die.body) {
-            ammoBackend.teardownAmmoDieBody(world, die);
-        }
         if (engine && die.wasmId != null) engine.removeDie(die.wasmId);
     });
     clearSpawnedDice();
@@ -147,7 +123,6 @@ export const clearDice = (scene, world) => {
 export const updateDiceSet = (scene, world, targetCounts) => {
     if (!targetCounts || typeof targetCounts !== 'object') return;
 
-    const ammoBackend = getAmmoDiceBackend();
     const currentCounts = {};
     spawnedDice.forEach((d) => {
         currentCounts[d.type] = (currentCounts[d.type] || 0) + 1;
@@ -168,9 +143,6 @@ export const updateDiceSet = (scene, world, targetCounts) => {
                 if (toRemove === 0) break;
                 if (spawnedDice[i].type === type) {
                     const die = spawnedDice[i];
-                    if (ammoBackend && world && die.body) {
-                        ammoBackend.teardownAmmoDieBody(world, die);
-                    }
                     if (isUsingWasmPhysics() && die.wasmId != null) {
                         getWasmEngine().removeDie(die.wasmId);
                     }

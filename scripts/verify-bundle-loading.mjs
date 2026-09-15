@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
- * Verify lazy chunks: ?webgl must not fetch three.webgpu; the default WASM path
- * must not fetch the ammo physics chunk. `?no-wasm` is the only escape hatch
- * that pulls ammo back in.
+ * Verify lazy chunks: ?webgl must not fetch three.webgpu. ammo.js was
+ * retired — there is no physics fallback chunk to check for any more.
+ * `?no-wasm` now forces WasmPhysicsBridge's no-op stub instead of a
+ * different engine, so this also checks that path shows the honest
+ * failure banner and spawns no dice, rather than fetching a fallback chunk.
  */
 import { chromium } from 'playwright';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -16,9 +18,11 @@ function scriptRequests(urls, pattern) {
 
 async function collectScripts(page, path) {
     const urls = [];
+    const consoleMessages = [];
     page.on('request', (req) => {
         if (req.resourceType() === 'script') urls.push(req.url());
     });
+    page.on('console', (msg) => consoleMessages.push(msg.text()));
     await page.goto(`${BASE}${path}`, { waitUntil: 'domcontentloaded', timeout: 120000 });
     // Tier 0 completes before the full decorative pass; that's enough for renderer
     // and physics lazy chunks to have been requested.
@@ -30,7 +34,7 @@ async function collectScripts(page, path) {
         { timeout: 240000 }
     );
     await sleep(3000);
-    return urls;
+    return { urls, consoleMessages };
 }
 
 const preview = await startPreview({ port: PORT });
@@ -45,7 +49,7 @@ try {
     // WebGL baseline: no three.webgpu chunk
     {
         const page = await browser.newPage();
-        const urls = await collectScripts(page, '/?webgl&no-post&fair-dice&test&no-wasm');
+        const { urls } = await collectScripts(page, '/?webgl&no-post&fair-dice&test&no-wasm');
         const webgpu = scriptRequests(urls, /three\.webgpu/i);
         if (webgpu.length) {
             failed += 1;
@@ -56,50 +60,51 @@ try {
         await page.close();
     }
 
-    // WASM authoritative (default when wasm is active): no ammo physics chunk,
-    // and no ammo rigid body behind any die.
+    // ?no-wasm: no physics fallback chunk exists any more — the app should show
+    // the honest failure banner and spawn zero dice, not a different engine.
     {
         const page = await browser.newPage();
-        const urls = await collectScripts(page, '/?webgl&no-post&fair-dice&test');
-        const wasmActive = await page.evaluate(() => window.__app?.physicsWorld == null);
+        const { urls, consoleMessages } = await collectScripts(
+            page,
+            '/?webgl&no-post&fair-dice&test&no-wasm'
+        );
         const physics = scriptRequests(urls, /\/physics-[^/]+\.js/i);
-        if (!wasmActive) {
-            console.log('skip: WASM engine inactive in this build — ammo physics chunk expected');
-        } else if (physics.length) {
+        if (physics.length) {
             failed += 1;
-            console.error('FAIL: WASM path fetched ammo physics chunk:', physics);
+            console.error(
+                'FAIL: ?no-wasm fetched a physics fallback chunk (should not exist):',
+                physics
+            );
         } else {
-            console.log('ok: WASM path did not fetch ammo physics chunk');
+            console.log('ok: ?no-wasm fetched no physics fallback chunk');
         }
 
-        if (wasmActive) {
-            const ammoDiceBodies = await page.evaluate(() => {
-                let count = 0;
-                window.__app?.scene?.traverse((object) => {
-                    if (object.userData?.isDie && object.userData.body != null) count += 1;
-                });
-                return count;
+        const dieCount = await page.evaluate(() => {
+            let count = 0;
+            window.__app?.scene?.traverse((object) => {
+                if (object.userData?.isDie) count += 1;
             });
-            if (ammoDiceBodies > 0) {
-                failed += 1;
-                console.error(`FAIL: WASM path created ${ammoDiceBodies} ammo dice body/bodies`);
-            } else {
-                console.log('ok: WASM path created no ammo dice bodies');
-            }
-        }
-        await page.close();
-    }
-
-    // Explicit ammo fallback still loads physics
-    {
-        const page = await browser.newPage();
-        const urls = await collectScripts(page, '/?webgl&no-post&fair-dice&test&no-wasm');
-        const physics = scriptRequests(urls, /\/physics-[^/]+\.js/i);
-        if (!physics.length) {
+            return count;
+        });
+        if (dieCount > 0) {
             failed += 1;
-            console.error('FAIL: ?no-wasm did not fetch ammo physics chunk');
+            console.error(`FAIL: ?no-wasm spawned ${dieCount} die/dice with no physics engine`);
         } else {
-            console.log('ok: ?no-wasm fetched ammo physics chunk');
+            console.log('ok: ?no-wasm spawned no dice');
+        }
+
+        // The overlay itself fades out and is removed ~3s after
+        // showLoadFailure() runs (see PhysicsBootstrap.js), so by the time
+        // collectScripts() returns the DOM node is very likely already gone —
+        // assert the console warning it logs instead, which is stable.
+        const sawFailureBanner = consoleMessages.some((text) =>
+            text.includes('Physics engine unavailable')
+        );
+        if (!sawFailureBanner) {
+            failed += 1;
+            console.error('FAIL: ?no-wasm did not log the physics-unavailable warning');
+        } else {
+            console.log('ok: ?no-wasm logged the physics-unavailable warning');
         }
         await page.close();
     }

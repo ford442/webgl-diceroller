@@ -11,7 +11,6 @@ import { initUI, createCrosshair } from '../ui.js';
 import { createDiceCasePanel } from '../ui/DiceCasePanel.js';
 import { initResultsUI } from '../results.js';
 import { initInteraction } from '../interaction.js';
-import { createFloorAndWalls } from '../physics.js';
 import {
     TIER_PROP_DEFINITIONS,
     DECORATIVE_TIER_ENTRIES,
@@ -56,7 +55,7 @@ async function spawnTier(entries, context) {
 /**
  * @param {import('three').Scene} scene
  * @param {import('three').Camera} camera
- * @param {import('../types/ammo').AmmoWorld | null | undefined} physicsWorld
+ * @param {null} physicsWorld ammo.js was retired; this legacy param is always null now
  * @param {import('../types/app').AppOrchestrator} orchestrator
  * @param {import('../types/app').TierLoadCallbacks} callbacks
  * @param {import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer} renderer
@@ -86,7 +85,6 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         scheduler: orchestrator.scheduler,
         cullingSystem,
         registerUpdate: registerUpdateFn,
-        createFloorAndWalls,
         layoutConfig,
         layoutManager,
         clutterOptions: {
@@ -126,6 +124,9 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         envMap: scene.environment ?? null,
         qualityProfile: callbacks.qualityProfile ?? null,
     });
+    // spawnObjects() no-ops without WASM (see DiceSpawn.js): dice models stay
+    // loaded for the case-panel preview, but no dice are spawned into the
+    // scene — a static tavern beats silently running a different simulation.
     spawnObjects(scene, physicsWorld);
 
     updateLoadingText('Setting up game...');
