@@ -235,7 +235,7 @@ Do **not** add `-ffast-math` or `PRECISE_F32=0` — seeded replay depends on IEE
 
 ##### EMSDK upgrade backlog (`--closure 1`, `-s STRICT=1`, `-fno-rtti`, `-fno-exceptions`)
 
-Four flags are commented in `emcc_flags.inc.sh` as "re-evaluate on EMSDK upgrade" but have never actually been re-evaluated against a newer toolchain — the comments describe *why they were off on 3.1.61* (the version pinned since this file existed), not a result of testing a newer one. This needs a real EMSDK checkout to do safely; it was not attempted in an environment without one (an LLM coding session without network access to fetch/build emsdk, for instance), since blindly flipping any of these and pushing is exactly the kind of change that can silently break the release build or bloat the glue in a way CI's existing checks won't catch.
+Four flags are commented in `emcc_flags.inc.sh` as "re-evaluate on EMSDK upgrade" but have never actually been re-evaluated against a newer toolchain — the comments describe _why they were off on 3.1.61_ (the version pinned since this file existed), not a result of testing a newer one. This needs a real EMSDK checkout to do safely; it was not attempted in an environment without one (an LLM coding session without network access to fetch/build emsdk, for instance), since blindly flipping any of these and pushing is exactly the kind of change that can silently break the release build or bloat the glue in a way CI's existing checks won't catch.
 
 Procedure for whoever picks this up, one flag at a time (not all four in a single branch — if the combination fails, you want to know which flag caused it):
 
@@ -244,7 +244,7 @@ Procedure for whoever picks this up, one flag at a time (not all four in a singl
 3. If it builds: run `npm run test:solver` (native, unaffected by emcc flags but confirms nothing else broke) then `node scripts/compare-solver-golden.mjs` against the built `public/wasm/dice_physics.wasm` — the WASM parity check only runs when that artifact exists, so this is the one environment where it actually executes.
 4. Record the glue size delta (`build-info.json`'s `js_bytes`/`wasm_bytes`, or a manual `wc -c`) for `--closure 1` specifically — it's a size-only flag, so a failure to build is the only reason not to keep it; there's no correctness question once it builds.
 5. For `-fno-rtti` / `-fno-exceptions`: Embind's own generated glue may use RTTI/exceptions internally even if the app's own C++ error paths don't, so "it builds" isn't sufficient — also grep the generated `.js` for stripped-down dynamic_cast/exception-string remnants, and run the full page's error paths (a malformed hull, an out-of-range static/dynamic add) to confirm Embind still reports errors sanely rather than trapping.
-6. Whatever survives, update `emcc_flags.inc.sh`'s comment block to describe the *new* pinned version's status instead of 3.1.61's, so the next person isn't re-deriving this from scratch. Whatever doesn't survive, leave the comment as-is but note the EMSDK version it was last tried against.
+6. Whatever survives, update `emcc_flags.inc.sh`'s comment block to describe the _new_ pinned version's status instead of 3.1.61's, so the next person isn't re-deriving this from scratch. Whatever doesn't survive, leave the comment as-is but note the EMSDK version it was last tried against.
 
 #### Debug flag set
 
@@ -292,34 +292,34 @@ BENCH_SOLVER=1 npm run test:solver
 
 Source layout:
 
-| File                                             | Role                                                                                                   |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `dice_physics_engine.hpp`                        | `DicePhysicsEngine` class declaration only — no inline definitions                                     |
-| `dice_physics/dice_math.hpp`                     | `Vec3`, `Quat`, `Mat3`, `PolyHull`                                                                     |
-| `dice_physics/dice_types.hpp`                    | `RigidBody`, `Contact`, `CollisionEvent`, `StaticBody`, etc.                                           |
-| `dice_physics/dice_sat.hpp`                      | SAT narrowphase helpers + `DeterministicRNG` (header-only; shared by multiple TUs)                     |
-| `dice_physics/dice_contacts.hpp`                 | Manifold types, sequential-impulse constants, `SOLVER_REVISION`                                        |
-| `dice_physics/dice_engine_lifecycle.cpp`         | Engine construction, per-die setters, static-collider registration                                     |
-| `dice_physics/dice_engine_step.cpp`              | `step()`, buffer builders, serialize/deserialize, invariant helpers                                    |
-| `dice_physics/dice_engine_collision_static.cpp`  | Shared helpers (radius, events, static materials) — contact generation is in `dice_engine_solver.cpp`  |
-| `dice_physics/dice_engine_collision_dynamic.cpp` | Die–die grid helpers used by tests                                                                     |
-| `dice_physics/dice_engine_integrate.cpp`         | Per-body integration, exponential damping, sleep bookkeeping                                           |
-| `dice_physics/dice_engine_solver.cpp`            | Persistent manifolds, sequential impulse, speculative contacts, island sleep                           |
-| `dice_physics/dice_engine_face_value.cpp`        | Engine-authoritative die face settlement                                                               |
-| `dice_physics.cpp`                               | Emscripten Embind exports for the WASM build (links against the `.cpp` files above)                    |
-| `solver_tests.cpp`                               | doctest unit + fuzz harness (`--dump-serialize`, `--bench`); also links against the `.cpp` files above |
-| `emcc_flags.inc.sh`                              | Single source of truth for Emscripten link flags                                                       |
-| `engine_sources.txt`                             | Single source of truth for the `dice_physics/dice_engine_*.cpp` list — read by `build.sh`, `build_solver_test.sh`, and `CMakeLists.txt` |
-| `build_solver_test.sh`                           | Native compile + run script; always writes `build-native/compile_commands.json`                        |
+| File                                             | Role                                                                                                                                                           |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dice_physics_engine.hpp`                        | `DicePhysicsEngine` class declaration only — no inline definitions                                                                                             |
+| `dice_physics/dice_math.hpp`                     | `Vec3`, `Quat`, `Mat3`, `PolyHull`                                                                                                                             |
+| `dice_physics/dice_types.hpp`                    | `RigidBody`, `Contact`, `CollisionEvent`, `StaticBody`, etc.                                                                                                   |
+| `dice_physics/dice_sat.hpp`                      | SAT narrowphase helpers + `DeterministicRNG` (header-only; shared by multiple TUs)                                                                             |
+| `dice_physics/dice_contacts.hpp`                 | Manifold types, sequential-impulse constants, `SOLVER_REVISION`                                                                                                |
+| `dice_physics/dice_engine_lifecycle.cpp`         | Engine construction, per-die setters, static-collider registration                                                                                             |
+| `dice_physics/dice_engine_step.cpp`              | `step()`, buffer builders, serialize/deserialize, invariant helpers                                                                                            |
+| `dice_physics/dice_engine_collision_static.cpp`  | Shared helpers (radius, events, static materials) — contact generation is in `dice_engine_solver.cpp`                                                          |
+| `dice_physics/dice_engine_collision_dynamic.cpp` | Die–die grid helpers used by tests                                                                                                                             |
+| `dice_physics/dice_engine_integrate.cpp`         | Per-body integration, exponential damping, sleep bookkeeping                                                                                                   |
+| `dice_physics/dice_engine_solver.cpp`            | Persistent manifolds, sequential impulse, speculative contacts, island sleep                                                                                   |
+| `dice_physics/dice_engine_face_value.cpp`        | Engine-authoritative die face settlement                                                                                                                       |
+| `dice_physics.cpp`                               | Emscripten Embind exports for the WASM build (links against the `.cpp` files above)                                                                            |
+| `solver_tests.cpp`                               | doctest unit + fuzz harness (`--dump-serialize`, `--bench`); also links against the `.cpp` files above                                                         |
+| `emcc_flags.inc.sh`                              | Single source of truth for Emscripten link flags                                                                                                               |
+| `engine_sources.txt`                             | Single source of truth for the `dice_physics/dice_engine_*.cpp` list — read by `build.sh`, `build_solver_test.sh`, and `CMakeLists.txt`                        |
+| `build_solver_test.sh`                           | Native compile + run script; always writes `build-native/compile_commands.json`                                                                                |
 | `generate-clangd-db.sh`                          | Merges `build-native/compile_commands.json` with an emcc-configured `build-emcc/compile_commands.json` into `compile_commands.json` (`npm run wasm:clangd-db`) |
-| `.clangd`                                        | Points clangd at the merged `compile_commands.json` (`CompilationDatabase: .`)                          |
-| `CMakeLists.txt`                                 | Local IDE / advanced-user build (SIMD + scalar targets) — **not** the CI build; see below              |
+| `.clangd`                                        | Points clangd at the merged `compile_commands.json` (`CompilationDatabase: .`)                                                                                 |
+| `CMakeLists.txt`                                 | Local IDE / advanced-user build (SIMD + scalar targets) — **not** the CI build; see below                                                                      |
 
 Add a new engine module to `engine_sources.txt` once — `build.sh`,
 `build_solver_test.sh`, and `CMakeLists.txt` all read that list, so there is
 no second (or third) place to remember to update.
 
-By default clangd only sees the *native* compile commands, so
+By default clangd only sees the _native_ compile commands, so
 `__EMSCRIPTEN__` / `__wasm_simd128__` branches in engine sources read as
 dead code in the editor. Run `npm run wasm:clangd-db` (needs an EMSDK on
 `PATH`, or checked out at `/root/emsdk`) to additionally configure
@@ -766,6 +766,6 @@ const t2 = window.__app.getWasmEngine().getTransforms();
 
 - [x] die×dynamic and dynamic×dynamic pairs moved off brute force onto the die uniform grid: dynamics get their own per-cell bucket (`dynGridCells_`, `rebuildDynGrid`) sharing the die grid's dimensions/origin. `forEachDynamicPair` mirrors `forEachDiePair`'s same-population dedup; `forEachDieDynamicPair` is bipartite (die index space × dynamics index space), so it collects grid candidates and sort+uniques them before dispatch — a body straddling a cell boundary can otherwise surface the same pair from more than one neighbor cell.
 - [x] `MAX_DYNAMICS` raised 64 → 256 now that dynamics-involving pairs are grid-broadphased rather than brute-forced; `workerLayout.ts`'s mirrored `MAX_DYNAMICS` (sizes the dynamics SharedArrayBuffer) bumped to match — the two had been kept in sync only because both happened to be 64.
-- [x] `collectDieDynamicPairsForTesting` / `collectDynamicPairsForTesting` test hooks + a dedicated doctest verify the grid produces the exact same pair *set* as brute force on a dense, boundary-straddling layout. Post-simulation trajectories are allowed to diverge between the two paths (a sequential-impulse solver is iteration-order-sensitive, and grid vs. brute-force visit candidate pairs in a different order) — invariants (finite, in-bounds) are checked on both instead of requiring byte-identical `serializeState()`, unlike the pre-existing die-die grid-vs-brute test, which happens to stay byte-identical for its specific low-chaos layout.
+- [x] `collectDieDynamicPairsForTesting` / `collectDynamicPairsForTesting` test hooks + a dedicated doctest verify the grid produces the exact same pair _set_ as brute force on a dense, boundary-straddling layout. Post-simulation trajectories are allowed to diverge between the two paths (a sequential-impulse solver is iteration-order-sensitive, and grid vs. brute-force visit candidate pairs in a different order) — invariants (finite, in-bounds) are checked on both instead of requiring byte-identical `serializeState()`, unlike the pre-existing die-die grid-vs-brute test, which happens to stay byte-identical for its specific low-chaos layout.
 - [x] Cached rotation matrix (`BodyView::invInertiaWorldMat`, `inertiaWorldMat3` in `dice_physics/dice_sat.hpp`): `solveVelocityConstraints` rebuilds a `BodyView` once per (velocity iteration, manifold) and then calls `applyInvInertiaWorld` up to ~3x per contact point against it (normal + up to 2 tangents), with a rotation that is constant across all of those calls within one substep. Precomputing `R * diag(invInertia) * R^T` once at `BodyView` construction (`viewDie`/`viewDyn`) and reusing it as a single `Mat3::mul` replaces two quaternion rotates per call with one matrix-vector multiply. Verified mathematically equivalent to the old two-quaternion-rotate formula via a dedicated doctest (5000 random rotations/vectors/inertias, 1e-4 tolerance) before wiring it in; SOLVER_REVISION bumped anyway since the floating-point operation order (and therefore golden hashes) changed. `RigidBody`/`DynamicBody`'s own `applyInvInertiaWorld` — used only by `applyTorqueImpulse`, a single call per user API invocation, not a hot loop — is deliberately left on the quaternion form: a body-resident cache would need invalidating at every site that mutates `rotation` or `invInertia` (`setDieTransform`, `setDieHull`, `deserializeState`, ...), which is easy to miss and silently produce subtly-wrong physics; `BodyView` sidesteps that because it's always rebuilt fresh from the live body right before use.
 - [ ] Deferred: full SoA layout (`position`/`velocity`/`angularVelocity`/sleep as separate parallel arrays instead of `std::vector<RigidBody>`) for the actual SIMD win the cached rotation matrix above is a precursor to. Not attempted here — it touches nearly every file under `dice_physics/` (integration, both collision-static and collision-dynamic, the solver, face-value) and its payoff can only really be judged against a real before/after SIMD benchmark in the actual WASM build, which this environment cannot produce (no EMSDK). Whoever picks this up should keep `DICE_FORCE_SCALAR_SAT` byte-compatible per `scripts/compare-solver-simd.mjs`, same as the existing SIMD work above.
