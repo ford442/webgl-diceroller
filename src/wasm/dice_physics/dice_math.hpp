@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstddef>
 #include <vector>
 
 namespace dice_physics {
@@ -83,6 +85,7 @@ struct Quat {
 
 struct Mat3 {
     float m[9];
+    static Mat3 identity() { return {1, 0, 0, 0, 1, 0, 0, 0, 1}; }
     static Mat3 diagonal(float ix, float iy, float iz) {
         return { ix,0,0, 0,iy,0, 0,0,iz };
     }
@@ -94,6 +97,25 @@ struct Mat3 {
         };
     }
 };
+
+/** Orthonormal tangent pair for a unit normal (deterministic, branch-stable). */
+inline void tangentBasis(const Vec3& n, Vec3& t1, Vec3& t2) {
+    if (std::abs(n.x) >= 0.57735027f) {
+        t1 = Vec3{n.y, -n.x, 0.0f}.normalized();
+    } else {
+        t1 = Vec3{0.0f, n.z, -n.y}.normalized();
+    }
+    t2 = Vec3::cross(n, t1);
+}
+
+inline uint64_t fnv1a64(const uint8_t* data, size_t len) {
+    uint64_t h = 14695981039346656037ULL;
+    for (size_t i = 0; i < len; ++i) {
+        h ^= data[i];
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
 
 // ---------------------------------------------------------------------------
 // PolyHull

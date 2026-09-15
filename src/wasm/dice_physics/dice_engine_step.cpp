@@ -23,19 +23,38 @@ void DicePhysicsEngine::step(float dt) {
             if (b.sleeping) continue;
             integrate(b, subDt);
         }
-        resolveDieCollisions(subDt, subStats);
-        stepDynamics(subDt, subStats);
+        for (auto& d : dynamics_) {
+            if (d.sleeping) continue;
+            integrateDynamic(d, subDt);
+        }
+        for (auto& b : bodies_) refreshDieDerived(b);
+        for (auto& d : dynamics_) refreshDynamicDerived(d);
+        generateContacts(subDt, subStats);
+        solveContacts(subDt);
+        updateIslandSleep(subDt);
+        auto clampToTable = [&](auto& b) {
+            if (b.kinematic) return;
+            const float wx = tableHalfW_ - 0.02f;
+            const float wz = tableHalfD_ - 0.02f;
+            if (b.position.x >  wx) { b.position.x =  wx; if (b.velocity.x > 0.0f) b.velocity.x = 0.0f; }
+            if (b.position.x < -wx) { b.position.x = -wx; if (b.velocity.x < 0.0f) b.velocity.x = 0.0f; }
+            if (b.position.z >  wz) { b.position.z =  wz; if (b.velocity.z > 0.0f) b.velocity.z = 0.0f; }
+            if (b.position.z < -wz) { b.position.z = -wz; if (b.velocity.z < 0.0f) b.velocity.z = 0.0f; }
+            if (b.position.y < tableY_ - 1.0f) {
+                b.position.y = tableY_ + b.radius;
+                if (b.velocity.y < 0.0f) b.velocity.y = 0.0f;
+            }
+            if (b.position.y > tableY_ + 40.0f) {
+                b.position.y = tableY_ + 40.0f;
+                if (b.velocity.y > 0.0f) b.velocity.y = 0.0f;
+            }
+        };
+        for (auto& b : bodies_) clampToTable(b);
+        for (auto& d : dynamics_) clampToTable(d);
         lastStepStats_.pairCandidates += subStats.pairCandidates;
         lastStepStats_.sphereTests += subStats.sphereTests;
         lastStepStats_.satTests += subStats.satTests;
         lastStepStats_.contacts += subStats.contacts;
-        for (auto& b : bodies_) {
-            if (b.sleeping) continue;
-            resolveContainerCollisions(b, subDt);
-            resolveStaticCollisions(b, subDt);
-            resolveTableCollision(b, subDt);
-            checkSleep(b, subDt);
-        }
     }
 }
 
@@ -57,7 +76,8 @@ std::vector<std::pair<size_t, size_t>> DicePhysicsEngine::collectDiePairsForTest
 }
 
 bool DicePhysicsEngine::areAllSettled() const {
-    if (bodies_.empty()) return false;
+    // Explicit: an empty engine has no roll to finish.
+    if (!hasDice()) return false;
     for (const auto& b : bodies_) {
         if (b.kinematic) continue;
         if (!b.sleeping) return false;
@@ -116,7 +136,7 @@ std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
         const uint8_t* p = static_cast<const uint8_t*>(ptr);
         out.insert(out.end(), p, p + len);
     };
-    uint32_t version = 2;
+    uint32_t version = 3;
     uint32_t count = static_cast<uint32_t>(bodies_.size());
     append(&version, sizeof(version));
     append(&count, sizeof(count));
@@ -153,6 +173,30 @@ std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
         append(&d.mass, sizeof(d.mass));
         append(&d.halfExtents, sizeof(d.halfExtents));
     }
+
+    uint32_t manCount = static_cast<uint32_t>(manifolds_.size());
+    append(&manCount, sizeof(manCount));
+    for (const auto& m : manifolds_) {
+        const uint8_t kind = static_cast<uint8_t>(m.kind);
+        append(&kind, sizeof(kind));
+        append(&m.idA, sizeof(m.idA));
+        append(&m.idB, sizeof(m.idB));
+        append(&m.aux, sizeof(m.aux));
+        append(&m.normal, sizeof(m.normal));
+        append(&m.friction, sizeof(m.friction));
+        append(&m.restitution, sizeof(m.restitution));
+        const uint8_t pc = static_cast<uint8_t>(m.pointCount);
+        append(&pc, sizeof(pc));
+        for (uint8_t i = 0; i < pc; ++i) {
+            append(&m.points[i].point, sizeof(m.points[i].point));
+            append(&m.points[i].separation, sizeof(m.points[i].separation));
+            append(&m.points[i].featureId, sizeof(m.points[i].featureId));
+            append(&m.points[i].accN, sizeof(m.points[i].accN));
+            append(&m.points[i].accT1, sizeof(m.points[i].accT1));
+            append(&m.points[i].accT2, sizeof(m.points[i].accT2));
+            append(&m.points[i].velBias, sizeof(m.points[i].velBias));
+        }
+    }
     return out;
 }
 
@@ -167,7 +211,7 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
     };
     uint32_t version = 0, count = 0;
     if (!read(&version, sizeof(version))) return;
-    if (version != 1 && version != 2) return;
+    if (version != 1 && version != 2 && version != 3) return;
     if (!read(&count, sizeof(count))) return;
     bodies_.clear(); bodies_.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
@@ -231,6 +275,105 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
             }
         }
     }
+
+    manifolds_.clear();
+    if (version >= 3) {
+        uint32_t manCount = 0;
+        if (read(&manCount, sizeof(manCount))) {
+            manifolds_.reserve(manCount);
+            for (uint32_t i = 0; i < manCount; ++i) {
+                ContactManifold m;
+                uint8_t kind = 0;
+                uint8_t pc = 0;
+                if (!read(&kind, sizeof(kind))) break;
+                if (!read(&m.idA, sizeof(m.idA))) break;
+                if (!read(&m.idB, sizeof(m.idB))) break;
+                if (!read(&m.aux, sizeof(m.aux))) break;
+                if (!read(&m.normal, sizeof(m.normal))) break;
+                if (!read(&m.friction, sizeof(m.friction))) break;
+                if (!read(&m.restitution, sizeof(m.restitution))) break;
+                if (!read(&pc, sizeof(pc))) break;
+                m.kind = static_cast<ManifoldKind>(kind);
+                m.pointCount = std::min(static_cast<int>(pc), MAX_MANIFOLD_POINTS);
+                tangentBasis(m.normal, m.tangent1, m.tangent2);
+                m.stale = false;
+                for (int p = 0; p < m.pointCount; ++p) {
+                    if (!read(&m.points[p].point, sizeof(m.points[p].point))) break;
+                    if (!read(&m.points[p].separation, sizeof(m.points[p].separation))) break;
+                    if (!read(&m.points[p].featureId, sizeof(m.points[p].featureId))) break;
+                    if (!read(&m.points[p].accN, sizeof(m.points[p].accN))) break;
+                    if (!read(&m.points[p].accT1, sizeof(m.points[p].accT1))) break;
+                    if (!read(&m.points[p].accT2, sizeof(m.points[p].accT2))) break;
+                    if (!read(&m.points[p].velBias, sizeof(m.points[p].velBias))) break;
+                }
+                m.indexA = -1;
+                m.indexB = -1;
+                switch (m.kind) {
+                    case ManifoldKind::DieDie:
+                        for (size_t bi = 0; bi < bodies_.size(); ++bi) {
+                            if (bodies_[bi].id == m.idA) m.indexA = static_cast<int>(bi);
+                            if (bodies_[bi].id == m.idB) m.indexB = static_cast<int>(bi);
+                        }
+                        break;
+                    case ManifoldKind::DieDynamic:
+                        for (size_t bi = 0; bi < bodies_.size(); ++bi) {
+                            if (bodies_[bi].id == m.idA) m.indexA = static_cast<int>(bi);
+                        }
+                        for (size_t di = 0; di < dynamics_.size(); ++di) {
+                            if (dynamics_[di].userId == m.idB) m.indexB = static_cast<int>(di);
+                        }
+                        break;
+                    case ManifoldKind::DynamicDynamic:
+                        for (size_t di = 0; di < dynamics_.size(); ++di) {
+                            if (dynamics_[di].userId == m.idA) m.indexA = static_cast<int>(di);
+                            if (dynamics_[di].userId == m.idB) m.indexB = static_cast<int>(di);
+                        }
+                        break;
+                    case ManifoldKind::DieStatic:
+                    case ManifoldKind::DieTable:
+                    case ManifoldKind::DieWall:
+                    case ManifoldKind::DieContainer:
+                        for (size_t bi = 0; bi < bodies_.size(); ++bi) {
+                            if (bodies_[bi].id == m.idA) m.indexA = static_cast<int>(bi);
+                        }
+                        break;
+                    case ManifoldKind::DynamicStatic:
+                    case ManifoldKind::DynamicTable:
+                    case ManifoldKind::DynamicWall:
+                    case ManifoldKind::DynamicContainer:
+                        for (size_t di = 0; di < dynamics_.size(); ++di) {
+                            if (dynamics_[di].userId == m.idA) m.indexA = static_cast<int>(di);
+                        }
+                        break;
+                }
+                manifolds_.push_back(m);
+            }
+        }
+    }
+}
+
+uint64_t DicePhysicsEngine::hashSerializedState() const {
+    const auto bytes = serializeState();
+    return fnv1a64(bytes.data(), bytes.size());
+}
+
+float DicePhysicsEngine::maxTablePenetration() const {
+    float maxPen = 0.0f;
+    for (const auto& b : bodies_) {
+        if (b.useHull && !b.worldVerts.empty()) {
+            for (const auto& v : b.worldVerts) {
+                maxPen = std::max(maxPen, tableY_ - v.y);
+            }
+        } else if (b.useHull && !b.hull.verts.empty()) {
+            for (const auto& v : b.hull.verts) {
+                Vec3 wv = b.rotation.rotate(v) + b.position;
+                maxPen = std::max(maxPen, tableY_ - wv.y);
+            }
+        } else {
+            maxPen = std::max(maxPen, (tableY_ + b.radius) - b.position.y);
+        }
+    }
+    return maxPen;
 }
 
 bool DicePhysicsEngine::allBodyStatesFinite() const {
@@ -254,15 +397,21 @@ bool DicePhysicsEngine::allRotationsUnitLength(float eps) const {
 }
 
 bool DicePhysicsEngine::allBodyStatesInWorldBounds(float margin) const {
-    for (const auto& b : bodies_) {
-        const float wx = tableHalfW_ + b.radius + margin;
-        const float wz = tableHalfD_ + b.radius + margin;
+    auto inBounds = [&](const Vec3& p, float radius) {
+        const float wx = tableHalfW_ + radius + margin;
+        const float wz = tableHalfD_ + radius + margin;
         const float minY = tableY_ - margin;
-        // Throws from the spawn box can arc well above the table lip.
         const float maxY = tableY_ + 80.0f + margin;
-        if (b.position.x < -wx || b.position.x > wx) return false;
-        if (b.position.z < -wz || b.position.z > wz) return false;
-        if (b.position.y < minY || b.position.y > maxY) return false;
+        if (p.x < -wx || p.x > wx) return false;
+        if (p.z < -wz || p.z > wz) return false;
+        if (p.y < minY || p.y > maxY) return false;
+        return true;
+    };
+    for (const auto& b : bodies_) {
+        if (!inBounds(b.position, b.radius)) return false;
+    }
+    for (const auto& d : dynamics_) {
+        if (!inBounds(d.position, d.radius)) return false;
     }
     return true;
 }

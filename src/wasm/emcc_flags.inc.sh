@@ -2,6 +2,10 @@
 # Sourced by build.sh, build_colab.sh, and emcc_flags.sh (--print-link-line for CMake).
 #
 # Determinism: do not add -ffast-math or PRECISE_F32=0 — seeded replay is IEEE-754.
+# -s STACK_SIZE=262144 — EMSDK 3.1.61 default stack is small; manifold SI + SAT
+#   recursion/temps need headroom. Do not drop without a stack-highwater check.
+# --closure 1 and -s STRICT=1 are intentionally unset: Embind + EXPORT_ES6 glue
+#   on 3.1.61 still trips both. Re-evaluate when upgrading EMSDK.
 # -fno-rtti is omitted: Embind on EMSDK 3.1.61 still requires RTTI.
 # -fno-exceptions is omitted: Embind error paths can throw; DISABLE_EXCEPTION_CATCHING=1
 # still strips catch tables in release.
@@ -24,6 +28,7 @@ EMCC_COMMON=(
     -s ENVIRONMENT=web,worker,node
     -s FILESYSTEM=0
     -s ABORTING_MALLOC=0
+    -s STACK_SIZE=262144
 )
 
 EMCC_RELEASE=(

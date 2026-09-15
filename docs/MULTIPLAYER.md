@@ -53,7 +53,9 @@ Set the production app build env:
 VITE_SIGNALING_URL=https://<your-worker>.workers.dev npm run build:js
 ```
 
-The Worker routes each room code to a Durable Object (`RoomDurableObject`). Persisted fields include `protocolVersion`, `solverBuildId` (from `public/wasm/build-info.json` `git_sha`), dice counts, `lastRoll`, optional layout seed, and session snapshot.
+The Worker routes each room code to a Durable Object (`RoomDurableObject`). Persisted fields include `protocolVersion`, `solverBuildId` (`{solver_revision}:{git_sha}` from `public/wasm/build-info.json`), dice counts, `lastRoll`, optional layout seed, and session snapshot.
+
+Rebuild-required UX: any behavioural solver change bumps `SOLVER_REVISION` in `dice_contacts.hpp` (and therefore `solver_revision` in `build-info.json`). Clients send that identity at join; a guest on an older WASM build is rejected with `solver_build_mismatch` until they load a matching `npm run build:wasm` artifact. That is the intended safety net for seeded replay — do not work around it by clearing the room id.
 
 ## Protocol (DataChannel JSON)
 
@@ -74,10 +76,10 @@ Signaling Worker relays SDP/ICE (`signal`), peer join/leave, and `room-snapshot`
 
 ### Mismatch errors
 
-| Error                       | Meaning                                                          |
-| --------------------------- | ---------------------------------------------------------------- |
-| `solver_build_mismatch`     | WASM `git_sha` differs — run `npm run build:wasm` on all clients |
-| `protocol_version_mismatch` | Mixed v1/v2 or different app builds                              |
+| Error                       | Meaning                                                                                |
+| --------------------------- | -------------------------------------------------------------------------------------- |
+| `solver_build_mismatch`     | `solver_revision:git_sha` differs — rebuild WASM (`npm run build:wasm`) on all clients |
+| `protocol_version_mismatch` | Mixed v1/v2 or different app builds                                                    |
 
 ## COOP / COEP
 

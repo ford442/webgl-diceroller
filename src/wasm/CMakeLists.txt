@@ -27,6 +27,7 @@ set(ENGINE_SOURCES
     dice_physics/dice_engine_integrate.cpp
     dice_physics/dice_engine_face_value.cpp
     dice_physics/dice_engine_dynamics.cpp
+    dice_physics/dice_engine_solver.cpp
 )
 
 add_executable(dice_physics
