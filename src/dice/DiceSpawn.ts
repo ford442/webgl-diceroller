@@ -166,9 +166,13 @@ export const syncAllDiceToWasm = () => {
     engine.clearAllDice();
 
     spawnedDice.forEach((die) => {
+        // The shape wins over whatever preset the die was spawned with: a set
+        // that re-shaped this key clears it, and a stale preset would simulate
+        // the hull this die no longer has.
         const shape = getDieShape(die.type);
         const sides = getDieSides(shape);
         const physicsPreset = die.physicsPreset ?? presetForShape(shape);
+        die.physicsPreset = physicsPreset;
         die.wasmId = engine.addDie(
             sides,
             die.mesh.position.x,

@@ -195,7 +195,12 @@ void diceComputeMarking() {
     gDiceCoverage = smoothstep(-width, width, signedDistance);
     // A ridge that peaks on the outline: this is where a cut or an inlay has a
     // wall, and so where the normal should bend.
-    gDiceEdge = exp(-pow(signedDistance / (3.0 * width + 0.015), 2.0));
+    // Squared by multiplication, not pow(): signedDistance is negative for every
+    // fragment outside the glyph, and pow() with a negative base is undefined in
+    // GLSL ES. Drivers that return NaN there would make gDiceEdge poison the
+    // normal bend below.
+    float edgeRatio = signedDistance / (3.0 * width + 0.015);
+    gDiceEdge = exp(-edgeRatio * edgeRatio);
 
     float texel = 1.0 / 32.0;
     float dx =

@@ -65,6 +65,20 @@ describe('ShareableRoll', () => {
         expect(replay.seed).toBe(99);
     });
 
+    it('carries a derived die through the counts param', () => {
+        // A 4dF roll has to survive a share link; dF is not a hull, so a
+        // hand-written list of shapes would drop it silently.
+        expect(serializeDiceCounts({ dF: 4, d20: 1 })).toBe('d20:1,dF:4');
+
+        const counts = parseDiceParam('d20:1,dF:4');
+        expect(counts.dF).toBe(4);
+        expect(counts.d20).toBe(1);
+    });
+
+    it('rejects a counts param naming nothing it knows', () => {
+        expect(parseDiceParam('d7:2,nonsense:1')).toBeNull();
+    });
+
     it('round-trips the whole dice set, not just two colours', () => {
         const set = createDefaultDiceSet();
         set.dice.d20 = {

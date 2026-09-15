@@ -36,6 +36,32 @@ export function isHighQualityProfile(profile) {
 let nodeMaterialFactory = null;
 let nodeMaterialLoad = null;
 let backend = 'webgl';
+let degradation = null;
+
+/**
+ * Why the dice are not shading the way the descriptor asked, or `null` when
+ * they are. Surfaced so `?renderer-info` can report it rather than leaving a
+ * silently plainer die on the table.
+ */
+export function getDiceMaterialDegradation() {
+    return degradation;
+}
+
+/**
+ * Which twin a renderer needs.
+ *
+ * Asked of the renderer object, never of a flag someone set alongside it: a
+ * node material handed to `WebGLRenderer` dies in `WebGLProgram`, and a plain
+ * `MeshPhysicalMaterial` handed to `WebGPURenderer` dies in the node system.
+ * `WebGPURenderer` keeps `isWebGPURenderer` true even when it has fallen back
+ * to its WebGL2 *backend*, which is correct — it still wants nodes.
+ *
+ * @param {{ isWebGPURenderer?: boolean } | null | undefined} renderer
+ * @returns {'webgl'|'webgpu'}
+ */
+export function backendForRenderer(renderer) {
+    return renderer?.isWebGPURenderer === true ? 'webgpu' : 'webgl';
+}
 
 /**
  * Tell the dice which renderer they are being drawn by, and warm the node
@@ -47,17 +73,27 @@ let backend = 'webgl';
  */
 export async function setDiceMaterialBackend(next) {
     backend = next === 'webgpu' ? 'webgpu' : 'webgl';
-    if (backend !== 'webgpu') return;
+    if (backend !== 'webgpu') {
+        degradation = null;
+        return;
+    }
 
     nodeMaterialLoad ??= loadDiceFaceMarkingNodeMaterialFactory().then(
         (factory) => {
             nodeMaterialFactory = factory;
         },
         (error) => {
-            // A missing node backend is not worth a blank table: fall back to the
-            // GLSL twin, which a WebGPU renderer can still consume via its
-            // WebGL fallback path.
-            console.warn('[DiceMaterials] node material unavailable; using GLSL twin', error);
+            // `WebGPURenderer` adapts a plain material, so the body still shades
+            // and a hull's own baked markings still read — but it never runs
+            // `onBeforeCompile`, so the GLSL twin's atlas glyphs are lost. Say so
+            // rather than leaving an unexplained plainer die on the table.
+            degradation = 'webgpu-node-materials-unavailable';
+            console.warn(
+                '[DiceMaterials] three/tsl failed to load; dice fall back to the GLSL twin, ' +
+                    'whose atlas glyphs WebGPU cannot compile. Markings will be missing for any ' +
+                    'die whose descriptor differs from what its hull was authored with.',
+                error
+            );
             nodeMaterialLoad = null;
         }
     );
@@ -73,7 +109,7 @@ export function getDiceMaterialBackend() {
  *
  * @param {import('./DiceSetFormat.js').DiceSetEntry} entry
  * @param {import('three').Mesh} template die template the material will be worn by
- * @param {{ envMap?: import('three').Texture|null, qualityProfile?: object|null }} [options]
+ * @param {{ envMap?: import('three').Texture|null, qualityProfile?: object|null, forceWebGL?: boolean }} [options]
  * @returns {{ materials: import('three').Material[], dispose: () => void }}
  */
 export function createDiceMaterialForEntry(entry, template, options = {}) {
@@ -82,9 +118,10 @@ export function createDiceMaterialForEntry(entry, template, options = {}) {
         highQuality: isHighQualityProfile(options.qualityProfile),
     };
 
-    if (backend === 'webgpu' && nodeMaterialFactory) {
-        return nodeMaterialFactory(entry, template, shading);
-    }
+    // `forceWebGL` is for surfaces that own a plain WebGLRenderer of their own
+    // (the dice case preview), whatever the table is drawn with.
+    const useNodes = !options.forceWebGL && backend === 'webgpu' && nodeMaterialFactory;
+    if (useNodes) return nodeMaterialFactory(entry, template, shading);
     return createDiceFaceMarkingMaterial(entry, template, shading);
 }
 
