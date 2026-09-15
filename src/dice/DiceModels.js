@@ -4,6 +4,7 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { publicAssetUrl } from '../core/publicAssetUrl.js';
 import { ensureBodyPipGroups } from './DiceGeometryGroups.js';
 import {
+    backendForRenderer,
     createDiceMaterialForEntry,
     applyMaterialToDieMesh,
     disposeDiceMaterials,
@@ -58,23 +59,62 @@ function getAppearanceOptions() {
 }
 
 /**
- * The template for a die key, cloning its hull's template the first time a
- * derived type (dF on a d6, d100 on a d10) is asked for.
+ * Die templates, by die key. Distinct from `diceModels`, which holds the loaded
+ * hulls by *shape*: `dF` and `d6` are different templates riding one hull, and a
+ * set is free to say that its `d6` rides the d8 hull.
+ *
+ * @type {Map<string, import('three').Mesh>}
+ */
+const dieTemplates = new Map();
+
+/** The template for a die key, or `null` before its hull has loaded. */
+export function getDieTemplate(dieKey) {
+    return dieTemplates.get(dieKey) ?? null;
+}
+
+/**
+ * The template for a die key, built against the shape its entry names *now*.
+ *
+ * `shape` is part of the descriptor, so an incoming set — from a link, from a
+ * peer — can change which hull a key rides. A template cached from the old shape
+ * would leave the table showing a d6 while physics simulated a d8, so the shape
+ * it was built for is remembered and a change rebuilds it.
  */
 export function ensureDieTemplate(dieKey) {
-    const existing = diceModels[dieKey];
-    if (existing) return existing;
-
     const shape = getDieShape(dieKey);
+    const existing = dieTemplates.get(dieKey);
+    if (existing && existing.userData.builtForShape === shape) return existing;
+
     const hull = diceModels[shape];
-    if (!hull || shape === dieKey) return hull ?? null;
+    if (!hull) return existing ?? null;
 
     // Geometry, face normals and face values all belong to the hull and are
     // shared; only the material and the descriptor entry differ.
-    const clone = hull.clone();
-    clone.userData = { ...hull.userData };
-    diceModels[dieKey] = clone;
-    return clone;
+    const template = hull.clone();
+    template.userData = { ...hull.userData, builtForShape: shape };
+    dieTemplates.set(dieKey, template);
+
+    if (existing) reshapeExistingDice(dieKey, template);
+    return template;
+}
+
+/**
+ * Re-point everything already wearing a die key at its new hull.
+ *
+ * Pooled meshes are dropped outright — they are unused clones. Dice already on
+ * the table keep their body and their physics id, and take the new geometry, so
+ * the next `syncAllDiceToWasm()` re-registers them with the matching hull and
+ * side count rather than simulating the shape they used to be.
+ */
+function reshapeExistingDice(dieKey, template) {
+    diceMeshPool[dieKey] = [];
+    spawnedDice.forEach((die) => {
+        if (die.type !== dieKey || !die.mesh) return;
+        die.mesh.geometry = template.geometry;
+        die.massBiasOffset = template.userData.massBiasOffset?.clone() ?? null;
+        die.centerOfMassOffset = die.centerOfMassOffset ? die.massBiasOffset : null;
+        die.physicsPreset = null; // recomputed from the new shape on the next sync
+    });
 }
 
 export const loadDiceModels = async (onProgress) => {
@@ -192,7 +232,7 @@ function applyEntryToMeshes(dieKey, meshes) {
 /** Every mesh currently wearing a die key's look: template, spawned, pooled. */
 function meshesForKey(dieKey) {
     const meshes = [];
-    const template = diceModels[dieKey];
+    const template = dieTemplates.get(dieKey);
     if (template) meshes.push(template);
     spawnedDice.forEach((die) => {
         if (die.type === dieKey) meshes.push(die.mesh);
@@ -205,7 +245,7 @@ function meshesForKey(dieKey) {
  * Resolve the active dice set and dress every die with it.
  *
  * @param {import('three').Scene} scene
- * @param {{ envMap?: import('three').Texture|null, qualityProfile?: object|null, adaptiveProfile?: object|null, usingWebGPU?: boolean }} [options]
+ * @param {{ renderer?: object|null, envMap?: import('three').Texture|null, qualityProfile?: object|null, adaptiveProfile?: object|null }} [options]
  */
 export function initDiceAppearance(scene, options = {}) {
     diceAppearanceScene = scene;
@@ -215,8 +255,10 @@ export function initDiceAppearance(scene, options = {}) {
     initDiceSetRuntime();
 
     // The two material twins differ only in backend; pick before the first build
-    // so nothing has to be rebuilt once WebGPU reports in.
-    const backendReady = setDiceMaterialBackend(options.usingWebGPU ? 'webgpu' : 'webgl');
+    // so nothing has to be rebuilt once WebGPU reports in. Asked of the renderer
+    // itself — handing the wrong twin to a renderer is a hard crash, not a
+    // degraded look, so this must not come from a flag set somewhere alongside.
+    const backendReady = setDiceMaterialBackend(backendForRenderer(options.renderer));
 
     unsubscribeDiceSet?.();
     unsubscribeDiceSet = subscribeDiceSet((_set, changedKeys) => {
@@ -228,6 +270,21 @@ export function initDiceAppearance(scene, options = {}) {
     // A WebGPU table re-dresses once its node factory lands; on WebGL this
     // resolves immediately and the second pass is a no-op rebuild.
     return backendReady.then(() => refreshDiceAppearance());
+}
+
+/**
+ * Re-pick the material twin after the renderer is replaced, and re-dress every
+ * die with it.
+ *
+ * Renderer recovery can swap a WebGPU renderer for a WebGL one mid-session.
+ * Dice still wearing node materials would then take down the frame inside
+ * `WebGLProgram`, so this is not cosmetic.
+ *
+ * @param {object|null} renderer the renderer now drawing the table
+ */
+export async function setDiceRenderer(renderer) {
+    await setDiceMaterialBackend(backendForRenderer(renderer));
+    refreshDiceAppearance();
 }
 
 /** Update quality profile used when (re)building dice materials. */
@@ -243,17 +300,42 @@ export function setDiceAppearanceQualityProfile(profile) {
  * may never appear. `ensureDressedTemplate` dresses those on first use.
  */
 export function refreshDiceAppearance(dieKey = null) {
-    const keys = dieKey ? [dieKey] : listDieKeys().filter((key) => diceModels[key]);
+    const keys = dieKey ? [dieKey] : listDieKeys().filter((key) => dieTemplates.has(key));
     keys.forEach((key) => {
         const meshes = meshesForKey(key);
         if (meshes.length) applyEntryToMeshes(key, meshes);
     });
 }
 
+/**
+ * Materials for a die key built for a *plain* `WebGLRenderer`, whatever the
+ * table is drawn with. The dice case preview owns its own GL context, and a
+ * node material would die in its `WebGLProgram`.
+ *
+ * The caller owns the returned disposer — these are not the template's.
+ */
+export function buildPreviewMaterials(dieKey) {
+    const template = ensureDressedTemplate(dieKey);
+    if (!template) return null;
+    return createDiceMaterialForEntry(getDieEntry(dieKey), template, {
+        ...getAppearanceOptions(),
+        forceWebGL: true,
+    });
+}
+
 /** The template for a die key, wearing the active set's look for it. */
 export function ensureDressedTemplate(dieKey) {
     const template = ensureDieTemplate(dieKey);
-    if (template && !materialDisposers.has(dieKey)) applyEntryToMeshes(dieKey, [template]);
+    if (!template) return null;
+    // A template rebuilt for a new shape needs dressing again: its face frames,
+    // and so its glyph placement, belong to the hull it was just re-cut from.
+    if (
+        !materialDisposers.has(dieKey) ||
+        template.userData.dressedForShape !== template.userData.builtForShape
+    ) {
+        template.userData.dressedForShape = template.userData.builtForShape;
+        applyEntryToMeshes(dieKey, meshesForKey(dieKey));
+    }
     return template;
 }
 
@@ -300,6 +382,12 @@ export function releaseDiceMesh(scene, type, mesh) {
 export function disposeDiceAppearance() {
     materialDisposers.forEach((dispose) => dispose());
     materialDisposers.clear();
+}
+
+/** Test seam: forget every built template and material. */
+export function resetDieTemplatesForTests() {
+    disposeDiceAppearance();
+    dieTemplates.clear();
 }
 
 export { disposeDiceMaterials, getActiveDiceSet, diceModels, diceTypes };

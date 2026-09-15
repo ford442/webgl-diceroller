@@ -6,6 +6,7 @@ import {
     getActiveDiceSet,
     setDieAppearance,
     ensureDressedTemplate,
+    buildPreviewMaterials,
 } from '../dice.js';
 import { initUI, createCrosshair } from '../ui.js';
 import { createDiceCasePanel } from '../ui/DiceCasePanel.js';
@@ -123,9 +124,9 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
     // Awaited so a WebGPU table has its node materials before the first frame;
     // on WebGL this resolves on the same tick.
     await initDiceAppearance(scene, {
+        renderer,
         envMap: scene.environment ?? null,
         qualityProfile: callbacks.qualityProfile ?? null,
-        usingWebGPU: callbacks.app?.usingWebGPU === true,
     });
     // spawnObjects() no-ops without WASM (see DiceSpawn.js): dice models stay
     // loaded for the case-panel preview, but no dice are spawned into the
@@ -170,6 +171,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         getDiceSet: getActiveDiceSet,
         onEntryChange: (dieKey, patch) => setDieAppearance(dieKey, patch),
         getTemplateMesh: (type) => ensureDressedTemplate(type),
+        buildPreviewMaterials,
         getEnvMap: () => scene.environment ?? null,
         getQualityProfile: () => callbacks.qualityProfile ?? callbacks.app?.qualityProfile ?? null,
     });

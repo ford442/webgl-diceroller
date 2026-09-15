@@ -20,6 +20,7 @@ const DICE_TYPES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
  * @param {() => import('../dice/DiceSetFormat.js').DiceSet} hooks.getDiceSet
  * @param {(dieKey: string, patch: object) => void} hooks.onEntryChange
  * @param {(type: string) => THREE.Mesh|null} hooks.getTemplateMesh
+ * @param {(dieKey: string) => { materials: THREE.Material[], dispose: () => void }|null} [hooks.buildPreviewMaterials]
  * @param {() => THREE.Texture|null} [hooks.getEnvMap]
  * @param {() => object|null} [hooks.getQualityProfile]
  */
@@ -212,6 +213,7 @@ export function createDiceCasePanel(hooks) {
     }
 
     let previewMesh = null;
+    let previewMaterials = null;
     let selectedType = 'd6';
     let previewAngle = 0;
 
@@ -245,7 +247,23 @@ export function createDiceCasePanel(hooks) {
         }
         const template = hooks.getTemplateMesh(selectedType);
         if (!template) return;
+
         previewMesh = template.clone();
+
+        // This panel renders through its own WebGLRenderer (see below), so it
+        // cannot wear the table's material when the table is drawn by WebGPU —
+        // a node material dies inside WebGLProgram. Ask for the WebGL twin of
+        // the same descriptor entry instead.
+        const built = hooks.buildPreviewMaterials?.(selectedType) ?? null;
+        if (built) {
+            previewMesh.material =
+                previewMesh.geometry?.groups?.length >= 2 && built.materials.length >= 2
+                    ? built.materials
+                    : built.materials[0];
+            previewMaterials?.dispose();
+            previewMaterials = built;
+        }
+
         previewMesh.position.set(0, 0, 0);
         previewMesh.rotation.set(0.35, previewAngle, 0.15);
         previewScene.add(previewMesh);
@@ -306,6 +324,8 @@ export function createDiceCasePanel(hooks) {
         },
         dispose() {
             if (previewMesh) previewScene.remove(previewMesh);
+            previewMaterials?.dispose();
+            previewMaterials = null;
             disposePreviewRenderer();
             panel.remove();
         },
