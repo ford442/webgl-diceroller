@@ -43,3 +43,10 @@ export interface StaticConvexHullSpec extends StaticColliderSpecBase {
 
 export type StaticColliderSpec =
     StaticBoxSpec | StaticPlaneSpec | StaticOpenCylinderSpec | StaticConvexHullSpec;
+
+export interface CompoundColliderSpec extends StaticColliderSpecBase {
+    type: 'compound';
+    parts?: Array<StaticColliderSpec | CompoundColliderSpec>;
+}
+
+export type AnyColliderSpec = StaticColliderSpec | CompoundColliderSpec;

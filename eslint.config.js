@@ -76,7 +76,7 @@ export default [
         },
     },
     ...tseslint.config({
-        files: ['src/**/*.ts'],
+        files: ['src/**/*.ts', 'tests/unit/**/*.ts'],
         extends: [tseslint.configs.recommended],
         languageOptions: {
             ecmaVersion: 2022,
@@ -110,7 +110,7 @@ export default [
         },
     }),
     ...tseslint.config({
-        files: ['src/wasm/dice_physics.worker.ts'],
+        files: ['src/core-engine/wasm/dice_physics.worker.ts'],
         extends: [tseslint.configs.recommended],
         languageOptions: {
             ecmaVersion: 2022,

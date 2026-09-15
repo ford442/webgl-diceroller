@@ -55,6 +55,10 @@ Desktop **initiative / turn strip** and multiplayer session sync live outside `m
 
 State flows through **`AppContext`** (`app.session`, `app.multiplayer`) and **`AppEvents`** — not new `window.*` globals.
 
+### Headless core (`src/core-engine/`)
+
+Physics loading, worker/in-process bridges, notation, shareable dice-set format, commit-reveal, and [`rollHeadless()`](../src/core-engine/rollHeadless.ts) live in a Three.js-free tree. The page still imports [`src/wasm/PhysicsBridge.ts`](../src/wasm/PhysicsBridge.ts) for collider helpers that need `THREE.Object3D`. `npm run check:core-engine` rejects a `three` import (or `window.` / `document.` use) in that folder. Unit tests call `rollHeadless()` under vitest when `public/wasm/` artifacts exist; `verify:worker-replay` compares solver face values against the worker path.
+
 ### Test / debug hooks
 
 Under `?test`, `?debug`, or `?debug-perf`, [`AppTestHooks.js`](../src/core/AppTestHooks.js) installs **`window.__app`** — the stable documented API for Playwright and manual debugging.
