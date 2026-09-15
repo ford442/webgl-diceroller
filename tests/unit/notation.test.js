@@ -4,6 +4,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
+    SUPPORTED_SIDES as PARSER_SUPPORTED_SIDES,
     NotationError,
     applyExpressionChip,
     buildSpawnSpecs,
@@ -346,7 +347,9 @@ describe('display helpers', () => {
 // downstream.
 // ---------------------------------------------------------------------------
 
-const SUPPORTED_SIDES = [4, 6, 8, 10, 12, 20, 100];
+// Read from the parser rather than restated here: the supported sides come from
+// DIE_TYPE_CATALOG, so a new derived die type must not need this list edited.
+const SUPPORTED_SIDES = [...PARSER_SUPPORTED_SIDES];
 const NON_PERCENTILE_SIDES = SUPPORTED_SIDES.filter((n) => n !== 100);
 
 /** A d100/d% term: count must be 1, and no keep/drop/explode/reroll. */
@@ -432,6 +435,50 @@ describe('parseNotation property tests', () => {
             }),
             { numRuns: 300 }
         );
+    });
+
+    it('parses derived die types the catalog derives from shipped hulls', () => {
+        for (const [expr, type] of [
+            ['2d2', 'd2'],
+            ['1d3', 'd3'],
+            ['1d5', 'd5'],
+        ]) {
+            const parsed = parseNotation(expr);
+            expect(buildSpawnSpecs(parsed)[0].type).toBe(type);
+        }
+    });
+
+    it('parses 4dF as Fudge dice on the d6 hull', () => {
+        const parsed = parseNotation('4dF');
+        expect(parsed.groups[0].fudge).toBe(true);
+        expect(parsed.groups[0].count).toBe(4);
+
+        const specs = buildSpawnSpecs(parsed);
+        expect(specs).toHaveLength(4);
+        expect(specs.every((spec) => spec.type === 'dF')).toBe(true);
+    });
+
+    it('sums Fudge faces as the -1/0/+1 the descriptor reports', () => {
+        const parsed = parseNotation('4dF+1');
+        // readAllDiceValues resolves natural faces through NumberingSpec before
+        // evaluation, so what arrives here is already -1/0/+1.
+        const dice = buildSpawnSpecs(parsed).map((spec, index) => ({
+            groupIndex: spec.groupIndex,
+            dieIndex: spec.dieIndex,
+            type: spec.type,
+            role: spec.role,
+            value: [-1, 0, 1, 1][index],
+        }));
+        expect(evaluateRoll(parsed, dice).total).toBe(2);
+    });
+
+    it('labels a Fudge group as dF, not by its hull', () => {
+        expect(formatGroupLabel(parseNotation('4dF').groups[0])).toBe('4dF');
+    });
+
+    it('rejects explode and reroll on Fudge dice', () => {
+        expect(() => parseNotation('4dF!')).toThrow(NotationError);
+        expect(() => parseNotation('4dFr1')).toThrow(NotationError);
     });
 
     it('rejects every string containing an unsupported die size', () => {

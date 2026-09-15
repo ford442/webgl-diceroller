@@ -8,6 +8,20 @@ const _e2 = new THREE.Vector3();
 const _n = new THREE.Vector3();
 
 /**
+ * The shipped hulls carry their numerals as recessed geometry in a second draw
+ * group. Until they are re-exported with flat faces, that relief is the cheapest
+ * glyph source we have for the default numbering: the die material wears two
+ * instances of itself, one per group, both built from the same descriptor entry.
+ * `hasBakedMarkings` is how it knows there is a second group to dress.
+ *
+ * @param {THREE.BufferGeometry} geometry
+ * @param {boolean} present
+ */
+function setBakedMarkingsFlag(geometry, present) {
+    geometry.userData.hasBakedMarkings = present;
+}
+
+/**
  * Split die geometry into body (group 0) and pip/engraving (group 1) draw groups.
  * GLBs exported with dual materials are respected; otherwise triangles below an
  * area percentile are treated as pips (engraved numbers are much smaller).
@@ -24,6 +38,7 @@ export function ensureBodyPipGroups(geometry) {
     }
 
     if (geometry.groups?.length >= 2) {
+        setBakedMarkingsFlag(geometry, true);
         geometry.userData.bodyPipGroupsReady = true;
         geometry.userData.bodyGroupIndex = 0;
         geometry.userData.pipGroupIndex = 1;
@@ -88,6 +103,7 @@ export function ensureBodyPipGroups(geometry) {
     }
 
     if (!pipTris.length || !bodyTris.length) {
+        setBakedMarkingsFlag(geometry, false);
         geometry.userData.bodyPipGroupsReady = true;
         geometry.userData.bodyGroupIndex = 0;
         geometry.userData.pipGroupIndex = 0;
@@ -103,6 +119,7 @@ export function ensureBodyPipGroups(geometry) {
     geometry.addGroup(0, bodyTris.length, 0);
     geometry.addGroup(bodyTris.length, pipTris.length, 1);
 
+    setBakedMarkingsFlag(geometry, true);
     geometry.userData.bodyPipGroupsReady = true;
     geometry.userData.bodyGroupIndex = 0;
     geometry.userData.pipGroupIndex = 1;

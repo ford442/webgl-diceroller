@@ -4,6 +4,7 @@ import { diceModels, spawnedDice, diceTypes } from './DiceState.js';
 import { isUsingWasmPhysics } from './DicePhysicsPresets.js';
 import { getDieQuaternion } from './DiceTransformRead.js';
 import { getWasmFaceValueForDie } from './DiceFaceValueRead.js';
+import { resolveDieFaceValue } from './DiceSetRuntime.js';
 
 const _invQ = new THREE.Quaternion();
 const _localUp = new THREE.Vector3();
@@ -41,7 +42,11 @@ export const readDiceValueVisual = (die) => {
     return faceValues[bestIdx];
 };
 
-export const readDiceValue = (die) => {
+/**
+ * The face value as the *mesh* reads it: 1..faceCount, the hull's own numbering.
+ * Never show this to a player — a dF settles on a natural 6.
+ */
+export const readNaturalDiceValue = (die) => {
     if (isUsingWasmPhysics() && die?.wasmId != null) {
         const engineValue = getWasmFaceValueForDie(die.wasmId);
         if (engineValue > 0) return engineValue;
@@ -51,10 +56,27 @@ export const readDiceValue = (die) => {
     return readDiceValueVisual(die);
 };
 
+/**
+ * The value the die actually shows, per its descriptor entry.
+ *
+ * The hull, the physics engine and the face-normal clusterer all speak natural
+ * faces; `NumberingSpec` is what turns face 6 of a dF into a `+1`. Everything
+ * player-facing goes through here.
+ */
+export const readDiceValue = (die) => {
+    const natural = readNaturalDiceValue(die);
+    if (!natural) return natural;
+    return resolveDieFaceValue(die.type, natural);
+};
+
+/**
+ * How many of each die key are on the table. The shapes are always present (the
+ * dice tray shows a zero), and a derived key only appears once one is spawned.
+ */
 export const getSpawnedDiceCounts = () => {
     const counts = Object.fromEntries(diceTypes.map(({ type }) => [type, 0]));
     spawnedDice.forEach((die) => {
-        if (counts[die.type] != null) counts[die.type]++;
+        counts[die.type] = (counts[die.type] ?? 0) + 1;
     });
     return counts;
 };
@@ -63,6 +85,7 @@ export const readAllDiceValues = () =>
     spawnedDice.map((die) => ({
         type: die.type,
         value: readDiceValue(die),
+        naturalValue: readNaturalDiceValue(die),
         role: die.role ?? null,
         groupIndex: die.groupIndex ?? 0,
         dieIndex: die.dieIndex ?? 0,
@@ -78,7 +101,7 @@ export const getDiceValueDebugSnapshot = () =>
         const model = diceModels[die.type];
         const faceNormals = model?.userData?.faceNormals ?? [];
         const faceValues = model?.userData?.faceValues ?? [];
-        const engineValue = isUsingWasmPhysics() ? readDiceValue(die) : null;
+        const engineValue = isUsingWasmPhysics() ? readNaturalDiceValue(die) : null;
         const visualValue = readDiceValueVisual(die);
         const value = isUsingWasmPhysics() ? engineValue : visualValue;
         const dieQuaternion = getDieQuaternion(die);
@@ -100,6 +123,7 @@ export const getDiceValueDebugSnapshot = () =>
         return {
             type: die.type,
             value,
+            displayValue: value ? resolveDieFaceValue(die.type, value) : value,
             engineValue,
             visualValue,
             disagrees:

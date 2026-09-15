@@ -1,194 +1,28 @@
-import * as THREE from 'three';
+import { createDiceFaceMarkingMaterial } from './DiceFaceMarkingMaterial.js';
+import { loadDiceFaceMarkingNodeMaterialFactory } from './DiceFaceMarkingNodeMaterial.js';
+import { DICE_PRESET_PARAMS } from './DiceShadingParams.js';
+
+/**
+ * Which die material to build, for whichever renderer is live.
+ *
+ * There is one material per `DiceSet` entry and two implementations of it —
+ * GLSL for `WebGLRenderer`, TSL nodes for `WebGPURenderer` — and nothing outside
+ * this module needs to know which one it got. The six presets are still here,
+ * but as *starting points* the descriptor overrides (`DICE_PRESET_PARAMS`), not
+ * as an enum the renderer switches on.
+ */
 
 /** @typedef {'resin'|'metal'|'gemstone'|'bone'|'obsidian'|'glow'} DiceMaterialPresetId */
 
-/**
- * @typedef {Object} DiceMaterialPreset
- * @property {DiceMaterialPresetId} id
- * @property {string} label
- * @property {boolean} [requiresHighQuality]
- * @property {(ctx: { bodyColor: THREE.Color, pipColor: THREE.Color, envMap: THREE.Texture|null, highQuality: boolean }) => { body: THREE.Material, pip: THREE.Material }} build
- */
-
-/** @type {Record<DiceMaterialPresetId, DiceMaterialPreset>} */
-export const DICE_MATERIAL_PRESETS = {
-    resin: {
-        id: 'resin',
-        label: 'Resin',
-        build: ({ bodyColor, pipColor, envMap }) => ({
-            body: new THREE.MeshPhysicalMaterial({
-                color: bodyColor,
-                roughness: 0.18,
-                metalness: 0.0,
-                clearcoat: 0.85,
-                clearcoatRoughness: 0.12,
-                envMap,
-                envMapIntensity: 1.0,
-            }),
-            pip: new THREE.MeshPhysicalMaterial({
-                color: pipColor,
-                roughness: 0.22,
-                metalness: 0.0,
-                clearcoat: 0.6,
-                clearcoatRoughness: 0.15,
-                envMap,
-                envMapIntensity: 0.9,
-            }),
-        }),
-    },
-    metal: {
-        id: 'metal',
-        label: 'Metal',
-        build: ({ bodyColor, pipColor, envMap }) => ({
-            body: new THREE.MeshStandardMaterial({
-                color: bodyColor,
-                roughness: 0.22,
-                metalness: 0.92,
-                envMap,
-                envMapIntensity: 1.2,
-            }),
-            pip: new THREE.MeshStandardMaterial({
-                color: pipColor,
-                roughness: 0.35,
-                metalness: 0.75,
-                envMap,
-                envMapIntensity: 1.0,
-            }),
-        }),
-    },
-    gemstone: {
-        id: 'gemstone',
-        label: 'Gemstone',
-        requiresHighQuality: true,
-        build: ({ bodyColor, pipColor, envMap, highQuality }) => {
-            if (highQuality) {
-                return {
-                    body: new THREE.MeshPhysicalMaterial({
-                        color: bodyColor,
-                        roughness: 0.05,
-                        metalness: 0.0,
-                        transmission: 0.72,
-                        thickness: 0.65,
-                        ior: 1.52,
-                        envMap,
-                        envMapIntensity: 1.4,
-                    }),
-                    pip: new THREE.MeshPhysicalMaterial({
-                        color: pipColor,
-                        roughness: 0.08,
-                        metalness: 0.0,
-                        transmission: 0.35,
-                        thickness: 0.35,
-                        ior: 1.45,
-                        envMap,
-                        envMapIntensity: 1.1,
-                    }),
-                };
-            }
-
-            // Fake-refraction cubemap fallback for medium/low quality profiles.
-            return {
-                body: new THREE.MeshPhysicalMaterial({
-                    color: bodyColor,
-                    roughness: 0.08,
-                    metalness: 0.15,
-                    clearcoat: 1.0,
-                    clearcoatRoughness: 0.05,
-                    envMap,
-                    envMapIntensity: 1.6,
-                }),
-                pip: new THREE.MeshPhysicalMaterial({
-                    color: pipColor,
-                    roughness: 0.12,
-                    metalness: 0.1,
-                    clearcoat: 0.8,
-                    clearcoatRoughness: 0.08,
-                    envMap,
-                    envMapIntensity: 1.2,
-                }),
-            };
-        },
-    },
-    bone: {
-        id: 'bone',
-        label: 'Bone / Ivory',
-        build: ({ bodyColor, pipColor, envMap }) => ({
-            body: new THREE.MeshStandardMaterial({
-                color: bodyColor,
-                roughness: 0.62,
-                metalness: 0.02,
-                envMap,
-                envMapIntensity: 0.55,
-            }),
-            pip: new THREE.MeshStandardMaterial({
-                color: pipColor,
-                roughness: 0.7,
-                metalness: 0.0,
-                envMap,
-                envMapIntensity: 0.45,
-            }),
-        }),
-    },
-    obsidian: {
-        id: 'obsidian',
-        label: 'Obsidian',
-        build: ({ bodyColor, pipColor, envMap }) => ({
-            body: new THREE.MeshPhysicalMaterial({
-                color: bodyColor,
-                roughness: 0.12,
-                metalness: 0.05,
-                clearcoat: 0.9,
-                clearcoatRoughness: 0.04,
-                envMap,
-                envMapIntensity: 1.3,
-            }),
-            pip: new THREE.MeshStandardMaterial({
-                color: pipColor,
-                roughness: 0.25,
-                metalness: 0.35,
-                envMap,
-                envMapIntensity: 0.9,
-            }),
-        }),
-    },
-    glow: {
-        id: 'glow',
-        label: 'Glow',
-        build: ({ bodyColor, pipColor, envMap }) => ({
-            body: new THREE.MeshStandardMaterial({
-                color: bodyColor,
-                roughness: 0.35,
-                metalness: 0.05,
-                envMap,
-                envMapIntensity: 0.8,
-            }),
-            pip: new THREE.MeshStandardMaterial({
-                color: pipColor,
-                roughness: 0.4,
-                metalness: 0.0,
-                emissive: pipColor.clone(),
-                emissiveIntensity: 1.4,
-                envMap,
-                envMapIntensity: 0.6,
-            }),
-        }),
-    },
-};
+/** Preset metadata for the dice case: label, and whether it needs the good profile. */
+export const DICE_MATERIAL_PRESETS = Object.fromEntries(
+    Object.entries(DICE_PRESET_PARAMS).map(([id, params]) => [
+        id,
+        { id, label: params.label, requiresHighQuality: params.requiresHighQuality === true },
+    ])
+);
 
 export const DICE_PRESET_IDS = Object.keys(DICE_MATERIAL_PRESETS);
-
-const PRESET_SHORT = {
-    resin: 'r',
-    metal: 'm',
-    gemstone: 'g',
-    bone: 'b',
-    obsidian: 'o',
-    glow: 'l',
-};
-
-const PRESET_FROM_SHORT = Object.fromEntries(
-    Object.entries(PRESET_SHORT).map(([id, short]) => [short, id])
-);
 
 export function getPresetById(id) {
     return DICE_MATERIAL_PRESETS[id] ?? DICE_MATERIAL_PRESETS.resin;
@@ -199,34 +33,64 @@ export function isHighQualityProfile(profile) {
     return profile.id === 'high' || profile.postQuality === 'high';
 }
 
+let nodeMaterialFactory = null;
+let nodeMaterialLoad = null;
+let backend = 'webgl';
+
 /**
- * @param {DiceMaterialPresetId} presetId
- * @param {{ bodyColor: string, pipColor: string }} colors hex strings
- * @param {{ envMap?: THREE.Texture|null, qualityProfile?: object|null }} options
- * @returns {{ body: THREE.Material, pip: THREE.Material }}
+ * Tell the dice which renderer they are being drawn by, and warm the node
+ * material factory when that is WebGPU. Safe to call repeatedly (renderer
+ * recovery re-runs it after a device loss).
+ *
+ * @param {'webgl'|'webgpu'} next
+ * @returns {Promise<void>} resolves once the backend's factory is ready
  */
-export function createDiceMaterials(presetId, colors, options = {}) {
-    const preset = getPresetById(presetId);
-    const bodyColor = new THREE.Color(colors.bodyColor ?? '#c43c3c');
-    const pipColor = new THREE.Color(colors.pipColor ?? '#f5f0e6');
-    const highQuality = isHighQualityProfile(options.qualityProfile);
+export async function setDiceMaterialBackend(next) {
+    backend = next === 'webgpu' ? 'webgpu' : 'webgl';
+    if (backend !== 'webgpu') return;
 
-    let effectivePreset = preset;
-    if (preset.requiresHighQuality && !highQuality) {
-        effectivePreset = DICE_MATERIAL_PRESETS.resin;
-    }
+    nodeMaterialLoad ??= loadDiceFaceMarkingNodeMaterialFactory().then(
+        (factory) => {
+            nodeMaterialFactory = factory;
+        },
+        (error) => {
+            // A missing node backend is not worth a blank table: fall back to the
+            // GLSL twin, which a WebGPU renderer can still consume via its
+            // WebGL fallback path.
+            console.warn('[DiceMaterials] node material unavailable; using GLSL twin', error);
+            nodeMaterialLoad = null;
+        }
+    );
+    await nodeMaterialLoad;
+}
 
-    return effectivePreset.build({
-        bodyColor,
-        pipColor,
+export function getDiceMaterialBackend() {
+    return backend;
+}
+
+/**
+ * Build the material for one die, from its descriptor entry.
+ *
+ * @param {import('./DiceSetFormat.js').DiceSetEntry} entry
+ * @param {import('three').Mesh} template die template the material will be worn by
+ * @param {{ envMap?: import('three').Texture|null, qualityProfile?: object|null }} [options]
+ * @returns {{ materials: import('three').Material[], dispose: () => void }}
+ */
+export function createDiceMaterialForEntry(entry, template, options = {}) {
+    const shading = {
         envMap: options.envMap ?? null,
-        highQuality,
-    });
+        highQuality: isHighQualityProfile(options.qualityProfile),
+    };
+
+    if (backend === 'webgpu' && nodeMaterialFactory) {
+        return nodeMaterialFactory(entry, template, shading);
+    }
+    return createDiceFaceMarkingMaterial(entry, template, shading);
 }
 
 /**
  * Dispose previous dice materials without touching shared geometry.
- * @param {THREE.Material|THREE.Material[]|null} material
+ * @param {import('three').Material|import('three').Material[]|null} material
  */
 export function disposeDiceMaterials(material) {
     if (!material) return;
@@ -235,25 +99,19 @@ export function disposeDiceMaterials(material) {
 }
 
 /**
- * Apply body/pip materials to a die mesh (single or dual-slot).
- * @param {THREE.Mesh} mesh
- * @param {{ body: THREE.Material, pip: THREE.Material }} materials
+ * Wear a die material.
+ *
+ * A hull that authored its markings as a second draw group gets both instances;
+ * one covering the whole mesh is enough for anything else. Both come from the
+ * same descriptor entry either way.
+ *
+ * @param {import('three').Mesh} mesh
+ * @param {import('three').Material[]} materials
  */
-export function applyMaterialsToDieMesh(mesh, materials) {
-    const pipGroup = mesh.geometry?.userData?.pipGroupIndex ?? 1;
-    const hasPipGroup = mesh.geometry?.groups?.length >= 2 && pipGroup > 0;
-
-    if (hasPipGroup) {
-        mesh.material = [materials.body, materials.pip];
-    } else {
-        mesh.material = materials.body;
-    }
+export function applyMaterialToDieMesh(mesh, materials) {
+    if (!mesh || !materials?.length) return;
+    const groups = mesh.geometry?.groups?.length ?? 0;
+    mesh.material = groups >= 2 && materials.length >= 2 ? materials : materials[0];
 }
 
-export function presetToShortCode(presetId) {
-    return PRESET_SHORT[presetId] ?? PRESET_SHORT.resin;
-}
-
-export function presetFromShortCode(code) {
-    return PRESET_FROM_SHORT[code] ?? 'resin';
-}
+export { DICE_PRESET_PARAMS };

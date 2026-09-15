@@ -4,14 +4,21 @@ import {
     DICE_PRESET_IDS,
     isHighQualityProfile,
 } from '../dice/DiceMaterials.js';
-import { DICE_TYPES } from '../dice/DiceAppearanceConfig.js';
+import { MARKING_STYLES } from '../dice/DiceSetFormat.js';
+
+/** Die keys the case offers. The derived types are descriptor-only for now. */
+const DICE_TYPES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
 
 /**
- * Dice Case panel — per-type preset + color pickers with a live rotating preview.
+ * Dice Case panel — per-die finish, colours and marking style, with a live
+ * rotating preview.
+ *
+ * It edits the active `DiceSet` directly: there is no per-type appearance triple
+ * behind it any more, so what the panel shows is what a share link carries.
  *
  * @param {object} hooks
- * @param {() => Record<string, { preset: string, bodyColor: string, pipColor: string }>} hooks.getConfig
- * @param {(type: string, partial: object) => void} hooks.onTypeChange
+ * @param {() => import('../dice/DiceSetFormat.js').DiceSet} hooks.getDiceSet
+ * @param {(dieKey: string, patch: object) => void} hooks.onEntryChange
  * @param {(type: string) => THREE.Mesh|null} hooks.getTemplateMesh
  * @param {() => THREE.Texture|null} [hooks.getEnvMap]
  * @param {() => object|null} [hooks.getQualityProfile]
@@ -110,7 +117,7 @@ export function createDiceCasePanel(hooks) {
     const pipColorRow = document.createElement('div');
     pipColorRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
     const pipColorLabel = document.createElement('label');
-    pipColorLabel.textContent = 'Pips';
+    pipColorLabel.textContent = 'Marks';
     pipColorLabel.style.fontSize = '12px';
     pipColorLabel.style.minWidth = '42px';
     const pipColorInput = document.createElement('input');
@@ -120,6 +127,24 @@ export function createDiceCasePanel(hooks) {
     pipColorRow.appendChild(pipColorLabel);
     pipColorRow.appendChild(pipColorInput);
     body.appendChild(pipColorRow);
+
+    const styleRow = document.createElement('div');
+    styleRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
+    const styleLabel = document.createElement('label');
+    styleLabel.textContent = 'Cut';
+    styleLabel.style.fontSize = '12px';
+    styleLabel.style.minWidth = '42px';
+    const styleSelect = document.createElement('select');
+    styleSelect.style.flex = '1';
+    MARKING_STYLES.forEach((style) => {
+        const opt = document.createElement('option');
+        opt.value = style;
+        opt.textContent = style[0].toUpperCase() + style.slice(1);
+        styleSelect.appendChild(opt);
+    });
+    styleRow.appendChild(styleLabel);
+    styleRow.appendChild(styleSelect);
+    body.appendChild(styleRow);
 
     const hint = document.createElement('div');
     hint.style.cssText = 'font-size:10px;opacity:0.75;line-height:1.35;margin-top:6px;';
@@ -137,7 +162,7 @@ export function createDiceCasePanel(hooks) {
         }
     });
 
-    [typeSelect, presetSelect, bodyColorInput, pipColorInput].forEach((el) => {
+    [typeSelect, presetSelect, styleSelect, bodyColorInput, pipColorInput].forEach((el) => {
         el.addEventListener('mousedown', (e) => e.stopPropagation());
         el.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     });
@@ -191,19 +216,19 @@ export function createDiceCasePanel(hooks) {
     let previewAngle = 0;
 
     function syncControlsFromConfig() {
-        const config = hooks.getConfig();
-        const entry = config[selectedType];
+        const entry = hooks.getDiceSet().dice[selectedType];
         if (!entry) return;
-        presetSelect.value = entry.preset;
-        bodyColorInput.value = entry.bodyColor;
-        pipColorInput.value = entry.pipColor;
+        presetSelect.value = entry.body.preset;
+        bodyColorInput.value = entry.body.bodyColor;
+        pipColorInput.value = entry.body.markingColor;
+        styleSelect.value = entry.faces.style;
 
         const _gemstone = DICE_MATERIAL_PRESETS.gemstone;
         const highQ = isHighQualityProfile(hooks.getQualityProfile?.());
         /** @type {HTMLOptionElement | null} */ (
             presetSelect.querySelector('option[value="gemstone"]')
         ).disabled = false;
-        if (!highQ && entry.preset === 'gemstone') {
+        if (!highQ && entry.body.preset === 'gemstone') {
             hint.textContent = 'Gemstone uses a lighter faux-gem look on this quality profile.';
         } else if (!highQ) {
             hint.textContent =
@@ -226,8 +251,8 @@ export function createDiceCasePanel(hooks) {
         previewScene.add(previewMesh);
     }
 
-    function emitChange(partial) {
-        hooks.onTypeChange(selectedType, partial);
+    function emitChange(patch) {
+        hooks.onEntryChange(selectedType, patch);
         rebuildPreviewMesh();
         syncControlsFromConfig();
     }
@@ -239,13 +264,16 @@ export function createDiceCasePanel(hooks) {
     });
 
     presetSelect.addEventListener('change', () => {
-        emitChange({ preset: presetSelect.value });
+        emitChange({ body: { preset: presetSelect.value } });
+    });
+    styleSelect.addEventListener('change', () => {
+        emitChange({ faces: { style: styleSelect.value } });
     });
     bodyColorInput.addEventListener('input', () => {
-        emitChange({ bodyColor: bodyColorInput.value });
+        emitChange({ body: { bodyColor: bodyColorInput.value } });
     });
     pipColorInput.addEventListener('input', () => {
-        emitChange({ pipColor: pipColorInput.value });
+        emitChange({ body: { markingColor: pipColorInput.value } });
     });
 
     canvasContainer.appendChild(panel);

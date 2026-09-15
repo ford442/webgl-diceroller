@@ -7,7 +7,8 @@ import {
     readAllDiceValues,
     getDiceValueDebugSnapshot,
     replaceDiceSet,
-    getDiceAppearanceConfig,
+    getActiveDiceSet,
+    setDieAppearance,
     buildDicePresencePayload,
     applyDicePresencePayload,
     refreshDiceAppearance,
@@ -364,6 +365,7 @@ async function init() {
             buildTierLoadOptions(app, {
                 collisionAudio,
                 qualityProfile: postConfig?.adaptiveProfile ?? app.qualityProfile ?? null,
+                rendererState,
                 multiplayerRef,
                 rollWiring,
                 setLampData: (data) => {
@@ -515,7 +517,8 @@ async function init() {
         readAllDiceValues,
         areDiceSettled,
         getDiceValueDebugSnapshot,
-        getDiceAppearanceConfig,
+        getActiveDiceSet,
+        setDieAppearance,
         buildDicePresencePayload,
         applyDicePresencePayload,
         refreshDiceAppearance,

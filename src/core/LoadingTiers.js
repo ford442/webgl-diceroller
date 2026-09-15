@@ -3,9 +3,9 @@ import {
     spawnObjects,
     updateDiceSet,
     initDiceAppearance,
-    getDiceAppearanceConfig,
-    setDieTypeAppearance,
-    diceModels,
+    getActiveDiceSet,
+    setDieAppearance,
+    ensureDressedTemplate,
 } from '../dice.js';
 import { initUI, createCrosshair } from '../ui.js';
 import { createDiceCasePanel } from '../ui/DiceCasePanel.js';
@@ -120,9 +120,12 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         updateLoadingBar(percent);
         if (label) updateLoadingText(`Loading dice models... (${label})`);
     });
-    initDiceAppearance(scene, {
+    // Awaited so a WebGPU table has its node materials before the first frame;
+    // on WebGL this resolves on the same tick.
+    await initDiceAppearance(scene, {
         envMap: scene.environment ?? null,
         qualityProfile: callbacks.qualityProfile ?? null,
+        usingWebGPU: callbacks.app?.usingWebGPU === true,
     });
     // spawnObjects() no-ops without WASM (see DiceSpawn.js): dice models stay
     // loaded for the case-panel preview, but no dice are spawned into the
@@ -164,9 +167,9 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
     callbacks.setInteraction?.(interaction);
 
     const diceCasePanel = createDiceCasePanel({
-        getConfig: getDiceAppearanceConfig,
-        onTypeChange: (type, partial) => setDieTypeAppearance(type, partial),
-        getTemplateMesh: (type) => diceModels[type] ?? null,
+        getDiceSet: getActiveDiceSet,
+        onEntryChange: (dieKey, patch) => setDieAppearance(dieKey, patch),
+        getTemplateMesh: (type) => ensureDressedTemplate(type),
         getEnvMap: () => scene.environment ?? null,
         getQualityProfile: () => callbacks.qualityProfile ?? callbacks.app?.qualityProfile ?? null,
     });

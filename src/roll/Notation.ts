@@ -15,6 +15,7 @@
  *   1d20+5 vs 1d20+2   opposed roll (margin = left − right)
  */
 
+import { DIE_SHAPE_FACE_COUNT, DIE_TYPE_CATALOG } from '../dice/DiceSetFormat.js';
 import type {
     DiceGroup,
     DieOutcome,
@@ -61,7 +62,23 @@ interface RollSystemConfig {
     fumbleMin?: number;
 }
 
-const SUPPORTED_SIDES = new Set([4, 6, 8, 10, 12, 20, 100]);
+/**
+ * Which dice can be named in notation — read from the catalog, not listed here.
+ *
+ * `DIE_TYPE_CATALOG` is the one place that knows which die types exist, derived
+ * ones included, so `d2`, `d3` and `d5` became rollable the moment they were
+ * added there. Fudge dice are spelled `dF` rather than by a face count and are
+ * handled separately.
+ */
+export const SUPPORTED_SIDES = new Set(
+    Object.keys(DIE_TYPE_CATALOG)
+        .map((key) => /^d(\d+)$/.exec(key))
+        .filter((match): match is RegExpExecArray => match !== null)
+        .map((match) => Number.parseInt(match[1], 10))
+);
+
+/** The Fudge die's hull has six faces even though it shows three values. */
+const FUDGE_SIDES = DIE_SHAPE_FACE_COUNT[DIE_TYPE_CATALOG.dF.shape];
 
 /** System presets — change crit/fumble defaults only, not a rules engine. */
 export const ROLL_SYSTEMS: Record<string, RollSystemConfig> = {
@@ -97,9 +114,15 @@ export const ROLL_SYSTEMS: Record<string, RollSystemConfig> = {
 export const DEFAULT_ROLL_SYSTEM = 'dnd5e';
 
 /** Map numeric sides to internal die type strings. */
-export function sidesToDieType(sides: number): string {
+export function sidesToDieType(sides: number, fudge = false): string {
+    if (fudge) return 'dF';
     if (sides === 100) return 'd100';
     return `d${sides}`;
+}
+
+/** The die key a parsed group spawns. */
+export function dieTypeForGroup(group: DiceGroup): string {
+    return sidesToDieType(group.sides, group.fudge === true);
 }
 
 /** Parse a dice notation string into groups and a net modifier. */
@@ -148,9 +171,9 @@ export class NotationError extends Error {
 }
 
 function tokenize(input: string): string[] {
-    // die term: optional sign, count, d(sides|%), optional keep/drop, optional rN, optional ! or !!
+    // die term: optional sign, count, d(sides|%|F), optional keep/drop, optional rN, optional ! or !!
     const re =
-        /([+-]?\d*d(?:%|\d+)(?:kh\d*|kl\d*|dh\d*|dl\d*)?(?:r\d+)?(?:!!|!)?)|([+-]\d+)(?!d)/gi;
+        /([+-]?\d*d(?:%|F|\d+)(?:kh\d*|kl\d*|dh\d*|dl\d*)?(?:r\d+)?(?:!!|!)?)|([+-]\d+)(?!d)/gi;
     const tokens: string[] = [];
     let match: RegExpExecArray | null;
     let lastIndex = 0;
@@ -218,15 +241,16 @@ class Parser {
     parseDiceToken(tok: string): DiceGroup {
         this.consume();
         const normalized = tok.replace(/^\+/, '');
-        const m = /^(\d*)d(%|\d+)((kh|kl|dh|dl)(\d+)?)?(r(\d+))?(!!|!)?$/i.exec(normalized);
+        const m = /^(\d*)d(%|F|\d+)((kh|kl|dh|dl)(\d+)?)?(r(\d+))?(!!|!)?$/i.exec(normalized);
         if (!m) throw new NotationError(`Invalid dice term "${tok}"`);
 
         const count = m[1] ? Number.parseInt(m[1], 10) : 1;
         if (count < 1 || count > 100) throw new NotationError(`Invalid count in "${tok}"`);
 
         const sidesRaw = m[2];
-        const sides = sidesRaw === '%' ? 100 : Number.parseInt(sidesRaw, 10);
-        if (!SUPPORTED_SIDES.has(sides)) {
+        const fudge = sidesRaw.toUpperCase() === 'F';
+        const sides = fudge ? FUDGE_SIDES : sidesRaw === '%' ? 100 : Number.parseInt(sidesRaw, 10);
+        if (!fudge && !SUPPORTED_SIDES.has(sides)) {
             throw new NotationError(`Unsupported die d${sidesRaw}`);
         }
 
@@ -258,6 +282,12 @@ class Parser {
         const explodeMark = m[8] ?? '';
         const explode = explodeMark === '!' || explodeMark === '!!';
         const compound = explodeMark === '!!';
+
+        // A Fudge face is -1, 0 or +1: "explode on the highest face" and "reroll
+        // anything at or below 1" are not meaningful thresholds there.
+        if (fudge && (explode || rerollMax != null)) {
+            throw new NotationError('Explode and reroll are not supported on Fudge dice');
+        }
         const percentile = sides === 100;
 
         if (percentile && count !== 1) {
@@ -280,6 +310,7 @@ class Parser {
             compound,
             rerollMax,
             percentile,
+            fudge,
         };
     }
 }
@@ -315,7 +346,7 @@ export function buildSpawnSpecsForGroups(groups: DiceGroup[]): SpawnDieSpec[] {
             return;
         }
 
-        const dieType = sidesToDieType(group.sides);
+        const dieType = dieTypeForGroup(group);
         for (let i = 0; i < group.count; i++) {
             specs.push({
                 type: dieType,
@@ -581,7 +612,8 @@ export function computeFlags(
 }
 
 export function formatGroupLabel(group: DiceGroup): string {
-    let label = `${group.count}d${group.percentile ? '100' : group.sides}`;
+    const face = group.fudge ? 'F' : group.percentile ? '100' : String(group.sides);
+    let label = `${group.count}d${face}`;
     if (group.keep) label += `k${group.keep}${group.keepCount}`;
     if (group.drop) label += `d${group.drop}${group.dropCount}`;
     if (group.rerollMax != null) label += `r${group.rerollMax}`;
@@ -607,7 +639,7 @@ export function getExplodingRespawnSpecs(
         groupDice.forEach((d) => {
             if (d.value === maxFace) {
                 specs.push({
-                    type: sidesToDieType(group.sides),
+                    type: dieTypeForGroup(group),
                     role: null,
                     groupIndex,
                     dieIndex: d.dieIndex,
@@ -637,7 +669,7 @@ export function getRerollRespawnSpecs(
         groupDice.forEach((d) => {
             if (d.value != null && d.value <= group.rerollMax!) {
                 specs.push({
-                    type: sidesToDieType(group.sides),
+                    type: dieTypeForGroup(group),
                     role: null,
                     groupIndex,
                     dieIndex: d.dieIndex,

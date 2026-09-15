@@ -23,7 +23,8 @@ export function installDebugGlobals(app, deps) {
         readAllDiceValues,
         areDiceSettled,
         getDiceValueDebugSnapshot,
-        getDiceAppearanceConfig,
+        getActiveDiceSet,
+        setDieAppearance,
         buildDicePresencePayload,
         applyDicePresencePayload,
         refreshDiceAppearance,
@@ -57,8 +58,15 @@ export function installDebugGlobals(app, deps) {
     };
     app.getTableLayoutConfig = () => getLayoutManager()?.getConfig();
     app.getLastRollShareUrl = () => rollWiring.getLastRollShareUrl();
-    app.getDiceAppearanceConfig = getDiceAppearanceConfig;
-    app.getDicePresencePayload = () => buildDicePresencePayload(getDiceAppearanceConfig());
+    app.getActiveDiceSet = getActiveDiceSet;
+    // Documented for Playwright: patch one die's descriptor entry and the table
+    // re-dresses without reloading an asset.
+    app.setDieAppearance = (dieKey, patch) => {
+        const entry = setDieAppearance(dieKey, patch);
+        multiplayerRef.current?.broadcastPresence?.();
+        return entry;
+    };
+    app.getDicePresencePayload = () => buildDicePresencePayload();
     app.applyDicePresencePayload = applyDicePresencePayload;
     app.refreshDiceAppearance = () => {
         refreshDiceAppearance();

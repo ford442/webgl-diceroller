@@ -2,13 +2,14 @@
  * Unit tests for shareable roll URL helpers.
  */
 import { describe, expect, it } from 'vitest';
-import { createDefaultAppearanceConfig } from '../../src/dice/DiceAppearanceConfig.js';
+import { createDefaultDiceSet, withComputedId } from '../../src/dice/DiceSetFormat.js';
+import { serializeLegacyDiceLook } from '../../src/dice/LegacyDiceLook.js';
 import {
     REPLAY_VERSION,
     buildShareableRollUrl,
     parseDiceParam,
+    parseShareableRollDiceSet,
     parseShareableRollParams,
-    serializeDiceAppearance,
     serializeDiceCounts,
 } from '../../src/roll/ShareableRoll.js';
 import { computeSeededThrowParams, createSeededRng } from '../../src/wasm/seededThrowParams.js';
@@ -64,17 +65,54 @@ describe('ShareableRoll', () => {
         expect(replay.seed).toBe(99);
     });
 
-    it('includes dice appearance when customized', () => {
-        const appearance = createDefaultAppearanceConfig();
-        appearance.d20 = { preset: 'metal', bodyColor: '#112233', pipColor: '#aabbcc' };
-        const url = buildShareableRollUrl(7, { d20: 1 }, 'http://example.test/roller', appearance);
-        const parsed = new URL(url);
-        expect(parsed.searchParams.get('dice-look')).toContain('d20:m:112233:aabbcc');
+    it('round-trips the whole dice set, not just two colours', () => {
+        const set = createDefaultDiceSet();
+        set.dice.d20 = {
+            ...set.dice.d20,
+            body: { ...set.dice.d20.body, preset: 'metal', bodyColor: '#112233' },
+            faces: { ...set.dice.d20.faces, style: 'engraved', glyphs: 'numerals' },
+        };
+        const customized = withComputedId(set);
+
+        const url = buildShareableRollUrl(7, { d20: 1 }, 'http://example.test/roller', customized);
+        const decoded = parseShareableRollDiceSet(new URL(url).searchParams);
+
+        expect(decoded).not.toBeNull();
+        expect(decoded.id).toBe(customized.id);
+        expect(decoded.dice.d20.body.bodyColor).toBe('#112233');
+        expect(decoded.dice.d20.faces.style).toBe('engraved');
     });
 
-    it('omits default-only appearance types', () => {
-        const appearance = createDefaultAppearanceConfig();
-        expect(serializeDiceAppearance(appearance)).toBe('');
+    it('stops writing the v0 short code but still reads one', () => {
+        const set = createDefaultDiceSet();
+        set.dice.d20 = {
+            ...set.dice.d20,
+            body: { ...set.dice.d20.body, preset: 'metal', bodyColor: '#112233' },
+        };
+        const legacyToken = serializeLegacyDiceLook(withComputedId(set));
+        expect(legacyToken).toContain('d20:m:112233');
+
+        const url = buildShareableRollUrl(7, { d20: 1 }, 'http://example.test/roller', set);
+        expect(new URL(url).searchParams.get('dice-look')).toBeNull();
+
+        const legacyUrl = new URL(`http://example.test/roller?dice-look=${legacyToken}`);
+        const decoded = parseShareableRollDiceSet(legacyUrl.searchParams);
+        expect(decoded.dice.d20.body.bodyColor).toBe('#112233');
+        expect(decoded.dice.d20.body.preset).toBe('metal');
+    });
+
+    it('drops a v0 short code when a v1 set is also present', () => {
+        const set = createDefaultDiceSet();
+        const url = new URL(
+            buildShareableRollUrl(
+                7,
+                { d20: 1 },
+                'http://example.test/roller?dice-look=d20:m:112233:aabbcc',
+                set
+            )
+        );
+        expect(url.searchParams.get('dice-look')).toBeNull();
+        expect(parseShareableRollDiceSet(url.searchParams).id).toBe(set.id);
     });
 });
 
