@@ -10,6 +10,7 @@ import { parseCollisionEventBuffer } from './collisionEvents.js';
 import { applyFaceTableForDie } from './faceTableLoader.js';
 import type { HullTable } from './hullTypes.js';
 import { parsePhysicsFlags } from './physicsFlags.js';
+import { toRngSeedBigInt } from './seedUtil.js';
 import type {
     CollisionEvent,
     DicePhysicsModule,
@@ -135,6 +136,10 @@ function wrapEngine(raw: EmbindPhysicsEngine, Module: DicePhysicsModule): Physic
         for (let i = 0; i < bytes.length; i++) vec.push_back(bytes[i] ?? 0);
         originalDeserialize(vec);
         vec.delete?.();
+    };
+    const originalSeedRNG = raw.seedRNG.bind(raw);
+    engine.seedRNG = (seed: number) => {
+        originalSeedRNG(toRngSeedBigInt(seed));
     };
     return engine;
 }
@@ -279,7 +284,7 @@ export const pollCollisionEvents = (): CollisionEvent[] => {
 
 export const seedPhysicsRNG = (seed: number): void => {
     if (!_session?.available) return;
-    _session.engine.seedRNG(seed >>> 0);
+    _session.engine.seedRNG(seed);
 };
 
 export const randomPhysicsFloat = (): number => {

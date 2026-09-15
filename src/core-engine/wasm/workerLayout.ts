@@ -110,7 +110,7 @@ export const sabSupported = (): boolean =>
 //   └────────────────────────────────────────────────┘
 // ---------------------------------------------------------------------------
 
-export const MAX_DYNAMICS = 64; // must match dice_physics_engine.hpp MAX_DYNAMICS
+export const MAX_DYNAMICS = 256; // must match dice_physics_engine.hpp MAX_DYNAMICS
 export const DYN_STRIDE = 7; // [px,py,pz, qx,qy,qz,qw] per dynamic prop
 
 export const DYN_HEADER_INTS = 2;

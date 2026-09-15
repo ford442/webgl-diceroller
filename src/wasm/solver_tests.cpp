@@ -150,6 +150,52 @@ TEST_CASE("Quaternion integration stays unit length") {
     }
 }
 
+TEST_CASE("inertiaWorldMat3 matches the quaternion double-rotate it replaces") {
+    // BodyView::applyInvInertiaWorld used to do
+    // rot.rotate(invInertiaLocal-scaled rot.conjugate().rotate(v)) on every
+    // call; it now does inertiaWorldMat3(rot, invInertiaLocal).mul(v) once
+    // per BodyView construction. Same math, different FP operation order
+    // (hence the SOLVER_REVISION bump), so this checks the two formulas
+    // agree within float tolerance across many rotations/vectors/inertias
+    // rather than assuming the algebra transcribed correctly.
+    auto oldFormula = [](const Quat& rot, const Vec3& invInertiaLocal, const Vec3& v) {
+        Vec3 local = rot.conjugate().rotate(v);
+        local.x *= invInertiaLocal.x;
+        local.y *= invInertiaLocal.y;
+        local.z *= invInertiaLocal.z;
+        return rot.rotate(local);
+    };
+
+    DeterministicRNG rng;
+    rng.seed(0xB0D7710Aull);
+    for (int i = 0; i < 5000; ++i) {
+        Quat rot{
+            rng.nextFloat() * 2.0f - 1.0f,
+            rng.nextFloat() * 2.0f - 1.0f,
+            rng.nextFloat() * 2.0f - 1.0f,
+            rng.nextFloat() * 2.0f - 1.0f,
+        };
+        rot = rot.normalized();
+        Vec3 invInertia{
+            rng.nextFloat() * 5.0f,
+            rng.nextFloat() * 5.0f,
+            rng.nextFloat() * 5.0f,
+        };
+        Vec3 v{
+            rng.nextFloat() * 20.0f - 10.0f,
+            rng.nextFloat() * 20.0f - 10.0f,
+            rng.nextFloat() * 20.0f - 10.0f,
+        };
+
+        Vec3 want = oldFormula(rot, invInertia, v);
+        Vec3 got = inertiaWorldMat3(rot, invInertia).mul(v);
+
+        CHECK(got.x == doctest::Approx(want.x).epsilon(1e-4));
+        CHECK(got.y == doctest::Approx(want.y).epsilon(1e-4));
+        CHECK(got.z == doctest::Approx(want.z).epsilon(1e-4));
+    }
+}
+
 TEST_CASE("PRNG golden sequence") {
     DeterministicRNG rng;
     rng.seed(0x123456789ABCDEF0ULL);
@@ -455,8 +501,11 @@ TEST_CASE("Golden traces: seed and parity hashes are stable") {
     runParity(p1);
     runParity(p2);
     CHECK(p1.hashSerializedState() == p2.hashSerializedState());
-    CHECK(p1.hashSerializedState() == 0x16a0c37d01d80318ULL);
-    CHECK(a.hashSerializedState() == 0x4f98b38ccd2d733cULL);
+    // Hashes below are SOLVER_REVISION-pinned; regenerate with
+    // `solver_tests --dump-golden` (see scripts/compare-solver-golden.mjs and
+    // tests/fixtures/solver-golden.json) whenever SOLVER_REVISION bumps.
+    CHECK(p1.hashSerializedState() == 0x9a82c5d0872fd75fULL);
+    CHECK(a.hashSerializedState() == 0xc3127461c4a976f0ULL);
 }
 
 TEST_CASE("Determinism: same seed yields identical serialize output") {
@@ -748,6 +797,123 @@ TEST_CASE("Broadphase grid matches brute-force pair set and serialize state") {
     CHECK(std::memcmp(gridState.data(), bruteState.data(), gridState.size()) == 0);
 }
 
+TEST_CASE("Broadphase grid matches brute force for die-dynamic and dynamic-dynamic pairs") {
+    PolyHull cube = makeUnitCubeHull();
+    auto cubeFlat = flattenHull(cube);
+
+    auto setupEngine = [&]() {
+        DicePhysicsEngine engine;
+        engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+        // Dice and dynamic boxes interleaved on a dense grid (spacing well
+        // under GRID_CELL_SIZE=2.2) so several bodies straddle a cell
+        // boundary and land in more than one grid cell -- exactly the case
+        // forEachDieDynamicPair's sort+unique dedup exists for.
+        for (int i = 0; i < 10; ++i) {
+            const float x = static_cast<float>((i % 5) - 2) * 0.9f;
+            const float y = 2.5f + static_cast<float>(i) * 0.08f;
+            const float z = static_cast<float>((i / 5) % 2) * 0.9f;
+            const int id = engine.addDie(6, x, y, z);
+            engine.setDieHull(id, cubeFlat);
+            engine.applyImpulse(id, 3.0f, 1.0f, -1.5f);
+            engine.applyTorqueImpulse(id, 5.0f, 0.0f, 4.0f);
+        }
+        for (int i = 0; i < 16; ++i) {
+            const float x = static_cast<float>((i % 4) - 2) * 0.85f + 0.3f;
+            const float y = 1.0f + static_cast<float>(i) * 0.07f;
+            const float z = static_cast<float>((i / 4) % 4 - 2) * 0.85f;
+            CHECK(engine.addDynamicBox(1000 + i, 0.25f, x, y, z,
+                0.2f, 0.2f, 0.2f, 0.0f, 0.0f, 0.0f, 1.0f, 0) == 1000 + i);
+        }
+        return engine;
+    };
+
+    DicePhysicsEngine pairEngine = setupEngine();
+    const auto gridDieDyn = pairEngine.collectDieDynamicPairsForTesting(true);
+    const auto bruteDieDyn = pairEngine.collectDieDynamicPairsForTesting(false);
+    CHECK(gridDieDyn.size() == bruteDieDyn.size());
+    CHECK(std::equal(gridDieDyn.begin(), gridDieDyn.end(), bruteDieDyn.begin()));
+
+    const auto gridDynDyn = pairEngine.collectDynamicPairsForTesting(true);
+    const auto bruteDynDyn = pairEngine.collectDynamicPairsForTesting(false);
+    CHECK(gridDynDyn.size() == bruteDynDyn.size());
+    CHECK(std::equal(gridDynDyn.begin(), gridDynDyn.end(), bruteDynDyn.begin()));
+
+    // Unlike the die-die grid (20 dice on a regular layout, where grid and
+    // brute-force traversal order happen to coincide -- see the test above),
+    // this scenario is dense enough that a handful of simultaneous new
+    // contacts resolve in a different order between the two paths, and a
+    // sequential-impulse solver is order-sensitive: grid and brute diverge
+    // into different (both valid) trajectories rather than staying
+    // byte-identical. That's expected -- production always runs one path
+    // (useBroadphase_ defaults true; setBroadphaseForTesting is test-only),
+    // so replay determinism only needs "same code path -> same result",
+    // which the pair-set equality above already establishes. What both
+    // paths must still do is stay physically valid.
+    auto runScenario = [&](bool useBroadphase) {
+        DicePhysicsEngine engine = setupEngine();
+        engine.setBroadphaseForTesting(useBroadphase);
+        for (int frame = 0; frame < 120; ++frame) {
+            engine.step(1.0f / 60.0f);
+            CHECK(engine.allBodyStatesFinite());
+            CHECK(engine.allBodyStatesInWorldBounds(20.0f));
+        }
+        CHECK(engine.getDynamicCapacityDroppedCount() == 0);
+    };
+    runScenario(true);
+    runScenario(false);
+}
+
+TEST_CASE("Fuzz: dynamics-heavy scenarios preserve invariants") {
+    // The general dice-only fuzz loop below never adds a DynamicBody, so it
+    // never exercises forEachDieDynamicPair / forEachDynamicPair's grid
+    // path. Cover it here with random dice + dynamic-box counts/placements
+    // (including boundary-straddling positions the handwritten equivalence
+    // test above can't randomize into).
+    const char* env = std::getenv("FUZZ_SEEDS");
+    int seedCount = env ? std::atoi(env) / 10 : 200;
+    if (seedCount < 1) seedCount = 200;
+
+    PolyHull cube = makeUnitCubeHull();
+    auto cubeFlat = flattenHull(cube);
+
+    DeterministicRNG master;
+    master.seed(0xD11CE0FFULL);
+
+    for (int run = 0; run < seedCount; ++run) {
+        DicePhysicsEngine engine;
+        engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+
+        const int dieCount = static_cast<int>(master.next() % 8);
+        for (int d = 0; d < dieCount; ++d) {
+            float x = master.nextFloat() * 8.0f - 4.0f;
+            float y = 2.0f + master.nextFloat() * 4.0f;
+            float z = master.nextFloat() * 8.0f - 4.0f;
+            int id = engine.addDie(6, x, y, z);
+            if (id < 0) continue;
+            engine.setDieHull(id, cubeFlat);
+            engine.applyImpulse(id,
+                (master.nextFloat() - 0.5f) * 20.0f,
+                master.nextFloat() * 5.0f,
+                (master.nextFloat() - 0.5f) * 20.0f);
+        }
+
+        const int dynCount = static_cast<int>(master.next() % 20);
+        for (int p = 0; p < dynCount; ++p) {
+            float x = master.nextFloat() * 8.0f - 4.0f;
+            float y = 1.0f + master.nextFloat() * 4.0f;
+            float z = master.nextFloat() * 8.0f - 4.0f;
+            engine.addDynamicBox(p, 0.2f + master.nextFloat() * 0.3f, x, y, z,
+                0.15f, 0.15f, 0.15f, 0.0f, 0.0f, 0.0f, 1.0f, 0);
+        }
+
+        for (int frame = 0; frame < 180; ++frame) {
+            engine.step(1.0f / 60.0f);
+            CHECK(engine.allBodyStatesFinite());
+            CHECK(engine.allBodyStatesInWorldBounds(20.0f));
+        }
+    }
+}
+
 TEST_CASE("Fuzz: random scenarios preserve invariants and settle") {
     const char* env = std::getenv("FUZZ_SEEDS");
     int seedCount = env ? std::atoi(env) : 2000;
@@ -878,10 +1044,11 @@ int dumpGolden() {
     return 0;
 }
 
-int runBench(int dieCount, int steps, int warmup) {
+int runBench(int dieCount, int steps, int warmup, int dynamicsCount) {
     if (dieCount < 1) dieCount = 50;
     if (steps < 1) steps = 600;
     if (warmup < 0) warmup = 60;
+    if (dynamicsCount < 0) dynamicsCount = 0;
 
     PolyHull cube = makeUnitCubeHull();
     auto cubeFlat = flattenHull(cube);
@@ -899,6 +1066,16 @@ int runBench(int dieCount, int steps, int warmup) {
         engine.applyTorqueImpulse(id, 10.0f, 0.0f, 5.0f);
     }
 
+    // Scattered across the same table area as the dice, dense enough to
+    // exercise forEachDieDynamicPair / forEachDynamicPair's grid rather than
+    // sitting in mostly-empty cells that make the broadphase look free.
+    for (int i = 0; i < dynamicsCount; ++i) {
+        const float x = static_cast<float>((i % 12) - 6) * 0.5f;
+        const float y = 1.0f + static_cast<float>(i) * 0.03f;
+        const float z = static_cast<float>((i / 12) % 12 - 6) * 0.5f;
+        engine.addDynamicBox(i, 0.3f, x, y, z, 0.2f, 0.2f, 0.2f, 0.0f, 0.0f, 0.0f, 1.0f, 0);
+    }
+
     const float dt = 1.0f / 60.0f;
     for (int w = 0; w < warmup; ++w) {
         engine.step(dt);
@@ -914,11 +1091,13 @@ int runBench(int dieCount, int steps, int warmup) {
     const double msPerStep = totalMs / static_cast<double>(steps);
     const double usPerStep = msPerStep * 1000.0;
 
-    std::cout << "bench dice=" << dieCount << " steps=" << steps
+    std::cout << "bench dice=" << dieCount << " dynamics=" << dynamicsCount
+              << " steps=" << steps
               << " warmup=" << warmup
               << " total_ms=" << totalMs
               << " ms_per_step=" << msPerStep << '\n';
     std::cout << "bench_json {\"profile\":\"native-scalar\",\"dice\":" << dieCount
+              << ",\"dynamics\":" << dynamicsCount
               << ",\"steps\":" << steps
               << ",\"warmup\":" << warmup
               << ",\"total_ms\":" << totalMs
@@ -942,6 +1121,7 @@ int main(int argc, char** argv) {
         int dieCount = 50;
         int steps = 600;
         int warmup = 60;
+        int dynamicsCount = 0;
         for (int i = 2; i < argc; ++i) {
             if (std::strncmp(argv[i], "--dice=", 7) == 0) {
                 dieCount = std::atoi(argv[i] + 7);
@@ -949,9 +1129,11 @@ int main(int argc, char** argv) {
                 steps = std::atoi(argv[i] + 8);
             } else if (std::strncmp(argv[i], "--warmup=", 9) == 0) {
                 warmup = std::atoi(argv[i] + 9);
+            } else if (std::strncmp(argv[i], "--dynamics=", 11) == 0) {
+                dynamicsCount = std::atoi(argv[i] + 11);
             }
         }
-        return runBench(dieCount, steps, warmup);
+        return runBench(dieCount, steps, warmup, dynamicsCount);
     }
     doctest::Context ctx;
     ctx.applyCommandLine(argc, argv);

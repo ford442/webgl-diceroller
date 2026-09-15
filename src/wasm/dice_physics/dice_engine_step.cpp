@@ -75,6 +75,24 @@ std::vector<std::pair<size_t, size_t>> DicePhysicsEngine::collectDiePairsForTest
     return {pairSet.begin(), pairSet.end()};
 }
 
+std::vector<std::pair<size_t, size_t>> DicePhysicsEngine::collectDieDynamicPairsForTesting(bool useBroadphase) {
+    const bool saved = useBroadphase_;
+    useBroadphase_ = useBroadphase;
+    std::set<std::pair<size_t, size_t>> pairSet;
+    forEachDieDynamicPair([&](size_t di, size_t pi) { pairSet.insert({di, pi}); });
+    useBroadphase_ = saved;
+    return {pairSet.begin(), pairSet.end()};
+}
+
+std::vector<std::pair<size_t, size_t>> DicePhysicsEngine::collectDynamicPairsForTesting(bool useBroadphase) {
+    const bool saved = useBroadphase_;
+    useBroadphase_ = useBroadphase;
+    std::set<std::pair<size_t, size_t>> pairSet;
+    forEachDynamicPair([&](size_t i, size_t j) { pairSet.insert({i, j}); });
+    useBroadphase_ = saved;
+    return {pairSet.begin(), pairSet.end()};
+}
+
 bool DicePhysicsEngine::areAllSettled() const {
     // Explicit: an empty engine has no roll to finish.
     if (!hasDice()) return false;

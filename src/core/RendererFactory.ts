@@ -156,6 +156,48 @@ export const WEBGPU_REQUIRED_LIMITS: Record<string, number> = {
     maxUniformBufferBindingSize: 16384,
 };
 
+/**
+ * WebGPU device feature floor. Deliberately empty beyond the perf-tracking
+ * opt-in below: none of the TSL materials this app ships depend on an
+ * optional GPU feature today. Passing a curated (rather than absent)
+ * `requiredFeatures` list stops Three's `WebGPUBackend.init()` from doing
+ * what it does when `parameters.device` is left unset — enumerating every
+ * `GPUFeatureName` the adapter reports and requesting all of them — which
+ * makes the adapter's full feature set part of this app's de facto support
+ * matrix (and its replay/determinism surface) without that ever being a
+ * deliberate choice. If a material starts needing e.g.
+ * `float32-filterable`, add it here with a comment saying which material
+ * needs it, not silently — see docs/RENDERER.md (if this list grows).
+ */
+export const WEBGPU_CURATED_FEATURES: readonly string[] = [];
+
+/** GPU feature name gating `WebGPURenderer`'s `trackTimestamp` (GPU pass timing). */
+export const WEBGPU_TIMESTAMP_QUERY_FEATURE = 'timestamp-query';
+
+/** `?debug-perf` / `?gpu-timer` opt into GPU-timestamp pass timing (see createRenderer). */
+export function wantsWebGpuTimestampQuery(searchParams: URLSearchParams): boolean {
+    return searchParams.has('debug-perf') || searchParams.has('gpu-timer');
+}
+
+/**
+ * Curated `requiredFeatures` for `adapter.requestDevice()`: the documented
+ * floor (currently empty) plus `timestamp-query` when both the caller wants
+ * GPU-timestamp tracking and the adapter actually supports it. Never
+ * requests a feature the adapter lacks — `requestDevice` rejects on an
+ * unsupported required feature, and that would turn "no GPU timer" into
+ * "no WebGPU at all".
+ */
+export function getWebGpuRequiredFeatures(
+    adapterFeatures: { has(name: string): boolean },
+    { wantTimestampQuery }: { wantTimestampQuery: boolean }
+): string[] {
+    const features = [...WEBGPU_CURATED_FEATURES];
+    if (wantTimestampQuery && adapterFeatures.has(WEBGPU_TIMESTAMP_QUERY_FEATURE)) {
+        features.push(WEBGPU_TIMESTAMP_QUERY_FEATURE);
+    }
+    return features;
+}
+
 export interface WebGlContextAttributeOptions {
     antialias: boolean;
     xrCompatible?: boolean;
@@ -265,6 +307,64 @@ export async function describeWebGpuLimitMismatches(
     } catch (err) {
         return err instanceof Error ? err.message : String(err);
     }
+}
+
+export interface CuratedWebGpuDevice {
+    device: unknown;
+    trackTimestamp: boolean;
+    requiredFeatures: string[];
+}
+
+/**
+ * Request a WebGPU device with {@link getWebGpuRequiredFeatures}'s curated
+ * feature list instead of letting `WebGPUBackend.init()` request every
+ * `GPUFeatureName` the adapter reports (see WEBGPU_CURATED_FEATURES). The
+ * resulting `device` is meant to be passed into `WebGPURenderer`'s
+ * constructor — `WebGPUBackend.init()` uses a caller-supplied `device`
+ * as-is and skips its own (kitchen-sink) adapter/device request entirely.
+ *
+ * Returns `null` when `navigator.gpu`/`requestAdapter` is unavailable, or
+ * when `requestDevice` rejects (e.g. our curated `requiredLimits` floor
+ * genuinely exceeds the adapter) — callers should fall back to letting
+ * `WebGPURenderer` request its own device in that case, same as any other
+ * WebGPU init failure.
+ */
+export async function requestCuratedWebGpuDevice(
+    wantTimestampQuery: boolean
+): Promise<CuratedWebGpuDevice | null> {
+    // Same rationale as describeWebGpuLimitMismatches for the local cast.
+    const nav = typeof navigator !== 'undefined' ? navigator : undefined;
+    const gpu = (
+        nav as {
+            gpu?: {
+                requestAdapter(
+                    opts?: unknown
+                ): Promise<{ features: { has(name: string): boolean } } | null>;
+            };
+        }
+    )?.gpu;
+    if (!gpu?.requestAdapter) return null;
+    const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
+    if (!adapter) return null;
+
+    const requiredFeatures = getWebGpuRequiredFeatures(adapter.features, { wantTimestampQuery });
+    const device = await (
+        adapter as unknown as {
+            requestDevice(descriptor?: {
+                requiredFeatures?: string[];
+                requiredLimits?: Record<string, number>;
+            }): Promise<unknown>;
+        }
+    ).requestDevice({
+        requiredFeatures,
+        requiredLimits: WEBGPU_REQUIRED_LIMITS,
+    });
+
+    return {
+        device,
+        trackTimestamp: requiredFeatures.includes(WEBGPU_TIMESTAMP_QUERY_FEATURE),
+        requiredFeatures,
+    };
 }
 
 function applySharedRendererConfig(
@@ -555,10 +655,33 @@ export async function createRenderer(
             };
         }
 
+        // Hoisted so a failure after device creation (below) can best-effort
+        // release the GPUDevice in the catch block instead of leaking it.
+        let curated: CuratedWebGpuDevice | null = null;
         try {
             const THREE_WEBGPU = await import('three/webgpu');
             const gpuParams = getWebGpuRendererParameters({ antialias });
-            const renderer = new THREE_WEBGPU.WebGPURenderer(gpuParams);
+            // Own the canvas here rather than letting WebGPURenderer create
+            // its own (the WebGL path already creates one first) — recovery,
+            // XR, and a second view all need one stable element to hold on to.
+            const canvas = document.createElement('canvas');
+            const wantTimestampQuery = wantsWebGpuTimestampQuery(searchParams);
+            // null when navigator.gpu/requestAdapter is unavailable or our
+            // curated requiredLimits/requiredFeatures request fails — falls
+            // through to letting WebGPURenderer request its own device
+            // (the pre-existing kitchen-sink behavior) rather than losing
+            // WebGPU entirely over a device-curation problem.
+            curated = await requestCuratedWebGpuDevice(wantTimestampQuery);
+            const renderer = new THREE_WEBGPU.WebGPURenderer({
+                ...gpuParams,
+                canvas,
+                ...(curated
+                    ? {
+                          device: curated.device as GPUDevice,
+                          trackTimestamp: curated.trackTimestamp,
+                      }
+                    : {}),
+            });
             applySharedRendererConfig(renderer, width, height, pixelRatio);
             await renderer.init();
 
@@ -566,6 +689,12 @@ export async function createRenderer(
                 console.info(
                     '[RendererFactory] WebGPU requiredLimits floor',
                     WEBGPU_REQUIRED_LIMITS
+                );
+                console.info(
+                    '[RendererFactory] WebGPU requiredFeatures',
+                    curated
+                        ? curated.requiredFeatures
+                        : '(curated device request unavailable; WebGPUBackend requested its own device/features)'
                 );
             }
 
@@ -579,6 +708,11 @@ export async function createRenderer(
                 ...sharedMeta,
             };
         } catch (error) {
+            // Best-effort: renderer.init() (or something before it) failed
+            // after we'd already obtained a curated device — release it
+            // rather than leaving an unused GPUDevice around while we fall
+            // back to WebGL.
+            (curated?.device as { destroy?: () => void } | undefined)?.destroy?.();
             const message = error instanceof Error ? error.message : String(error);
             const gpuLimitNote = await describeWebGpuLimitMismatches();
             const limitSuffix = gpuLimitNote ? `; ${gpuLimitNote}` : '';

@@ -1,2 +1,8 @@
 CompileFlags:
-    CompilationDatabase: build-native
+    # src/wasm/generate-clangd-db.sh merges the native compile_commands.json
+    # (build-native/, from build_solver_test.sh) with the Emscripten one
+    # (build-emcc/, from `emcmake cmake`, when an EMSDK is available) into
+    # src/wasm/compile_commands.json, so engine sources resolve
+    # __EMSCRIPTEN__/__wasm_simd128__ instead of only the native branches.
+    # Run it after checkout and whenever engine_sources.txt changes.
+    CompilationDatabase: .

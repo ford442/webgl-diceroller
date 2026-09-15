@@ -22,6 +22,7 @@
         "build:wasm": "bash src/wasm/build.sh",
         "build:wasm:debug": "bash src/wasm/build.sh --debug",
         "build:wasm_colab": "bash src/wasm/build_colab.sh",
+        "wasm:clangd-db": "bash src/wasm/generate-clangd-db.sh",
         "convert:dice": "node scripts/convert-dice-to-glb.mjs",
         "convert:props": "node scripts/convert-props.mjs",
         "optimize:fallback-jpgs": "node scripts/reencode-fallback-jpgs.mjs",

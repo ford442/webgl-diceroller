@@ -53,6 +53,7 @@ import {
 } from './workerLayout.js';
 import { computeSeededThrowParams, applyThrowParams } from './seededThrowParams.js';
 import { dispatchLinear, drainRing } from './workerCommands.js';
+import { toRngSeedBigInt } from './seedUtil.js';
 import type { DicePhysicsModule, EmbindPhysicsEngine } from './physicsTypes.js';
 
 /** Convex-hull + face-table data shipped in `public/wasm/hulls.json`. */
@@ -589,7 +590,7 @@ function handle(type: string, payload: CommandPayload): void {
             break;
         case 'seedRNG':
             drainCommandQueue();
-            eng.seedRNG(payload.seed);
+            eng.seedRNG(toRngSeedBigInt(payload.seed));
             break;
         case 'serializeState': {
             const vec = eng.serializeState();
@@ -606,7 +607,7 @@ function handle(type: string, payload: CommandPayload): void {
             break;
         }
         case 'seededThrow': {
-            eng.seedRNG(payload.seed >>> 0);
+            eng.seedRNG(toRngSeedBigInt(payload.seed));
             const params = computeSeededThrowParams(
                 () => eng.randomFloat(),
                 payload.dice,

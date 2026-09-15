@@ -21,16 +21,13 @@ CXXFLAGS=(-std=c++17 -O2 -Wall -Wextra -Wpedantic -I"${SCRIPT_DIR}")
 
 # DicePhysicsEngine member functions live in separate .cpp translation units
 # (see docs/WASM_ENGINE.md); solver_tests.cpp only needs the class declaration.
-ENGINE_SOURCES=(
-    "${SCRIPT_DIR}/dice_physics/dice_engine_lifecycle.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_step.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_collision_static.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_collision_dynamic.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_integrate.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_face_value.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_dynamics.cpp"
-    "${SCRIPT_DIR}/dice_physics/dice_engine_solver.cpp"
-)
+# The source list itself lives in engine_sources.txt (single source of truth
+# shared with build.sh and CMakeLists.txt).
+ENGINE_SOURCES=()
+while IFS= read -r rel; do
+    [[ -z "${rel}" || "${rel}" == \#* ]] && continue
+    ENGINE_SOURCES+=("${SCRIPT_DIR}/${rel}")
+done < "${SCRIPT_DIR}/engine_sources.txt"
 ALL_SOURCES=("${SCRIPT_DIR}/solver_tests.cpp" "${ENGINE_SOURCES[@]}")
 
 mkdir -p "${BUILD_DIR}"
@@ -120,6 +117,15 @@ if [ "${BENCH_SOLVER:-}" = "1" ]; then
     for N in 10 50 100 200; do
         "${BIN}" --bench --dice="${N}" --steps=600 --warmup=60
     done
+    # Informational: die + dynamics broadphase cost at MAX_DYNAMICS (256).
+    # --dice=48 (not 50) deliberately avoids colliding with the dice-only
+    # "50" budget key in scripts/solver-bench-baselines.json -- this line
+    # isn't gated on a threshold (compare-solver-bench.mjs is warn-only and
+    # skips rows with no baseline entry for their dice count); it exists so
+    # a regression back toward brute-force die-dynamic / dynamic-dynamic
+    # pairing (dropped in favor of the shared uniform grid, see
+    # docs/WASM_ENGINE.md Phase 8) is visible in CI output.
+    "${BIN}" --bench --dice=48 --dynamics=256 --steps=600 --warmup=60
 fi
 
 echo "[test:solver] All solver tests passed."

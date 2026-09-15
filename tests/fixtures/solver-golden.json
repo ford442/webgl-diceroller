@@ -1,17 +1,17 @@
 {
-    "revision": 3,
+    "revision": 7,
     "notes": "Native FNV-1a of serializeState() after the named scenarios. Update with solver_tests --dump-golden when SOLVER_REVISION or behaviour changes.",
     "traces": [
         {
             "name": "parity-fixed",
             "frames": 30,
-            "hash": "0x16a0c37d01d80318"
+            "hash": "0x9a82c5d0872fd75f"
         },
         {
             "name": "seed-deadbeefcafebabe",
             "seed": "0xDEADBEEFCAFEBABE",
             "frames": 240,
-            "hash": "0x4f98b38ccd2d733c"
+            "hash": "0xc3127461c4a976f0"
         }
     ]
 }

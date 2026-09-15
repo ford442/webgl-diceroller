@@ -1,0 +1,19 @@
+# engine_sources.txt -- single source of truth for the DicePhysicsEngine
+# member-function translation units (see docs/WASM_ENGINE.md).
+#
+# Consumed by build.sh, build_solver_test.sh, and CMakeLists.txt. Paths are
+# relative to this file's directory (src/wasm/). Add a new engine .cpp here
+# once and every consumer picks it up -- do not hand-edit ENGINE_SOURCES in
+# any of those three files again.
+#
+# Blank lines and lines starting with '#' are ignored by all three readers.
+# ASCII only: CMake's file(STRINGS) treats non-ASCII bytes as line breaks.
+
+dice_physics/dice_engine_lifecycle.cpp
+dice_physics/dice_engine_step.cpp
+dice_physics/dice_engine_collision_static.cpp
+dice_physics/dice_engine_collision_dynamic.cpp
+dice_physics/dice_engine_integrate.cpp
+dice_physics/dice_engine_face_value.cpp
+dice_physics/dice_engine_dynamics.cpp
+dice_physics/dice_engine_solver.cpp

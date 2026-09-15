@@ -4,6 +4,9 @@
 # Determinism: do not add -ffast-math or PRECISE_F32=0 — seeded replay is IEEE-754.
 # -s STACK_SIZE=262144 — EMSDK 3.1.61 default stack is small; manifold SI + SAT
 #   recursion/temps need headroom. Do not drop without a stack-highwater check.
+# -s WASM_BIGINT=1 — lets Embind bind uint64_t/int64_t (seedRNG) directly as a
+#   JS BigInt instead of needing a narrowing uint32_t shim at the binding.
+#   Supported since EMSDK ~1.39; do not drop without re-narrowing seedRNG.
 # --closure 1 and -s STRICT=1 are intentionally unset: Embind + EXPORT_ES6 glue
 #   on 3.1.61 still trips both. Re-evaluate when upgrading EMSDK.
 # -fno-rtti is omitted: Embind on EMSDK 3.1.61 still requires RTTI.
@@ -28,6 +31,7 @@ EMCC_COMMON=(
     -s ENVIRONMENT=web,worker,node
     -s FILESYSTEM=0
     -s ABORTING_MALLOC=0
+    -s WASM_BIGINT=1
     -s STACK_SIZE=262144
 )
 

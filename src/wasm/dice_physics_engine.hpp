@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -36,9 +37,10 @@ public:
     static constexpr int MAX_EVENTS_PER_STEP = 1024;
     static constexpr uint32_t FLAG_NO_DRAG = 1u << 0;
     // Soft cap on dynamic (non-die) rigid-body props — knockable clutter.
-    // Small on purpose: dynamic×die/dynamic×dynamic pairs are brute-forced
-    // (no broadphase grid), which is trivial at this scale.
-    static constexpr int MAX_DYNAMICS = 64;
+    // die×dynamic and dynamic×dynamic pairs share the die uniform grid (see
+    // forEachDieDynamicPair / forEachDynamicPair), so this is a memory/event
+    // budget cap, not a brute-force-cost cap.
+    static constexpr int MAX_DYNAMICS = 256;
 
     DicePhysicsEngine();
 
@@ -186,6 +188,12 @@ public:
     /** Test hook: enumerate die–die pair indices without running the solver. */
     std::vector<std::pair<size_t, size_t>> collectDiePairsForTesting(bool useBroadphase);
 
+    /** Test hook: enumerate (dieIndex, dynamicIndex) pairs without running the solver. */
+    std::vector<std::pair<size_t, size_t>> collectDieDynamicPairsForTesting(bool useBroadphase);
+
+    /** Test hook: enumerate dynamic–dynamic pair indices without running the solver. */
+    std::vector<std::pair<size_t, size_t>> collectDynamicPairsForTesting(bool useBroadphase);
+
     bool areAllSettled() const;
     bool hasDice() const { return !bodies_.empty(); }
 
@@ -269,6 +277,16 @@ private:
 
     static constexpr float GRID_CELL_SIZE = 2.2f;
     std::vector<std::vector<size_t>> dieGridCells_;
+    // Dynamics share the die grid's dimensions/origin (ensureDieGridDimensions)
+    // but get their own per-cell bucket, since a die index and a dynamics_
+    // index are different spaces.
+    std::vector<std::vector<size_t>> dynGridCells_;
+    // Scratch buffer for forEachDieDynamicPair's candidate pairs (cleared and
+    // refilled each call) — a die/dynamic straddling a cell boundary can
+    // otherwise surface the same (dieIndex, dynIndex) pair from more than one
+    // cell in the 3x3 neighbor scan; sort+unique before dispatch removes
+    // exactly those duplicates.
+    std::vector<std::pair<size_t, size_t>> dieDynamicPairScratch_;
     int gridCols_ = 0;
     int gridRows_ = 0;
     float gridOriginX_ = 0.0f;
@@ -311,8 +329,13 @@ private:
     int bodyCellZMin(float z, float radius) const;
     int bodyCellZMax(float z, float radius) const;
     void rebuildDieGrid(float expand);
+    void rebuildDynGrid(float expand);
     template <typename Fn>
     void forEachDiePair(Fn&& fn, float expand = 0.0f);
+    template <typename Fn>
+    void forEachDynamicPair(Fn&& fn, float expand = 0.0f);
+    template <typename Fn>
+    void forEachDieDynamicPair(Fn&& fn, float expand = 0.0f);
     void processDiePair(size_t i, size_t j, StepStats& stats, float spec);
     void generateDieDieContacts(float spec, StepStats& stats);
 
@@ -414,6 +437,111 @@ void DicePhysicsEngine::forEachDiePair(Fn&& fn, float expand) {
                 }
             }
         }
+    }
+}
+
+// Mirrors forEachDiePair exactly, over dynamics_/dynGridCells_ instead of
+// bodies_/dieGridCells_ — same-population pairs, so the same "only walk the
+// forward half of the 3x3 neighborhood" trick avoids double-counting.
+template <typename Fn>
+void DicePhysicsEngine::forEachDynamicPair(Fn&& fn, float expand) {
+    if (!useBroadphase_ || dynamics_.size() < 2) {
+        for (size_t i = 0; i < dynamics_.size(); ++i) {
+            for (size_t j = i + 1; j < dynamics_.size(); ++j) {
+                fn(i, j);
+            }
+        }
+        return;
+    }
+
+    rebuildDynGrid(expand);
+    for (int cz = 0; cz < gridRows_; ++cz) {
+        for (int cx = 0; cx < gridCols_; ++cx) {
+            const auto& cell = dynGridCells_[static_cast<size_t>(cz * gridCols_ + cx)];
+
+            for (size_t ai = 0; ai < cell.size(); ++ai) {
+                for (size_t bi = ai + 1; bi < cell.size(); ++bi) {
+                    fn(cell[ai], cell[bi]);
+                }
+            }
+
+            for (int dz = 0; dz <= 1; ++dz) {
+                const int dxStart = dz == 0 ? 1 : -1;
+                for (int dx = dxStart; dx <= 1; ++dx) {
+                    if (dx == 0 && dz == 0) continue;
+                    const int nx = cx + dx;
+                    const int nz = cz + dz;
+                    if (nx < 0 || nx >= gridCols_ || nz < 0 || nz >= gridRows_) continue;
+                    if (nz < cz || (nz == cz && nx <= cx)) continue;
+
+                    const auto& neighbor =
+                        dynGridCells_[static_cast<size_t>(nz * gridCols_ + nx)];
+                    for (size_t a : cell) {
+                        for (size_t b : neighbor) {
+                            if (a < b) {
+                                fn(a, b);
+                            } else if (b < a) {
+                                fn(b, a);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Bipartite (die index space x dynamics index space): unlike forEachDiePair /
+// forEachDynamicPair, there is no single canonical ordering to dedupe on, so
+// a die or dynamic body that straddles a cell boundary (and is therefore
+// bucketed into more than one grid cell) can otherwise surface the same
+// (dieIndex, dynIndex) candidate from more than one cell in the 3x3 neighbor
+// scan below. Collect candidates into a scratch buffer and sort+unique
+// before dispatch, so every pair reaches fn() exactly once regardless of how
+// many cells either body overlaps — matching the brute-force branch's
+// semantics exactly (verified against it in solver_tests.cpp).
+template <typename Fn>
+void DicePhysicsEngine::forEachDieDynamicPair(Fn&& fn, float expand) {
+    if (!useBroadphase_ || bodies_.empty() || dynamics_.empty()) {
+        for (size_t di = 0; di < bodies_.size(); ++di) {
+            for (size_t pi = 0; pi < dynamics_.size(); ++pi) {
+                fn(di, pi);
+            }
+        }
+        return;
+    }
+
+    rebuildDieGrid(expand);
+    rebuildDynGrid(expand);
+
+    dieDynamicPairScratch_.clear();
+    for (int cz = 0; cz < gridRows_; ++cz) {
+        for (int cx = 0; cx < gridCols_; ++cx) {
+            const auto& dieCell = dieGridCells_[static_cast<size_t>(cz * gridCols_ + cx)];
+            if (dieCell.empty()) continue;
+
+            const int nzMin = std::max(0, cz - 1);
+            const int nzMax = std::min(gridRows_ - 1, cz + 1);
+            const int nxMin = std::max(0, cx - 1);
+            const int nxMax = std::min(gridCols_ - 1, cx + 1);
+            for (int nz = nzMin; nz <= nzMax; ++nz) {
+                for (int nx = nxMin; nx <= nxMax; ++nx) {
+                    const auto& dynCell = dynGridCells_[static_cast<size_t>(nz * gridCols_ + nx)];
+                    for (size_t di : dieCell) {
+                        for (size_t pi : dynCell) {
+                            dieDynamicPairScratch_.emplace_back(di, pi);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    std::sort(dieDynamicPairScratch_.begin(), dieDynamicPairScratch_.end());
+    dieDynamicPairScratch_.erase(
+        std::unique(dieDynamicPairScratch_.begin(), dieDynamicPairScratch_.end()),
+        dieDynamicPairScratch_.end());
+    for (const auto& pr : dieDynamicPairScratch_) {
+        fn(pr.first, pr.second);
     }
 }
 
