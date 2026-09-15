@@ -306,6 +306,30 @@ void DicePhysicsEngine::rebuildDieGrid(float expand) {
     }
 }
 
+void DicePhysicsEngine::rebuildDynGrid(float expand) {
+    ensureDieGridDimensions();
+    const size_t cellCount = static_cast<size_t>(gridCols_ * gridRows_);
+    if (dynGridCells_.size() != cellCount) {
+        dynGridCells_.assign(cellCount, {});
+    } else {
+        for (auto& cell : dynGridCells_) cell.clear();
+    }
+
+    for (size_t i = 0; i < dynamics_.size(); ++i) {
+        const auto& d = dynamics_[i];
+        const float r = d.radius + expand;
+        const int minCx = bodyCellXMin(d.position.x, r);
+        const int maxCx = bodyCellXMax(d.position.x, r);
+        const int minCz = bodyCellZMin(d.position.z, r);
+        const int maxCz = bodyCellZMax(d.position.z, r);
+        for (int cz = minCz; cz <= maxCz; ++cz) {
+            for (int cx = minCx; cx <= maxCx; ++cx) {
+                dynGridCells_[static_cast<size_t>(cz * gridCols_ + cx)].push_back(i);
+            }
+        }
+    }
+}
+
 void DicePhysicsEngine::processDiePair(size_t i, size_t j, StepStats& stats, float spec) {
     auto& a = bodies_[i];
     auto& b = bodies_[j];
@@ -649,84 +673,80 @@ void DicePhysicsEngine::generateDynamicStaticContacts(DynamicBody& b, size_t dyn
 }
 
 void DicePhysicsEngine::generateDieDynamicContacts(float spec, StepStats& stats) {
-    for (size_t pi = 0; pi < dynamics_.size(); ++pi) {
+    forEachDieDynamicPair([&](size_t di, size_t pi) {
+        auto& die = bodies_[di];
         auto& prop = dynamics_[pi];
-        for (size_t di = 0; di < bodies_.size(); ++di) {
-            auto& die = bodies_[di];
-            stats.pairCandidates++;
-            if (die.kinematic && prop.kinematic) continue;
-            if (die.sleeping && prop.sleeping) continue;
-            Vec3 delta = prop.position - die.position;
-            const float distSq = delta.lengthSq();
-            const float combinedR = die.radius + prop.radius + spec;
-            if (distSq >= combinedR * combinedR) continue;
-            stats.sphereTests++;
-            const float mu = std::sqrt(die.friction * prop.friction);
-            const float rest = std::min(die.restitution, prop.restitution);
-            if (die.useHull && !die.worldVerts.empty()) {
-                addSatContacts(
-                    ManifoldKind::DieDynamic, die.id, prop.userId, 0,
-                    static_cast<int>(di), static_cast<int>(pi),
-                    die.hull, die.position, die.rotation, die.worldVerts,
-                    prop.hull, prop.position, prop.rotation, prop.worldVerts,
-                    spec, mu, rest, &stats
-                );
-            } else {
-                Vec3 normal = distSq > 1e-8f ? delta / std::sqrt(distSq) : Vec3{1, 0, 0};
-                float dist = std::sqrt(std::max(distSq, 0.0f));
-                float pen = die.radius + prop.radius - dist;
-                ContactPoint pts[1];
-                pts[0].point = die.position + normal * die.radius;
-                pts[0].separation = -pen;
-                pts[0].featureId = 0;
-                auto* m = matchManifold(ManifoldKind::DieDynamic, die.id, prop.userId, 0);
-                if (!m) continue;
-                m->indexA = static_cast<int>(di);
-                m->indexB = static_cast<int>(pi);
-                m->friction = mu;
-                m->restitution = rest;
-                commitManifoldPoints(*m, pts, 1, normal);
-            }
-            auto* found = matchManifold(ManifoldKind::DieDynamic, die.id, prop.userId, 0);
-            if (!found || found->stale) continue;
-            wake(die);
-            wake(prop);
-            Vec3 relVel = prop.velocity - die.velocity;
-            float speed = std::abs(Vec3::dot(relVel, found->normal));
-            if (speed > 0.5f && events_.size() < static_cast<size_t>(MAX_EVENTS_PER_STEP)) {
-                events_.push_back(makeEvent(die, dynamicEventOtherId(prop.userId), speed));
-            }
+        stats.pairCandidates++;
+        if (die.kinematic && prop.kinematic) return;
+        if (die.sleeping && prop.sleeping) return;
+        Vec3 delta = prop.position - die.position;
+        const float distSq = delta.lengthSq();
+        const float combinedR = die.radius + prop.radius + spec;
+        if (distSq >= combinedR * combinedR) return;
+        stats.sphereTests++;
+        const float mu = std::sqrt(die.friction * prop.friction);
+        const float rest = std::min(die.restitution, prop.restitution);
+        if (die.useHull && !die.worldVerts.empty()) {
+            addSatContacts(
+                ManifoldKind::DieDynamic, die.id, prop.userId, 0,
+                static_cast<int>(di), static_cast<int>(pi),
+                die.hull, die.position, die.rotation, die.worldVerts,
+                prop.hull, prop.position, prop.rotation, prop.worldVerts,
+                spec, mu, rest, &stats
+            );
+        } else {
+            Vec3 normal = distSq > 1e-8f ? delta / std::sqrt(distSq) : Vec3{1, 0, 0};
+            float dist = std::sqrt(std::max(distSq, 0.0f));
+            float pen = die.radius + prop.radius - dist;
+            ContactPoint pts[1];
+            pts[0].point = die.position + normal * die.radius;
+            pts[0].separation = -pen;
+            pts[0].featureId = 0;
+            auto* m = matchManifold(ManifoldKind::DieDynamic, die.id, prop.userId, 0);
+            if (!m) return;
+            m->indexA = static_cast<int>(di);
+            m->indexB = static_cast<int>(pi);
+            m->friction = mu;
+            m->restitution = rest;
+            commitManifoldPoints(*m, pts, 1, normal);
         }
-    }
+        auto* found = matchManifold(ManifoldKind::DieDynamic, die.id, prop.userId, 0);
+        if (!found || found->stale) return;
+        wake(die);
+        wake(prop);
+        Vec3 relVel = prop.velocity - die.velocity;
+        float speed = std::abs(Vec3::dot(relVel, found->normal));
+        if (speed > 0.5f && events_.size() < static_cast<size_t>(MAX_EVENTS_PER_STEP)) {
+            events_.push_back(makeEvent(die, dynamicEventOtherId(prop.userId), speed));
+        }
+    }, spec);
 }
 
 void DicePhysicsEngine::generateDynamicDynamicContacts(float spec, StepStats& stats) {
-    for (size_t i = 0; i < dynamics_.size(); ++i) {
-        for (size_t j = i + 1; j < dynamics_.size(); ++j) {
-            auto& a = dynamics_[i];
-            auto& b = dynamics_[j];
-            stats.pairCandidates++;
-            if (a.kinematic && b.kinematic) continue;
-            if (a.sleeping && b.sleeping) continue;
-            Vec3 delta = b.position - a.position;
-            const float distSq = delta.lengthSq();
-            const float combinedR = a.radius + b.radius + spec;
-            if (distSq >= combinedR * combinedR) continue;
-            stats.sphereTests++;
-            addSatContacts(
-                ManifoldKind::DynamicDynamic, a.userId, b.userId, 0,
-                static_cast<int>(i), static_cast<int>(j),
-                a.hull, a.position, a.rotation, a.worldVerts,
-                b.hull, b.position, b.rotation, b.worldVerts,
-                spec, std::sqrt(a.friction * b.friction), std::min(a.restitution, b.restitution),
-                &stats
-            );
-            auto* found = matchManifold(ManifoldKind::DynamicDynamic, a.userId, b.userId, 0);
-            if (!found || found->stale) continue;
-            wake(a);
-            wake(b);
-        }
-    }
+    forEachDynamicPair([&](size_t i, size_t j) {
+        auto& a = dynamics_[i];
+        auto& b = dynamics_[j];
+        stats.pairCandidates++;
+        if (a.kinematic && b.kinematic) return;
+        if (a.sleeping && b.sleeping) return;
+        Vec3 delta = b.position - a.position;
+        const float distSq = delta.lengthSq();
+        const float combinedR = a.radius + b.radius + spec;
+        if (distSq >= combinedR * combinedR) return;
+        stats.sphereTests++;
+        addSatContacts(
+            ManifoldKind::DynamicDynamic, a.userId, b.userId, 0,
+            static_cast<int>(i), static_cast<int>(j),
+            a.hull, a.position, a.rotation, a.worldVerts,
+            b.hull, b.position, b.rotation, b.worldVerts,
+            spec, std::sqrt(a.friction * b.friction), std::min(a.restitution, b.restitution),
+            &stats
+        );
+        auto* found = matchManifold(ManifoldKind::DynamicDynamic, a.userId, b.userId, 0);
+        if (!found || found->stale) return;
+        wake(a);
+        wake(b);
+    }, spec);
 }
 
 void DicePhysicsEngine::generateContacts(float dt, StepStats& stats) {

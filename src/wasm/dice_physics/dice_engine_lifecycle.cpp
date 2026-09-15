@@ -27,6 +27,7 @@ void DicePhysicsEngine::init(float gravity, float tableY, float tableHalfW, floa
     gridCols_ = 0;
     gridRows_ = 0;
     dieGridCells_.clear();
+    dynGridCells_.clear();
     lastStepStats_ = {};
     staticCapacityDroppedCount_ = 0;
     dynamicCapacityDroppedCount_ = 0;

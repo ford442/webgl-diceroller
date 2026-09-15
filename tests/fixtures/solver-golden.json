@@ -1,5 +1,5 @@
 {
-    "revision": 5,
+    "revision": 6,
     "notes": "Native FNV-1a of serializeState() after the named scenarios. Update with solver_tests --dump-golden when SOLVER_REVISION or behaviour changes.",
     "traces": [
         {

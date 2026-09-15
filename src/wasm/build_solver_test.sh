@@ -117,6 +117,15 @@ if [ "${BENCH_SOLVER:-}" = "1" ]; then
     for N in 10 50 100 200; do
         "${BIN}" --bench --dice="${N}" --steps=600 --warmup=60
     done
+    # Informational: die + dynamics broadphase cost at MAX_DYNAMICS (256).
+    # --dice=48 (not 50) deliberately avoids colliding with the dice-only
+    # "50" budget key in scripts/solver-bench-baselines.json -- this line
+    # isn't gated on a threshold (compare-solver-bench.mjs is warn-only and
+    # skips rows with no baseline entry for their dice count); it exists so
+    # a regression back toward brute-force die-dynamic / dynamic-dynamic
+    # pairing (dropped in favor of the shared uniform grid, see
+    # docs/WASM_ENGINE.md Phase 8) is visible in CI output.
+    "${BIN}" --bench --dice=48 --dynamics=256 --steps=600 --warmup=60
 fi
 
 echo "[test:solver] All solver tests passed."
