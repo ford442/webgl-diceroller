@@ -233,6 +233,19 @@ Do **not** add `-ffast-math` or `PRECISE_F32=0` — seeded replay depends on IEE
 
 **Browser note:** `-msimd128` requires WASM SIMD128 (Chrome 91+, Firefox 89+, Safari 16.4+). The runtime probe loads the scalar artifact automatically; `cd src/wasm && ./build.sh --scalar` rebuilds only that tree.
 
+##### EMSDK upgrade backlog (`--closure 1`, `-s STRICT=1`, `-fno-rtti`, `-fno-exceptions`)
+
+Four flags are commented in `emcc_flags.inc.sh` as "re-evaluate on EMSDK upgrade" but have never actually been re-evaluated against a newer toolchain — the comments describe *why they were off on 3.1.61* (the version pinned since this file existed), not a result of testing a newer one. This needs a real EMSDK checkout to do safely; it was not attempted in an environment without one (an LLM coding session without network access to fetch/build emsdk, for instance), since blindly flipping any of these and pushing is exactly the kind of change that can silently break the release build or bloat the glue in a way CI's existing checks won't catch.
+
+Procedure for whoever picks this up, one flag at a time (not all four in a single branch — if the combination fails, you want to know which flag caused it):
+
+1. `git checkout -b emsdk-bump` and bump `EMSDK_VERSION` in `.github/workflows/ci.yml` (currently `3.1.61`) plus any local `emsdk_env.sh` checkout to match.
+2. Add the flag to `EMCC_COMMON` (or a profile-specific array) in `emcc_flags.inc.sh`, run `npm run build:wasm`, and watch for a build failure first — `--closure 1` and `-s STRICT=1` are the likely failure points per the existing comment (Embind + `EXPORT_ES6` glue).
+3. If it builds: run `npm run test:solver` (native, unaffected by emcc flags but confirms nothing else broke) then `node scripts/compare-solver-golden.mjs` against the built `public/wasm/dice_physics.wasm` — the WASM parity check only runs when that artifact exists, so this is the one environment where it actually executes.
+4. Record the glue size delta (`build-info.json`'s `js_bytes`/`wasm_bytes`, or a manual `wc -c`) for `--closure 1` specifically — it's a size-only flag, so a failure to build is the only reason not to keep it; there's no correctness question once it builds.
+5. For `-fno-rtti` / `-fno-exceptions`: Embind's own generated glue may use RTTI/exceptions internally even if the app's own C++ error paths don't, so "it builds" isn't sufficient — also grep the generated `.js` for stripped-down dynamic_cast/exception-string remnants, and run the full page's error paths (a malformed hull, an out-of-range static/dynamic add) to confirm Embind still reports errors sanely rather than trapping.
+6. Whatever survives, update `emcc_flags.inc.sh`'s comment block to describe the *new* pinned version's status instead of 3.1.61's, so the next person isn't re-deriving this from scratch. Whatever doesn't survive, leave the comment as-is but note the EMSDK version it was last tried against.
+
 #### Debug flag set
 
 | Flag                             | Purpose                    |
