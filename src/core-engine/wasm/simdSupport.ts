@@ -21,7 +21,7 @@ type ValidateFn = (bytes: BufferSource) => boolean;
  *   When the argument is present but not a function, returns false (test hook).
  */
 export function supportsWasmSimd(validate?: ValidateFn | null): boolean {
-    const injected = arguments.length > 0;
+    const injected = arguments.length > 0 && validate !== undefined;
     if (injected) {
         if (typeof validate !== 'function') return false;
         try {

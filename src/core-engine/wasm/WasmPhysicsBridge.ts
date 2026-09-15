@@ -89,8 +89,9 @@ const STUB_ENGINE = {
 function adaptFlatVertexMethods(engine: EmbindPhysicsEngine, Module: DicePhysicsModule): void {
     const mutable = engine as unknown as Record<string, (...args: unknown[]) => unknown>;
     for (const method of ['addStaticConvexHull', 'addDynamicHull'] as const) {
-        const original = mutable[method];
-        if (typeof original !== 'function') continue;
+        const candidate = mutable[method];
+        if (typeof candidate !== 'function') continue;
+        const original = candidate.bind(engine);
 
         mutable[method] = (...args: unknown[]) => {
             const index = args.findIndex((arg) => Array.isArray(arg));

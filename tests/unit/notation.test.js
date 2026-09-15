@@ -33,6 +33,18 @@ describe('parseNotation', () => {
         expect(p.groups[0].keepCount).toBe(1);
     });
 
+    it('parses uppercase keep/drop tokens the same as lowercase', () => {
+        const keep = parseNotation('2D20KH1');
+        expect(keep.groups[0].keep).toBe('h');
+        expect(keep.groups[0].keepCount).toBe(1);
+        expect(keep.groups[0].drop).toBeNull();
+
+        const drop = parseNotation('4D6DL1');
+        expect(drop.groups[0].drop).toBe('l');
+        expect(drop.groups[0].dropCount).toBe(1);
+        expect(drop.groups[0].keep).toBeNull();
+    });
+
     it('parses 2d20kl1 disadvantage', () => {
         const p = parseNotation('2d20kl1');
         expect(p.groups[0].keep).toBe('l');

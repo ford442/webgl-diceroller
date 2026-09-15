@@ -44,7 +44,7 @@ export async function run() {
     const e = getWasmEngine();
     e.init(-15.0, -2.75, 18.0, 18.0);
 
-    const id = e.addDie(6, 0, 8, 0);
+    const id = e.addDie(6, 0, ${TABLE_SURFACE_Y + 5.75}, 0);
     const dice = [{ id, index: 0 }];
 
     seededPhysicsThrow(${SEED}, dice, ${TABLE_SURFACE_Y});

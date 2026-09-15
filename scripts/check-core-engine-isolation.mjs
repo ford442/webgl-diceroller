@@ -13,8 +13,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 's
 
 const FORBIDDEN_SPECIFIERS = [
     /from\s+['"]three(?:\/[^'"]*)?['"]/,
+    /import\s+['"]three(?:\/[^'"]*)?['"]/,
     /import\s*\(\s*['"]three(?:\/[^'"]*)?['"]\s*\)/,
+    /require\s*\(\s*['"]three(?:\/[^'"]*)?['"]\s*\)/,
     /from\s+['"][^'"]*\/three['"]/,
+];
+
+const FORBIDDEN_IMPORT_BINDINGS = [
+    /import\s+document\s+from/,
+    /import\s+\*\s+as\s+document\s+from/,
+    /import\s+\{[^}]*\bdocument\b[^}]*\}\s+from/,
 ];
 
 const FORBIDDEN_IDENTIFIERS = [/\bdocument\./, /\bdocument\[/, /\bwindow\./, /\bwindow\[/];
@@ -39,6 +47,11 @@ for (const file of files) {
     for (const re of FORBIDDEN_SPECIFIERS) {
         if (re.test(source)) {
             violations.push(`${rel}: forbidden module specifier matching ${re}`);
+        }
+    }
+    for (const re of FORBIDDEN_IMPORT_BINDINGS) {
+        if (re.test(source)) {
+            violations.push(`${rel}: forbidden document import binding matching ${re}`);
         }
     }
     // Allow `typeof window` / `typeof document` and comments.

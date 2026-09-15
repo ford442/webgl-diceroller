@@ -43,7 +43,7 @@ import {
     DYNAMICS_SAB_BYTES,
 } from './workerLayout.js';
 import { parsePhysicsFlags } from './physicsFlags.js';
-import { resolveWasmArtifactDir } from './wasmArtifact.js';
+import { getPhysicsSearchParams, resolveWasmArtifactDir } from './wasmArtifact.js';
 import { OP, copyIntoRing, countRecords } from './workerCommands.js';
 import { parseCollisionEventBuffer } from './collisionEvents.js';
 import type { CollisionEvent, PhysicsEngine } from './physicsTypes.js';
@@ -820,7 +820,7 @@ let _engine: WorkerEngineProxy | null = null;
 let _available = false;
 let _initialized = false;
 let _usingSAB = false;
-const _searchParams = new URLSearchParams(self.location ? self.location.search : '');
+const _searchParams = getPhysicsSearchParams();
 
 export const flushWorkerCommandBatch = (): void => {
     _engine?.flushCommandBatch();
