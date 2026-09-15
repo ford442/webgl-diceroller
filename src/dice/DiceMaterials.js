@@ -38,6 +38,22 @@ let nodeMaterialLoad = null;
 let backend = 'webgl';
 
 /**
+ * Which twin a renderer needs.
+ *
+ * Asked of the renderer object, never of a flag someone set alongside it: a
+ * node material handed to `WebGLRenderer` dies in `WebGLProgram`, and a plain
+ * `MeshPhysicalMaterial` handed to `WebGPURenderer` dies in the node system.
+ * `WebGPURenderer` keeps `isWebGPURenderer` true even when it has fallen back
+ * to its WebGL2 *backend*, which is correct — it still wants nodes.
+ *
+ * @param {{ isWebGPURenderer?: boolean } | null | undefined} renderer
+ * @returns {'webgl'|'webgpu'}
+ */
+export function backendForRenderer(renderer) {
+    return renderer?.isWebGPURenderer === true ? 'webgpu' : 'webgl';
+}
+
+/**
  * Tell the dice which renderer they are being drawn by, and warm the node
  * material factory when that is WebGPU. Safe to call repeatedly (renderer
  * recovery re-runs it after a device loss).
@@ -73,7 +89,7 @@ export function getDiceMaterialBackend() {
  *
  * @param {import('./DiceSetFormat.js').DiceSetEntry} entry
  * @param {import('three').Mesh} template die template the material will be worn by
- * @param {{ envMap?: import('three').Texture|null, qualityProfile?: object|null }} [options]
+ * @param {{ envMap?: import('three').Texture|null, qualityProfile?: object|null, forceWebGL?: boolean }} [options]
  * @returns {{ materials: import('three').Material[], dispose: () => void }}
  */
 export function createDiceMaterialForEntry(entry, template, options = {}) {
@@ -82,9 +98,10 @@ export function createDiceMaterialForEntry(entry, template, options = {}) {
         highQuality: isHighQualityProfile(options.qualityProfile),
     };
 
-    if (backend === 'webgpu' && nodeMaterialFactory) {
-        return nodeMaterialFactory(entry, template, shading);
-    }
+    // `forceWebGL` is for surfaces that own a plain WebGLRenderer of their own
+    // (the dice case preview), whatever the table is drawn with.
+    const useNodes = !options.forceWebGL && backend === 'webgpu' && nodeMaterialFactory;
+    if (useNodes) return nodeMaterialFactory(entry, template, shading);
     return createDiceFaceMarkingMaterial(entry, template, shading);
 }
 

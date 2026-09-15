@@ -71,16 +71,17 @@ export function createMysticTome(
     sigil.castShadow = true;
     group.add(sigil);
 
-    return createProp({
-        scene,
-        physicsWorld,
-        mesh: group,
+    return createProp(scene, physicsWorld, {
+        name: 'MysticTome',
         position,
-        rotationY,
-        yOffset: thickness / 2, // Center of box is elevated by half thickness
-        physics: {
-            type: 'box',
-            halfExtents: [width / 2, thickness / 2, length / 2],
-        },
+        rotation: rotationY,
+        footOffsetY: thickness / 2, // centre of the box is half a thickness up
+        colliders: [
+            {
+                type: 'box',
+                halfExtents: [width / 2, thickness / 2, length / 2],
+            },
+        ],
+        build: ({ group: root }) => root.add(group),
     });
 }

@@ -4,6 +4,7 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { publicAssetUrl } from '../core/publicAssetUrl.js';
 import { ensureBodyPipGroups } from './DiceGeometryGroups.js';
 import {
+    backendForRenderer,
     createDiceMaterialForEntry,
     applyMaterialToDieMesh,
     disposeDiceMaterials,
@@ -205,7 +206,7 @@ function meshesForKey(dieKey) {
  * Resolve the active dice set and dress every die with it.
  *
  * @param {import('three').Scene} scene
- * @param {{ envMap?: import('three').Texture|null, qualityProfile?: object|null, adaptiveProfile?: object|null, usingWebGPU?: boolean }} [options]
+ * @param {{ renderer?: object|null, envMap?: import('three').Texture|null, qualityProfile?: object|null, adaptiveProfile?: object|null }} [options]
  */
 export function initDiceAppearance(scene, options = {}) {
     diceAppearanceScene = scene;
@@ -215,8 +216,10 @@ export function initDiceAppearance(scene, options = {}) {
     initDiceSetRuntime();
 
     // The two material twins differ only in backend; pick before the first build
-    // so nothing has to be rebuilt once WebGPU reports in.
-    const backendReady = setDiceMaterialBackend(options.usingWebGPU ? 'webgpu' : 'webgl');
+    // so nothing has to be rebuilt once WebGPU reports in. Asked of the renderer
+    // itself — handing the wrong twin to a renderer is a hard crash, not a
+    // degraded look, so this must not come from a flag set somewhere alongside.
+    const backendReady = setDiceMaterialBackend(backendForRenderer(options.renderer));
 
     unsubscribeDiceSet?.();
     unsubscribeDiceSet = subscribeDiceSet((_set, changedKeys) => {
@@ -228,6 +231,21 @@ export function initDiceAppearance(scene, options = {}) {
     // A WebGPU table re-dresses once its node factory lands; on WebGL this
     // resolves immediately and the second pass is a no-op rebuild.
     return backendReady.then(() => refreshDiceAppearance());
+}
+
+/**
+ * Re-pick the material twin after the renderer is replaced, and re-dress every
+ * die with it.
+ *
+ * Renderer recovery can swap a WebGPU renderer for a WebGL one mid-session.
+ * Dice still wearing node materials would then take down the frame inside
+ * `WebGLProgram`, so this is not cosmetic.
+ *
+ * @param {object|null} renderer the renderer now drawing the table
+ */
+export async function setDiceRenderer(renderer) {
+    await setDiceMaterialBackend(backendForRenderer(renderer));
+    refreshDiceAppearance();
 }
 
 /** Update quality profile used when (re)building dice materials. */
@@ -247,6 +265,22 @@ export function refreshDiceAppearance(dieKey = null) {
     keys.forEach((key) => {
         const meshes = meshesForKey(key);
         if (meshes.length) applyEntryToMeshes(key, meshes);
+    });
+}
+
+/**
+ * Materials for a die key built for a *plain* `WebGLRenderer`, whatever the
+ * table is drawn with. The dice case preview owns its own GL context, and a
+ * node material would die in its `WebGLProgram`.
+ *
+ * The caller owns the returned disposer — these are not the template's.
+ */
+export function buildPreviewMaterials(dieKey) {
+    const template = ensureDressedTemplate(dieKey);
+    if (!template) return null;
+    return createDiceMaterialForEntry(getDieEntry(dieKey), template, {
+        ...getAppearanceOptions(),
+        forceWebGL: true,
     });
 }
 
