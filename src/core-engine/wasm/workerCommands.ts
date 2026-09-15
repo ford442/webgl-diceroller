@@ -1,0 +1,244 @@
+/**
+ * workerCommands.ts
+ *
+ * Shared batched-command protocol for the physics Web Worker.  High-frequency
+ * per-die mutations (torque impulses, kinematic transforms/velocities) are
+ * encoded as compact float records and flushed once per main-thread frame
+ * instead of one postMessage per call.
+ *
+ * Record layout: [opcode, dieId, ...payload] — all f32.
+ *
+ * Structural / rare commands (addDie, init, …) stay on plain postMessage.
+ */
+
+/**
+ * The slice of an engine that command dispatch actually drives. Declared
+ * structurally (rather than taking `PhysicsEngine`) so both the bridge-facing
+ * `PhysicsEngine` and the worker's raw `EmbindPhysicsEngine` — which disagree
+ * on `setContainerPlanes` / `serializeState` — can be dispatched to.
+ */
+export interface PhysicsCommandTarget {
+    applyImpulse(id: number, fx: number, fy: number, fz: number): void;
+    applyTorqueImpulse(id: number, tx: number, ty: number, tz: number): void;
+    setDieTransform(
+        id: number,
+        px: number,
+        py: number,
+        pz: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number
+    ): void;
+    setDieVelocity(
+        id: number,
+        lvx: number,
+        lvy: number,
+        lvz: number,
+        avx: number,
+        avy: number,
+        avz: number
+    ): void;
+    applyDynamicImpulse?(userId: number, fx: number, fy: number, fz: number): void;
+    applyDynamicTorqueImpulse?(userId: number, tx: number, ty: number, tz: number): void;
+    setDynamicTransform?(
+        userId: number,
+        px: number,
+        py: number,
+        pz: number,
+        qx: number,
+        qy: number,
+        qz: number,
+        qw: number
+    ): void;
+    setDynamicVelocity?(
+        userId: number,
+        lvx: number,
+        lvy: number,
+        lvz: number,
+        avx: number,
+        avy: number,
+        avz: number
+    ): void;
+}
+
+export const OP = {
+    APPLY_IMPULSE: 1,
+    APPLY_TORQUE: 2,
+    SET_TRANSFORM: 3,
+    SET_VELOCITY: 4,
+    PROP_APPLY_IMPULSE: 5,
+    PROP_APPLY_TORQUE: 6,
+    PROP_SET_TRANSFORM: 7,
+    PROP_SET_VELOCITY: 8,
+} as const;
+
+type Opcode = (typeof OP)[keyof typeof OP];
+
+/** Floats per record (including opcode + id). */
+export const RECORD_LEN: Record<Opcode, number> = {
+    [OP.APPLY_IMPULSE]: 5,
+    [OP.APPLY_TORQUE]: 5,
+    [OP.SET_TRANSFORM]: 9,
+    [OP.SET_VELOCITY]: 8,
+    [OP.PROP_APPLY_IMPULSE]: 5,
+    [OP.PROP_APPLY_TORQUE]: 5,
+    [OP.PROP_SET_TRANSFORM]: 9,
+    [OP.PROP_SET_VELOCITY]: 8,
+};
+
+const MAX_RECORD_LEN = 9;
+
+function recordLen(opcode: number): number | undefined {
+    return (RECORD_LEN as Record<number, number>)[opcode];
+}
+
+function f32(buf: Float32Array, index: number): number {
+    return buf[index] ?? 0;
+}
+
+/**
+ * Dispatch every record in a linear command buffer.
+ */
+export function dispatchLinear(
+    engine: PhysicsCommandTarget,
+    buf: Float32Array,
+    start = 0,
+    end = buf.length
+): number {
+    let records = 0;
+    let i = start;
+    while (i < end) {
+        const opcode = f32(buf, i);
+        const len = recordLen(opcode);
+        if (!len || i + len > end) break;
+        const id = f32(buf, i + 1);
+        switch (opcode) {
+            case OP.APPLY_IMPULSE:
+                engine.applyImpulse(id, f32(buf, i + 2), f32(buf, i + 3), f32(buf, i + 4));
+                break;
+            case OP.APPLY_TORQUE:
+                engine.applyTorqueImpulse(id, f32(buf, i + 2), f32(buf, i + 3), f32(buf, i + 4));
+                break;
+            case OP.SET_TRANSFORM:
+                engine.setDieTransform(
+                    id,
+                    f32(buf, i + 2),
+                    f32(buf, i + 3),
+                    f32(buf, i + 4),
+                    f32(buf, i + 5),
+                    f32(buf, i + 6),
+                    f32(buf, i + 7),
+                    f32(buf, i + 8)
+                );
+                break;
+            case OP.SET_VELOCITY:
+                engine.setDieVelocity(
+                    id,
+                    f32(buf, i + 2),
+                    f32(buf, i + 3),
+                    f32(buf, i + 4),
+                    f32(buf, i + 5),
+                    f32(buf, i + 6),
+                    f32(buf, i + 7)
+                );
+                break;
+            case OP.PROP_APPLY_IMPULSE:
+                engine.applyDynamicImpulse?.(id, f32(buf, i + 2), f32(buf, i + 3), f32(buf, i + 4));
+                break;
+            case OP.PROP_APPLY_TORQUE:
+                engine.applyDynamicTorqueImpulse?.(
+                    id,
+                    f32(buf, i + 2),
+                    f32(buf, i + 3),
+                    f32(buf, i + 4)
+                );
+                break;
+            case OP.PROP_SET_TRANSFORM:
+                engine.setDynamicTransform?.(
+                    id,
+                    f32(buf, i + 2),
+                    f32(buf, i + 3),
+                    f32(buf, i + 4),
+                    f32(buf, i + 5),
+                    f32(buf, i + 6),
+                    f32(buf, i + 7),
+                    f32(buf, i + 8)
+                );
+                break;
+            case OP.PROP_SET_VELOCITY:
+                engine.setDynamicVelocity?.(
+                    id,
+                    f32(buf, i + 2),
+                    f32(buf, i + 3),
+                    f32(buf, i + 4),
+                    f32(buf, i + 5),
+                    f32(buf, i + 6),
+                    f32(buf, i + 7)
+                );
+                break;
+            default:
+                return records;
+        }
+        i += len;
+        records++;
+    }
+    return records;
+}
+
+/** Drain a ring-buffered command queue from `tail` up to `head` (exclusive). */
+export function drainRing(
+    engine: PhysicsCommandTarget,
+    ring: Float32Array,
+    head: number,
+    tail: number,
+    capacity: number
+): number {
+    let t = tail;
+    while (t !== head) {
+        const opcode = f32(ring, t);
+        if (opcode === 0) {
+            t = 0;
+            if (t === head) break;
+            continue;
+        }
+        const len = recordLen(opcode);
+        if (!len) {
+            t = (t + 1) % capacity;
+            continue;
+        }
+        const scratch = new Float32Array(len);
+        for (let j = 0; j < len; j++) scratch[j] = f32(ring, (t + j) % capacity);
+        dispatchLinear(engine, scratch, 0, len);
+        t = (t + len) % capacity;
+    }
+    return t;
+}
+
+/** Copy `src` into `ring` starting at `head`, wrapping as needed. */
+export function copyIntoRing(
+    ring: Float32Array,
+    capacity: number,
+    head: number,
+    src: Float32Array | number[]
+): number {
+    for (let i = 0; i < src.length; i++) {
+        ring[(head + i) % capacity] = src[i] ?? 0;
+    }
+    return (head + src.length) % capacity;
+}
+
+/** Count records in a linear buffer (for debug stats). */
+export function countRecords(buf: Float32Array, start = 0, end = buf.length): number {
+    let records = 0;
+    let i = start;
+    while (i < end) {
+        const len = recordLen(f32(buf, i));
+        if (!len || i + len > end) break;
+        i += len;
+        records++;
+    }
+    return records;
+}
+
+export { MAX_RECORD_LEN };

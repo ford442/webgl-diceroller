@@ -120,11 +120,12 @@ export interface RollDieStats {
 }
 
 export interface RollSessionDeps {
-    scene: import('three').Scene;
+    /** Scene handle from the renderer; opaque in the headless core. */
+    scene: unknown;
     /** ammo.js was retired; this legacy param is always null now. */
     world: null;
-    replaceDiceSet: (scene: import('three').Scene, world: null, specs: DieSpec[]) => void;
-    throwDice: (scene: import('three').Scene, world: null, seed?: number | null) => void;
+    replaceDiceSet: (scene: unknown, world: null, specs: DieSpec[]) => void;
+    throwDice: (scene: unknown, world: null, seed?: number | null) => void;
     readAllDiceValues: () => Array<{
         type: string;
         value: number | null;

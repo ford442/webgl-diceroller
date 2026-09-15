@@ -41,6 +41,7 @@ jobs:
             - run: npm run check:bundle-size
             - run: npm run check:deploy-size
             - run: npm run check:cycles
+            - run: npm run check:core-engine
             - run: npm run test:unit:coverage
             - run: npm run audit:prop-colliders
             - run: npm run verify:renderer-factory

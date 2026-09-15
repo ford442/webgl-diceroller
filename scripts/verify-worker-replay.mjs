@@ -59,6 +59,7 @@ export async function run() {
 
     const snapshot = await serializePhysicsState();
     const hasSnapshot = snapshot instanceof Uint8Array && snapshot.byteLength > 0;
+    const faceValues = Array.from(e.getFaceValues?.() ?? []);
 
     return {
         ok: true,
@@ -68,6 +69,7 @@ export async function run() {
         t1Len: t1.length,
         hasSnapshot,
         snapshotBytes: snapshot?.byteLength ?? 0,
+        faceValues,
     };
 }
 `;
@@ -118,4 +120,28 @@ if (!pass) {
     console.error('[verify] FAILED');
     process.exit(1);
 }
+
+const { rollHeadless, wasmArtifactsPresent } = await import('../src/core-engine/rollHeadless.ts');
+if (wasmArtifactsPresent()) {
+    console.log('[verify] comparing worker face values with rollHeadless()…');
+    const headless = await rollHeadless('1d6', SEED);
+    const workerFaces = result.faceValues ?? [];
+    const headlessFaces = headless.trace.faceValues ?? [];
+    const facesMatch =
+        workerFaces.length === headlessFaces.length &&
+        workerFaces.every((v, i) => v === headlessFaces[i]);
+    console.log(
+        '[verify] worker faces',
+        JSON.stringify(workerFaces),
+        'headless faces',
+        JSON.stringify(headlessFaces)
+    );
+    if (!facesMatch) {
+        console.error('[verify] FAILED: rollHeadless face values diverge from worker path');
+        process.exit(1);
+    }
+} else {
+    console.log('[verify] skipping rollHeadless compare (WASM artifacts not present)');
+}
+
 console.log('[verify] PASSED');
