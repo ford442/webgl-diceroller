@@ -152,7 +152,11 @@ function readNatural(engine: PhysicsEngine, wasmId: number): number {
     return 0;
 }
 
-function stepUntilSettled(engine: PhysicsEngine, dt: number, maxSteps: number): number {
+function stepUntilSettled(
+    engine: PhysicsEngine,
+    dt: number,
+    maxSteps: number
+): { steps: number; settled: boolean } {
     let idle = 0;
     let steps = 0;
     while (steps < maxSteps) {
@@ -160,12 +164,12 @@ function stepUntilSettled(engine: PhysicsEngine, dt: number, maxSteps: number): 
         steps += 1;
         if (engine.areAllSettled()) {
             idle += 1;
-            if (idle >= IDLE_STEPS_REQUIRED) return steps;
+            if (idle >= IDLE_STEPS_REQUIRED) return { steps, settled: true };
         } else {
             idle = 0;
         }
     }
-    return steps;
+    return { steps, settled: false };
 }
 
 async function resolveSide(
@@ -194,7 +198,11 @@ async function resolveSide(
         applyThrowParams(engine, params);
         subSeed = (subSeed + 1) >>> 0;
 
-        steps += stepUntilSettled(engine, dt, maxSteps);
+        const stepped = stepUntilSettled(engine, dt, maxSteps);
+        steps += stepped.steps;
+        if (!stepped.settled) {
+            throw new NotationError(`Physics did not settle within ${maxSteps} steps (dt=${dt}).`);
+        }
 
         const roundDice: DieOutcome[] = spawned.map(({ wasmId, spec }, i) => {
             const natural = readNatural(engine, wasmId);

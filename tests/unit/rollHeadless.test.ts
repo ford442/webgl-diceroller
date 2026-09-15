@@ -5,11 +5,14 @@ import {
     rollHeadless,
     wasmArtifactsPresent,
 } from '../../src/core-engine/index.js';
+import { presetForShape } from '../../src/core-engine/wasm/physicsPresets.js';
 
 describe('core-engine public API', () => {
     it('exposes physics presets without Three.js', () => {
         expect(DIE_PHYSICS_PRESETS.d20.mass).toBe(5);
         expect(parseNotation('3d6+2').modifier).toBe(2);
+        expect(presetForShape('toString')).toEqual(DIE_PHYSICS_PRESETS.d6);
+        expect(presetForShape('d20')).toEqual(DIE_PHYSICS_PRESETS.d20);
     });
 });
 

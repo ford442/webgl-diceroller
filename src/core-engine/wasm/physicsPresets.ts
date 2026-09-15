@@ -30,7 +30,7 @@ export function getDieSides(type: string): number {
 }
 
 export function presetForShape(shape: string): PhysicsPreset {
-    if (shape in DIE_PHYSICS_PRESETS) {
+    if (Object.prototype.hasOwnProperty.call(DIE_PHYSICS_PRESETS, shape)) {
         return DIE_PHYSICS_PRESETS[shape as DieShapeId];
     }
     return DIE_PHYSICS_PRESETS.d6;
