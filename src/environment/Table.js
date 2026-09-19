@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getWoodTextures } from '../core/TexturePipeline.js';
+import { getTableTextures, getWoodTextures } from '../core/TexturePipeline.js';
 import { ROOM_FLOOR_Y, TABLE_CENTER_Y } from '../core/SceneMetrics.js';
 
 export function createTable(scene) {
@@ -23,8 +23,11 @@ export function createTable(scene) {
     // Position (World)
     const position = { x: 0, y: TABLE_CENTER_Y, z: 0 };
 
-    // Wood Textures (Rims, Legs & Surface)
+    // Wood Textures (Rims, Legs)
     const { diffuse: woodDiffuse, roughness: woodRoughness, bump: woodBump } = getWoodTextures();
+
+    // Table Textures (Surface)
+    const { diffuse: tableDiffuse, roughness: tableRoughness, normal: tableNormal, ao: tableAo } = getTableTextures();
 
     // VELVET Material for dice zone
     const velvetMaterial = new THREE.MeshStandardMaterial({
@@ -48,10 +51,10 @@ export function createTable(scene) {
     });
 
     const surfaceMaterial = new THREE.MeshStandardMaterial({
-        map: woodDiffuse,
-        roughnessMap: woodRoughness,
-        bumpMap: woodBump, // getWoodTextures returns bump instead of normal map currently
-        bumpScale: 0.05,
+        map: tableDiffuse,
+        roughnessMap: tableRoughness,
+        normalMap: tableNormal,
+        aoMap: tableAo,
         color: 0xffffff,
         roughness: 1.0,
         metalness: 0.0,
