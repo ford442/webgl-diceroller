@@ -27,7 +27,12 @@ export function createTable(scene) {
     const { diffuse: woodDiffuse, roughness: woodRoughness, bump: woodBump } = getWoodTextures();
 
     // Table Textures (Surface)
-    const { diffuse: tableDiffuse, roughness: tableRoughness, normal: tableNormal, ao: tableAo } = getTableTextures();
+    const {
+        diffuse: tableDiffuse,
+        roughness: tableRoughness,
+        normal: tableNormal,
+        ao: tableAo,
+    } = getTableTextures();
 
     // VELVET Material for dice zone
     const velvetMaterial = new THREE.MeshStandardMaterial({
