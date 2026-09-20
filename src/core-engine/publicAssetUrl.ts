@@ -41,6 +41,12 @@ function resolveViteBase(viteBase: string, locationHref?: string): string {
     }
 
     if (locationHref) {
+        // When running in a worker context (e.g. from an /assets/ JS file), we must resolve
+        // relative public assets (like /wasm/dice_physics.js) against the origin's root, not
+        // the worker script directory.
+        if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
+            return new URL(dirBase, new URL(locationHref).origin + '/').href;
+        }
         return new URL(dirBase, directoryHref(locationHref)).href;
     }
 
