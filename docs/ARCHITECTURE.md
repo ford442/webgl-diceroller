@@ -49,7 +49,7 @@ Host-authoritative WebRTC tables use deterministic WASM seeded replay. See [`MUL
 Desktop **initiative / turn strip** and multiplayer session sync live outside `main.js`:
 
 - [`SessionState.ts`](src/session/SessionState.ts) — seat list, current actor, `lastExpression`; persisted in `localStorage` per room code.
-- [`SessionWiring.js`](src/app/SessionWiring.js) — subscribes to `roll:settled` / `roll:evaluated`; emits `session:initiative` and `session:turn`; host broadcasts `session-sync` via [`RoomSession.js`](src/net/RoomSession.js).
+- [`SessionWiring.js`](src/app/SessionWiring.js) — subscribes to `roll:settled` / `roll:evaluated`; emits `session:initiative` and `session:turn`; host broadcasts `session-sync` via [`RoomSession.ts`](src/net/RoomSession.ts).
 - [`SessionStrip.js`](src/ui/SessionStrip.js) — DOM strip (pass turn, current actor).
 - XR roll totals: [`XrResultsHud.js`](src/xr/XrResultsHud.js) on `xrWorld`; DOM HUD suppressed while presenting (`setDomResultsSuppressed`).
 

@@ -30,14 +30,93 @@ import {
     parseShareableRollParams,
 } from '../roll/ShareableRoll.js';
 import { createCommit, generateNonce, verifyReveal } from '../net/CommitReveal.js';
+import type { AppContext, AppEvents, PendingRollMeta } from '../types/app';
+import type { DiceReadValue } from '../types/dice.js';
+import type { EvaluatedRoll } from '../types/roll.js';
+import type { RollHistory } from '../roll/RollHistory.js';
+import type { RollStats } from '../roll/RollStats.js';
+import type {
+    RemoteCommitMessage,
+    RemoteRevealMessage,
+    RemoteRollMessage,
+    RemoteTableSyncMessage,
+    RoomSession,
+} from '../net/RoomSession.js';
 
 const FAIR_COMMIT_ACK_MS = 300;
 
-/**
- * @param {import('../types/app').AppContext} app
- * @param {object} deps
- */
-export function createRollWiring(app, deps) {
+interface ShadowControllerLike {
+    pulse: (kind: string) => void;
+}
+
+interface DiceGameFeelLike {
+    clearRollState: () => void;
+    onResultsReady: (results: unknown) => void;
+    handleCollisionEvent: (ev: unknown) => void;
+    onNotationResult?: (result: EvaluatedRoll) => void;
+}
+
+interface CameraControllerLike {
+    setState: (state: string) => void;
+}
+
+interface LampDataLike {
+    setRolling: (rolling: boolean) => void;
+}
+
+interface UiLike {
+    updateCounts?: (counts: Record<string, number>) => void;
+}
+
+interface FairnessMonitorLike {
+    render: () => void;
+}
+
+interface RollHistoryPanelLike {
+    refresh: () => void;
+}
+
+interface CollisionAudioLike {
+    handleCollisionEvent: (ev: unknown) => void;
+    checkCollisionPropReactions?: (ev: unknown) => void;
+}
+
+export interface RollWiringDeps {
+    appEvents: AppEvents;
+    getScene: () => unknown;
+    getPhysicsWorld: () => unknown;
+    getShadowController: () => ShadowControllerLike | null | undefined;
+    getDiceGameFeel: () => DiceGameFeelLike | null | undefined;
+    getCameraController: () => CameraControllerLike | null | undefined;
+    getLampData: () => LampDataLike | null | undefined;
+    getUi: () => UiLike | null | undefined;
+    rollHistory?: RollHistory | null;
+    rollStats?: RollStats | null;
+    getFairnessMonitor: () => FairnessMonitorLike | null | undefined;
+    getRollHistoryPanel: () => RollHistoryPanelLike | null | undefined;
+    getCollisionAudio: () => CollisionAudioLike | null | undefined;
+    multiplayerRef: { current: RoomSession | null };
+    useFairCommit?: boolean;
+}
+
+interface LastRollRef {
+    seed: number | null;
+    counts: Record<string, number>;
+    source?: string;
+    expression?: string | null;
+    system?: string;
+}
+
+interface RollHandlerRef {
+    roll: ((explicitSeed?: number | null) => Promise<number | undefined>) | null;
+    lastRoll: LastRollRef | null;
+}
+
+interface NotationRollOptions {
+    system?: string;
+}
+
+export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
     const {
         appEvents,
         getScene,
@@ -55,26 +134,25 @@ export function createRollWiring(app, deps) {
         useFairCommit = false,
     } = deps;
 
-    /** @type {import('../types/app').PendingRollMeta} */
-    let pendingRollMeta = { seed: null, expression: null, diceSet: {} };
+    let pendingRollMeta: PendingRollMeta = { seed: null, expression: null, diceSet: {} };
     let activeRollSystem = DEFAULT_ROLL_SYSTEM;
 
-    const rollSessionRef = { current: null };
-    const rollHandlerRef = { roll: null, lastRoll: null };
+    const rollSessionRef: { current: ReturnType<typeof createRollSession> | null } = {
+        current: null,
+    };
+    const rollHandlerRef: RollHandlerRef = { roll: null, lastRoll: null };
 
-    /** @type {{ hash: string, notation?: string | null } | null} */
-    let pendingFairCommit = null;
+    let pendingFairCommit: { hash: string; notation?: string | null } | null = null;
 
-    function captureDiceSet() {
-        /** @type {Record<string, number>} */
-        const diceSet = {};
-        spawnedDice.forEach((die) => {
+    function captureDiceSet(): Record<string, number> {
+        const diceSet: Record<string, number> = {};
+        spawnedDice.forEach((die: { type: string }) => {
             diceSet[die.type] = (diceSet[die.type] ?? 0) + 1;
         });
         return diceSet;
     }
 
-    function beginPhysicalReroll(source) {
+    function beginPhysicalReroll(source: string): void {
         pendingRollMeta = {
             seed: null,
             expression: null,
@@ -96,15 +174,20 @@ export function createRollWiring(app, deps) {
         emitRollStarted({ source });
     }
 
-    function beginCupRoll() {
+    function beginCupRoll(): void {
         beginPhysicalReroll('cup');
     }
 
-    function beginTowerRoll() {
+    function beginTowerRoll(): void {
         beginPhysicalReroll('tower');
     }
 
-    async function broadcastFairCommit(seed, expression, diceSet, source) {
+    async function broadcastFairCommit(
+        seed: number,
+        expression: string | null,
+        diceSet: Record<string, number>,
+        source: string
+    ): Promise<void> {
         if (!useFairCommit || !multiplayerRef.current?.isHost?.()) return;
         const nonce = generateNonce();
         const dieCount = Object.values(diceSet).reduce((sum, n) => sum + (Number(n) || 0), 0);
@@ -130,7 +213,11 @@ export function createRollWiring(app, deps) {
         });
     }
 
-    function beginRoll(seed = null, expression = null, meta = {}) {
+    function beginRoll(
+        seed: number | null = null,
+        expression: string | null = null,
+        meta: Record<string, unknown> = {}
+    ): void {
         pendingRollMeta = {
             seed: seed ?? null,
             expression: expression ?? null,
@@ -148,7 +235,7 @@ export function createRollWiring(app, deps) {
         emitRollStarted();
     }
 
-    function emitRollStarted(extra = {}) {
+    function emitRollStarted(extra: Record<string, unknown> = {}): void {
         appEvents.emit(AppEvent.ROLL_STARTED, {
             seed: pendingRollMeta.seed,
             expression: pendingRollMeta.expression,
@@ -158,9 +245,12 @@ export function createRollWiring(app, deps) {
         });
     }
 
-    function handleResultsReady(results) {
-        rollHistory?.appendRoll(results, pendingRollMeta);
-        rollStats?.recordResults(results);
+    function handleResultsReady(results: DiceReadValue[]): void {
+        // RollHistory/RollStats model settled dice as `{ type, value: number }`;
+        // `value` is only ever null mid-roll, never once results are ready.
+        const settled = results as unknown as Array<{ type: string; value: number }>;
+        rollHistory?.appendRoll(settled, pendingRollMeta);
+        rollStats?.recordResults(settled);
         getFairnessMonitor()?.render();
         getRollHistoryPanel()?.refresh();
         getDiceGameFeel()?.onResultsReady(results);
@@ -168,17 +258,17 @@ export function createRollWiring(app, deps) {
         pendingRollMeta = { seed: null, expression: null, diceSet: {} };
     }
 
-    function bindRollSettledSubscribers() {
+    function bindRollSettledSubscribers(): void {
         appEvents.on(AppEvent.ROLL_SETTLED, (payload) => {
-            const results = /** @type {{ results?: unknown }} */ (payload)?.results ?? payload;
+            const results = (payload as { results?: unknown } | undefined)?.results ?? payload;
             if (!shouldDeferAutoResults()) {
-                showResults(/** @type {import('../types/dice').DiceReadValue[]} */ (results));
+                showResults(results as DiceReadValue[]);
             }
-            handleResultsReady(/** @type {import('../types/dice').DiceReadValue[]} */ (results));
+            handleResultsReady(results as DiceReadValue[]);
         });
     }
 
-    function bindCollisionSubscribers() {
+    function bindCollisionSubscribers(): void {
         appEvents.on(AppEvent.DICE_COLLISION, (ev) => {
             const collisionAudio = deps.getCollisionAudio();
             collisionAudio?.handleCollisionEvent(ev);
@@ -187,10 +277,23 @@ export function createRollWiring(app, deps) {
         });
     }
 
-    function initRollSession({ replaceDiceSet, readAllDiceValues, areDiceSettled }) {
+    function initRollSession({
+        replaceDiceSet,
+        readAllDiceValues,
+        areDiceSettled,
+    }: {
+        replaceDiceSet: (scene: unknown, world: unknown, specs: unknown) => void;
+        readAllDiceValues: () => Array<{
+            type: string;
+            value: number | null;
+            role?: 'tens' | 'ones' | null;
+            groupIndex?: number;
+        }>;
+        areDiceSettled: () => boolean;
+    }): void {
         rollSessionRef.current = createRollSession({
             scene: getScene(),
-            world: getPhysicsWorld(),
+            world: getPhysicsWorld() as null,
             replaceDiceSet,
             throwDice: (s, w, seed) => {
                 if (seed != null) {
@@ -203,7 +306,7 @@ export function createRollWiring(app, deps) {
                 }
                 getDiceGameFeel()?.clearRollState();
                 throwDice(s, w, seed);
-                getCameraController().setState(DiceFocusState.WAITING_FOR_STOP);
+                getCameraController()!.setState(DiceFocusState.WAITING_FOR_STOP);
                 const lampData = getLampData();
                 if (lampData) lampData.setRolling(true);
             },
@@ -226,7 +329,7 @@ export function createRollWiring(app, deps) {
         });
         app.rollSession = rollSessionRef.current;
 
-        rollHandlerRef.roll = async (explicitSeed = null) => {
+        rollHandlerRef.roll = async (explicitSeed: number | null = null) => {
             if (multiplayerRef.current?.isGuest()) return;
             const seed = explicitSeed ?? generateRollSeed();
             const diceSet = captureDiceSet();
@@ -248,7 +351,7 @@ export function createRollWiring(app, deps) {
             if (lampData) lampData.setRolling(true);
             await broadcastFairCommit(seed, null, diceSet, 'ui');
             throwDice(getScene(), getPhysicsWorld(), seed);
-            getCameraController().setState(DiceFocusState.WAITING_FOR_STOP);
+            getCameraController()!.setState(DiceFocusState.WAITING_FOR_STOP);
             if (!useFairCommit) {
                 emitRollStarted({ source: 'ui', seed: seed >>> 0 });
             }
@@ -260,12 +363,13 @@ export function createRollWiring(app, deps) {
         return {
             systems: Object.values(ROLL_SYSTEMS).map((s) => ({ id: s.id, label: s.label })),
             getSystem: () => activeRollSystem,
-            setSystem: (id) => {
+            setSystem: (id: string) => {
                 if (ROLL_SYSTEMS[id]) activeRollSystem = id;
             },
-            applyChip: (expr, chip, system) => applyExpressionChip(expr, chip, system),
+            applyChip: (expr: string, chip: unknown, system: string) =>
+                applyExpressionChip(expr, chip as never, system),
             defaultExpressionForSystem,
-            onNotationRoll: async (expression, opts = {}) => {
+            onNotationRoll: async (expression: string, opts: NotationRollOptions = {}) => {
                 if (multiplayerRef.current?.isGuest()) {
                     throw new Error('Only the host can roll');
                 }
@@ -284,7 +388,7 @@ export function createRollWiring(app, deps) {
                 shadowController?.pulse('roll');
                 getDiceGameFeel()?.clearRollState();
                 hideResults();
-                getCameraController().setState(DiceFocusState.WAITING_FOR_STOP);
+                getCameraController()!.setState(DiceFocusState.WAITING_FOR_STOP);
                 const lampData = getLampData();
                 if (lampData) lampData.setRolling(true);
                 await broadcastFairCommit(seed, expression, diceSet, 'notation');
@@ -296,11 +400,11 @@ export function createRollWiring(app, deps) {
         };
     }
 
-    function hasShareableRoll() {
+    function hasShareableRoll(): boolean {
         return rollHandlerRef.lastRoll?.seed != null;
     }
 
-    function getLastRollShareUrl() {
+    function getLastRollShareUrl(): string | null {
         const last = rollHandlerRef.lastRoll;
         if (last?.seed == null) return null;
         return buildShareableRollUrl(last.seed, last.counts, undefined, getActiveDiceSet(), {
@@ -309,14 +413,14 @@ export function createRollWiring(app, deps) {
         });
     }
 
-    async function handleRemoteCommit(msg) {
+    async function handleRemoteCommit(msg: RemoteCommitMessage): Promise<void> {
         pendingFairCommit = {
             hash: msg.hash,
             notation: msg.notation ?? null,
         };
     }
 
-    async function handleRemoteReveal(msg) {
+    async function handleRemoteReveal(msg: RemoteRevealMessage): Promise<void> {
         if (!isWasmAvailable()) {
             throw new Error('wasm_required');
         }
@@ -336,7 +440,11 @@ export function createRollWiring(app, deps) {
         });
     }
 
-    async function handleRemoteRoll({ seed, notation, diceCounts }) {
+    async function handleRemoteRoll({
+        seed,
+        notation,
+        diceCounts,
+    }: RemoteRollMessage): Promise<void> {
         if (diceCounts) {
             updateDiceSet(getScene(), getPhysicsWorld(), diceCounts);
             getUi()?.updateCounts?.(diceCounts);
@@ -365,12 +473,19 @@ export function createRollWiring(app, deps) {
         }
     }
 
-    async function handleRemoteTableSync(msg) {
+    async function handleRemoteTableSync(msg: RemoteTableSyncMessage): Promise<void> {
         if (msg.diceCounts) {
             updateDiceSet(getScene(), getPhysicsWorld(), msg.diceCounts);
             getUi()?.updateCounts?.(msg.diceCounts);
         }
-        const last = msg.lastRoll;
+        const last = msg.lastRoll as
+            | {
+                  seed?: number | null;
+                  notation?: string | null;
+                  diceCounts?: Record<string, number> | null;
+              }
+            | null
+            | undefined;
         if (last?.seed != null && isWasmAvailable()) {
             if (last.notation && rollSessionRef.current) {
                 pendingRollMeta = {
@@ -384,16 +499,15 @@ export function createRollWiring(app, deps) {
                 updateDiceSet(getScene(), getPhysicsWorld(), last.diceCounts);
                 beginRoll(last.seed, null, { source: 'remote-sync', diceSet: last.diceCounts });
             } else {
-                beginRoll(last.seed, null, { source: 'remote-sync' });
+                beginRoll(last.seed ?? null, null, { source: 'remote-sync' });
             }
         }
     }
 
-    /**
-     * @param {URLSearchParams} searchParams
-     * @param {{ skip?: boolean }} [options]
-     */
-    function replayShareableRoll(searchParams, options = {}) {
+    function replayShareableRoll(
+        searchParams: URLSearchParams,
+        options: { skip?: boolean } = {}
+    ): void {
         const replayRequest = options.skip ? null : parseShareableRollParams(searchParams);
         if (replayRequest) {
             if ('error' in replayRequest) {
@@ -429,7 +543,7 @@ export function createRollWiring(app, deps) {
                             console.warn('[ShareableRoll] expression replay failed', err)
                         );
                 } else {
-                    rollHandlerRef.roll(replayRequest.seed);
+                    rollHandlerRef.roll?.(replayRequest.seed);
                 }
             }
         }

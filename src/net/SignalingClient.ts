@@ -14,6 +14,7 @@ export interface SignalingMessage {
     peers?: Array<{ peerId: string; role: string }>;
     error?: string;
     to?: string;
+    from?: string;
     data?: unknown;
     diceCounts?: Record<string, number> | null;
     presence?: unknown;
