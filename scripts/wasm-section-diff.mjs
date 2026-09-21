@@ -9,11 +9,19 @@
  * rather than `code` is the difference between "cosmetic path leakage, fix with
  * -ffile-prefix-map" and "the two builds generate different physics".
  *
- * Usage: node scripts/wasm-section-diff.mjs <a.wasm> <b.wasm>
- * Exits 0 always — this is a diagnostic, the shell script owns the verdict.
+ * Usage: node scripts/wasm-section-diff.mjs <a.wasm> <b.wasm> [--verdict]
+ *
+ * Without --verdict it always exits 0: a diagnostic, the caller owns the
+ * verdict. With --verdict it exits 0 only when the two files have the same
+ * section list (same count, same labels, same order) AND the same size for
+ * every section AND the same total size. That is the "structurally identical,
+ * content renumbered" case — see verify-cmake-wasm-parity.sh, which uses it to
+ * tell symbol renumbering apart from a real codegen difference. Flag drift
+ * (-DNDEBUG, a missing -msimd128, a different -O) moves section sizes, so it
+ * cannot pass this.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 const SECTION_NAMES = [
@@ -87,10 +95,12 @@ function parseSections(buf) {
     return sections;
 }
 
-const [aPath, bPath] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const verdictMode = argv.includes('--verdict');
+const [aPath, bPath] = argv.filter((arg) => arg !== '--verdict');
 if (!aPath || !bPath) {
-    console.error('usage: wasm-section-diff.mjs <a.wasm> <b.wasm>');
-    process.exit(0);
+    console.error('usage: wasm-section-diff.mjs <a.wasm> <b.wasm> [--verdict]');
+    process.exit(verdictMode ? 2 : 0);
 }
 
 let a;
@@ -100,7 +110,8 @@ try {
     b = parseSections(readFileSync(bPath));
 } catch (err) {
     console.log(`[wasm-section-diff] could not parse: ${err.message}`);
-    process.exit(0);
+    // Unparsable means equivalence cannot be vouched for, so --verdict fails.
+    process.exit(verdictMode ? 1 : 0);
 }
 
 console.log(`[wasm-section-diff] ${aPath} -> ${a.length} sections`);
@@ -136,3 +147,18 @@ if (rows.length === 0) {
     console.log('[wasm-section-diff] differing sections:');
     for (const row of rows) console.log(row);
 }
+
+// Structural equivalence: the same sections in the same order, each the same
+// size, and the same total. Content may still differ (symbol renumbering).
+const sameShape =
+    a.length === b.length &&
+    a.every((left, i) => left.label === b[i].label && left.size === b[i].size) &&
+    statSync(aPath).size === statSync(bPath).size;
+
+console.log(
+    sameShape
+        ? '[wasm-section-diff] VERDICT: structurally identical (same sections, same sizes, same total).'
+        : '[wasm-section-diff] VERDICT: structurally different (section list, a section size, or the total differs).'
+);
+
+if (verdictMode && !sameShape) process.exit(1);

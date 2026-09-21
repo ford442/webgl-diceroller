@@ -106,6 +106,15 @@ assert_contains "${COMPILE_SCALAR}" "DICE_FORCE_SCALAR_SAT" "scalar compile line
 assert_absent "${COMPILE_SCALAR}" "-msimd128" "scalar compile line"
 assert_absent "${COMPILE_SCALAR}" "-s " "scalar compile line"
 
+# --bind is shorthand for -lembind, a link-time library. On a per-TU compile
+# emcc warns "linker flag ignored during compilation: '--bind'" for every unit,
+# so --print-compile-line drops it while --print-link-line keeps it. Embind only
+# needs <emscripten/bind.h> at compile time.
+assert_absent "${COMPILE_RELEASE}" "--bind" "release compile line"
+assert_absent "${COMPILE_SCALAR}" "--bind" "scalar compile line"
+assert_contains "${SHELL_FLAGS}" "--bind" "release link flags"
+assert_contains "${SCALAR_FLAGS}" "--bind" "scalar link flags"
+
 # The two profiles must differ, or the SIMD build is silently a scalar build.
 if [[ "${COMPILE_RELEASE}" == "${COMPILE_SCALAR}" ]]; then
     fail "release and scalar compile lines are identical — SIMD target would build as scalar"
@@ -136,6 +145,7 @@ echo "ok: emcc release flags in sync (shell == CMake printer)"
 echo "ok: required size/determinism flags present; -ffast-math absent"
 echo "ok: release has -msimd128; scalar does not"
 echo "ok: compile lines carry codegen flags and differ between SIMD and scalar"
+echo "ok: --bind is link-line only (compile lines would warn per translation unit)"
 
 # --- engine_sources.txt: every dice_physics/*.cpp module is registered, and
 # every registered module still exists. Catches the "added a .cpp, forgot to

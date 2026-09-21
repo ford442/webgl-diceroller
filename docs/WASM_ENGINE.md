@@ -497,20 +497,48 @@ of its own; the real case was `CMAKE_CXX_FLAGS_RELEASE`'s `-DNDEBUG`, which
 
 The `wasm-toolchain` CI job now closes that gap:
 `scripts/verify-cmake-wasm-parity.sh` (`npm run verify:cmake-wasm`) builds both
-profiles with `build.sh`, builds them again through `emcmake cmake`, and `cmp`s
-the `.wasm` files. A difference fails the job. CMakeLists.txt clears every
+profiles with `build.sh`, builds them again through `emcmake cmake`, and
+compares the `.wasm` files. CMakeLists.txt clears every
 `CMAKE_CXX_FLAGS_<CONFIG>` / `CMAKE_EXE_LINKER_FLAGS_<CONFIG>` slot so the only
 flags in play are the ones `emcc_flags.sh` prints, and
-`verify-emcc-flags-sync.sh` asserts that clearing stays in place (the byte diff
-would catch a regression too, but only in the job that has an EMSDK, and its
-failure message is much further from the cause).
+`verify-emcc-flags-sync.sh` asserts that clearing stays in place (the binary
+comparison would catch a regression too, but only in the job that has an EMSDK,
+and its failure message is much further from the cause).
 
-On a mismatch the script prints sizes, sha256s, the first differing byte, and —
-via `scripts/wasm-section-diff.mjs` — **which wasm section diverged**. That last
-one is the useful part: a difference confined to a custom section (`name`,
-`producers`) is absolute build paths leaking in, fixable with
-`-ffile-prefix-map`; a difference in `code` means the two builds genuinely
-generate different physics.
+##### Why the comparison is not purely byte-for-byte
+
+Byte-identity is checked first and reported when it holds. It is not, however,
+achievable in general, and the first CI run of this job proved it: `build.sh`
+compiles and links in a single `em++` invocation, while CMake compiles each
+translation unit separately and then LTO-links the objects, which changes the
+order symbols are resolved in. Measured on EMSDK 3.1.61:
+
+- identical total size — 150765 bytes SIMD, 143090 scalar,
+- identical size for **every** section, and
+- differing content in `import` / `function` / `export` / `element` / `code` /
+  `data`, first diverging inside the 121-byte `import` section.
+
+That is the signature of function and import **renumbering**, not of different
+codegen: a dropped `-msimd128`, a stray `-DNDEBUG` or a different `-O` level all
+move section _sizes_.
+
+So when the bytes differ, the script demands both of:
+
+1. **Structural identity** — `wasm-section-diff.mjs --verdict`: same section
+   list in the same order, same size for every section, same total size.
+2. **Behavioural identity** — `emsdk-variant-probe.mjs` run against both
+   artifacts must produce the same physics fingerprint (30 stepped frames of
+   `serializeState`, plus `getFaceValues` and a seeded `randomFloat` draw).
+
+Either one failing fails the job. Together they test the property the
+byte-diff was a proxy for — that the build clangd sees is the build the browser
+runs — and unlike a hashed allowlist they do not go stale on the next commit.
+
+The diagnostic still prints sizes, sha256s, the first differing byte, both
+compile lines, and the per-section breakdown, so a genuine divergence is
+readable: a difference confined to a custom section (`name`, `producers`) is
+absolute build paths leaking in, fixable with `-ffile-prefix-map`; a change in
+`code`'s **size** means codegen really changed.
 
 The parity script writes CMake's output to a scratch directory
 (`-DDICE_WASM_OUTPUT_ROOT=…`), so comparing the builds never overwrites
@@ -532,10 +560,10 @@ Unlike `build.sh` — which compiles and links in a single `em++` invocation, so
 every flag reaches the compiler — CMake compiles each translation unit and
 links separately. Codegen flags therefore have to be applied twice:
 
-| Printer                              | Used for                 | Carries                                                    |
-| ------------------------------------ | ------------------------ | ---------------------------------------------------------- |
-| `emcc_flags.sh --print-link-line`    | `LINK_FLAGS`             | everything, including `-s KEY=VALUE` linker settings       |
-| `emcc_flags.sh --print-compile-line` | `target_compile_options` | the same flags minus `-s` pairs (`-O3 -flto -msimd128`, …) |
+| Printer                              | Used for                 | Carries                                                                 |
+| ------------------------------------ | ------------------------ | ----------------------------------------------------------------------- |
+| `emcc_flags.sh --print-link-line`    | `LINK_FLAGS`             | everything, including `-s KEY=VALUE` linker settings                    |
+| `emcc_flags.sh --print-compile-line` | `target_compile_options` | the same flags minus `-s` pairs and `--bind` (`-O3 -flto -msimd128`, …) |
 
 `-msimd128` is what defines `__wasm_simd128__`, and `-DDICE_FORCE_SCALAR_SAT`
 is a preprocessor define (both gate `dice_sat.hpp`). Passing them as
@@ -899,15 +927,23 @@ folkloric.
       memory and event-budget cap rather than a brute-force-cost cap, and says
       not to reintroduce nested loops on the old assumption. The comment was
       going to mislead exactly the person picking up the SoA/broadphase work.
-- [x] **CMake is byte-checked against `build.sh` in CI.**
+- [x] **CMake is checked against `build.sh` in CI.**
       `scripts/verify-cmake-wasm-parity.sh` (`npm run verify:cmake-wasm`, run by
-      the new `wasm-toolchain` job) builds both profiles each way and `cmp`s the
-      `.wasm` files. `verify-emcc-flags-sync.sh` only ever compared flag
+      the new `wasm-toolchain` job) builds both profiles each way and compares
+      the `.wasm` files. `verify-emcc-flags-sync.sh` only ever compared flag
       _strings_, which cannot catch CMake adding flags of its own —
       `CMAKE_CXX_FLAGS_RELEASE`'s `-DNDEBUG`, which `build.sh` never passes, was
       the real instance. CMakeLists.txt now clears every
       `CMAKE_CXX_FLAGS_<CONFIG>` / `CMAKE_EXE_LINKER_FLAGS_<CONFIG>` slot, and
-      `verify-emcc-flags-sync.sh` asserts that clearing stays.
+      also no longer sets `CMAKE_CXX_STANDARD` (which prepended its own
+      `-std=gnu++17`); `verify-emcc-flags-sync.sh` asserts the clearing stays.
+      Byte-identity turned out not to be achievable — per-TU compile + LTO link
+      renumbers symbols — so the check falls back to structural + behavioural
+      equivalence; see "Why the comparison is not purely byte-for-byte" above.
+- [x] `--print-compile-line` drops `--bind` as well as `-s` pairs. `--bind` is
+      shorthand for `-lembind`, a link-time library, and emitting it on a per-TU
+      compile made emcc warn `linker flag ignored during compilation: '--bind'`
+      once per translation unit. The link line still carries it.
 - [x] Mismatches are diagnosable rather than just red:
       `scripts/wasm-section-diff.mjs` reports **which wasm section** diverged, so
       "only the `name` custom section differs" (absolute build paths leaking in,
