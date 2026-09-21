@@ -186,6 +186,15 @@ else console.log(`    (no compile_commands entry for target ${target})`);
 NODE
 }
 
+# Run the behaviour probe against one artifact directory and print its
+# fingerprint on stdout. Captures stdout only: folding stderr in with 2>&1 would
+# put any node warning (an ExperimentalWarning, a deprecation) into the
+# fingerprint, so one side emitting a warning the other did not would read as a
+# physics difference. Diagnostics land in ${SCRATCH}/probe.err.
+probe() {
+    node "${SCRIPT_DIR}/emsdk-variant-probe.mjs" "$1" 2>"${SCRATCH}/probe.err"
+}
+
 # --- 3. Compare --------------------------------------------------------------
 FAILED=0
 for profile in "${PROFILES[@]}"; do
@@ -223,13 +232,13 @@ for profile in "${PROFILES[@]}"; do
     behavioural_ok=1
     ref_fp=""
     cmake_fp=""
-    if ! ref_fp="$(node "${SCRIPT_DIR}/emsdk-variant-probe.mjs" "${ref_dir}" 2>&1)"; then
+    if ! ref_fp="$(probe "${ref_dir}")"; then
         echo "  probe FAILED on build.sh's artifact:" >&2
-        printf '    %s\n' "${ref_fp}" >&2
+        sed 's/^/    /' "${SCRATCH}/probe.err" >&2
         behavioural_ok=0
-    elif ! cmake_fp="$(node "${SCRIPT_DIR}/emsdk-variant-probe.mjs" "${cmake_dir}" 2>&1)"; then
+    elif ! cmake_fp="$(probe "${cmake_dir}")"; then
         echo "  probe FAILED on CMake's artifact:" >&2
-        printf '    %s\n' "${cmake_fp}" >&2
+        sed 's/^/    /' "${SCRATCH}/probe.err" >&2
         behavioural_ok=0
     elif [[ "${ref_fp}" != "${cmake_fp}" ]]; then
         echo "  physics fingerprints DIFFER:" >&2
