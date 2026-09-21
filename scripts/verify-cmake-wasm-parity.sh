@@ -85,18 +85,6 @@ echo "[cmake-parity] emcc: $(em++ --version | head -n1)"
 echo "[cmake-parity] cmake: $(cmake --version | head -n1)"
 echo "[cmake-parity] profiles: ${PROFILES[*]}"
 
-# --- 1. build.sh (source of truth) ------------------------------------------
-if [[ "${REUSE_EXISTING}" -eq 1 && -f "${REPO_ROOT}/public/wasm/dice_physics.wasm" ]]; then
-    echo "[cmake-parity] --reuse-existing: keeping the public/wasm artifacts already present."
-else
-    echo "[cmake-parity] Building reference artifacts with build.sh..."
-    bash "${WASM_DIR}/build.sh"
-fi
-
-SCRATCH="$(mktemp -d)"
-cleanup() { rm -rf "${SCRATCH}"; }
-trap cleanup EXIT
-
 # The probe loads dice_physics.js, which resolves dice_physics.wasm next to it,
 # so the reference copy needs both files rather than just the binary.
 profile_src_dir() {
@@ -106,6 +94,34 @@ profile_src_dir() {
         *) echo "FAIL: unknown profile '$1' (expected simd or scalar)" >&2; exit 2 ;;
     esac
 }
+
+# --- 1. build.sh (source of truth) ------------------------------------------
+# --reuse-existing has to check every selected profile, not just the SIMD one:
+# with DICE_PARITY_PROFILES=scalar and only public/wasm/ populated, keying on
+# the SIMD artifact alone skipped build.sh and then died on the missing scalar
+# reference.
+have_all_references=1
+for profile in "${PROFILES[@]}"; do
+    src="$(profile_src_dir "${profile}")"
+    for f in dice_physics.wasm dice_physics.js; do
+        [[ -f "${src}/${f}" ]] || have_all_references=0
+    done
+done
+
+if [[ "${REUSE_EXISTING}" -eq 1 && "${have_all_references}" -eq 1 ]]; then
+    echo "[cmake-parity] --reuse-existing: reusing the artifacts already present for ${PROFILES[*]}."
+else
+    if [[ "${REUSE_EXISTING}" -eq 1 ]]; then
+        echo "[cmake-parity] --reuse-existing requested, but some ${PROFILES[*]} artifact is missing — building."
+    fi
+    echo "[cmake-parity] Building reference artifacts with build.sh..."
+    bash "${WASM_DIR}/build.sh"
+fi
+
+SCRATCH="$(mktemp -d)"
+cleanup() { rm -rf "${SCRATCH}"; }
+trap cleanup EXIT
+
 profile_cmake_dir() {
     case "$1" in
         simd)   printf '%s' "${SCRATCH}/cmake-out/wasm" ;;

@@ -8,14 +8,23 @@
  * capacity-checked vector) while participating in the solver like a die
  * (integrated, collides, sleeps).
  *
- * Broadphase: since Phase 8 (docs/WASM_ENGINE.md) die-dynamic and
- * dynamic-dynamic pairs are NOT brute-forced. Dynamics get their own per-cell
- * bucket (`dynGridCells_`, rebuilt by `rebuildDynGrid` in
- * dice_engine_solver.cpp) sharing the die grid's dimensions and origin; the
- * templated `forEachDieDynamicPair` / `forEachDynamicPair` in
- * dice_physics_engine.hpp walk it. `MAX_DYNAMICS` (256) is therefore a memory /
- * event-budget cap, not a brute-force-cost cap -- do not reintroduce nested
- * loops here on the assumption that the cap keeps them cheap.
+ * Broadphase: since Phase 8 (docs/WASM_ENGINE.md), die-dynamic and
+ * dynamic-dynamic pairs are grid-broadphased rather than brute-forced.
+ * Dynamics get their own per-cell bucket (`dynGridCells_`, rebuilt by
+ * `rebuildDynGrid` in dice_engine_solver.cpp) sharing the die grid's
+ * dimensions and origin; the templated `forEachDieDynamicPair` /
+ * `forEachDynamicPair` in dice_physics_engine.hpp walk it.
+ *
+ * Both walkers still keep a nested-loop path, taken when `useBroadphase_` is
+ * false (or a population is too small to pair). `useBroadphase_` is a test
+ * hook -- `setBroadphaseForTesting`, used to diff grid pairs against
+ * brute-force ones -- so production always takes the grid path, but the
+ * fallback is real code and not dead.
+ *
+ * Either way `MAX_DYNAMICS` (256) is a memory / event-budget cap, not a
+ * brute-force-cost cap: it was raised 64 -> 256 *because* the grid made the
+ * pair cost sub-quadratic. Do not reintroduce nested loops on the production
+ * path on the assumption that the cap keeps them cheap.
  */
 
 #include "../dice_physics_engine.hpp"

@@ -479,7 +479,7 @@ npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when b
 
     Capture on a machine with the same SwiftShader path CI uses; a capture taken without `public/wasm/` present will not match the runner's.
 
-- **Every job has a `timeout-minutes`.** GitHub's default is six hours. Keep new jobs at 15 minutes (30 for emcc / render capture) so a hang fails fast instead of burning the account's CI budget.
+- **Every job has a `timeout-minutes`.** GitHub's default is six hours. Keep new jobs at 15 minutes so a hang fails fast instead of burning the account's CI budget. Current exceptions: 20 for `test-solver` (the fuzz run plus a clang-tidy pass), and 30 for `build-wasm`, `render-regression`, and `wasm-toolchain` (the last links both wasm profiles twice for the CMake parity diff).
 
 - `test:wasm-gameplay-loop`, `test:wasm-authoritative`, and `test:share-roll-replay` all run in CI (`verify-tests` matrix); `verify:worker-replay` runs in the `verify` matrix. All four need the `wasm-artifacts` build (`npm run build:wasm`) to exercise the WASM-authoritative path rather than skipping.
 

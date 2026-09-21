@@ -13,9 +13,16 @@
 # every variant links into a scratch directory, and emcc_flags.inc.sh is read,
 # never modified.
 #
-# A variant PASSES only if it links AND loads AND produces the same physics as
-# the baseline. Compiling is not evidence -- closure in particular mangles
-# Embind glue in ways that only surface at load time.
+# All four are probed, one variant each plus a combined `all`. A variant PASSES
+# only if it links AND loads AND produces the same physics as the baseline.
+# Compiling is not evidence -- closure in particular mangles Embind glue in
+# ways that only surface at load time, and -fno-exceptions/-fno-rtti can break
+# Embind's error paths and type registry with no diagnostic at all, which is
+# why the probe exercises three separate binding shapes rather than one.
+#
+# -fno-exceptions note: a green probe is necessary but not sufficient for it.
+# The probe only walks success paths; Embind's *error* reporting is what the
+# flag threatens. See docs/WASM_ENGINE.md before acting on a pass.
 #
 # Usage (from repo root, with an EMSDK active):
 #   bash scripts/emsdk-flag-experiment.sh
@@ -56,9 +63,10 @@ declare -A VARIANT_FLAGS=(
     [strict]="-sSTRICT=1"
     [closure]="--closure 1"
     [no-rtti]="-fno-rtti"
-    [all]="-sSTRICT=1 --closure 1 -fno-rtti"
+    [no-exceptions]="-fno-exceptions"
+    [all]="-sSTRICT=1 --closure 1 -fno-rtti -fno-exceptions"
 )
-VARIANTS=(${DICE_EXPERIMENT_VARIANTS:-baseline strict closure no-rtti all})
+read -r -a VARIANTS <<< "${DICE_EXPERIMENT_VARIANTS:-baseline strict closure no-rtti no-exceptions all}"
 
 EMSDK_FULL="$(em++ --version 2>/dev/null | head -n1)"
 EMSDK_SEMVER="$(echo "${EMSDK_FULL}" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"

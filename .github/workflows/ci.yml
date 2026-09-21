@@ -9,6 +9,14 @@ concurrency:
     group: ci-${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: true
 
+# Least privilege for GITHUB_TOKEN. Every job here only reads the repo: the
+# artifact and cache actions authenticate with ACTIONS_RUNTIME_TOKEN, not this
+# one, so nothing needs write access. Without this block the workflow inherits
+# the repository default, which on a pull_request trigger can be far broader
+# than anything these jobs do.
+permissions:
+    contents: read
+
 env:
     EMSDK_VERSION: '3.1.61'
     # GitHub-hosted runners have no GPU. The WebGL2 TSL backend never finishes

@@ -22,6 +22,11 @@ on:
                 required: false
                 default: true
 
+# Least privilege: this workflow only reads the repo and writes to the job
+# summary (which needs no GITHUB_TOKEN scope).
+permissions:
+    contents: read
+
 env:
     # Must match EMSDK_VERSION in ci.yml — Actions has no cross-workflow
     # variable, so scripts/verify-emcc-flags-sync.sh asserts the two agree.
