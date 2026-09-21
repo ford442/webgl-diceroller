@@ -19,79 +19,138 @@ import {
     makePresence,
     makePing,
     makePong,
+    type CommitFields,
+    type ProtocolMessage,
 } from './Protocol.js';
 import { createSignalingClient } from './SignalingClient.js';
+import type { SignalingMessage } from './SignalingClient.js';
 import { createPeerMesh } from './PeerMesh.js';
+import type { AppEvents } from '../types/app';
 
-/**
- * @typedef {'idle' | 'hosting' | 'joining' | 'connected' | 'reconnecting' | 'error'} SessionStatus
- */
+export type SessionRole = 'host' | 'guest';
 
-/**
- * @param {{
- *   signalingUrl: string,
- *   events: import('../types/app').AppEvents,
- *   protocolVersion: number,
- *   solverBuildId: string,
- *   getDiceCounts: () => Record<string, number>,
- *   getPresencePayload: () => { diceAppearance?: string, diceAppearanceVersion?: number },
- *   getSessionSnapshot?: () => object | null,
- *   applyPresencePayload: (payload: object) => void,
- *   isWasmAvailable: () => boolean,
- *   useFairCommit?: boolean,
- *   onRemoteRoll: (msg: {
- *     seed: number,
- *     notation: string | null,
- *     diceCounts: Record<string, number> | null,
- *   }) => void | Promise<void>,
- *   onRemoteTableSync?: (msg: object) => void | Promise<void>,
- *   onRemoteCommit?: (msg: object) => void | Promise<void>,
- *   onRemoteReveal?: (msg: object) => void | Promise<void>,
- *   onRemoteSessionSync?: (msg: object) => void | Promise<void>,
- *   onRoomSnapshot?: (msg: object) => void | Promise<void>,
- *   generatePeerId?: () => string,
- *   displayName?: string,
- * }} deps
- */
-export function createRoomSession(deps) {
+export type SessionStatus = 'idle' | 'hosting' | 'joining' | 'connected' | 'reconnecting' | 'error';
+
+export interface RoomSessionState {
+    status: SessionStatus;
+    statusDetail: string | null;
+    role: SessionRole | null;
+    roomCode: string | null;
+    peerId: string;
+    connectedPeers: string[];
+    signalingConfigured: boolean;
+    protocolVersion: number;
+    solverBuildId: string;
+    useFairCommit: boolean;
+}
+
+export interface RemoteRollMessage {
+    seed: number;
+    notation: string | null;
+    diceCounts: Record<string, number> | null;
+}
+
+export interface RemoteCommitMessage {
+    hash: string;
+    notation?: string | null;
+}
+
+export interface RemoteRevealMessage {
+    hash?: string;
+    seed: number;
+    nonce: string;
+    notation?: string | null;
+    diceCounts?: Record<string, number> | null;
+}
+
+export interface RemoteTableSyncMessage {
+    diceCounts?: Record<string, number> | null;
+    presence?: unknown;
+    lastRoll?: unknown;
+}
+
+export interface SessionSnapshot {
+    seats?: Array<{ id: string; name: string; initiative?: number | null }>;
+    currentIndex?: number;
+    lastExpression?: string | null;
+}
+
+export interface PresencePayload {
+    diceAppearance?: string;
+    diceAppearanceVersion?: number;
+}
+
+export interface RoomSessionDeps {
+    signalingUrl: string;
+    events: AppEvents;
+    protocolVersion: number;
+    solverBuildId: string;
+    getDiceCounts: () => Record<string, number>;
+    /** Opaque presence payload — shape is owned by the dice-appearance/dice-set subsystem. */
+    getPresencePayload: () => unknown;
+    getSessionSnapshot?: () => SessionSnapshot | null;
+    applyPresencePayload: (payload: unknown) => void;
+    isWasmAvailable: () => boolean;
+    useFairCommit?: boolean;
+    onRemoteRoll: (msg: RemoteRollMessage) => void | Promise<void>;
+    onRemoteTableSync?: (msg: RemoteTableSyncMessage) => void | Promise<void>;
+    onRemoteCommit?: (msg: RemoteCommitMessage) => void | Promise<void>;
+    onRemoteReveal?: (msg: RemoteRevealMessage) => void | Promise<void>;
+    onRemoteSessionSync?: (msg: unknown) => void | Promise<void>;
+    onRoomSnapshot?: (msg: RemoteTableSyncMessage) => void | Promise<void>;
+    generatePeerId?: () => string;
+    displayName?: string;
+}
+
+export interface RoomSession {
+    peerId: string;
+    getState: () => RoomSessionState;
+    onStatus: (fn: (state: RoomSessionState) => void) => () => void;
+    createAndHost: () => Promise<{ code: string }>;
+    joinRoom: (code: string) => Promise<void>;
+    leave: () => void;
+    broadcastPresence: () => void;
+    broadcastSessionSync: (snapshot: SessionSnapshot | null | undefined) => void;
+    recordSettledResults: (results: unknown) => void;
+    pushPersistedRoomState: () => void;
+    isGuest: () => boolean;
+    isHost: () => boolean;
+    signalingConfigured: boolean;
+    useFairCommit: boolean;
+}
+
+interface LastRoll {
+    seed: number;
+    notation: string | null;
+    diceCounts: Record<string, number>;
+    results?: unknown;
+}
+
+export function createRoomSession(deps: RoomSessionDeps): RoomSession {
     const signaling = createSignalingClient(deps.signalingUrl);
     const peerId = deps.generatePeerId?.() ?? crypto.randomUUID();
     const displayName = deps.displayName ?? null;
     const protocolVersion = deps.protocolVersion;
     const useFairCommit = deps.useFairCommit ?? protocolVersion >= PROTOCOL_VERSION_V2;
 
-    /** @type {'host' | 'guest' | null} */
-    let role = null;
-    /** @type {string | null} */
-    let roomCode = null;
-    /** @type {SessionStatus} */
-    let status = 'idle';
-    /** @type {string | null} */
-    let statusDetail = null;
-    /** @type {ReturnType<typeof createPeerMesh> | null} */
-    let mesh = null;
-    /** @type {(() => void) | null} */
-    let unsubSignal = null;
-    /** @type {(() => void) | null} */
-    let unsubRollStarted = null;
-    /** @type {ReturnType<typeof setInterval> | null} */
-    let pingTimer = null;
-    /** @type {ReturnType<typeof setTimeout> | null} */
-    let reconnectTimer = null;
+    let role: SessionRole | null = null;
+    let roomCode: string | null = null;
+    let status: SessionStatus = 'idle';
+    let statusDetail: string | null = null;
+    let mesh: ReturnType<typeof createPeerMesh> | null = null;
+    let unsubSignal: (() => void) | null = null;
+    let unsubRollStarted: (() => void) | null = null;
+    let pingTimer: ReturnType<typeof setInterval> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let reconnectAttempts = 0;
     let suppressBroadcast = false;
-    /** @type {{ seed: number, notation: string | null, diceCounts: Record<string, number>, results?: unknown } | null} */
-    let lastRoll = null;
-    /** @type {unknown} */
-    let pendingCommit = null;
-    /** @type {unknown} */
-    let lastReveal = null;
-    /** @type {Set<(state: object) => void>} */
-    const statusListeners = new Set();
-    /** @type {Set<string>} */
-    const commitAckPeers = new Set();
+    let lastRoll: LastRoll | null = null;
+    let pendingCommit: unknown = null;
+    let lastReveal: unknown = null;
+    const statusListeners = new Set<(state: RoomSessionState) => void>();
+    const commitAckPeers = new Set<string>();
 
-    function getState() {
+    function getState(): RoomSessionState {
         return {
             status,
             statusDetail,
@@ -106,7 +165,7 @@ export function createRoomSession(deps) {
         };
     }
 
-    function setStatus(next, detail = null) {
+    function setStatus(next: SessionStatus, detail: string | null = null): void {
         status = next;
         statusDetail = detail;
         const snap = getState();
@@ -119,17 +178,14 @@ export function createRoomSession(deps) {
         }
     }
 
-    /**
-     * @param {(state: object) => void} fn
-     */
-    function onStatus(fn) {
+    function onStatus(fn: (state: RoomSessionState) => void): () => void {
         statusListeners.add(fn);
         fn(getState());
         return () => statusListeners.delete(fn);
     }
 
     function buildPresenceMsg() {
-        const presence = deps.getPresencePayload() ?? {};
+        const presence = (deps.getPresencePayload() ?? {}) as PresencePayload;
         return makePresence(
             {
                 peerId,
@@ -141,15 +197,15 @@ export function createRoomSession(deps) {
         );
     }
 
-    function sendEncoded(toPeerId, msg) {
+    function sendEncoded(toPeerId: string, msg: ProtocolMessage): void {
         mesh?.sendTo(toPeerId, encodeMessage(msg, protocolVersion));
     }
 
-    function broadcastEncoded(msg) {
+    function broadcastEncoded(msg: ProtocolMessage): void {
         mesh?.broadcast(encodeMessage(msg, protocolVersion));
     }
 
-    function pushPersistedRoomState() {
+    function pushPersistedRoomState(): void {
         if (role !== 'host') return;
         signaling.pushRoomState({
             diceCounts: deps.getDiceCounts(),
@@ -161,7 +217,7 @@ export function createRoomSession(deps) {
         });
     }
 
-    function sendTableSync(toPeerId) {
+    function sendTableSync(toPeerId: string): void {
         sendEncoded(
             toPeerId,
             makeTableSync(
@@ -175,10 +231,7 @@ export function createRoomSession(deps) {
         );
     }
 
-    /**
-     * @param {object} msg
-     */
-    async function applyRoomSnapshot(msg) {
+    async function applyRoomSnapshot(msg: SignalingMessage): Promise<void> {
         if (msg.diceCounts || msg.lastRoll || msg.session) {
             try {
                 await deps.onRoomSnapshot?.(msg);
@@ -208,11 +261,7 @@ export function createRoomSession(deps) {
         lastReveal = msg.lastReveal ?? lastReveal;
     }
 
-    /**
-     * @param {string} fromPeerId
-     * @param {string} raw
-     */
-    async function onChannelMessage(fromPeerId, raw) {
+    async function onChannelMessage(fromPeerId: string, raw: string): Promise<void> {
         const decoded = decodeMessage(raw);
         if (decoded.ok === false) {
             if (decoded.error === 'unsupported_version') {
@@ -220,7 +269,7 @@ export function createRoomSession(deps) {
             }
             return;
         }
-        const msg = decoded.msg;
+        const msg = decoded.msg as ProtocolMessage;
 
         switch (msg.type) {
             case MsgType.HELLO:
@@ -376,14 +425,14 @@ export function createRoomSession(deps) {
         }
     }
 
-    function attachMesh() {
+    function attachMesh(): void {
         mesh?.close();
         mesh = createPeerMesh({
             localPeerId: peerId,
-            role: /** @type {'host' | 'guest'} */ (role),
-            sendSignal: (to, data) => signaling.sendSignal(to, data),
+            role: role as 'host' | 'guest',
+            sendSignal: (to: string, data: unknown) => signaling.sendSignal(to, data),
             onChannelMessage,
-            onPeerConnected: (remoteId) => {
+            onPeerConnected: (remoteId: string) => {
                 reconnectAttempts = 0;
                 sendEncoded(
                     remoteId,
@@ -418,7 +467,7 @@ export function createRoomSession(deps) {
         });
     }
 
-    function wireSignalingHandlers() {
+    function wireSignalingHandlers(): void {
         unsubSignal?.();
         unsubSignal = signaling.onMessage((msg) => {
             if (msg.type === 'room-snapshot') {
@@ -447,21 +496,21 @@ export function createRoomSession(deps) {
         });
     }
 
-    function startPing() {
+    function startPing(): void {
         stopPing();
         pingTimer = setInterval(() => {
             broadcastEncoded(makePing(undefined, protocolVersion));
         }, 15000);
     }
 
-    function stopPing() {
+    function stopPing(): void {
         if (pingTimer) {
             clearInterval(pingTimer);
             pingTimer = null;
         }
     }
 
-    function scheduleReconnect() {
+    function scheduleReconnect(): void {
         if (reconnectTimer || !roomCode || !role) return;
         setStatus('reconnecting', 'Reconnecting…');
         const delay = Math.min(10000, 1000 * 2 ** reconnectAttempts);
@@ -477,7 +526,7 @@ export function createRoomSession(deps) {
         }, delay);
     }
 
-    async function reconnect() {
+    async function reconnect(): Promise<void> {
         if (!roomCode || !role) return;
         signaling.disconnect();
         attachMesh();
@@ -492,7 +541,7 @@ export function createRoomSession(deps) {
         startPing();
     }
 
-    async function connectSignaling(code, connectRole) {
+    async function connectSignaling(code: string, connectRole: SessionRole): Promise<void> {
         await signaling.connectRoom(code, {
             peerId,
             role: connectRole,
@@ -501,14 +550,23 @@ export function createRoomSession(deps) {
         });
     }
 
-    function bindHostRollBroadcast() {
+    function bindHostRollBroadcast(): void {
         unsubRollStarted?.();
         unsubRollStarted = deps.events.on(AppEvent.ROLL_STARTED, (payload) => {
             if (role !== 'host' || suppressBroadcast) return;
-            const p =
-                /** @type {{ seed?: number | null, expression?: string | null, diceSet?: Record<string, number>, source?: string, commit?: object, reveal?: object }} */ (
-                    payload ?? {}
-                );
+            const p = (payload ?? {}) as {
+                seed?: number | null;
+                expression?: string | null;
+                diceSet?: Record<string, number>;
+                source?: string;
+                commit?: CommitFields;
+                reveal?: {
+                    seed: number;
+                    nonce: string;
+                    notation?: string | null;
+                    throwAt?: number;
+                };
+            };
             if (p.seed == null) return;
             if (!deps.isWasmAvailable()) return;
 
@@ -567,10 +625,7 @@ export function createRoomSession(deps) {
         });
     }
 
-    /**
-     * @returns {Promise<{ code: string }>}
-     */
-    async function createAndHost() {
+    async function createAndHost(): Promise<{ code: string }> {
         leave();
         role = 'host';
         setStatus('hosting', 'Creating room…');
@@ -587,10 +642,7 @@ export function createRoomSession(deps) {
         return { code };
     }
 
-    /**
-     * @param {string} code
-     */
-    async function joinRoom(code) {
+    async function joinRoom(code: string): Promise<void> {
         const normalized = String(code || '')
             .toUpperCase()
             .replace(/[^0-9A-Z]/g, '');
@@ -628,7 +680,7 @@ export function createRoomSession(deps) {
         setStatus('joining', `Guest · waiting for host`);
     }
 
-    function syncRoomToUrl(code) {
+    function syncRoomToUrl(code: string): void {
         try {
             const url = new URL(window.location.href);
             url.searchParams.set('room', code);
@@ -639,12 +691,12 @@ export function createRoomSession(deps) {
         }
     }
 
-    function broadcastPresence() {
+    function broadcastPresence(): void {
         if (role !== 'host' || !mesh) return;
         broadcastEncoded(buildPresenceMsg());
     }
 
-    function broadcastSessionSync(snapshot) {
+    function broadcastSessionSync(snapshot: SessionSnapshot | null | undefined): void {
         if (role !== 'host' || !mesh || !snapshot) return;
         broadcastEncoded(
             makeSessionSync(
@@ -659,14 +711,14 @@ export function createRoomSession(deps) {
         pushPersistedRoomState();
     }
 
-    function recordSettledResults(results) {
+    function recordSettledResults(results: unknown): void {
         if (lastRoll) {
             lastRoll = { ...lastRoll, results };
             pushPersistedRoomState();
         }
     }
 
-    function leave() {
+    function leave(): void {
         stopPing();
         if (reconnectTimer) {
             clearTimeout(reconnectTimer);
@@ -688,11 +740,11 @@ export function createRoomSession(deps) {
         setStatus('idle');
     }
 
-    function isGuest() {
+    function isGuest(): boolean {
         return role === 'guest';
     }
 
-    function isHost() {
+    function isHost(): boolean {
         return role === 'host';
     }
 
@@ -716,10 +768,10 @@ export function createRoomSession(deps) {
 
 /**
  * Resolve signaling base URL from Vite env or query override.
- * @param {URLSearchParams} [searchParams]
- * @returns {string}
  */
-export function resolveSignalingUrl(searchParams = new URLSearchParams(window.location.search)) {
+export function resolveSignalingUrl(
+    searchParams: URLSearchParams = new URLSearchParams(window.location.search)
+): string {
     const fromQuery = searchParams.get('signal');
     if (fromQuery) return fromQuery;
     try {

@@ -11,16 +11,25 @@ import {
 } from '../dice.js';
 import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
 import { createRoomSession, resolveSignalingUrl } from '../net/RoomSession.js';
+import type { RoomSession } from '../net/RoomSession.js';
 import { createMultiplayerPanel } from '../ui/MultiplayerPanel.js';
 import { isTouchPrimaryDevice } from '../core/DeviceCapabilities.js';
 import { loadSolverBuildId } from '../wasm/SolverBuildId.js';
 import { resolveNegotiatedProtocolVersion, isFairCommitEnabled } from '../net/protocolFlags.js';
+import type { AppContext, AppEvents } from '../types/app';
+import type { createRollWiring } from './RollWiring.js';
 
-/**
- * @param {import('../types/app').AppContext} app
- * @param {object} deps
- */
-export async function setupMultiplayer(app, deps) {
+export interface MultiplayerWiringDeps {
+    searchParams: URLSearchParams;
+    appEvents: AppEvents;
+    multiplayerRef: { current: RoomSession | null };
+    rollWiring: ReturnType<typeof createRollWiring>;
+}
+
+export async function setupMultiplayer(
+    app: AppContext,
+    deps: MultiplayerWiringDeps
+): Promise<{ roomParam: string | null }> {
     const { searchParams, appEvents, multiplayerRef, rollWiring } = deps;
 
     const signalingUrl = resolveSignalingUrl(searchParams);
@@ -60,7 +69,7 @@ export async function setupMultiplayer(app, deps) {
             parent: panelParent,
             touchUi: isTouchPrimaryDevice(),
             onCreate: () => session.createAndHost(),
-            onJoin: (code) => session.joinRoom(code),
+            onJoin: (code: string) => session.joinRoom(code),
             onLeave: () => session.leave(),
         });
         session.onStatus((state) => mpPanel.updateStatus(state));

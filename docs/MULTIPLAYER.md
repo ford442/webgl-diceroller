@@ -137,7 +137,7 @@ Cup pours (`seed == null`) are not broadcast. Guests cannot roll (UI hint: “On
 | [`src/net/CommitReveal.ts`](src/net/CommitReveal.ts)         | SHA-256 commit-reveal                   |
 | [`src/net/SignalingClient.ts`](src/net/SignalingClient.ts)   | HTTP/WS to Worker                       |
 | [`src/net/PeerMesh.js`](src/net/PeerMesh.js)                 | Star WebRTC + DataChannels              |
-| [`src/net/RoomSession.js`](src/net/RoomSession.js)           | Host/guest session                      |
+| [`src/net/RoomSession.ts`](src/net/RoomSession.ts)           | Host/guest session                      |
 | [`src/session/SessionState.ts`](src/session/SessionState.ts) | Initiative / turn snapshot              |
 | [`src/app/SessionWiring.js`](src/app/SessionWiring.js)       | Session strip + `AppEvents`             |
 | [`src/ui/MultiplayerPanel.js`](src/ui/MultiplayerPanel.js)   | Create / join UI                        |
