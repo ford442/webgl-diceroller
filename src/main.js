@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 
+import './ui/hud.css';
 import { isWasmAvailable } from './wasm/PhysicsBridge.js';
 import {
     syncAllDiceToWasm,

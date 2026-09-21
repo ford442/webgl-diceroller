@@ -1,10 +1,7 @@
 /**
  * Minimal multiplayer create / join / status panel.
  */
-
-const GOLD = '#e8c882';
-const GOLD_DARK = '#8B6914';
-const BG = 'rgba(20, 10, 0, 0.55)';
+import { hudButton, hudInput } from './hudPanel.js';
 
 /**
  * @param {{
@@ -22,68 +19,42 @@ export function createMultiplayerPanel(opts) {
     root.id = 'multiplayer-panel';
     root.setAttribute('role', 'region');
     root.setAttribute('aria-label', 'Multiplayer table');
-    root.style.marginTop = '8px';
-    root.style.paddingTop = '8px';
-    root.style.borderTop = `1px solid ${GOLD_DARK}`;
-    root.style.fontSize = touchUi ? '14px' : '12px';
+    root.className = 'hud-divider hud-panel--multiplayer';
+    if (touchUi) root.dataset.touch = 'true';
 
     const title = document.createElement('div');
     title.textContent = 'Table (multiplayer)';
-    title.style.fontWeight = 'bold';
-    title.style.color = GOLD;
-    title.style.marginBottom = '6px';
+    title.className = 'hud-panel--multiplayer__title';
     root.appendChild(title);
 
     const statusEl = document.createElement('div');
     statusEl.id = 'multiplayer-status';
-    statusEl.style.color = '#ccc';
-    statusEl.style.marginBottom = '6px';
-    statusEl.style.minHeight = '1.2em';
+    statusEl.className = 'hud-panel--multiplayer__status';
     statusEl.textContent = 'Idle';
     root.appendChild(statusEl);
 
     const btnRow = document.createElement('div');
-    btnRow.style.display = 'flex';
-    btnRow.style.flexWrap = 'wrap';
-    btnRow.style.gap = '6px';
-    btnRow.style.marginBottom = '6px';
+    btnRow.className = 'hud-row hud-row--wrap hud-mt-xs';
 
-    const createBtn = document.createElement('button');
-    createBtn.type = 'button';
-    createBtn.textContent = 'Create table';
-    styleButton(createBtn, touchUi);
-
-    const leaveBtn = document.createElement('button');
-    leaveBtn.type = 'button';
-    leaveBtn.textContent = 'Leave';
+    const createBtn = hudButton('Create table');
+    const leaveBtn = hudButton('Leave');
     leaveBtn.style.display = 'none';
-    styleButton(leaveBtn, touchUi);
 
     btnRow.appendChild(createBtn);
     btnRow.appendChild(leaveBtn);
     root.appendChild(btnRow);
 
     const codeRow = document.createElement('div');
+    codeRow.className = 'hud-panel--multiplayer__code-row hud-mt-xs';
     codeRow.style.display = 'none';
-    codeRow.style.flexDirection = 'column';
-    codeRow.style.gap = '4px';
-    codeRow.style.marginBottom = '6px';
 
     const codeLabel = document.createElement('div');
-    codeLabel.style.color = GOLD;
+    codeLabel.className = 'hud-panel--multiplayer__code-label';
     codeLabel.textContent = 'Room code';
     const codeValue = document.createElement('code');
-    codeValue.style.display = 'block';
-    codeValue.style.padding = '4px 6px';
-    codeValue.style.background = BG;
-    codeValue.style.borderRadius = '3px';
-    codeValue.style.letterSpacing = '0.12em';
-    codeValue.style.fontSize = '14px';
+    codeValue.className = 'hud-panel--multiplayer__code-value';
 
-    const copyBtn = document.createElement('button');
-    copyBtn.type = 'button';
-    copyBtn.textContent = 'Copy invite URL';
-    styleButton(copyBtn, touchUi);
+    const copyBtn = hudButton('Copy invite URL');
 
     codeRow.appendChild(codeLabel);
     codeRow.appendChild(codeValue);
@@ -91,42 +62,25 @@ export function createMultiplayerPanel(opts) {
     root.appendChild(codeRow);
 
     const joinRow = document.createElement('div');
-    joinRow.style.display = 'flex';
-    joinRow.style.gap = '6px';
-    joinRow.style.alignItems = 'center';
+    joinRow.className = 'hud-row hud-mt-xs';
 
-    const joinInput = document.createElement('input');
-    joinInput.type = 'text';
+    const joinInput = hudInput('text', 'Join room code');
     joinInput.placeholder = 'Room code';
-    joinInput.setAttribute('aria-label', 'Join room code');
     joinInput.maxLength = 8;
     joinInput.autocomplete = 'off';
     joinInput.spellcheck = false;
     joinInput.style.flex = '1';
     joinInput.style.minWidth = '0';
-    joinInput.style.padding = '4px 6px';
-    joinInput.style.background = BG;
-    joinInput.style.border = `1px solid ${GOLD_DARK}`;
-    joinInput.style.color = '#fff';
-    joinInput.style.borderRadius = '3px';
-    joinInput.style.fontSize = touchUi ? '16px' : '12px';
-    joinInput.style.minHeight = touchUi ? '44px' : 'auto';
-    joinInput.addEventListener('mousedown', (e) => e.stopPropagation());
 
-    const joinBtn = document.createElement('button');
-    joinBtn.type = 'button';
-    joinBtn.textContent = 'Join';
-    styleButton(joinBtn, touchUi);
+    const joinBtn = hudButton('Join');
 
     joinRow.appendChild(joinInput);
     joinRow.appendChild(joinBtn);
     root.appendChild(joinRow);
 
     const guestHint = document.createElement('div');
+    guestHint.className = 'hud-panel--multiplayer__guest-hint hud-mt-xs';
     guestHint.style.display = 'none';
-    guestHint.style.marginTop = '6px';
-    guestHint.style.color = '#aaa';
-    guestHint.style.fontStyle = 'italic';
     guestHint.textContent = 'Only the host can roll.';
     root.appendChild(guestHint);
 
@@ -143,7 +97,7 @@ export function createMultiplayerPanel(opts) {
             }
         } catch (err) {
             statusEl.textContent = err?.message ?? 'Create failed';
-            statusEl.style.color = '#f88';
+            statusEl.classList.add('hud-panel--multiplayer__status--error');
         } finally {
             busy = false;
             createBtn.disabled = false;
@@ -161,7 +115,7 @@ export function createMultiplayerPanel(opts) {
             showCode(code.toUpperCase());
         } catch (err) {
             statusEl.textContent = err?.message ?? 'Join failed';
-            statusEl.style.color = '#f88';
+            statusEl.classList.add('hud-panel--multiplayer__status--error');
         } finally {
             busy = false;
             joinBtn.disabled = false;
@@ -172,7 +126,7 @@ export function createMultiplayerPanel(opts) {
         opts.onLeave?.();
         hideCode();
         guestHint.style.display = 'none';
-        statusEl.style.color = '#ccc';
+        statusEl.classList.remove('hud-panel--multiplayer__status--error');
         statusEl.textContent = 'Idle';
     });
 
@@ -230,7 +184,10 @@ export function createMultiplayerPanel(opts) {
             else text = state.status;
         }
         statusEl.textContent = text;
-        statusEl.style.color = state.status === 'error' ? '#f88' : '#ccc';
+        statusEl.classList.toggle(
+            'hud-panel--multiplayer__status--error',
+            state.status === 'error'
+        );
         guestHint.style.display = state.role === 'guest' ? 'block' : 'none';
         if (state.roomCode) showCode(state.roomCode);
         if (state.status === 'idle') hideCode();
@@ -248,20 +205,4 @@ export function createMultiplayerPanel(opts) {
             root.remove();
         },
     };
-}
-
-/**
- * @param {HTMLButtonElement} btn
- * @param {boolean} touchUi
- */
-function styleButton(btn, touchUi) {
-    btn.style.cursor = 'pointer';
-    btn.style.padding = touchUi ? '10px 12px' : '4px 8px';
-    btn.style.minHeight = touchUi ? '44px' : 'auto';
-    btn.style.background = BG;
-    btn.style.border = `1px solid ${GOLD_DARK}`;
-    btn.style.color = GOLD;
-    btn.style.borderRadius = '3px';
-    btn.style.fontSize = touchUi ? '14px' : '12px';
-    btn.addEventListener('mousedown', (e) => e.stopPropagation());
 }

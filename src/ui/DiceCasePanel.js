@@ -5,6 +5,8 @@ import {
     isHighQualityProfile,
 } from '../dice/DiceMaterials.js';
 import { MARKING_STYLES } from '../dice/DiceSetFormat.js';
+import { prefersReducedMotion } from '../core/AccessibilityPrefs.js';
+import { createHudPanel, hudSelect } from './hudPanel.js';
 
 /** Die keys the case offers. The derived types are descriptor-only for now. */
 const DICE_TYPES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
@@ -25,54 +27,28 @@ const DICE_TYPES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
  * @param {() => object|null} [hooks.getQualityProfile]
  */
 export function createDiceCasePanel(hooks) {
-    const canvasContainer = document.getElementById('canvas-container') || document.body;
-
-    const panel = document.createElement('div');
-    panel.style.cssText = [
-        'position:absolute',
-        'left:10px',
-        'top:50%',
-        'transform:translateY(-50%)',
-        'background:rgba(0,0,0,0.55)',
-        'color:white',
-        'font-family:sans-serif',
-        'border-radius:6px',
-        'padding:10px',
-        'z-index:1000',
-        'width:min(92vw, 220px)',
-        'box-shadow:0 8px 24px rgba(0,0,0,0.35)',
-    ].join(';');
-
-    const header = document.createElement('div');
-    header.style.cssText =
-        'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
-    const title = document.createElement('div');
-    title.textContent = 'Dice Case';
-    title.style.fontWeight = 'bold';
-    const collapseBtn = document.createElement('button');
-    collapseBtn.textContent = '−';
-    collapseBtn.title = 'Collapse dice case';
-    collapseBtn.style.cssText = 'cursor:pointer;min-width:28px;';
-    header.appendChild(title);
-    header.appendChild(collapseBtn);
-    panel.appendChild(header);
-
-    const body = document.createElement('div');
-    panel.appendChild(body);
+    const hudPanel = createHudPanel({
+        id: 'dice-case-panel',
+        ariaLabel: 'Dice case',
+        anchor: 'center-left',
+        title: 'Dice Case',
+        collapsible: true,
+        className: 'hud-panel--dice-case',
+    });
+    const { el: panel, body, collapseButton: collapseBtn } = hudPanel;
 
     const previewCanvas = document.createElement('canvas');
     previewCanvas.width = 160;
     previewCanvas.height = 120;
-    previewCanvas.style.cssText =
-        'width:100%;height:auto;border-radius:4px;background:rgba(0,0,0,0.35);display:block;margin-bottom:8px;';
+    previewCanvas.className = 'hud-dice-case-preview';
     body.appendChild(previewCanvas);
 
     const typeRow = document.createElement('div');
-    typeRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;';
+    typeRow.className = 'hud-row hud-mt-xs';
     const typeLabel = document.createElement('label');
     typeLabel.textContent = 'Die';
-    typeLabel.style.fontSize = '12px';
-    const typeSelect = document.createElement('select');
+    typeLabel.className = 'hud-label';
+    const typeSelect = hudSelect('Die type');
     typeSelect.style.flex = '1';
     DICE_TYPES.forEach((type) => {
         const opt = document.createElement('option');
@@ -85,11 +61,11 @@ export function createDiceCasePanel(hooks) {
     body.appendChild(typeRow);
 
     const presetRow = document.createElement('div');
-    presetRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;';
+    presetRow.className = 'hud-row hud-mt-xs';
     const presetLabel = document.createElement('label');
     presetLabel.textContent = 'Finish';
-    presetLabel.style.fontSize = '12px';
-    const presetSelect = document.createElement('select');
+    presetLabel.className = 'hud-label';
+    const presetSelect = hudSelect('Dice finish preset');
     presetSelect.style.flex = '1';
     DICE_PRESET_IDS.forEach((id) => {
         const opt = document.createElement('option');
@@ -102,40 +78,37 @@ export function createDiceCasePanel(hooks) {
     body.appendChild(presetRow);
 
     const bodyColorRow = document.createElement('div');
-    bodyColorRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
+    bodyColorRow.className = 'hud-row hud-mt-xs';
     const bodyColorLabel = document.createElement('label');
     bodyColorLabel.textContent = 'Body';
-    bodyColorLabel.style.fontSize = '12px';
-    bodyColorLabel.style.minWidth = '42px';
+    bodyColorLabel.className = 'hud-label hud-label--fixed';
     const bodyColorInput = document.createElement('input');
     bodyColorInput.type = 'color';
-    bodyColorInput.style.cssText =
-        'flex:1;height:28px;border:none;padding:0;background:transparent;cursor:pointer;';
+    bodyColorInput.className = 'hud-color-input';
+    bodyColorInput.setAttribute('aria-label', 'Body color');
     bodyColorRow.appendChild(bodyColorLabel);
     bodyColorRow.appendChild(bodyColorInput);
     body.appendChild(bodyColorRow);
 
     const pipColorRow = document.createElement('div');
-    pipColorRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
+    pipColorRow.className = 'hud-row hud-mt-xs';
     const pipColorLabel = document.createElement('label');
     pipColorLabel.textContent = 'Marks';
-    pipColorLabel.style.fontSize = '12px';
-    pipColorLabel.style.minWidth = '42px';
+    pipColorLabel.className = 'hud-label hud-label--fixed';
     const pipColorInput = document.createElement('input');
     pipColorInput.type = 'color';
-    pipColorInput.style.cssText =
-        'flex:1;height:28px;border:none;padding:0;background:transparent;cursor:pointer;';
+    pipColorInput.className = 'hud-color-input';
+    pipColorInput.setAttribute('aria-label', 'Marking color');
     pipColorRow.appendChild(pipColorLabel);
     pipColorRow.appendChild(pipColorInput);
     body.appendChild(pipColorRow);
 
     const styleRow = document.createElement('div');
-    styleRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
+    styleRow.className = 'hud-row hud-mt-xs';
     const styleLabel = document.createElement('label');
     styleLabel.textContent = 'Cut';
-    styleLabel.style.fontSize = '12px';
-    styleLabel.style.minWidth = '42px';
-    const styleSelect = document.createElement('select');
+    styleLabel.className = 'hud-label hud-label--fixed';
+    const styleSelect = hudSelect('Marking style');
     styleSelect.style.flex = '1';
     MARKING_STYLES.forEach((style) => {
         const opt = document.createElement('option');
@@ -148,20 +121,18 @@ export function createDiceCasePanel(hooks) {
     body.appendChild(styleRow);
 
     const hint = document.createElement('div');
-    hint.style.cssText = 'font-size:10px;opacity:0.75;line-height:1.35;margin-top:6px;';
+    hint.className = 'hud-status-line hud-mt-xs';
     hint.textContent = 'Saved locally and included in shared roll links.';
     body.appendChild(hint);
 
-    let collapsed = false;
     let previewRenderer = null;
-    collapseBtn.addEventListener('click', () => {
-        collapsed = !collapsed;
-        body.style.display = collapsed ? 'none' : 'block';
-        collapseBtn.textContent = collapsed ? '+' : '−';
-        if (collapsed) {
-            disposePreviewRenderer();
-        }
-    });
+    collapseBtn.title = 'Collapse dice case';
+    hudPanel.setCollapsed(false);
+    const baseSetCollapsed = hudPanel.setCollapsed;
+    hudPanel.setCollapsed = (next) => {
+        baseSetCollapsed(next);
+        if (next) disposePreviewRenderer();
+    };
 
     [typeSelect, presetSelect, styleSelect, bodyColorInput, pipColorInput].forEach((el) => {
         el.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -189,7 +160,7 @@ export function createDiceCasePanel(hooks) {
      * dispose it on collapse so the slot is released.
      */
     function ensurePreviewRenderer() {
-        if (previewRenderer || collapsed) return previewRenderer;
+        if (previewRenderer || hudPanel.isCollapsed()) return previewRenderer;
         previewRenderer = new THREE.WebGLRenderer({
             canvas: previewCanvas,
             antialias: false,
@@ -225,7 +196,6 @@ export function createDiceCasePanel(hooks) {
         pipColorInput.value = entry.body.markingColor;
         styleSelect.value = entry.faces.style;
 
-        const _gemstone = DICE_MATERIAL_PRESETS.gemstone;
         const highQ = isHighQualityProfile(hooks.getQualityProfile?.());
         /** @type {HTMLOptionElement | null} */ (
             presetSelect.querySelector('option[value="gemstone"]')
@@ -294,8 +264,6 @@ export function createDiceCasePanel(hooks) {
         emitChange({ body: { markingColor: pipColorInput.value } });
     });
 
-    canvasContainer.appendChild(panel);
-
     syncControlsFromConfig();
     rebuildPreviewMesh();
 
@@ -312,12 +280,14 @@ export function createDiceCasePanel(hooks) {
             rebuildPreviewMesh();
         },
         updatePreview(deltaTime) {
-            if (collapsed) return;
+            if (hudPanel.isCollapsed()) return;
             if (!previewMesh) return;
             const renderer = ensurePreviewRenderer();
             if (!renderer) return;
-            previewAngle += deltaTime * 0.55;
-            previewMesh.rotation.y = previewAngle;
+            if (!prefersReducedMotion()) {
+                previewAngle += deltaTime * 0.55;
+                previewMesh.rotation.y = previewAngle;
+            }
             const envMap = hooks.getEnvMap?.();
             if (envMap) previewScene.environment = envMap;
             renderer.render(previewScene, previewCamera);
