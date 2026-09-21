@@ -62,7 +62,7 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: public/
+                  path: .
             - run: npm run build:js
             - run: npx playwright install --with-deps chromium
             - run: npm run verify:bundle-loading
@@ -163,7 +163,7 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: public/
+                  path: .
             - run: npm run test:solver
 
     # These verify:* scripts each boot their own throwaway vite dev server
@@ -192,7 +192,8 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: public/
+                  path: .
+            - run: ls -la public/wasm public/wasm-scalar || true
             - run: npx playwright install --with-deps chromium
             - run: npm run ${{ matrix.script }}
 
@@ -230,7 +231,8 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: public/
+                  path: .
+            - run: ls -la public/wasm public/wasm-scalar || true
             - run: npx playwright install --with-deps chromium
             - run: npm run build:js
             # --host 127.0.0.1 is load-bearing: with no --host, vite binds
@@ -263,7 +265,7 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: public/
+                  path: .
             - run: npx playwright install --with-deps chromium
             # Required profiles (?webgl&no-post, ?webgl) must capture and match
             # tests/baselines/. The optional ?webgpu capture is skipped on CPU CI
