@@ -3,9 +3,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WASM_DIR="${SCRIPT_DIR}/../src/wasm"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+WASM_DIR="${REPO_ROOT}/src/wasm"
 CMAKE="${WASM_DIR}/CMakeLists.txt"
 INC="${WASM_DIR}/emcc_flags.inc.sh"
+CI_YML="${REPO_ROOT}/.github/workflows/ci.yml"
+EXPERIMENT_YML="${REPO_ROOT}/.github/workflows/emsdk-experiment.yml"
 
 fail() {
     echo "FAIL: $*" >&2
@@ -30,6 +33,19 @@ fi
 if ! grep -q 'target_compile_options(dice_physics_scalar ' "${CMAKE}"; then
     fail "CMakeLists.txt must set target_compile_options on dice_physics_scalar"
 fi
+
+# CMake's per-config flag slots must stay cleared. CMAKE_CXX_FLAGS_RELEASE
+# defaults to "-O3 -DNDEBUG"; build.sh never passes -DNDEBUG, so leaving it set
+# silently gives CMake a different libc++ hardening configuration than the
+# shipped build. scripts/verify-cmake-wasm-parity.sh would eventually catch it
+# as a byte mismatch, but only in the job that has an EMSDK -- assert it here
+# too, where the failure names the cause directly.
+for cfg in DEBUG RELEASE RELWITHDEBINFO MINSIZEREL; do
+    if ! grep -qE 'set\(CMAKE_CXX_FLAGS_\$\{cfg\} ""\)' "${CMAKE}" \
+        && ! grep -qE "set\(CMAKE_CXX_FLAGS_${cfg} \"\"\)" "${CMAKE}"; then
+        fail "CMakeLists.txt must clear CMAKE_CXX_FLAGS_${cfg} (CMake's own -O/-DNDEBUG would diverge from build.sh)"
+    fi
+done
 
 # Ignore comments: a documented "do not add -ffast-math" note is not a flag.
 if grep -vE '^\s*#' "${INC}" | grep -qE -- '-ffast-math|PRECISE_F32=0'; then
@@ -99,6 +115,23 @@ assert_contains "${DEBUG_FLAGS}" "ASSERTIONS=2" "debug flags"
 assert_absent "${DEBUG_FLAGS}" "-msimd128" "debug flags"
 assert_absent "${DEBUG_FLAGS}" "-flto" "debug flags"
 
+# The EMSDK pin lives in ci.yml; emsdk-experiment.yml copies it so its control
+# job runs the toolchain CI actually uses. Actions has no cross-workflow
+# variable, so the copy is asserted here instead -- a drifted control row would
+# make the flag experiment's conclusions wrong in the most misleading way
+# ("closure works now!" measured against a toolchain nothing ships).
+if [[ -f "${CI_YML}" && -f "${EXPERIMENT_YML}" ]]; then
+    CI_EMSDK="$(grep -oE "EMSDK_VERSION: *'[^']+'" "${CI_YML}" | head -n1 | grep -oE "'[^']+'" | tr -d "'")"
+    EXP_EMSDK="$(grep -oE "PINNED_EMSDK_VERSION: *'[^']+'" "${EXPERIMENT_YML}" | head -n1 | grep -oE "'[^']+'" | tr -d "'")"
+    [[ -n "${CI_EMSDK}" ]] || fail "could not read EMSDK_VERSION from ci.yml"
+    [[ -n "${EXP_EMSDK}" ]] || fail "could not read PINNED_EMSDK_VERSION from emsdk-experiment.yml"
+    if [[ "${CI_EMSDK}" != "${EXP_EMSDK}" ]]; then
+        fail "EMSDK pin drift: ci.yml has '${CI_EMSDK}', emsdk-experiment.yml has '${EXP_EMSDK}'"
+    fi
+    echo "ok: EMSDK pin consistent across workflows (${CI_EMSDK})"
+fi
+
+echo "ok: CMake per-config flag slots cleared (no hidden -DNDEBUG / -O override)"
 echo "ok: emcc release flags in sync (shell == CMake printer)"
 echo "ok: required size/determinism flags present; -ffast-math absent"
 echo "ok: release has -msimd128; scalar does not"

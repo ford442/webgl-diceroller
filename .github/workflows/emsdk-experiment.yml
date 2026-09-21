@@ -1,0 +1,74 @@
+name: EMSDK flag experiment
+
+# Manual only. This never gates a PR: its job is to produce the evidence that
+# issue #311's "EMSDK pin updated **or** record exactly which STRICT/closure
+# flags still fail and why 3.1.61 stays" asks for, on demand, rather than
+# leaving `emcc_flags.inc.sh`'s "re-evaluate when upgrading EMSDK" comments to
+# rot.
+#
+# Run it from the Actions tab, read the two job summaries, then copy the tables
+# into docs/WASM_ENGINE.md ("EMSDK pin and disabled flags") and into the issue.
+# Only after that should anyone touch EMSDK_VERSION in ci.yml.
+on:
+    workflow_dispatch:
+        inputs:
+            candidate_version:
+                description: 'EMSDK version to evaluate (e.g. 4.0.15, or "latest")'
+                required: true
+                default: 'latest'
+            include_pinned_control:
+                description: 'Also run the experiment on the version CI pins today'
+                type: boolean
+                required: false
+                default: true
+
+env:
+    # Must match EMSDK_VERSION in ci.yml — Actions has no cross-workflow
+    # variable, so scripts/verify-emcc-flags-sync.sh asserts the two agree.
+    PINNED_EMSDK_VERSION: '3.1.61'
+
+jobs:
+    candidate:
+        name: 'Candidate EMSDK (${{ inputs.candidate_version }})'
+        runs-on: ubuntu-latest
+        # Five full -O3 -flto links plus a build + native parity run; the
+        # timeout is sized for that, not optimism.
+        timeout-minutes: 45
+        steps:
+            - uses: actions/checkout@v5
+            - uses: mymindstorm/setup-emsdk@v15
+              with:
+                  version: ${{ inputs.candidate_version }}
+                  actions-cache-folder: emsdk-cache-candidate
+            - name: Probe --closure / -s STRICT / -fno-rtti
+              run: bash scripts/emsdk-flag-experiment.sh
+            # Whatever the flags do, a newer EMSDK must still produce the same
+            # physics as the pinned one, or seeded replay breaks for everyone
+            # mid-roll. The baseline variant above only compares within a single
+            # toolchain; these compare the shipped build itself.
+            - name: Build the shipped profiles on this toolchain
+              run: npm run build:wasm
+            # test:solver runs the unit/fuzz suite, the golden traces, and --
+            # because build:wasm ran above -- the native <-> WASM serialize
+            # parity check.
+            - name: Native tests, goldens, native ↔ WASM parity
+              run: npm run test:solver
+            - name: Scalar ↔ SIMD serialize parity
+              run: node scripts/compare-solver-simd.mjs
+
+    pinned-control:
+        name: 'Pinned EMSDK control'
+        if: ${{ inputs.include_pinned_control }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        steps:
+            - uses: actions/checkout@v5
+            - uses: mymindstorm/setup-emsdk@v15
+              with:
+                  version: ${{ env.PINNED_EMSDK_VERSION }}
+                  actions-cache-folder: emsdk-cache
+            # Same probe on the pinned toolchain. Without this row, a candidate
+            # failure reads as "the new EMSDK broke closure" when the honest
+            # reading may be "closure never worked here".
+            - name: Probe --closure / -s STRICT / -fno-rtti
+              run: bash scripts/emsdk-flag-experiment.sh

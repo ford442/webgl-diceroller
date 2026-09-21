@@ -19,6 +19,19 @@ fi
 
 CXXFLAGS=(-std=c++17 -O2 -Wall -Wextra -Wpedantic -I"${SCRIPT_DIR}")
 
+# -Werror: the engine TUs are warning-clean under g++ 13 and clang 18, and CI
+# pins ubuntu-latest, so a new warning is a real signal rather than toolchain
+# noise. third_party/doctest.h is included by solver_tests.cpp only and is
+# warning-clean at these flags; if a future compiler disagrees, silence it
+# there rather than dropping -Werror globally.
+# Escape hatch for local builds on an unpinned/newer compiler:
+#   SOLVER_NO_WERROR=1 npm run test:solver
+if [ "${SOLVER_NO_WERROR:-0}" != "1" ]; then
+    CXXFLAGS+=(-Werror)
+else
+    echo "[test:solver] SOLVER_NO_WERROR=1 -- building without -Werror."
+fi
+
 # DicePhysicsEngine member functions live in separate .cpp translation units
 # (see docs/WASM_ENGINE.md); solver_tests.cpp only needs the class declaration.
 # The source list itself lives in engine_sources.txt (single source of truth

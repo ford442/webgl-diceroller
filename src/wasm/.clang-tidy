@@ -1,0 +1,69 @@
+# .clang-tidy — static analysis for the DicePhysicsEngine C++ sources.
+#
+# Run by scripts/run-clang-tidy-engine.sh (npm run lint:cpp), which is wired
+# into the `test-solver` CI job. That script decides *which* files are analysed
+# (src/wasm/dice_physics/**, the translation units listed in
+# engine_sources.txt); this file decides which checks run.
+#
+# Scope notes:
+#   - src/wasm/third_party/doctest.h is vendored and deliberately out of scope;
+#     HeaderFilterRegex below keeps its ~44k header warnings out of the report.
+#   - src/wasm/dice_physics.cpp (the Embind bindings) is out of scope too: it
+#     includes <emscripten/bind.h>, which the native compile_commands.json has
+#     no include path for, so clang-tidy can only report a parse error on it.
+#     Covering it would mean analysing against the emcc database, which only
+#     exists when an EMSDK is present.
+#
+# Enabled families and why:
+#   bugprone-*        the point of the exercise.
+#   clang-analyzer-*  path-sensitive: null derefs and uninitialised reads in a
+#                     solver are exactly the bugs unit tests miss. ~45s total.
+#   performance-*     this is the hot loop; a silent copy here is a real cost.
+#   misc-*, cert-*    cheap, and catch genuine lifetime/UB mistakes.
+#
+# Deliberately disabled (all of these fire on correct code here):
+#   bugprone-easily-swappable-parameters  every Vec3-ish (float x, float y, float z)
+#       signature in the engine trips this; renaming will not make them safer.
+#   bugprone-narrowing-conversions        int->float in physics math is pervasive
+#       and intentional; the engine is float32 throughout for determinism.
+#   bugprone-misplaced-widening-cast      fires on
+#       `static_cast<size_t>(gridCols_ * gridRows_)` in the broadphase. Grid
+#       dimensions are clamped small (see rebuildDieGrid), so the int product
+#       cannot overflow; casting each operand instead would only add noise.
+#   misc-const-correctness                ~35 hits of pure churn in hot code.
+#   misc-include-cleaner                  wants every transitively-used symbol's
+#       header included per TU; the module split intentionally funnels through
+#       dice_physics_engine.hpp.
+#   misc-non-private-member-variables-in-classes / cert-dcl21-cpp
+#       RigidBody / DynamicBody are plain aggregates by design.
+#   readability-*                         not enabled at all: it wants 16
+#       redundant-member-init removals and member-to-static conversions that
+#       would churn the layout this issue is about to rewrite (SoA).
+#
+# The engine sources are clean under this set as of the commit that added it,
+# so WarningsAsErrors is everything that is enabled -- a new warning is a
+# regression, not background noise.
+
+Checks: >
+    -*,
+    bugprone-*,
+    clang-analyzer-*,
+    performance-*,
+    misc-*,
+    cert-*,
+    -bugprone-easily-swappable-parameters,
+    -bugprone-narrowing-conversions,
+    -bugprone-misplaced-widening-cast,
+    -misc-const-correctness,
+    -misc-include-cleaner,
+    -misc-non-private-member-variables-in-classes,
+    -misc-no-recursion,
+    -cert-dcl21-cpp
+
+WarningsAsErrors: '*'
+
+# Engine headers are in scope (dice_sat.hpp and dice_math.hpp carry the SIMD
+# code); third_party/ and system headers are not.
+HeaderFilterRegex: 'src/wasm/(dice_physics/|dice_physics_engine\.hpp)'
+
+FormatStyle: none

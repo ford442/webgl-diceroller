@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 3.13)
 project(DicePhysics CXX)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# NOT set(CMAKE_CXX_STANDARD 17): that makes CMake prepend its own
+# -std=gnu++17 ahead of the -std=c++17 emcc_flags.inc.sh already supplies. The
+# later flag wins so the effective standard is the same either way, but it is
+# one more flag on CMake's compile line that build.sh's never has -- and the
+# wasm-toolchain CI job byte-diffs the two builds. emcc_flags.inc.sh owns the
+# standard, as it owns every other compile flag here.
 
 # Always emit compile_commands.json (clangd / IDE tooling). The native
 # solver-test build (build_solver_test.sh) writes its own — this covers the
@@ -10,9 +14,32 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ---------------------------------------------------------------------------
-# NOTE: build.sh is the CI / source-of-truth build. This CMake project is a
-# convenience for local IDE / clangd / advanced use; it is not run in CI.
+# NOTE: build.sh remains the source-of-truth build -- it is what produces the
+# artifacts CI uploads and the site ships. This CMake project exists for local
+# IDE / clangd use AND as a cross-check: the `wasm-toolchain` CI job configures
+# it with emcmake and byte-diffs its dice_physics.wasm against build.sh's (see
+# scripts/verify-cmake-wasm-parity.sh). Keep the two in sync -- a divergence
+# here is a real failure, not an IDE-only inconvenience.
 # ---------------------------------------------------------------------------
+
+# emcc_flags.inc.sh owns the optimisation level and every -D. CMake's own
+# per-config flags would silently diverge from build.sh -- most visibly
+# -DNDEBUG, which CMAKE_CXX_FLAGS_RELEASE adds and build.sh never passes,
+# changing libc++ hardening assertions and therefore the emitted code. Clear
+# the per-config slots so target_compile_options / LINK_FLAGS (both derived
+# from emcc_flags.sh) are the whole story. CMAKE_CXX_FLAGS itself is left
+# alone: the Emscripten toolchain file uses it for sysroot plumbing.
+foreach(cfg DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    set(CMAKE_CXX_FLAGS_${cfg} "")
+    set(CMAKE_EXE_LINKER_FLAGS_${cfg} "")
+endforeach()
+
+# Where the wasm/ and wasm-scalar/ output dirs live. Defaults to the repo's
+# public/ so a plain local configure lands exactly where build.sh puts things.
+# scripts/verify-cmake-wasm-parity.sh points it at a scratch dir instead, so
+# comparing the two builds never overwrites the artifacts CI uploads.
+set(DICE_WASM_OUTPUT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../public" CACHE PATH
+    "Parent directory for the wasm/ and wasm-scalar/ output directories")
 
 # ---------------------------------------------------------------------------
 # Source files — dice_physics.cpp (Embind bindings) + the DicePhysicsEngine
@@ -87,7 +114,7 @@ target_compile_options(dice_physics PRIVATE ${EM_COMPILE_FLAGS_LIST})
 # can resolve the binary with a relative URL. Matches build.sh's SIMD output.
 # ---------------------------------------------------------------------------
 set_target_properties(dice_physics PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../../public/wasm"
+    RUNTIME_OUTPUT_DIRECTORY "${DICE_WASM_OUTPUT_ROOT}/wasm"
 )
 
 # ---------------------------------------------------------------------------
@@ -125,7 +152,7 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
         OUTPUT_NAME "dice_physics"
         SUFFIX ".js"
         LINK_FLAGS "${EM_LINK_FLAGS_SCALAR}"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../../public/wasm-scalar"
+        RUNTIME_OUTPUT_DIRECTORY "${DICE_WASM_OUTPUT_ROOT}/wasm-scalar"
     )
 
     # -DDICE_FORCE_SCALAR_SAT is a preprocessor define — compile-time only.

@@ -48,7 +48,7 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 - [x] Mirror spawn/throw/remove lifecycle events into the WASM world.
 - [x] **Phase 3:** Build-time convex-hull extraction from Draco-compressed GLB models.
 - [x] **Phase 3:** SAT-based polyhedral collision detection (die-die + die-table).
-- [x] **Phase 3:** Deterministic xorshift64* PRNG + state serialization for replay.
+- [x] **Phase 3:** Deterministic xorshift64\* PRNG + state serialization for replay.
 - [x] **Phase 3:** Collision event buffer for audio/gameplay hooks.
 - [x] **Phase 3:** Hardening — max dice limits, hull vertex limits, memory caps, NaN checks.
 - [x] **Phase 3:** Experimental Web Worker bridge (`WorkerPhysicsBridge.ts`).
@@ -235,16 +235,60 @@ Do **not** add `-ffast-math` or `PRECISE_F32=0` — seeded replay depends on IEE
 
 ##### EMSDK upgrade backlog (`--closure 1`, `-s STRICT=1`, `-fno-rtti`, `-fno-exceptions`)
 
-Four flags are commented in `emcc_flags.inc.sh` as "re-evaluate on EMSDK upgrade" but have never actually been re-evaluated against a newer toolchain — the comments describe _why they were off on 3.1.61_ (the version pinned since this file existed), not a result of testing a newer one. This needs a real EMSDK checkout to do safely; it was not attempted in an environment without one (an LLM coding session without network access to fetch/build emsdk, for instance), since blindly flipping any of these and pushing is exactly the kind of change that can silently break the release build or bloat the glue in a way CI's existing checks won't catch.
+Four flags are commented in `emcc_flags.inc.sh` as "re-evaluate on EMSDK
+upgrade". The comments describe _why they were off on 3.1.61_ — the version
+pinned since this file existed — not a result of testing a newer toolchain.
 
-Procedure for whoever picks this up, one flag at a time (not all four in a single branch — if the combination fails, you want to know which flag caused it):
+**Status:** still 3.1.61, and none of the four has been measured against a
+newer EMSDK. The blocker was never the decision, it was that nobody could run
+the experiment: it needs a real emsdk checkout, which an environment without
+network access to fetch and build one cannot provide.
 
-1. `git checkout -b emsdk-bump` and bump `EMSDK_VERSION` in `.github/workflows/ci.yml` (currently `3.1.61`) plus any local `emsdk_env.sh` checkout to match.
-2. Add the flag to `EMCC_COMMON` (or a profile-specific array) in `emcc_flags.inc.sh`, run `npm run build:wasm`, and watch for a build failure first — `--closure 1` and `-s STRICT=1` are the likely failure points per the existing comment (Embind + `EXPORT_ES6` glue).
-3. If it builds: run `npm run test:solver` (native, unaffected by emcc flags but confirms nothing else broke) then `node scripts/compare-solver-golden.mjs` against the built `public/wasm/dice_physics.wasm` — the WASM parity check only runs when that artifact exists, so this is the one environment where it actually executes.
-4. Record the glue size delta (`build-info.json`'s `js_bytes`/`wasm_bytes`, or a manual `wc -c`) for `--closure 1` specifically — it's a size-only flag, so a failure to build is the only reason not to keep it; there's no correctness question once it builds.
-5. For `-fno-rtti` / `-fno-exceptions`: Embind's own generated glue may use RTTI/exceptions internally even if the app's own C++ error paths don't, so "it builds" isn't sufficient — also grep the generated `.js` for stripped-down dynamic_cast/exception-string remnants, and run the full page's error paths (a malformed hull, an out-of-range static/dynamic add) to confirm Embind still reports errors sanely rather than trapping.
-6. Whatever survives, update `emcc_flags.inc.sh`'s comment block to describe the _new_ pinned version's status instead of 3.1.61's, so the next person isn't re-deriving this from scratch. Whatever doesn't survive, leave the comment as-is but note the EMSDK version it was last tried against.
+That is now automated. `.github/workflows/emsdk-experiment.yml` is a
+`workflow_dispatch`-only workflow that runs `scripts/emsdk-flag-experiment.sh`
+on a candidate EMSDK and, for contrast, on the pinned one. The script links
+five variants (`baseline`, `strict`, `closure`, `no-rtti`, `all`) into a
+scratch directory — it reads `emcc_flags.inc.sh` and never modifies it, so the
+shipped build is untouched — and for each one records:
+
+- whether it **links**,
+- whether the artifact **loads and runs** in Node
+  (`scripts/emsdk-variant-probe.mjs`, which exercises three different Embind
+  shapes: a registered vector via `serializeState`, an `emscripten::val`
+  `typed_memory_view` via `getFaceValues`, and a `uint64_t`/BigInt argument via
+  `seedRNG`),
+- whether the physics **fingerprint matches the baseline**,
+- the **glue JS and wasm byte counts**.
+
+Linking is deliberately not treated as success. `--closure 1` mangles Embind
+glue in ways that only appear at load time, and `-fno-rtti` can break Embind's
+type registry with no diagnostic at all — which is exactly why "it builds" was
+never a safe basis for flipping these.
+
+The candidate job additionally runs `npm run build:wasm`, `npm run test:solver`
+(native tests, goldens, and native↔WASM serialize parity) and
+`scripts/compare-solver-simd.mjs` on the new toolchain, because a newer EMSDK
+must reproduce the same physics as the pinned one or seeded replay breaks
+mid-roll for anyone on an older artifact.
+
+To act on a result:
+
+1. Run the workflow from the Actions tab against the candidate version.
+2. Paste both job summaries into the tracking issue and into this section,
+   naming the EMSDK version each was measured on.
+3. Only then change `EMSDK_VERSION` in `.github/workflows/ci.yml` — and
+   `PINNED_EMSDK_VERSION` in `emsdk-experiment.yml` alongside it;
+   `scripts/verify-emcc-flags-sync.sh` fails the build if the two drift, so a
+   stale control row cannot quietly invalidate the next experiment.
+4. Add only the flags that passed to `emcc_flags.inc.sh`, one per commit, and
+   rewrite the comment block there to describe the _new_ pinned version's
+   status rather than 3.1.61's.
+
+For `-fno-rtti` / `-fno-exceptions` specifically, a green probe is necessary
+but still not sufficient: Embind's generated glue may use RTTI or exceptions
+internally even where the engine's own C++ does not. Also exercise the real
+error paths (a malformed hull, an out-of-range static/dynamic add) in a browser
+and confirm Embind still reports errors rather than trapping.
 
 #### Debug flag set
 
@@ -273,6 +317,40 @@ npm run test:solver
 # Tune fuzz volume (default 2000 seeds, ~6 s on CI):
 FUZZ_SEEDS=500 npm run test:solver
 ```
+
+Compiled with `-std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror`. The engine TUs
+are warning-clean under g++ 13 and clang 18 and CI pins `ubuntu-latest`, so a
+new warning is signal rather than toolchain noise. If a newer local compiler
+disagrees, `SOLVER_NO_WERROR=1 npm run test:solver` gets you moving — but the
+fix belongs in the code, not in dropping the flag.
+
+#### clang-tidy (`npm run lint:cpp`)
+
+```bash
+npm run lint:cpp                      # analyses the engine_sources.txt TUs
+CLANG_TIDY=clang-tidy-18 npm run lint:cpp
+```
+
+`scripts/run-clang-tidy-engine.sh` runs clang-tidy over every translation unit
+listed in `engine_sources.txt`, against the `build-native/compile_commands.json`
+that `build_solver_test.sh` writes (it runs that script first if the database is
+missing, so this works from a clean checkout). The `test-solver` CI job runs it
+right after the tests, for that ordering.
+
+Enabled: `bugprone-*`, `clang-analyzer-*`, `performance-*`, `misc-*`, `cert-*`,
+with `WarningsAsErrors: '*'` — the sources are clean under that set, so any
+finding is a regression. `src/wasm/.clang-tidy` lists every disabled check
+beside the reason it is wrong for this codebase; add to that list (with a
+reason) rather than silencing findings inline.
+
+Two things are deliberately out of scope. `third_party/doctest.h` is vendored,
+and `dice_physics.cpp` includes `<emscripten/bind.h>`, which the native
+database has no include path for — clang-tidy can only emit a parse error on
+it. Covering the Embind bindings would mean analysing against the emcc
+database, which exists only where an EMSDK does.
+
+`readability-*` is not enabled: it wants member-init and member-to-static
+churn across exactly the structures the SoA work is going to rewrite.
 
 `test:solver` also runs `scripts/compare-solver-golden.mjs` against
 `tests/fixtures/solver-golden.json` (FNV-1a of `serializeState()` after named
@@ -313,7 +391,8 @@ Source layout:
 | `build_solver_test.sh`                           | Native compile + run script; always writes `build-native/compile_commands.json`                                                                                |
 | `generate-clangd-db.sh`                          | Merges `build-native/compile_commands.json` with an emcc-configured `build-emcc/compile_commands.json` into `compile_commands.json` (`npm run wasm:clangd-db`) |
 | `.clangd`                                        | Points clangd at the merged `compile_commands.json` (`CompilationDatabase: .`)                                                                                 |
-| `CMakeLists.txt`                                 | Local IDE / advanced-user build (SIMD + scalar targets) — **not** the CI build; see below                                                                      |
+| `CMakeLists.txt`                                 | IDE / clangd build (SIMD + scalar targets). `build.sh` still ships; CI byte-diffs the two — see below                                                          |
+| `.clang-tidy`                                    | Check set for `dice_physics/**` (`npm run lint:cpp`, run by the `test-solver` CI job); documents every disabled check and why                                  |
 
 Add a new engine module to `engine_sources.txt` once — `build.sh`,
 `build_solver_test.sh`, and `CMakeLists.txt` all read that list, so there is
@@ -327,6 +406,14 @@ dead code in the editor. Run `npm run wasm:clangd-db` (needs an EMSDK on
 an EMSDK the script still produces a working native-only db instead of
 failing, so clangd keeps functioning, just without the emcc-only branches
 resolved.
+
+CI runs that merge too. The `wasm-toolchain` job has an EMSDK, so it produces
+the full native + emcc database and uploads it as the **`clangd-compile-commands`**
+artifact. Two reasons that matters: it proves the merge still works after an
+`engine_sources.txt` or flag change (it used to be exercised only on whoever's
+laptop last ran it), and anyone without a local EMSDK can download the artifact
+into `src/wasm/compile_commands.json` and get real `__wasm_simd128__` coverage
+in their editor instead of greyed-out branches.
 
 ### Runtime flags
 
@@ -401,11 +488,39 @@ Output files land in `public/wasm/`:
 
 ### CMake alternative (advanced)
 
-**`build.sh` is the CI source of truth.** CMake is a convenience for local
-IDE / clangd / advanced use and is not run in CI. It uses the same release
-flags as `build.sh` via `emcc_flags.sh --print-link-line release`, exports
-`compile_commands.json` (`CMAKE_EXPORT_COMPILE_COMMANDS ON`), and configures
-two targets mirroring `build.sh`'s SIMD + scalar outputs:
+**`build.sh` is the source of truth** — it produces the artifacts CI uploads
+and the site ships. CMake is what clangd and IDE tooling see. Those two used to
+be related only by a text comparison of flag strings
+(`scripts/verify-emcc-flags-sync.sh`), which cannot catch CMake injecting flags
+of its own; the real case was `CMAKE_CXX_FLAGS_RELEASE`'s `-DNDEBUG`, which
+`build.sh` never passes.
+
+The `wasm-toolchain` CI job now closes that gap:
+`scripts/verify-cmake-wasm-parity.sh` (`npm run verify:cmake-wasm`) builds both
+profiles with `build.sh`, builds them again through `emcmake cmake`, and `cmp`s
+the `.wasm` files. A difference fails the job. CMakeLists.txt clears every
+`CMAKE_CXX_FLAGS_<CONFIG>` / `CMAKE_EXE_LINKER_FLAGS_<CONFIG>` slot so the only
+flags in play are the ones `emcc_flags.sh` prints, and
+`verify-emcc-flags-sync.sh` asserts that clearing stays in place (the byte diff
+would catch a regression too, but only in the job that has an EMSDK, and its
+failure message is much further from the cause).
+
+On a mismatch the script prints sizes, sha256s, the first differing byte, and —
+via `scripts/wasm-section-diff.mjs` — **which wasm section diverged**. That last
+one is the useful part: a difference confined to a custom section (`name`,
+`producers`) is absolute build paths leaking in, fixable with
+`-ffile-prefix-map`; a difference in `code` means the two builds genuinely
+generate different physics.
+
+The parity script writes CMake's output to a scratch directory
+(`-DDICE_WASM_OUTPUT_ROOT=…`), so comparing the builds never overwrites
+`public/wasm/`. A plain local configure still defaults to `public/`, exactly
+where `build.sh` puts things.
+
+CMake uses the same release flags as `build.sh` via
+`emcc_flags.sh --print-link-line release`, exports `compile_commands.json`
+(`CMAKE_EXPORT_COMPILE_COMMANDS ON`), and configures two targets mirroring
+`build.sh`'s SIMD + scalar outputs:
 
 ```bash
 mkdir build && cd build
@@ -531,7 +646,7 @@ const engine = getWasmEngine();
 
 | Method             | Signature                | Description                                 |
 | ------------------ | ------------------------ | ------------------------------------------- |
-| `seedRNG`          | `(seed: u64): void`      | Seed the internal xorshift64* generator.    |
+| `seedRNG`          | `(seed: u64): void`      | Seed the internal xorshift64\* generator.   |
 | `randomFloat`      | `(): f32`                | Return next deterministic float in `[0,1)`. |
 | `serializeState`   | `(): VectorU8`           | Snapshot all body states to a byte vector.  |
 | `deserializeState` | `(data: VectorU8): void` | Restore a snapshot.                         |
@@ -768,4 +883,82 @@ const t2 = window.__app.getWasmEngine().getTransforms();
 - [x] `MAX_DYNAMICS` raised 64 → 256 now that dynamics-involving pairs are grid-broadphased rather than brute-forced; `workerLayout.ts`'s mirrored `MAX_DYNAMICS` (sizes the dynamics SharedArrayBuffer) bumped to match — the two had been kept in sync only because both happened to be 64.
 - [x] `collectDieDynamicPairsForTesting` / `collectDynamicPairsForTesting` test hooks + a dedicated doctest verify the grid produces the exact same pair _set_ as brute force on a dense, boundary-straddling layout. Post-simulation trajectories are allowed to diverge between the two paths (a sequential-impulse solver is iteration-order-sensitive, and grid vs. brute-force visit candidate pairs in a different order) — invariants (finite, in-bounds) are checked on both instead of requiring byte-identical `serializeState()`, unlike the pre-existing die-die grid-vs-brute test, which happens to stay byte-identical for its specific low-chaos layout.
 - [x] Cached rotation matrix (`BodyView::invInertiaWorldMat`, `inertiaWorldMat3` in `dice_physics/dice_sat.hpp`): `solveVelocityConstraints` rebuilds a `BodyView` once per (velocity iteration, manifold) and then calls `applyInvInertiaWorld` up to ~3x per contact point against it (normal + up to 2 tangents), with a rotation that is constant across all of those calls within one substep. Precomputing `R * diag(invInertia) * R^T` once at `BodyView` construction (`viewDie`/`viewDyn`) and reusing it as a single `Mat3::mul` replaces two quaternion rotates per call with one matrix-vector multiply. Verified mathematically equivalent to the old two-quaternion-rotate formula via a dedicated doctest (5000 random rotations/vectors/inertias, 1e-4 tolerance) before wiring it in; SOLVER_REVISION bumped anyway since the floating-point operation order (and therefore golden hashes) changed. `RigidBody`/`DynamicBody`'s own `applyInvInertiaWorld` — used only by `applyTorqueImpulse`, a single call per user API invocation, not a hot loop — is deliberately left on the quaternion form: a body-resident cache would need invalidating at every site that mutates `rotation` or `invInertia` (`setDieTransform`, `setDieHull`, `deserializeState`, ...), which is easy to miss and silently produce subtly-wrong physics; `BodyView` sidesteps that because it's always rebuilt fresh from the live body right before use.
-- [ ] Deferred: full SoA layout (`position`/`velocity`/`angularVelocity`/sleep as separate parallel arrays instead of `std::vector<RigidBody>`) for the actual SIMD win the cached rotation matrix above is a precursor to. Not attempted here — it touches nearly every file under `dice_physics/` (integration, both collision-static and collision-dynamic, the solver, face-value) and its payoff can only really be judged against a real before/after SIMD benchmark in the actual WASM build, which this environment cannot produce (no EMSDK). Whoever picks this up should keep `DICE_FORCE_SCALAR_SAT` byte-compatible per `scripts/compare-solver-simd.mjs`, same as the existing SIMD work above.
+- [ ] Deferred (still open; see "Still deferred after Phase 9" below): full SoA layout (`position`/`velocity`/`angularVelocity`/sleep as separate parallel arrays instead of `std::vector<RigidBody>`) for the actual SIMD win the cached rotation matrix above is a precursor to. Not attempted here — it touches nearly every file under `dice_physics/` (integration, both collision-static and collision-dynamic, the solver, face-value) and its payoff can only really be judged against a real before/after SIMD benchmark in the actual WASM build, which this environment cannot produce (no EMSDK). Whoever picks this up should keep `DICE_FORCE_SCALAR_SAT` byte-compatible per `scripts/compare-solver-simd.mjs`, same as the existing SIMD work above.
+
+### Phase 9 (Toolchain: CMake parity, clangd in CI, `-Werror`, clang-tidy)
+
+The hygiene half of the "compile commands + solver layout" work. **No behaviour
+change** — `SOLVER_REVISION` is untouched and goldens are unchanged; every item
+here is about making the build's existing invariants checkable instead of
+folkloric.
+
+- [x] `dice_engine_dynamics.cpp`'s file comment no longer claims "the small
+      `MAX_DYNAMICS` cap means all dynamic-involving pairs are brute-forced".
+      That has been false since Phase 8. It now names `dynGridCells_` /
+      `rebuildDynGrid` / `forEachDieDynamicPair`, says `MAX_DYNAMICS` (256) is a
+      memory and event-budget cap rather than a brute-force-cost cap, and says
+      not to reintroduce nested loops on the old assumption. The comment was
+      going to mislead exactly the person picking up the SoA/broadphase work.
+- [x] **CMake is byte-checked against `build.sh` in CI.**
+      `scripts/verify-cmake-wasm-parity.sh` (`npm run verify:cmake-wasm`, run by
+      the new `wasm-toolchain` job) builds both profiles each way and `cmp`s the
+      `.wasm` files. `verify-emcc-flags-sync.sh` only ever compared flag
+      _strings_, which cannot catch CMake adding flags of its own —
+      `CMAKE_CXX_FLAGS_RELEASE`'s `-DNDEBUG`, which `build.sh` never passes, was
+      the real instance. CMakeLists.txt now clears every
+      `CMAKE_CXX_FLAGS_<CONFIG>` / `CMAKE_EXE_LINKER_FLAGS_<CONFIG>` slot, and
+      `verify-emcc-flags-sync.sh` asserts that clearing stays.
+- [x] Mismatches are diagnosable rather than just red:
+      `scripts/wasm-section-diff.mjs` reports **which wasm section** diverged, so
+      "only the `name` custom section differs" (absolute build paths leaking in,
+      an `-ffile-prefix-map` fix) is distinguishable from "`code` differs" (the
+      two builds generate different physics). `DICE_CMAKE_PARITY_STRICT=0`
+      downgrades the failure to a report while diagnosing.
+- [x] CMake's wasm output root is a cache variable (`DICE_WASM_OUTPUT_ROOT`,
+      default `public/`), so the parity build writes to a scratch dir and can
+      never clobber the artifacts CI uploads.
+- [x] **The merged clangd database is produced in CI** and uploaded as the
+      `clangd-compile-commands` artifact. `npm run wasm:clangd-db` previously ran
+      only on whoever's machine remembered to; now an `engine_sources.txt` or
+      flag change that breaks the merge fails a job, and anyone without a local
+      EMSDK can download a database in which `__EMSCRIPTEN__` /
+      `__wasm_simd128__` actually resolve.
+- [x] Native solver tests compile with **`-Werror`** (`SOLVER_NO_WERROR=1` is the
+      documented local escape hatch). Nothing had to be fixed: g++ 13 and clang
+      18 were both already clean at `-Wall -Wextra -Wpedantic`.
+- [x] **clang-tidy** on `dice_physics/**` (`npm run lint:cpp`, in the
+      `test-solver` job): `bugprone-*`, `clang-analyzer-*`, `performance-*`,
+      `misc-*`, `cert-*`, `WarningsAsErrors: '*'`. The engine is clean under this
+      set today, so a finding is a regression. `src/wasm/.clang-tidy` documents
+      each disabled check next to why it is wrong here — notably
+      `bugprone-misplaced-widening-cast`, which fires on the broadphase's
+      `static_cast<size_t>(gridCols_ * gridRows_)` where the grid dimensions are
+      clamped small. `third_party/doctest.h` and `dice_physics.cpp` (needs
+      emscripten headers the native database lacks) are out of scope.
+- [x] The EMSDK flag question is now measurable on demand rather than
+      perpetually deferred — see
+      [EMSDK upgrade backlog](#emsdk-upgrade-backlog---closure-1--s-strict1--fno-rtti--fno-exceptions)
+      above for `.github/workflows/emsdk-experiment.yml` and what a passing
+      variant has to prove. **The pin is still 3.1.61**: the workflow is the
+      record-producing mechanism, and no result exists until someone dispatches
+      it.
+
+#### Still deferred after Phase 9
+
+- [ ] **SoA hot fields** (`position` / `velocity` / `angularVelocity` /
+      `sleeping` as parallel arrays; hull and face tables stay AoS; `BodyView`
+      stays the per-manifold adapter). Unchanged from the Phase 8 note below: it
+      touches nearly every file under `dice_physics/`, it is a behaviour change
+      (`SOLVER_REVISION` bump, regenerated goldens, `solver_build_mismatch` for
+      guests on old WASM), and its payoff can only be judged against a real
+      before/after **WASM SIMD** benchmark — not a native one, since the native
+      build is scalar. Phase 9 deliberately shipped the guardrails that work
+      needs first: `compare-solver-simd.mjs` byte-parity is already enforced,
+      `-Werror` and clang-tidy now cover the files it will rewrite, and the CMake
+      byte-diff means the IDE and the shipped build cannot silently disagree
+      about a layout change.
+- [ ] **Island stepping order made canonical**, and optionally `-pthread` +
+      `PTHREAD_POOL_SIZE` for independent islands (COOP/COEP is already on).
+      Determinism must not depend on thread arrival order; if that cannot be
+      _proven_, this does not ship. Seeded replay is the product feature at
+      stake, not an implementation detail.

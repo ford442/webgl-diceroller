@@ -6,8 +6,16 @@
  * Dynamic props live in their own `dynamics_` vector, separate from dice's
  * `bodies_`. This mirrors the static-collider lifecycle (caller-supplied id,
  * capacity-checked vector) while participating in the solver like a die
- * (integrated, collides, sleeps). The small MAX_DYNAMICS cap means all
- * dynamic-involving pairs are brute-forced rather than broadphased.
+ * (integrated, collides, sleeps).
+ *
+ * Broadphase: since Phase 8 (docs/WASM_ENGINE.md) die-dynamic and
+ * dynamic-dynamic pairs are NOT brute-forced. Dynamics get their own per-cell
+ * bucket (`dynGridCells_`, rebuilt by `rebuildDynGrid` in
+ * dice_engine_solver.cpp) sharing the die grid's dimensions and origin; the
+ * templated `forEachDieDynamicPair` / `forEachDynamicPair` in
+ * dice_physics_engine.hpp walk it. `MAX_DYNAMICS` (256) is therefore a memory /
+ * event-budget cap, not a brute-force-cost cap -- do not reintroduce nested
+ * loops here on the assumption that the cap keeps them cheap.
  */
 
 #include "../dice_physics_engine.hpp"
