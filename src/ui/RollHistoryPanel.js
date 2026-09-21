@@ -1,32 +1,13 @@
 import { formatDiceSet, formatResultsSummary } from '../roll/RollHistory.js';
+import { createHudPanel, hudButton, guardPointerEvents } from './hudPanel.js';
 
-const FONT = "'Palatino Linotype', 'Book Antiqua', Palatino, serif";
 const GOLD = '#ffd700';
-const GOLD_DIM = '#e8c882';
 const GOLD_DARK = '#8B6914';
-const BG_PANEL = 'rgba(15, 9, 2, 0.94)';
-const BG_CARD = 'rgba(20, 10, 0, 0.92)';
-const BORDER = '1px solid rgba(139, 105, 20, 0.45)';
 const MUTED = '#a78a58';
 const PASS = '#8fd18f';
 const FAIL = '#ff8f7a';
 const OBSERVED = '#ffd66b';
 const EXPECTED = '#6486ff';
-
-function buttonStyle(extra = '') {
-    return `
-        background: rgba(139, 105, 20, 0.22);
-        color: ${GOLD_DIM};
-        border: 1px solid rgba(232, 200, 130, 0.28);
-        border-radius: 4px;
-        padding: 5px 8px;
-        cursor: pointer;
-        font-family: ${FONT};
-        font-size: 11px;
-        letter-spacing: 0.4px;
-        ${extra}
-    `;
-}
 
 /** @typedef {import('../types/roll').RollHistoryEntry} RollHistoryEntry */
 
@@ -52,107 +33,59 @@ export function createRollHistoryPanel({
     let activeTab = 'history';
     const expandedIds = new Set();
 
-    const toggleBtn = document.createElement('button');
+    const toggleBtn = hudButton('📜', 'hud-panel--history-toggle');
     toggleBtn.id = 'roll-history-toggle';
-    toggleBtn.type = 'button';
     toggleBtn.title = 'Roll history (H)';
     toggleBtn.setAttribute('aria-label', 'Toggle roll history');
-    toggleBtn.style.cssText = `
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        z-index: 1085;
-        width: 38px;
-        height: 38px;
-        border-radius: 8px;
-        border: ${BORDER};
-        background: ${BG_PANEL};
-        color: ${GOLD_DIM};
-        font-size: 18px;
-        cursor: pointer;
-        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
-    `;
-    toggleBtn.textContent = '📜';
-    toggleBtn.addEventListener('mousedown', (event) => event.stopPropagation());
     toggleBtn.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
         setVisible(!visible);
     });
+    mount.appendChild(toggleBtn);
 
-    const panel = document.createElement('div');
-    panel.id = 'roll-history-panel';
-    panel.style.cssText = `
-        position: absolute;
-        top: 56px;
-        left: 10px;
-        width: min(360px, calc(100vw - 20px));
-        max-height: calc(100% - 66px);
-        display: none;
-        flex-direction: column;
-        background: ${BG_PANEL};
-        border: ${BORDER};
-        border-radius: 10px;
-        color: ${GOLD_DIM};
-        font-family: ${FONT};
-        font-size: 12px;
-        z-index: 1080;
-        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
-        overflow: hidden;
-    `;
+    const hudPanel = createHudPanel({
+        id: 'roll-history-panel',
+        ariaLabel: 'Roll history and statistics',
+        anchor: 'top-left',
+        variant: 'display',
+        className: 'hud-panel--history',
+        parent: mount,
+    });
+    const { el: panel, body: content } = hudPanel;
+    panel.style.display = 'none';
 
     const header = document.createElement('div');
-    header.style.cssText = `
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 12px;
-        border-bottom: ${BORDER};
-        background: rgba(139, 105, 20, 0.18);
-    `;
+    header.className = 'hud-panel--history__header';
 
     const title = document.createElement('div');
-    title.style.cssText =
-        'font-size:14px;font-weight:bold;letter-spacing:0.6px;color:' + GOLD + ';';
+    title.className = 'hud-panel--history__title';
     title.textContent = 'Roll Chronicle';
 
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.textContent = '✕';
+    const closeBtn = hudButton('✕');
     closeBtn.title = 'Close (H)';
-    closeBtn.style.cssText = buttonStyle('padding:2px 7px;');
     closeBtn.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
         setVisible(false);
     });
-    closeBtn.addEventListener('mousedown', (event) => event.stopPropagation());
 
     header.appendChild(title);
     header.appendChild(closeBtn);
 
     const tabRow = document.createElement('div');
-    tabRow.style.cssText = `
-        display: flex;
-        gap: 6px;
-        padding: 8px 12px 0;
-    `;
+    tabRow.className = 'hud-row hud-panel--history__tabs';
 
-    const historyTab = document.createElement('button');
-    historyTab.type = 'button';
-    historyTab.textContent = 'History';
+    const historyTab = hudButton('History');
     historyTab.dataset.tab = 'history';
+    historyTab.style.flex = '1';
 
-    const statsTab = document.createElement('button');
-    statsTab.type = 'button';
-    statsTab.textContent = 'Statistics';
+    const statsTab = hudButton('Statistics');
     statsTab.dataset.tab = 'statistics';
+    statsTab.style.flex = '1';
 
     const tabs = [historyTab, statsTab];
     tabs.forEach((tab) => {
-        tab.style.cssText = buttonStyle('flex:1;');
-        tab.addEventListener('mousedown', (event) => event.stopPropagation());
         tab.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -162,34 +95,21 @@ export function createRollHistoryPanel({
         tabRow.appendChild(tab);
     });
 
-    const content = document.createElement('div');
-    content.style.cssText = `
-        flex: 1;
-        overflow-y: auto;
-        padding: 10px 12px 12px;
-    `;
-
     const footer = document.createElement('div');
-    footer.style.cssText = `
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        padding: 8px 12px 12px;
-        border-top: ${BORDER};
-        background: rgba(0, 0, 0, 0.12);
-    `;
+    footer.className = 'hud-row hud-row--wrap hud-panel--history__footer';
 
-    panel.appendChild(header);
-    panel.appendChild(tabRow);
-    panel.appendChild(content);
+    // Rebuild the panel's own header (title/close/tabs are bespoke; the
+    // primitive's default header only covers the title+collapse pattern).
+    // `content` (the primitive's body, styled via #roll-history-panel .hud-panel__body)
+    // is used directly as the scrollable area.
+    panel.insertBefore(tabRow, content);
+    panel.insertBefore(header, tabRow);
     panel.appendChild(footer);
-    mount.appendChild(toggleBtn);
-    mount.appendChild(panel);
 
     function setVisible(next) {
         visible = next;
         panel.style.display = visible ? 'flex' : 'none';
-        toggleBtn.style.outline = visible ? `2px solid ${GOLD_DIM}` : 'none';
+        toggleBtn.style.outline = visible ? `2px solid ${GOLD_DARK}` : 'none';
         if (visible) render();
     }
 
@@ -200,48 +120,30 @@ export function createRollHistoryPanel({
     function updateTabStyles() {
         tabs.forEach((tab) => {
             const selected = tab.dataset.tab === activeTab;
-            tab.style.background = selected
-                ? 'rgba(232, 200, 130, 0.22)'
-                : 'rgba(139, 105, 20, 0.22)';
-            tab.style.color = selected ? GOLD : GOLD_DIM;
-            tab.style.fontWeight = selected ? 'bold' : 'normal';
+            tab.classList.toggle('hud-btn--selected', selected);
         });
     }
 
     function renderHistoryTab() {
         const entries = rollHistory.getEntries();
         if (entries.length === 0) {
-            content.innerHTML = `<div style="color:${MUTED};font-style:italic;line-height:1.5;">No rolls yet. Throw some dice and they will appear here.</div>`;
+            content.innerHTML = `<div class="hud-panel--history__empty">No rolls yet. Throw some dice and they will appear here.</div>`;
             return;
         }
 
         const list = document.createElement('div');
-        list.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
+        list.className = 'hud-panel--history__list';
 
         entries.forEach((entry, index) => {
             const expanded = expandedIds.has(entry.id);
             const row = document.createElement('div');
-            row.style.cssText = `
-                border: 1px solid rgba(139, 105, 20, 0.22);
-                border-radius: 8px;
-                background: ${index === 0 ? 'rgba(139, 105, 20, 0.14)' : BG_CARD};
-                overflow: hidden;
-            `;
+            row.className = 'hud-panel--history__entry';
+            if (index === 0) row.classList.add('hud-panel--history__entry--latest');
 
             const summaryBtn = document.createElement('button');
             summaryBtn.type = 'button';
-            summaryBtn.style.cssText = `
-                display: block;
-                width: 100%;
-                text-align: left;
-                background: transparent;
-                border: 0;
-                color: inherit;
-                cursor: pointer;
-                padding: 8px 10px;
-                font-family: ${FONT};
-            `;
-            summaryBtn.addEventListener('mousedown', (event) => event.stopPropagation());
+            summaryBtn.className = 'hud-panel--history__entry-summary';
+            guardPointerEvents(summaryBtn);
 
             const time = new Date(entry.timestamp).toLocaleString([], {
                 month: 'short',
@@ -255,7 +157,7 @@ export function createRollHistoryPanel({
 
             summaryBtn.innerHTML = `
                 <div style="font-size:10px;color:${GOLD_DARK};">${time}</div>
-                <div style="margin-top:3px;font-size:12px;color:${GOLD_DIM};line-height:1.4;">
+                <div style="margin-top:3px;font-size:12px;color:var(--hud-fg);line-height:1.4;">
                     ${setLabel ? `<span style="color:${MUTED};">${setLabel}</span><br>` : ''}
                     ${summary}
                 </div>
@@ -275,23 +177,13 @@ export function createRollHistoryPanel({
 
             if (expanded) {
                 const details = document.createElement('div');
-                details.style.cssText = `
-                    padding: 0 10px 10px;
-                    border-top: 1px solid rgba(139, 105, 20, 0.18);
-                `;
+                details.className = 'hud-panel--history__entry-details';
 
                 const diceGrid = document.createElement('div');
-                diceGrid.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;';
+                diceGrid.className = 'hud-panel--history__die-grid';
                 entry.diceResults.forEach((result) => {
                     const chip = document.createElement('div');
-                    chip.style.cssText = `
-                        min-width: 48px;
-                        padding: 4px 8px;
-                        border-radius: 6px;
-                        border: 1px solid rgba(139, 105, 20, 0.35);
-                        background: rgba(0, 0, 0, 0.18);
-                        text-align: center;
-                    `;
+                    chip.className = 'hud-panel--history__die-chip';
                     chip.innerHTML = `
                         <div style="font-size:9px;color:${GOLD_DARK};text-transform:uppercase;">${result.type}</div>
                         <div style="font-size:18px;color:${GOLD};font-weight:bold;">${result.value}</div>
@@ -302,17 +194,13 @@ export function createRollHistoryPanel({
 
                 if (entry.expression) {
                     const expr = document.createElement('div');
-                    expr.style.cssText = `margin-top:8px;color:${MUTED};font-size:11px;`;
+                    expr.className = 'hud-panel--history__meta-line';
                     expr.textContent = `Expression: ${entry.expression}`;
                     details.appendChild(expr);
                 }
 
                 if (entry.seed != null && typeof onReplay === 'function') {
-                    const replayBtn = document.createElement('button');
-                    replayBtn.type = 'button';
-                    replayBtn.textContent = `↻ Replay seed ${entry.seed}`;
-                    replayBtn.style.cssText = buttonStyle('margin-top:8px;');
-                    replayBtn.addEventListener('mousedown', (event) => event.stopPropagation());
+                    const replayBtn = hudButton(`↻ Replay seed ${entry.seed}`, 'hud-mt-xs');
                     replayBtn.addEventListener('click', (event) => {
                         event.preventDefault();
                         event.stopPropagation();
@@ -321,7 +209,7 @@ export function createRollHistoryPanel({
                     details.appendChild(replayBtn);
                 } else if (entry.seed != null) {
                     const seedLabel = document.createElement('div');
-                    seedLabel.style.cssText = `margin-top:8px;color:${MUTED};font-size:11px;`;
+                    seedLabel.className = 'hud-panel--history__meta-line';
                     seedLabel.textContent = `Seed: ${entry.seed}`;
                     details.appendChild(seedLabel);
                 }
@@ -341,21 +229,21 @@ export function createRollHistoryPanel({
         const minSampleSize = rollStats.minSampleSize ?? 100;
 
         if (stats.length === 0) {
-            content.innerHTML = `<div style="color:${MUTED};font-style:italic;line-height:1.5;">Statistics appear after your first settled roll.</div>`;
+            content.innerHTML = `<div class="hud-panel--history__empty">Statistics appear after your first settled roll.</div>`;
             return;
         }
 
         const intro = document.createElement('div');
-        intro.style.cssText = `color:${MUTED};line-height:1.45;margin-bottom:10px;`;
+        intro.className = 'hud-panel--history__intro';
         intro.textContent = `Face distributions with expected-vs-actual mean. Chi-squared fairness activates after ${minSampleSize}+ rolls per die type (95% confidence).`;
 
         const sections = document.createElement('div');
-        sections.style.cssText = 'display:flex;flex-direction:column;gap:10px;';
+        sections.className = 'hud-panel--history__sections';
 
         stats.forEach((stat) => {
             const expected = stat.totalRolls / stat.sides;
             const maxObserved = Math.max(...stat.observedCounts, expected, 1);
-            const statusColor = !stat.hasEnoughSamples ? GOLD_DIM : stat.passes ? PASS : FAIL;
+            const statusColor = !stat.hasEnoughSamples ? GOLD_DARK : stat.passes ? PASS : FAIL;
             const statusText = !stat.hasEnoughSamples
                 ? `warming up (${Math.max(0, minSampleSize - stat.totalRolls)} to go)`
                 : stat.passes
@@ -369,7 +257,7 @@ export function createRollHistoryPanel({
                     const expectedWidth = `${(expected / maxObserved) * 100}%`;
                     return `
                     <div style="display:grid;grid-template-columns:28px 1fr 56px;gap:8px;align-items:center;">
-                        <div style="color:${GOLD_DIM};font-variant-numeric:tabular-nums;">${face}</div>
+                        <div style="color:var(--hud-fg);font-variant-numeric:tabular-nums;">${face}</div>
                         <div style="display:flex;align-items:center;gap:4px;height:10px;">
                             <div style="height:10px;width:${observedWidth};min-width:${count > 0 ? '2px' : '0'};background:${OBSERVED};border-radius:999px;"></div>
                             <div style="height:6px;width:${expectedWidth};background:${EXPECTED};opacity:0.8;border-radius:999px;"></div>
@@ -381,12 +269,7 @@ export function createRollHistoryPanel({
                 .join('');
 
             const section = document.createElement('section');
-            section.style.cssText = `
-                padding: 8px 9px 9px;
-                background: rgba(255, 255, 255, 0.03);
-                border: 1px solid rgba(232, 200, 130, 0.16);
-                border-radius: 6px;
-            `;
+            section.className = 'hud-panel--history__stat-section';
             section.innerHTML = `
                 <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
                     <div style="font-size:13px;color:${OBSERVED};font-weight:bold;">${stat.dieType}</div>
@@ -411,11 +294,8 @@ export function createRollHistoryPanel({
     function renderFooter() {
         footer.innerHTML = '';
 
-        const copyBtn = document.createElement('button');
-        copyBtn.type = 'button';
-        copyBtn.textContent = 'Copy log';
-        copyBtn.style.cssText = buttonStyle('flex:1;');
-        copyBtn.addEventListener('mousedown', (event) => event.stopPropagation());
+        const copyBtn = hudButton('Copy log');
+        copyBtn.style.flex = '1';
         copyBtn.addEventListener('click', async (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -431,11 +311,8 @@ export function createRollHistoryPanel({
             }
         });
 
-        const csvBtn = document.createElement('button');
-        csvBtn.type = 'button';
-        csvBtn.textContent = 'CSV';
-        csvBtn.style.cssText = buttonStyle('flex:1;');
-        csvBtn.addEventListener('mousedown', (event) => event.stopPropagation());
+        const csvBtn = hudButton('CSV');
+        csvBtn.style.flex = '1';
         csvBtn.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -449,11 +326,8 @@ export function createRollHistoryPanel({
             URL.revokeObjectURL(url);
         });
 
-        const clearHistoryBtn = document.createElement('button');
-        clearHistoryBtn.type = 'button';
-        clearHistoryBtn.textContent = 'Clear log';
-        clearHistoryBtn.style.cssText = buttonStyle('flex:1;');
-        clearHistoryBtn.addEventListener('mousedown', (event) => event.stopPropagation());
+        const clearHistoryBtn = hudButton('Clear log');
+        clearHistoryBtn.style.flex = '1';
         clearHistoryBtn.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -462,11 +336,8 @@ export function createRollHistoryPanel({
             render();
         });
 
-        const resetStatsBtn = document.createElement('button');
-        resetStatsBtn.type = 'button';
-        resetStatsBtn.textContent = 'Reset stats';
-        resetStatsBtn.style.cssText = buttonStyle('flex:1;');
-        resetStatsBtn.addEventListener('mousedown', (event) => event.stopPropagation());
+        const resetStatsBtn = hudButton('Reset stats');
+        resetStatsBtn.style.flex = '1';
         resetStatsBtn.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();

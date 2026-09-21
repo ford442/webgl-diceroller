@@ -1,8 +1,6 @@
 import { DEFAULT_MIN_SAMPLE_SIZE } from '../roll/RollStats.js';
+import { createHudPanel } from '../ui/hudPanel.js';
 
-const PANEL_FONT = "'Palatino Linotype', 'Book Antiqua', Palatino, serif";
-const PANEL_BG = 'rgba(15, 9, 2, 0.92)';
-const PANEL_BORDER = '1px solid rgba(232, 200, 130, 0.42)';
 const LABEL = '#e8c882';
 const MUTED = '#a78a58';
 const PASS = '#8fd18f';
@@ -15,32 +13,20 @@ export function createFairnessMonitor({
     rollStats = null,
     minSampleSize = DEFAULT_MIN_SAMPLE_SIZE,
 } = {}) {
+    let hudPanel = null;
     let panel = null;
 
     function init() {
         if (!enabled || panel || !rollStats) return;
 
-        const container = document.getElementById('canvas-container') || document.body;
-        panel = document.createElement('div');
-        panel.id = 'fairness-monitor-panel';
-        panel.style.cssText = `
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 340px;
-            max-height: calc(100% - 20px);
-            overflow-y: auto;
-            padding: 10px 12px 12px;
-            background: ${PANEL_BG};
-            border: ${PANEL_BORDER};
-            border-radius: 8px;
-            color: ${LABEL};
-            font-family: ${PANEL_FONT};
-            font-size: 12px;
-            z-index: 1090;
-            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
-        `;
-        container.appendChild(panel);
+        hudPanel = createHudPanel({
+            id: 'fairness-monitor-panel',
+            ariaLabel: 'Fairness monitor',
+            anchor: 'top-right',
+            variant: 'display',
+            className: 'hud-panel--fairness',
+        });
+        panel = hudPanel.body;
         render();
     }
 
@@ -73,15 +59,7 @@ export function createFairnessMonitor({
                         Pearson chi-squared test against a uniform face distribution.
                     </div>
                 </div>
-                <button id="fairness-monitor-reset" style="
-                    background: rgba(232, 200, 130, 0.12);
-                    color: ${LABEL};
-                    border: 1px solid rgba(232, 200, 130, 0.28);
-                    border-radius: 4px;
-                    padding: 3px 7px;
-                    cursor: pointer;
-                    font: inherit;
-                ">Reset</button>
+                <button id="fairness-monitor-reset" class="hud-btn">Reset</button>
             </div>
             <div style="margin-top:8px;color:${MUTED};line-height:1.4;">
                 Pass/fail activates once a die type reaches ${minSampleSize}+ recorded rolls. Critical values use 95% confidence.

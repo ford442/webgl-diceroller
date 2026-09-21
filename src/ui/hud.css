@@ -1,0 +1,761 @@
+/**
+ * HUD design tokens + shared chrome for every DOM overlay drawn over the
+ * WebGL/WebGPU canvas (dice controls, dice case, roll history, session
+ * strip, multiplayer panel, fairness monitor, results overlay).
+ *
+ * Dark tavern HUD is the only theme for now. Everything below is one
+ * source of truth so a later high-contrast / theme pass only has to touch
+ * this file, not every panel's `style.cssText`.
+ */
+
+:root {
+    --hud-bg: rgba(12, 7, 2, 0.94);
+    --hud-bg-strong: rgba(9, 5, 1, 0.97);
+    --hud-bg-card: rgba(24, 13, 2, 0.96);
+    --hud-fg: #f3d9a0;
+    --hud-fg-strong: #ffe066;
+    --hud-fg-muted: #c9a86c;
+    --hud-accent: #c9a84c;
+    --hud-border-color: rgba(201, 168, 76, 0.4);
+    --hud-border: 1px solid var(--hud-border-color);
+    --hud-radius: 8px;
+    --hud-radius-sm: 4px;
+    --hud-gap: 8px;
+    --hud-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --hud-z-crosshair: 999;
+    --hud-z-panel: 1000;
+    --hud-z-hud: 1001;
+    --hud-z-history: 1080;
+    --hud-z-history-toggle: 1085;
+    --hud-z-fairness: 1090;
+    --hud-font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --hud-font-display: 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+}
+
+/* Screen-reader-only text (aria-live regions, etc). */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Visible keyboard focus for every DOM control over the 3D canvas. */
+#canvas-container button:focus-visible,
+#canvas-container input:focus-visible,
+#canvas-container select:focus-visible,
+#canvas-container textarea:focus-visible {
+    outline: 2px solid var(--hud-fg-strong);
+    outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------
+ * Panel shell
+ * ------------------------------------------------------------------- */
+
+.hud-panel {
+    position: absolute;
+    z-index: var(--hud-z-panel);
+    display: flex;
+    flex-direction: column;
+    gap: var(--hud-gap);
+    background: var(--hud-bg);
+    color: var(--hud-fg);
+    font-family: var(--hud-font);
+    border: var(--hud-border);
+    border-radius: var(--hud-radius);
+    padding: 10px;
+    box-shadow: var(--hud-shadow);
+    box-sizing: border-box;
+}
+
+.hud-panel--display {
+    font-family: var(--hud-font-display);
+}
+
+.hud-panel--scrim {
+    background: var(--hud-bg-strong);
+}
+
+.hud-panel--bare {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+}
+
+.hud-panel[data-touch='true'] {
+    padding: 12px;
+    gap: 8px;
+}
+
+.hud-panel[data-hud-anchor='top-right'] {
+    top: 10px;
+    right: 10px;
+}
+.hud-panel[data-hud-anchor='top-right'][data-touch='true'] {
+    top: 8px;
+    right: 8px;
+    left: 8px;
+    max-width: none;
+}
+
+.hud-panel[data-hud-anchor='top-left'] {
+    top: 10px;
+    left: 10px;
+}
+.hud-panel[data-hud-anchor='top-left'][data-touch='true'] {
+    top: 8px;
+    left: 8px;
+}
+
+.hud-panel[data-hud-anchor='bottom-left'] {
+    bottom: 10px;
+    left: 10px;
+}
+.hud-panel[data-hud-anchor='bottom-left'][data-touch='true'] {
+    bottom: max(84px, calc(16px + env(safe-area-inset-bottom)));
+    left: 8px;
+}
+
+.hud-panel[data-hud-anchor='bottom-center'] {
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.hud-panel[data-hud-anchor='center-left'] {
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.hud-panel[data-hud-anchor='none'] {
+    position: static;
+}
+
+.hud-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.hud-panel__title {
+    font-weight: bold;
+}
+
+.hud-panel__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--hud-gap);
+}
+
+.hud-panel__body[hidden] {
+    display: none;
+}
+
+/* ---------------------------------------------------------------------
+ * Shared controls
+ * ------------------------------------------------------------------- */
+
+.hud-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.hud-row--wrap {
+    flex-wrap: wrap;
+}
+
+.hud-row--between {
+    justify-content: space-between;
+}
+
+.hud-divider {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--hud-border-color);
+    font-weight: bold;
+}
+
+.hud-label {
+    font-size: 12px;
+}
+
+.hud-btn,
+.hud-select,
+.hud-input {
+    font-family: inherit;
+    color: var(--hud-fg);
+    background: rgba(201, 168, 76, 0.1);
+    border: 1px solid var(--hud-border-color);
+    border-radius: var(--hud-radius-sm);
+}
+
+.hud-btn {
+    cursor: pointer;
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+.hud-btn:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
+.hud-btn--chip {
+    padding: 4px 8px;
+    min-height: 28px;
+    font-size: 10px;
+}
+
+.hud-btn--collapse {
+    min-width: 28px;
+    padding: 2px 7px;
+}
+
+.hud-btn--primary {
+    background: rgba(255, 224, 102, 0.16);
+    color: var(--hud-fg-strong);
+    font-weight: bold;
+}
+
+.hud-select,
+.hud-input {
+    padding: 4px 6px;
+}
+
+.hud-input {
+    box-sizing: border-box;
+}
+
+.hud-panel[data-touch='true'] .hud-input,
+.hud-panel[data-touch='true'] .hud-select {
+    min-height: 44px;
+    font-size: 16px;
+}
+
+.hud-panel[data-touch='true'] .hud-btn {
+    min-height: 40px;
+}
+
+.hud-status-line {
+    font-size: 11px;
+    opacity: 0.85;
+    line-height: 1.35;
+}
+
+/* ---------------------------------------------------------------------
+ * Per-panel layout exceptions — sizes specific to one panel's content,
+ * not general enough to be tokens.
+ * ------------------------------------------------------------------- */
+
+#dice-controls-panel {
+    max-width: 220px;
+}
+#dice-controls-panel[data-touch='true'] {
+    max-width: min(92vw, 320px);
+    max-height: 42vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+#dice-help-panel {
+    font-size: 12px;
+    max-width: min(92vw, 320px);
+}
+#dice-help-panel[data-touch='true'] {
+    font-size: 11px;
+    bottom: max(84px, calc(16px + env(safe-area-inset-bottom)));
+}
+
+.hud-panel--dice-case {
+    width: min(92vw, 220px);
+}
+
+.hud-dice-case-preview {
+    width: 100%;
+    height: auto;
+    border-radius: var(--hud-radius-sm);
+    background: rgba(0, 0, 0, 0.35);
+    display: block;
+}
+
+.hud-label--fixed {
+    min-width: 42px;
+}
+
+.hud-color-input {
+    flex: 1;
+    height: 28px;
+    border: none;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.hud-panel--history-toggle {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: var(--hud-z-history-toggle);
+    width: 38px;
+    height: 38px;
+    border-radius: var(--hud-radius);
+    font-size: 18px;
+}
+
+#roll-history-panel {
+    top: 56px;
+    width: min(360px, calc(100vw - 20px));
+    max-height: calc(100% - 66px);
+    z-index: var(--hud-z-history);
+    overflow: hidden;
+    padding: 0;
+    font-size: 12px;
+}
+
+.hud-panel--history__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: var(--hud-border);
+    background: rgba(201, 168, 76, 0.14);
+}
+
+.hud-panel--history__title {
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 0.6px;
+    color: var(--hud-fg-strong);
+}
+
+.hud-panel--history__tabs {
+    padding: 8px 12px 0;
+}
+
+#roll-history-panel .hud-panel__body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px 12px;
+}
+
+.hud-panel--history__footer {
+    padding: 8px 12px 12px;
+    border-top: var(--hud-border);
+    background: rgba(0, 0, 0, 0.12);
+}
+
+.hud-btn--selected {
+    background: rgba(255, 224, 102, 0.22);
+    color: var(--hud-fg-strong);
+    font-weight: bold;
+}
+
+.hud-panel--history__entry {
+    border: 1px solid var(--hud-border-color);
+    border-radius: var(--hud-radius);
+    background: var(--hud-bg-card);
+    overflow: hidden;
+}
+
+.hud-panel--history__entry--latest {
+    background: rgba(201, 168, 76, 0.14);
+}
+
+.hud-panel--history__entry-summary {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    padding: 8px 10px;
+    font-family: inherit;
+}
+
+.hud-panel--history__entry-details {
+    padding: 0 10px 10px;
+    border-top: 1px solid rgba(139, 105, 20, 0.18);
+}
+
+.hud-panel--history__die-chip {
+    min-width: 48px;
+    padding: 4px 8px;
+    border-radius: var(--hud-radius-sm);
+    border: 1px solid var(--hud-border-color);
+    background: rgba(0, 0, 0, 0.18);
+    text-align: center;
+}
+
+.hud-panel--session-strip {
+    z-index: 12;
+    font-size: 12px;
+    color: var(--hud-fg-muted);
+    max-width: min(96vw, 640px);
+}
+
+.hud-panel--session-strip__actor {
+    color: var(--hud-fg);
+    font-weight: bold;
+}
+
+.hud-panel--session-strip__expr {
+    color: var(--hud-fg-muted);
+    font-style: italic;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 240px;
+}
+
+.hud-panel--multiplayer {
+    font-size: 12px;
+}
+.hud-panel--multiplayer[data-touch='true'] {
+    font-size: 14px;
+}
+
+.hud-panel--multiplayer__title {
+    font-weight: bold;
+    color: var(--hud-fg-strong);
+    margin-bottom: 6px;
+}
+
+.hud-panel--multiplayer__status {
+    color: var(--hud-fg-muted);
+    margin-bottom: 6px;
+    min-height: 1.2em;
+}
+.hud-panel--multiplayer__status--error {
+    color: #f88;
+}
+
+.hud-panel--multiplayer__code-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.hud-panel--multiplayer__code-label {
+    color: var(--hud-fg-strong);
+}
+
+.hud-panel--multiplayer__code-value {
+    display: block;
+    padding: 4px 6px;
+    background: var(--hud-bg);
+    border-radius: var(--hud-radius-sm);
+    letter-spacing: 0.12em;
+    font-size: 14px;
+}
+
+.hud-panel--multiplayer__guest-hint {
+    color: var(--hud-fg-muted);
+    font-style: italic;
+}
+
+/* ---------------------------------------------------------------------
+ * Dice HUD + results overlay (results.js)
+ * ------------------------------------------------------------------- */
+
+#dice-hud-panel {
+    bottom: 12px;
+    gap: 4px;
+    align-items: center;
+    padding: 8px 12px 10px;
+    background: var(--hud-bg-strong);
+    border-radius: 10px;
+    z-index: var(--hud-z-hud);
+    max-width: min(96vw, 640px);
+}
+
+.hud-panel--dice-hud__label {
+    color: var(--hud-fg-muted);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    opacity: 0.9;
+}
+
+.hud-panel--dice-hud__empty {
+    color: var(--hud-fg-muted);
+    font-style: italic;
+}
+
+.hud-panel--results-overlay {
+    position: absolute;
+    bottom: 88px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    z-index: var(--hud-z-hud);
+    pointer-events: none;
+    opacity: 0;
+    font-family: var(--hud-font-display);
+}
+
+.hud-result-scrim {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    background: var(--hud-bg-strong);
+    border: 1px solid var(--hud-border-color);
+    border-radius: 12px;
+    padding: 10px 14px;
+    box-shadow: var(--hud-shadow);
+}
+
+.hud-result-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    max-width: 540px;
+}
+.hud-result-row--compact {
+    gap: 6px;
+}
+
+.hud-result-card {
+    background: var(--hud-bg-card);
+    border: 2px solid var(--hud-fg-muted);
+    border-radius: 8px;
+    padding: 7px 12px;
+    text-align: center;
+    min-width: 54px;
+    font-family: var(--hud-font-display);
+}
+.hud-result-card--compact {
+    border-width: 1px;
+    border-radius: 6px;
+    padding: 4px 8px;
+    min-width: 42px;
+}
+.hud-result-card--dropped {
+    background: rgba(20, 10, 0, 0.55);
+    border-color: rgba(201, 168, 76, 0.35);
+    text-decoration: line-through;
+    opacity: 0.55;
+}
+.hud-result-card--kept-glow {
+    box-shadow: 0 0 8px rgba(255, 224, 102, 0.25);
+}
+
+.hud-result-card__type {
+    font-size: 10px;
+    color: var(--hud-fg-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+.hud-result-card--compact .hud-result-card__type {
+    font-size: 9px;
+}
+
+.hud-result-card__value {
+    font-size: 27px;
+    font-weight: bold;
+    color: var(--hud-fg-strong);
+    line-height: 1.1;
+}
+.hud-result-card--compact .hud-result-card__value {
+    font-size: 20px;
+    color: var(--hud-fg);
+}
+.hud-result-card__value--dropped {
+    color: rgba(232, 200, 130, 0.45);
+}
+.hud-result-card__value--rolling {
+    color: var(--hud-fg);
+}
+
+.hud-result-card__debug-badge {
+    margin-top: 2px;
+    font-size: 9px;
+    color: #ff6b6b;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+.hud-result-card--compact .hud-result-card__debug-badge {
+    font-size: 8px;
+}
+
+.hud-result-total {
+    background: var(--hud-bg-card);
+    border: 2px solid var(--hud-fg);
+    border-radius: 8px;
+    padding: 5px 20px;
+    color: var(--hud-fg);
+    font-family: var(--hud-font-display);
+    font-size: 15px;
+    letter-spacing: 1px;
+}
+.hud-result-total--compact {
+    border: 1px solid var(--hud-fg-muted);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    align-self: center;
+}
+
+.hud-result-total__value {
+    color: var(--hud-fg-strong);
+    font-size: 16px;
+    font-weight: bold;
+}
+.hud-result-total__value--lg {
+    font-size: 20px;
+}
+
+.hud-result-expression {
+    color: var(--hud-fg);
+    font-family: var(--hud-font-display);
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.hud-result-breakdown {
+    background: var(--hud-bg-card);
+    border: 2px solid var(--hud-fg);
+    border-radius: 8px;
+    padding: 6px 16px;
+    color: var(--hud-fg);
+    font-family: var(--hud-font-display);
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    text-align: center;
+}
+
+.hud-panel--fairness {
+    width: 340px;
+    max-height: calc(100% - 20px);
+    overflow-y: auto;
+    z-index: var(--hud-z-fairness);
+    font-size: 12px;
+}
+
+.hud-panel--history__empty {
+    color: var(--hud-fg-muted);
+    font-style: italic;
+    line-height: 1.5;
+}
+
+.hud-panel--history__list,
+.hud-panel--history__sections {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.hud-panel--history__sections {
+    gap: 10px;
+}
+
+.hud-panel--history__die-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.hud-panel--history__meta-line {
+    margin-top: 8px;
+    color: var(--hud-fg-muted);
+    font-size: 11px;
+}
+
+.hud-panel--history__intro {
+    color: var(--hud-fg-muted);
+    line-height: 1.45;
+    margin-bottom: 10px;
+}
+
+.hud-panel--history__stat-section {
+    padding: 8px 9px 9px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(232, 200, 130, 0.16);
+    border-radius: var(--hud-radius-sm);
+}
+
+/* ---------------------------------------------------------------------
+ * Roll-all dock (touch devices only — floats independently of the panel).
+ * ------------------------------------------------------------------- */
+
+.hud-roll-dock {
+    position: absolute;
+    left: 50%;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    z-index: calc(var(--hud-z-panel) + 1);
+}
+
+.hud-roll-dock .hud-btn {
+    min-height: 52px;
+    min-width: min(72vw, 280px);
+    font-size: 18px;
+    font-weight: bold;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 153, 51, 0.65);
+    background: rgba(255, 153, 51, 0.92);
+    color: #1a1008;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------------------------------------------------------------------
+ * Crosshair
+ * ------------------------------------------------------------------- */
+
+.hud-crosshair {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 20px;
+    height: 20px;
+    pointer-events: none;
+    z-index: var(--hud-z-crosshair);
+    transform: translate(-50%, -50%);
+}
+
+.hud-crosshair__ring {
+    width: 100%;
+    height: 100%;
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    border-radius: 50%;
+}
+
+.hud-crosshair__dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    background: white;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* ---------------------------------------------------------------------
+ * Reduced motion — kill the dice-case preview spin and the results pop.
+ * ------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .hud-panel,
+    .hud-panel * {
+        transition-duration: 0.001ms !important;
+        animation-duration: 0.001ms !important;
+    }
+}

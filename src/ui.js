@@ -4,6 +4,13 @@ import {
     buildShareableTableUrl,
 } from './core/TableLayoutConfig.js';
 import { isTouchPrimaryDevice } from './core/DeviceCapabilities.js';
+import {
+    createHudPanel,
+    hudButton,
+    hudSelect,
+    hudInput,
+    guardPointerEvents,
+} from './ui/hudPanel.js';
 
 /**
  * @param {(counts: Record<string, number>) => void} onUpdateDice
@@ -31,31 +38,14 @@ export const initUI = (
     const canvasContainer = document.getElementById('canvas-container') || document.body;
     const touchUi = isTouchPrimaryDevice();
 
-    const container = document.createElement('div');
-    container.id = 'dice-controls-panel';
-    container.setAttribute('role', 'region');
-    container.setAttribute('aria-label', 'Dice controls');
-    container.style.position = 'absolute';
-    container.style.top = touchUi ? '8px' : '10px';
-    container.style.right = touchUi ? '8px' : '10px';
-    container.style.left = touchUi ? '8px' : 'auto';
-    container.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-    container.style.padding = touchUi ? '12px' : '10px';
-    container.style.color = 'white';
-    container.style.fontFamily = 'sans-serif';
-    container.style.borderRadius = '5px';
-    container.style.display = 'flex';
-    container.style.flexDirection = 'column';
-    container.style.gap = touchUi ? '8px' : '5px';
-    container.style.zIndex = '1000';
-    container.style.maxWidth = touchUi ? 'min(92vw, 320px)' : '220px';
-    if (touchUi) {
-        container.style.maxHeight = '42vh';
-        container.style.overflowY = 'auto';
-        /** @type {CSSStyleDeclaration & { webkitOverflowScrolling?: string }} */ (
-            container.style
-        ).webkitOverflowScrolling = 'touch';
-    }
+    const controlsPanel = createHudPanel({
+        id: 'dice-controls-panel',
+        ariaLabel: 'Dice controls',
+        anchor: 'top-right',
+        touchUi,
+        parent: canvasContainer,
+    });
+    const container = controlsPanel.body;
 
     const diceTypes = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
     const inputs = {};
@@ -63,32 +53,23 @@ export const initUI = (
 
     diceTypes.forEach((type) => {
         const row = document.createElement('div');
-        row.style.display = 'flex';
-        row.style.justifyContent = 'space-between';
-        row.style.alignItems = 'center';
+        row.className = 'hud-row hud-row--between';
 
         const label = document.createElement('label');
         label.htmlFor = `dice-count-${type}`;
         label.textContent = type.toUpperCase() + ': ';
-        label.style.marginRight = '10px';
 
-        const input = document.createElement('input');
+        const input = hudInput('number', `${type} count`);
         input.id = `dice-count-${type}`;
-        input.type = 'number';
         input.min = '0';
         input.max = '10';
         input.value = counts[type];
-        input.setAttribute('aria-label', `${type} count`);
         input.style.width = touchUi ? '56px' : '40px';
-        input.style.minHeight = touchUi ? '44px' : 'auto';
-        input.style.fontSize = touchUi ? '16px' : 'inherit';
-        input.style.marginLeft = '5px';
 
         input.addEventListener('change', () => {
             counts[type] = parseInt(input.value) || 0;
             onUpdateDice(counts);
         });
-        input.addEventListener('mousedown', (e) => e.stopPropagation());
 
         inputs[type] = input;
         row.appendChild(label);
@@ -114,16 +95,12 @@ export const initUI = (
     };
 
     const presetRow = document.createElement('div');
-    presetRow.style.display = 'flex';
-    presetRow.style.alignItems = 'center';
-    presetRow.style.gap = '6px';
-    presetRow.style.marginTop = '6px';
+    presetRow.className = 'hud-row hud-mt-sm';
     const presetLabel = document.createElement('label');
     presetLabel.htmlFor = 'dice-preset-select';
     presetLabel.textContent = 'Set:';
-    const presetSelect = document.createElement('select');
+    const presetSelect = hudSelect('Dice set preset');
     presetSelect.id = 'dice-preset-select';
-    presetSelect.setAttribute('aria-label', 'Dice set preset');
     presetSelect.style.flex = '1';
     const placeholder = document.createElement('option');
     placeholder.textContent = 'Presets…';
@@ -140,7 +117,6 @@ export const initUI = (
         if (preset) applyPreset(preset);
         presetSelect.value = '';
     });
-    presetSelect.addEventListener('mousedown', (e) => e.stopPropagation());
     presetRow.appendChild(presetLabel);
     presetRow.appendChild(presetSelect);
     container.appendChild(presetRow);
@@ -148,10 +124,7 @@ export const initUI = (
     // --- Dice notation roll input ---
     if (notationHooks?.onNotationRoll) {
         const notationDivider = document.createElement('div');
-        notationDivider.style.marginTop = '8px';
-        notationDivider.style.paddingTop = '8px';
-        notationDivider.style.borderTop = '1px solid rgba(255,255,255,0.2)';
-        notationDivider.style.fontWeight = 'bold';
+        notationDivider.className = 'hud-divider';
         notationDivider.textContent = 'Roll Notation';
         container.appendChild(notationDivider);
 
@@ -159,18 +132,12 @@ export const initUI = (
         let historyIndex = -1;
         let activeSystem = notationHooks.getSystem?.() ?? 'dnd5e';
 
-        const notationInput = document.createElement('input');
+        const notationInput = hudInput('text', 'Dice notation expression');
         notationInput.id = 'notation-roll-input';
-        notationInput.type = 'text';
         notationInput.placeholder = 'e.g. 3d6+2, 2d20kh1, 1d20 vs 1d20';
         notationInput.spellcheck = false;
-        notationInput.setAttribute('aria-label', 'Dice notation expression');
         notationInput.style.width = '100%';
-        notationInput.style.boxSizing = 'border-box';
-        notationInput.style.padding = '4px 6px';
-        notationInput.style.marginTop = '4px';
-        notationInput.style.minHeight = touchUi ? '40px' : undefined;
-        notationInput.addEventListener('mousedown', (e) => e.stopPropagation());
+        notationInput.classList.add('hud-mt-xs');
 
         const submitNotation = async () => {
             const expr = notationInput.value.trim();
@@ -223,18 +190,14 @@ export const initUI = (
 
         // System preset (defaults only — not a rules engine)
         const systemRow = document.createElement('div');
-        systemRow.style.display = 'flex';
-        systemRow.style.alignItems = 'center';
-        systemRow.style.gap = '6px';
-        systemRow.style.marginTop = '4px';
+        systemRow.className = 'hud-row hud-mt-xs';
         const systemLabel = document.createElement('label');
         systemLabel.textContent = 'System';
-        systemLabel.style.fontSize = '11px';
+        systemLabel.className = 'hud-label';
         systemLabel.htmlFor = 'notation-system-select';
-        const systemSelect = document.createElement('select');
+        const systemSelect = hudSelect('Roll system preset');
         systemSelect.id = 'notation-system-select';
         systemSelect.style.flex = '1';
-        systemSelect.setAttribute('aria-label', 'Roll system preset');
         const systems = notationHooks.systems ?? [
             { id: 'dnd5e', label: 'D&D 5e' },
             { id: 'pbta', label: 'PbtA' },
@@ -248,7 +211,6 @@ export const initUI = (
             if (sys.id === activeSystem) opt.selected = true;
             systemSelect.appendChild(opt);
         });
-        systemSelect.addEventListener('mousedown', (e) => e.stopPropagation());
         systemSelect.addEventListener('change', () => {
             activeSystem = systemSelect.value;
             notationHooks.setSystem?.(activeSystem);
@@ -272,20 +234,12 @@ export const initUI = (
         ];
 
         const mechanicRow = document.createElement('div');
-        mechanicRow.style.display = 'flex';
-        mechanicRow.style.flexWrap = 'wrap';
-        mechanicRow.style.gap = '4px';
-        mechanicRow.style.marginTop = '6px';
+        mechanicRow.className = 'hud-row hud-row--wrap hud-mt-sm';
         mechanicRow.setAttribute('role', 'group');
         mechanicRow.setAttribute('aria-label', 'Notation modifiers');
 
         chipDefs.forEach((chip) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.textContent = chip.label;
-            btn.style.cssText =
-                'font-size:10px;padding:4px 8px;min-height:28px;cursor:pointer;border-radius:3px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:white;';
-            btn.addEventListener('mousedown', (e) => e.stopPropagation());
+            const btn = hudButton(chip.label, 'hud-btn--chip');
             btn.addEventListener('click', () => {
                 if (chip.id === 'opposed') {
                     const base = notationInput.value.trim() || '1d20';
@@ -306,18 +260,11 @@ export const initUI = (
         container.appendChild(mechanicRow);
 
         const notationBtnRow = document.createElement('div');
-        notationBtnRow.style.display = 'flex';
-        notationBtnRow.style.gap = '6px';
-        notationBtnRow.style.marginTop = '4px';
+        notationBtnRow.className = 'hud-row hud-mt-xs';
 
-        const notationRollBtn = document.createElement('button');
-        notationRollBtn.type = 'button';
-        notationRollBtn.textContent = 'Roll';
+        const notationRollBtn = hudButton('Roll');
         notationRollBtn.style.flex = '1';
-        notationRollBtn.style.cursor = 'pointer';
-        notationRollBtn.style.minHeight = touchUi ? '40px' : undefined;
         notationRollBtn.addEventListener('click', submitNotation);
-        notationRollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
         notationBtnRow.appendChild(notationRollBtn);
         container.appendChild(notationBtnRow);
 
@@ -333,18 +280,10 @@ export const initUI = (
         ];
 
         const presetChipRow = document.createElement('div');
-        presetChipRow.style.display = 'flex';
-        presetChipRow.style.flexWrap = 'wrap';
-        presetChipRow.style.gap = '4px';
-        presetChipRow.style.marginTop = '6px';
+        presetChipRow.className = 'hud-row hud-row--wrap hud-mt-sm';
 
         NOTATION_PRESETS.forEach((preset) => {
-            const chip = document.createElement('button');
-            chip.type = 'button';
-            chip.textContent = preset;
-            chip.style.cssText =
-                'font-size:10px;padding:4px 6px;min-height:28px;cursor:pointer;border-radius:3px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:white;';
-            chip.addEventListener('mousedown', (e) => e.stopPropagation());
+            const chip = hudButton(preset, 'hud-btn--chip');
             chip.addEventListener('click', () => {
                 notationInput.value = preset;
                 submitNotation();
@@ -354,48 +293,24 @@ export const initUI = (
         container.appendChild(presetChipRow);
     }
 
-    const rollBtn = document.createElement('button');
-    rollBtn.type = 'button';
+    const rollBtn = hudButton('Roll All', 'hud-btn--primary');
     rollBtn.id = 'roll-all-btn';
-    rollBtn.textContent = 'Roll All';
     rollBtn.setAttribute('aria-keyshortcuts', 'R');
-    rollBtn.style.cursor = 'pointer';
     rollBtn.addEventListener('click', () => onRollAll());
-    rollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-    rollBtn.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
 
     if (touchUi) {
         const rollDock = document.createElement('div');
-        rollDock.style.position = 'absolute';
-        rollDock.style.left = '50%';
-        rollDock.style.bottom = 'max(16px, env(safe-area-inset-bottom))';
-        rollDock.style.transform = 'translateX(-50%)';
-        rollDock.style.zIndex = '1001';
-        rollBtn.style.marginTop = '0';
-        rollBtn.style.minHeight = '52px';
-        rollBtn.style.minWidth = 'min(72vw, 280px)';
-        rollBtn.style.fontSize = '18px';
-        rollBtn.style.fontWeight = 'bold';
-        rollBtn.style.borderRadius = '999px';
-        rollBtn.style.border = '1px solid rgba(255, 153, 51, 0.65)';
-        rollBtn.style.background = 'rgba(255, 153, 51, 0.92)';
-        rollBtn.style.color = '#1a1008';
-        rollBtn.style.boxShadow = '0 8px 24px rgba(0,0,0,0.35)';
+        rollDock.className = 'hud-roll-dock';
         rollDock.appendChild(rollBtn);
         canvasContainer.appendChild(rollDock);
     } else {
-        rollBtn.style.marginTop = '10px';
+        rollBtn.classList.add('hud-mt-lg');
         container.appendChild(rollBtn);
     }
 
     if (rollShareHooks?.buildShareUrl) {
-        const shareRollBtn = document.createElement('button');
-        shareRollBtn.type = 'button';
-        shareRollBtn.textContent = 'Share Roll';
-        shareRollBtn.style.cursor = 'pointer';
-        shareRollBtn.style.marginTop = '4px';
+        const shareRollBtn = hudButton('Share Roll', 'hud-mt-xs');
         shareRollBtn.title = 'Copy a link that replays this exact roll';
-        shareRollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
         shareRollBtn.addEventListener('click', async () => {
             if (rollShareHooks.hasShareableRoll && !rollShareHooks.hasShareableRoll()) {
                 shareRollBtn.textContent = 'Roll first';
@@ -423,26 +338,18 @@ export const initUI = (
     const audio = layoutHooks?.audio;
     if (audio) {
         const audioRow = document.createElement('div');
-        audioRow.style.display = 'flex';
-        audioRow.style.alignItems = 'center';
-        audioRow.style.gap = '6px';
-        audioRow.style.marginTop = '8px';
-        audioRow.addEventListener('mousedown', (e) => e.stopPropagation());
+        audioRow.className = 'hud-row hud-mt';
+        guardPointerEvents(audioRow);
 
-        const muteBtn = document.createElement('button');
-        muteBtn.type = 'button';
-        muteBtn.style.cursor = 'pointer';
-        muteBtn.style.minWidth = '34px';
+        const muteBtn = hudButton('', 'hud-btn--collapse');
         muteBtn.title = 'Mute / unmute';
 
-        const slider = document.createElement('input');
-        slider.type = 'range';
+        const slider = hudInput('range', 'Volume');
         slider.min = '0';
         slider.max = '1';
         slider.step = '0.01';
         slider.value = String(audio.getMasterVolume?.() ?? 0.6);
         slider.style.flex = '1';
-        slider.setAttribute('aria-label', 'Volume');
 
         const syncMuteIcon = () => {
             const isMuted = audio.isMuted?.() || parseFloat(slider.value) <= 0;
@@ -462,8 +369,6 @@ export const initUI = (
             audio.toggleMute?.();
             syncMuteIcon();
         });
-        muteBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-        slider.addEventListener('mousedown', (e) => e.stopPropagation());
 
         syncMuteIcon();
         audioRow.appendChild(muteBtn);
@@ -479,27 +384,20 @@ export const initUI = (
 
     if (layoutHooks?.onRerollLayout) {
         const layoutDivider = document.createElement('div');
-        layoutDivider.style.marginTop = '8px';
-        layoutDivider.style.paddingTop = '8px';
-        layoutDivider.style.borderTop = '1px solid rgba(255,255,255,0.2)';
-        layoutDivider.style.fontWeight = 'bold';
+        layoutDivider.className = 'hud-divider';
         layoutDivider.textContent = 'Table Layout';
         container.appendChild(layoutDivider);
 
         const densityRow = document.createElement('div');
-        densityRow.style.display = 'flex';
-        densityRow.style.justifyContent = 'space-between';
-        densityRow.style.alignItems = 'center';
-        densityRow.style.gap = '8px';
+        densityRow.className = 'hud-row hud-row--between';
 
         const densityLabel = document.createElement('label');
         densityLabel.htmlFor = 'layout-density-select';
         densityLabel.textContent = 'Density';
-        densityLabel.style.fontSize = '12px';
+        densityLabel.className = 'hud-label';
 
-        densitySelect = document.createElement('select');
+        densitySelect = hudSelect('Table clutter density');
         densitySelect.id = 'layout-density-select';
-        densitySelect.setAttribute('aria-label', 'Table clutter density');
         densitySelect.style.flex = '1';
         Object.keys(DENSITY_PRESETS).forEach((key) => {
             const option = document.createElement('option');
@@ -508,25 +406,20 @@ export const initUI = (
             densitySelect.appendChild(option);
         });
         densitySelect.value = layoutHooks.layoutConfig?.density ?? 'med';
-        densitySelect.addEventListener('mousedown', (e) => e.stopPropagation());
         densityRow.appendChild(densityLabel);
         densityRow.appendChild(densitySelect);
         container.appendChild(densityRow);
 
         const themeRow = document.createElement('div');
-        themeRow.style.display = 'flex';
-        themeRow.style.justifyContent = 'space-between';
-        themeRow.style.alignItems = 'center';
-        themeRow.style.gap = '8px';
+        themeRow.className = 'hud-row hud-row--between';
 
         const themeLabel = document.createElement('label');
         themeLabel.htmlFor = 'layout-theme-select';
         themeLabel.textContent = 'Theme';
-        themeLabel.style.fontSize = '12px';
+        themeLabel.className = 'hud-label';
 
-        themeSelect = document.createElement('select');
+        themeSelect = hudSelect('Table layout theme');
         themeSelect.id = 'layout-theme-select';
-        themeSelect.setAttribute('aria-label', 'Table layout theme');
         themeSelect.style.flex = '1';
         Object.values(LAYOUT_THEMES).forEach((theme) => {
             const option = document.createElement('option');
@@ -535,19 +428,13 @@ export const initUI = (
             themeSelect.appendChild(option);
         });
         themeSelect.value = layoutHooks.layoutConfig?.theme ?? 'default';
-        themeSelect.addEventListener('mousedown', (e) => e.stopPropagation());
         themeRow.appendChild(themeLabel);
         themeRow.appendChild(themeSelect);
         container.appendChild(themeRow);
 
-        rerollBtn = document.createElement('button');
-        rerollBtn.type = 'button';
+        rerollBtn = hudButton('New Table', 'hud-mt-xs');
         rerollBtn.id = 'reroll-layout-btn';
-        rerollBtn.textContent = 'New Table';
         rerollBtn.setAttribute('aria-keyshortcuts', 'Shift+R');
-        rerollBtn.style.cursor = 'pointer';
-        rerollBtn.style.marginTop = '4px';
-        rerollBtn.addEventListener('mousedown', (e) => e.stopPropagation());
         rerollBtn.addEventListener('click', async () => {
             rerollBtn.disabled = true;
             rerollBtn.textContent = 'Arranging...';
@@ -565,11 +452,7 @@ export const initUI = (
         });
         container.appendChild(rerollBtn);
 
-        shareBtn = document.createElement('button');
-        shareBtn.type = 'button';
-        shareBtn.textContent = 'Copy Table Link';
-        shareBtn.style.cursor = 'pointer';
-        shareBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+        shareBtn = hudButton('Copy Table Link');
         shareBtn.addEventListener('click', async () => {
             const config = layoutHooks.onShareTable?.() ?? layoutHooks.layoutConfig;
             const url = buildShareableTableUrl(config);
@@ -586,9 +469,7 @@ export const initUI = (
         container.appendChild(shareBtn);
 
         statusLine = document.createElement('div');
-        statusLine.style.fontSize = '11px';
-        statusLine.style.opacity = '0.85';
-        statusLine.style.lineHeight = '1.35';
+        statusLine.className = 'hud-status-line';
         container.appendChild(statusLine);
         updateLayoutStatus(layoutHooks.layoutConfig);
     }
@@ -598,24 +479,14 @@ export const initUI = (
         statusLine.textContent = `Seed ${config.seed} · ${config.clutterCount} clutter · ${config.decorCount} decor`;
     }
 
-    canvasContainer.appendChild(container);
-
-    const helpContainer = document.createElement('div');
-    helpContainer.style.position = 'absolute';
-    helpContainer.style.bottom = '10px';
-    helpContainer.style.left = '10px';
-    helpContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-    helpContainer.style.padding = '10px';
-    helpContainer.style.color = 'white';
-    helpContainer.style.fontFamily = 'sans-serif';
-    helpContainer.style.fontSize = touchUi ? '11px' : '12px';
-    helpContainer.style.borderRadius = '5px';
-    helpContainer.style.zIndex = '1000';
-    if (touchUi) {
-        helpContainer.style.bottom = 'max(84px, calc(16px + env(safe-area-inset-bottom)))';
-        helpContainer.style.maxWidth = 'min(92vw, 320px)';
-    }
-    helpContainer.innerHTML = touchUi
+    const helpPanel = createHudPanel({
+        id: 'dice-help-panel',
+        ariaLabel: touchUi ? 'Touch controls' : 'Keyboard and mouse controls',
+        anchor: 'bottom-left',
+        touchUi,
+        parent: canvasContainer,
+    });
+    helpPanel.body.innerHTML = touchUi
         ? `
         <div style="font-weight: bold; margin-bottom: 5px;">Touch Controls:</div>
         <div>👆 <b>Tap table</b> - Roll all dice</div>
@@ -638,7 +509,6 @@ export const initUI = (
         <div>⌨️ <b>Enter</b> - Roll notation expression</div>
         <div>⌨️ <b>Shift+R</b> - New table layout</div>
     `;
-    canvasContainer.appendChild(helpContainer);
 
     return {
         updateCounts: (newCounts) => {
@@ -657,31 +527,14 @@ export const initUI = (
 export const createCrosshair = () => {
     const canvasContainer = document.getElementById('canvas-container') || document.body;
     const crosshair = document.createElement('div');
-    crosshair.style.position = 'absolute';
-    crosshair.style.left = '50%';
-    crosshair.style.top = '50%';
-    crosshair.style.width = '20px';
-    crosshair.style.height = '20px';
-    crosshair.style.pointerEvents = 'none';
-    crosshair.style.zIndex = '999';
-    crosshair.style.transform = 'translate(-50%, -50%)';
+    crosshair.className = 'hud-crosshair';
 
     const circle = document.createElement('div');
-    circle.style.width = '100%';
-    circle.style.height = '100%';
-    circle.style.border = '2px solid rgba(255, 255, 255, 0.7)';
-    circle.style.borderRadius = '50%';
+    circle.className = 'hud-crosshair__ring';
     crosshair.appendChild(circle);
 
     const dot = document.createElement('div');
-    dot.style.position = 'absolute';
-    dot.style.top = '50%';
-    dot.style.left = '50%';
-    dot.style.width = '4px';
-    dot.style.height = '4px';
-    dot.style.backgroundColor = 'white';
-    dot.style.borderRadius = '50%';
-    dot.style.transform = 'translate(-50%, -50%)';
+    dot.className = 'hud-crosshair__dot';
     crosshair.appendChild(dot);
 
     canvasContainer.appendChild(crosshair);
