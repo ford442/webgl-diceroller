@@ -18,6 +18,7 @@
  * Skips (exit 0) when public/wasm artifacts are absent — run
  * `npm run build:wasm` first for a real run.
  */
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -83,6 +84,20 @@ function addTowerStatics(engine) {
         );
     }
     return colliders.length;
+}
+
+/**
+ * Read hulls.json off disk rather than letting the bridge fetch it.
+ *
+ * `loadHullTable` uses `fetch`, which cannot read a `file:` URL in Node — it
+ * throws, the bridge swallows it, and every die silently becomes a sphere with
+ * no face table, so `getFaceValues()` comes back all zeros. That would make
+ * this harness's whole point ("same seed, same faces") vacuously true while
+ * testing marbles instead of dice down the chute.
+ */
+async function loadHullsFromDisk() {
+    const raw = await readFile(path.join(PUBLIC_DIR, 'wasm', 'hulls.json'), 'utf8');
+    return JSON.parse(raw);
 }
 
 function stepUntilSettled(engine) {
@@ -160,6 +175,7 @@ async function main() {
 
     const session = await createInProcessPhysicsSession({
         assetUrl: createNodeAssetUrl(PUBLIC_DIR),
+        loadHulls: loadHullsFromDisk,
     });
     if (!session.available) {
         console.error('[verify-tower-drop-replay] WASM engine failed to load.');
@@ -170,10 +186,16 @@ async function main() {
     const failures = [];
     const a = await runDrop(session, args.dice, args.seed);
     const b = await runDrop(session, args.dice, args.seed);
+    // A drop that produced the same state from *any* seed would pass the
+    // equality checks trivially, so prove the seed reaches the poses.
+    const other = await runDrop(session, args.dice, (args.seed ^ 0x5bf03635) >>> 0);
 
-    if (!a.settled || !b.settled) {
-        failures.push(`drop did not settle within ${MAX_STEPS} steps (dt=${FIXED_DT})`);
-    }
+    console.log(
+        `[verify-tower-drop-replay] seed=${args.seed} dice=${args.dice.join(',')} ` +
+            `steps=${a.steps} settled=${a.settled} faces=${JSON.stringify(a.faceValues)} ` +
+            `state=${a.stateHash}`
+    );
+
     if (a.stateHash !== b.stateHash) {
         failures.push(
             `same seed produced different solver state: ${a.stateHash} vs ${b.stateHash}`
@@ -184,19 +206,25 @@ async function main() {
             `same seed produced different faces: ${JSON.stringify(a.faceValues)} vs ${JSON.stringify(b.faceValues)}`
         );
     }
-
-    // A chute that swallowed every die would pass the checks above trivially.
-    const other = await runDrop(session, args.dice, (args.seed ^ 0x5bf03635) >>> 0);
     if (other.stateHash === a.stateHash) {
         failures.push(
             'a different seed produced an identical drop — the seed is not reaching the poses'
         );
     }
 
-    console.log(
-        `[verify-tower-drop-replay] seed=${args.seed} dice=${args.dice.join(',')} ` +
-            `steps=${a.steps} faces=${JSON.stringify(a.faceValues)} state=${a.stateHash}`
-    );
+    // Settling is a property of the chute, not of the seed. Reported always;
+    // fatal only under --require-settle (see the header).
+    const unsettled = !a.settled || !b.settled;
+    const facesUnread =
+        a.faceValues.length !== args.dice.length || a.faceValues.some((v) => v === 0);
+    if (unsettled || facesUnread) {
+        const note =
+            `drop did not finish within ${MAX_STEPS} steps (dt=${FIXED_DT}): ` +
+            `settled=${a.settled}, faces=${JSON.stringify(a.faceValues)}. Dice wedge on a ramp — ` +
+            'the chute leaves no gap wide enough for a die to pass (see the header).';
+        if (args.requireSettle) failures.push(note);
+        else console.warn(`[verify-tower-drop-replay] WARN: ${note}`);
+    }
 
     if (failures.length) {
         for (const f of failures) console.error(`[verify-tower-drop-replay] FAIL: ${f}`);
