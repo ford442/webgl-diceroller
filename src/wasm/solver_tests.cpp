@@ -651,11 +651,20 @@ TEST_CASE("Sweep proxy: inscribed radius is the largest sphere the hull contains
 }
 
 TEST_CASE("Sweep: a segment starting inside the grown box reports no entry") {
-    // t == 0 is the discrete solver's case. Clipping to it would freeze
-    // anything already resting on a collider.
+    // Starting strictly inside is the discrete solver's case. Clipping to it
+    // would freeze anything already resting on a collider.
     float t = -1.0f;
     CHECK_FALSE(sweepSphereAgainstObb({0.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 0.0f}, 0.5f,
         {0.0f, 0.0f, 0.0f}, Quat{0, 0, 0, 1}, {1.0f, 1.0f, 1.0f}, t));
+
+    // But a body sitting exactly ON the grown face and heading through is a
+    // real crossing, not an interior start, and must still be reported — a die
+    // teleported onto a face (as a seeded drop can do) has had no prior
+    // discrete pass to catch it. Grown half-extent here is 1.5.
+    t = -1.0f;
+    CHECK(sweepSphereAgainstObb({-1.5f, 0.0f, 0.0f}, {4.0f, 0.0f, 0.0f}, 0.5f,
+        {0.0f, 0.0f, 0.0f}, Quat{0, 0, 0, 1}, {1.0f, 1.0f, 1.0f}, t));
+    CHECK(t == doctest::Approx(0.0f));
 
     // Crossing from outside does report the entry time.
     CHECK(sweepSphereAgainstObb({-4.0f, 0.0f, 0.0f}, {4.0f, 0.0f, 0.0f}, 0.5f,
@@ -666,6 +675,39 @@ TEST_CASE("Sweep: a segment starting inside the grown box reports no entry") {
     // A miss stays a miss.
     CHECK_FALSE(sweepSphereAgainstObb({-4.0f, 9.0f, 0.0f}, {4.0f, 9.0f, 0.0f}, 0.5f,
         {0.0f, 0.0f, 0.0f}, Quat{0, 0, 0, 1}, {1.0f, 1.0f, 1.0f}, t));
+}
+
+TEST_CASE("Swept contacts: an off-origin convex hull is swept where it actually is") {
+    // A hull whose local AABB is not centred on its own origin: sweeping the
+    // enclosing box at s.center would put the proxy somewhere the geometry
+    // is not, leaving part of the hull unswept. Box spans local x 2..4.
+    PolyHull offset;
+    offset.build({
+        {2.0f, -1.0f, -1.0f}, {4.0f, -1.0f, -1.0f}, {4.0f, 1.0f, -1.0f}, {2.0f, 1.0f, -1.0f},
+        {2.0f, -1.0f, 1.0f},  {4.0f, -1.0f, 1.0f},  {4.0f, 1.0f, 1.0f},  {2.0f, 1.0f, 1.0f},
+    });
+    CHECK(offset.aabbMin.x == doctest::Approx(2.0f));
+    CHECK(offset.aabbMax.x == doctest::Approx(4.0f));
+
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    std::vector<float> flat;
+    for (const auto& v : offset.verts) { flat.push_back(v.x); flat.push_back(v.y); flat.push_back(v.z); }
+    CHECK(engine.addStaticConvexHull(1, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, flat, 2) == 1);
+
+    PolyHull cube = makeUnitCubeHull();
+    auto cubeFlat = flattenHull(cube);
+    const int id = engine.addDie(6, -4.0f, -1.0f, 0.0f);
+    engine.setDieHull(id, cubeFlat);
+    engine.setDieVelocity(id, 80.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+    for (int frame = 0; frame < 20; ++frame) {
+        engine.step(0.1f);
+        float x = 0, y = 0, z = 0;
+        CHECK(engine.getDiePosition(id, x, y, z));
+        // The hull occupies x in [2, 4]; the die must not end up past it.
+        CHECK(x < 4.5f);
+    }
 }
 
 TEST_CASE("Swept contacts: a thin wall holds at substeps discrete SAT cannot see") {

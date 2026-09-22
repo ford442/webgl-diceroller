@@ -4,12 +4,33 @@
 
 const NONCE_BYTES = 16;
 
+/**
+ * The gameplay path a committed roll will take, folded into the commitment.
+ *
+ * A seed alone does not determine the dice: the same number poses a thrown
+ * roll and a dice-tower drop completely differently. Binding only
+ * `seed ‖ nonce` would let a host publish a commitment, wait for the acks, and
+ * *then* pick whichever trajectory it preferred — guests would verify the hash
+ * happily and replay the host's late choice. So the source is part of the
+ * preimage, and a reveal that names a different one fails verification.
+ *
+ * Absent/unknown canonicalises to `throw`, which is what every pre-`source`
+ * commitment meant.
+ */
+export type CommitRollSource = 'throw' | 'tower';
+
+export function canonicalRollSource(source: string | null | undefined): CommitRollSource {
+    return source === 'tower' ? 'tower' : 'throw';
+}
+
 export interface CommitPayload {
     hash: string;
     notation: string | null;
     dieCount: number;
     diceCounts?: Record<string, number> | null;
     throwAt?: number | null;
+    /** Announced alongside the hash, and bound into it. */
+    source?: CommitRollSource;
 }
 
 export interface RevealPayload {
@@ -17,6 +38,7 @@ export interface RevealPayload {
     nonce: string;
     notation?: string | null;
     diceCounts?: Record<string, number> | null;
+    source?: string | null;
 }
 
 function seedToBytes(seed: number): Uint8Array {
@@ -53,16 +75,26 @@ export function generateNonce(): string {
 }
 
 /**
+ * SHA-256 over `seed ‖ nonce ‖ source`.
+ *
  * @param {number} seed
  * @param {string} nonceBase64
+ * @param {string | null} [source] see `CommitRollSource`; absent means `throw`
  * @returns {Promise<string>} hex SHA-256
  */
-export async function commitHash(seed: number, nonceBase64: string): Promise<string> {
+export async function commitHash(
+    seed: number,
+    nonceBase64: string,
+    source?: string | null
+): Promise<string> {
     const nonceBytes = base64ToBytes(nonceBase64);
     if (!nonceBytes) throw new Error('invalid_nonce');
-    const payload = new Uint8Array(seedToBytes(seed).length + nonceBytes.length);
-    payload.set(seedToBytes(seed), 0);
-    payload.set(nonceBytes, 4);
+    const seedBytes = seedToBytes(seed);
+    const sourceBytes = new TextEncoder().encode(canonicalRollSource(source));
+    const payload = new Uint8Array(seedBytes.length + nonceBytes.length + sourceBytes.length);
+    payload.set(seedBytes, 0);
+    payload.set(nonceBytes, seedBytes.length);
+    payload.set(sourceBytes, seedBytes.length + nonceBytes.length);
     const digest = await crypto.subtle.digest('SHA-256', payload);
     return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
@@ -75,9 +107,10 @@ export async function commitHash(seed: number, nonceBase64: string): Promise<str
 export async function verifyReveal(
     expectedHash: string,
     seed: number,
-    nonceBase64: string
+    nonceBase64: string,
+    source?: string | null
 ): Promise<boolean> {
-    const actual = await commitHash(seed, nonceBase64);
+    const actual = await commitHash(seed, nonceBase64, source);
     return actual === expectedHash;
 }
 
@@ -89,14 +122,17 @@ export async function createCommit(
         dieCount: number;
         diceCounts?: Record<string, number> | null;
         throwAt?: number | null;
+        source?: string | null;
     }
 ): Promise<CommitPayload> {
-    const hash = await commitHash(seed, nonce);
+    const source = canonicalRollSource(fields.source);
+    const hash = await commitHash(seed, nonce, source);
     return {
         hash,
         notation: fields.notation ?? null,
         dieCount: fields.dieCount,
         diceCounts: fields.diceCounts ?? null,
         throwAt: fields.throwAt ?? null,
+        source,
     };
 }

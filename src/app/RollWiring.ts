@@ -253,6 +253,10 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             dieCount,
             diceCounts: diceSet,
             throwAt: performance.now(),
+            // Bound into the hash: a seed alone does not pin the trajectory,
+            // so without this a host could publish the commitment, collect
+            // acks, and only then decide between a throw and a tower drop.
+            source,
         });
         emitRollStarted({ source, seed, expression, diceSet, commit });
         await new Promise((resolve) => setTimeout(resolve, FAIR_COMMIT_ACK_MS));
@@ -266,6 +270,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
                 nonce,
                 notation: expression,
                 throwAt: performance.now(),
+                source,
             },
         });
     }
@@ -513,7 +518,10 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         if (!expectedHash) {
             throw new Error('commit_missing');
         }
-        const ok = await verifyReveal(expectedHash, msg.seed >>> 0, msg.nonce);
+        // The source is part of the preimage, so a host that committed to a
+        // throw and then revealed a tower drop (or the reverse) fails here
+        // rather than getting every guest to replay its late choice.
+        const ok = await verifyReveal(expectedHash, msg.seed >>> 0, msg.nonce, msg.source ?? null);
         if (!ok) {
             throw new Error('commit_mismatch');
         }

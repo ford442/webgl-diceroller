@@ -336,11 +336,18 @@ inline bool sweepSphereAgainstObb(
         tmax = std::min(tmax, t2);
         if (tmin > tmax) return false;
     }
-    // tmin == 0 means the sweep began inside the grown box. The body is
-    // already in contact range and the discrete pass owns it; clipping to
-    // zero motion here would freeze anything resting on a collider.
-    if (tmin <= 0.0f) return false;
-    tOut = tmin;
+    // A sweep that began *strictly inside* the grown box is the discrete
+    // solver's case, not ours: the body is already in contact range, and
+    // clipping it to zero motion here would freeze anything resting on a
+    // collider. Tested explicitly rather than inferred from `tmin == 0`,
+    // which also fires for a body sitting exactly on the surface and heading
+    // through — that one is a real crossing and must be reported (a body
+    // teleported onto a face, as a seeded drop can do, has had no prior
+    // discrete pass to catch it).
+    const bool startsInside =
+        std::abs(s[0]) < e[0] && std::abs(s[1]) < e[1] && std::abs(s[2]) < e[2];
+    if (startsInside) return false;
+    tOut = std::max(0.0f, tmin);
     return true;
 }
 

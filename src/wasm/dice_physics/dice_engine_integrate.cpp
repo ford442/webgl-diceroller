@@ -67,18 +67,27 @@ void DicePhysicsEngine::sweepClipAgainstStatics(RigidBody& b, const Vec3& from) 
     bool hit = false;
     for (const auto& s : statics_) {
         Vec3 halfExtents;
+        Vec3 sweepCenter = s.center;
         switch (s.shape) {
             case StaticShapeType::Box:
                 halfExtents = s.halfExtents;
                 break;
-            case StaticShapeType::ConvexHull:
+            case StaticShapeType::ConvexHull: {
                 if (s.hull.verts.empty()) continue;
                 // The hull's own AABB, which contains it: a sweep against the
                 // enclosing box can stop a body early but never lets one
                 // through, and a hull static is a rarity next to the boxes
                 // the props are actually built from.
+                //
+                // That AABB is not necessarily centred on the hull's local
+                // origin, so the box has to be re-centred on the AABB's
+                // midpoint — using s.center for an asymmetric hull would
+                // offset the proxy off the geometry and leave part of it
+                // unswept.
                 halfExtents = (s.hull.aabbMax - s.hull.aabbMin) * 0.5f;
+                sweepCenter += s.rotation.rotate((s.hull.aabbMin + s.hull.aabbMax) * 0.5f);
                 break;
+            }
             default:
                 // Planes are half-spaces (nothing to tunnel into) and open
                 // cylinders are already solved as radial planes.
@@ -89,10 +98,11 @@ void DicePhysicsEngine::sweepClipAgainstStatics(RigidBody& b, const Vec3& from) 
         // collider's, before paying for the slab test.
         const Vec3 midpoint = from + motion * 0.5f;
         const float reach = dist * 0.5f + proxy + halfExtents.length();
-        if ((s.center - midpoint).lengthSq() > reach * reach) continue;
+        if ((sweepCenter - midpoint).lengthSq() > reach * reach) continue;
 
         float t = 1.0f;
-        if (sweepSphereAgainstObb(from, b.position, proxy, s.center, s.rotation, halfExtents, t) &&
+        if (sweepSphereAgainstObb(from, b.position, proxy, sweepCenter, s.rotation, halfExtents,
+                                  t) &&
             t < earliest) {
             earliest = t;
             hit = true;
@@ -100,8 +110,10 @@ void DicePhysicsEngine::sweepClipAgainstStatics(RigidBody& b, const Vec3& from) 
     }
     if (!hit) return;
 
+    // `earliest` can be 0 for a body starting exactly on a face, so clamp:
+    // backing off past the start would move it backwards along its own motion.
     const float backoff = std::min(CCD_CONTACT_OFFSET / dist, earliest);
-    b.position = from + motion * (earliest - backoff);
+    b.position = from + motion * std::max(0.0f, earliest - backoff);
 }
 
 void DicePhysicsEngine::checkSleep(RigidBody& b, float dt) const {
