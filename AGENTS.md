@@ -267,7 +267,9 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 - **ESLint + Prettier** enforce a minimal ruleset (`eslint:recommended`, unused imports/vars, `eqeqeq`, import resolution). Config: [`eslint.config.js`](eslint.config.js), [`.prettierrc`](.prettierrc).
 - Run `npm run lint` before committing; CI blocks merge on lint/format failures.
 - **TypeScript policy:** `npm run typecheck` (`tsc --noEmit`, `checkJs` over remaining JS). `npm run typecheck:strict` is `strict: true` + `noUncheckedIndexedAccess` on `src/**/*.ts`. Headless seams live in [`src/core-engine/`](src/core-engine/) (WASM façade, notation, dice-set format, `rollHeadless()`); `npm run check:core-engine` fails the build if that tree imports `three` or uses `window.` / `document.`. **Environment props stay JavaScript** with JSDoc until individually migrated through `propKit`; do not bulk-convert the ~99 prop modules. `src/main.js` / `src/ui.js` / `src/results.js` stay JS until a panel kit exists. No `tsc` emit — Vite bundles `.ts` directly.
-- Native solver tests always write `src/wasm/build-native/compile_commands.json` (`npm run test:solver`; no `bear`/`compiledb` needed), and `src/wasm/.clangd` points clangd at it. CMake also exports `compile_commands.json` (`CMAKE_EXPORT_COMPILE_COMMANDS`) and Debug builds use `emcc_flags.sh` debug profile (`-O0 -g`), not release `-O3 -flto`.
+- Native solver tests always write `src/wasm/build-native/compile_commands.json` (`npm run test:solver`; no `bear`/`compiledb` needed), and `src/wasm/.clangd` points clangd at the _merged_ native + emcc database that `npm run wasm:clangd-db` produces. Without a local EMSDK, download the `clangd-compile-commands` artifact from CI's `wasm-toolchain` job into `src/wasm/compile_commands.json` — otherwise `__EMSCRIPTEN__` / `__wasm_simd128__` branches read as dead code in the editor. CMake also exports `compile_commands.json` (`CMAKE_EXPORT_COMPILE_COMMANDS`) and Debug builds use `emcc_flags.sh` debug profile (`-O0 -g`), not release `-O3 -flto`.
+- **C++ gates:** `npm run test:solver` compiles with `-Werror` (`SOLVER_NO_WERROR=1` to opt out locally), and `npm run lint:cpp` runs clang-tidy over `src/wasm/dice_physics/**` with `WarningsAsErrors: '*'`. The engine is clean under both, so a new diagnostic is a regression. Disabling a clang-tidy check means editing `src/wasm/.clang-tidy` with a reason next to the existing ones — not a `NOLINT` comment.
+- **Do not hand-edit CMake's source list or flags.** `engine_sources.txt` is the only place a new `dice_physics/*.cpp` gets registered, and `emcc_flags.inc.sh` is the only place flags live. CI's `wasm-toolchain` job byte-diffs CMake's `dice_physics.wasm` against `build.sh`'s, so a flag added in one place and not the other fails the build.
 - **Format on save (Cursor / VS Code):** enable Prettier as the default formatter and `"editor.formatOnSave": true` so agent edits match project style. ESLint fixes on save: `"editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" }`.
 - Optional local hook: `npm install` runs `husky` + `lint-staged` (ESLint fix + Prettier on staged `*.{js,mjs}`).
 - Prefix intentionally unused bindings with `_` (e.g. `_elapsedTime`, `catch (_e)`).
@@ -452,7 +454,9 @@ npm run test:breadloaf        # BreadLoaf prop in scene graph
 npm run test:dicecup          # DiceCup interactable (needs WASM for available:true)
 
 # Physics / renderer harnesses (scripts/)
-npm run test:solver                 # Native C++ unit + fuzz (see docs/WASM_ENGINE.md)
+npm run test:solver                 # Native C++ unit + fuzz, -Werror (see docs/WASM_ENGINE.md)
+npm run lint:cpp                    # clang-tidy over src/wasm/dice_physics/**
+npm run verify:cmake-wasm           # CMake vs build.sh .wasm byte parity (needs an EMSDK)
 node scripts/verify-wasm-primitives.mjs
 npm run verify:wasm-interaction     # drag + levitation on the WASM-only path (needs a build)
 npm run verify:worker-replay        # Worker-module replay determinism (seededPhysicsThrow) — isolated from the app UI
@@ -475,7 +479,7 @@ npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when b
 
     Capture on a machine with the same SwiftShader path CI uses; a capture taken without `public/wasm/` present will not match the runner's.
 
-- **Every job has a `timeout-minutes`.** GitHub's default is six hours. Keep new jobs at 15 minutes (30 for emcc / render capture) so a hang fails fast instead of burning the account's CI budget.
+- **Every job has a `timeout-minutes`.** GitHub's default is six hours. Keep new jobs at 15 minutes so a hang fails fast instead of burning the account's CI budget. Current exceptions: 20 for `test-solver` (the fuzz run plus a clang-tidy pass), and 30 for `build-wasm`, `render-regression`, and `wasm-toolchain` (the last links both wasm profiles twice for the CMake parity diff).
 
 - `test:wasm-gameplay-loop`, `test:wasm-authoritative`, and `test:share-roll-replay` all run in CI (`verify-tests` matrix); `verify:worker-replay` runs in the `verify` matrix. All four need the `wasm-artifacts` build (`npm run build:wasm`) to exercise the WASM-authoritative path rather than skipping.
 

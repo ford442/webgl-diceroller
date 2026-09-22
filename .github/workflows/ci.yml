@@ -9,6 +9,14 @@ concurrency:
     group: ci-${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: true
 
+# Least privilege for GITHUB_TOKEN. Every job here only reads the repo: the
+# artifact and cache actions authenticate with ACTIONS_RUNTIME_TOKEN, not this
+# one, so nothing needs write access. Without this block the workflow inherits
+# the repository default, which on a pull_request trigger can be far broader
+# than anything these jobs do.
+permissions:
+    contents: read
+
 env:
     EMSDK_VERSION: '3.1.61'
     # GitHub-hosted runners have no GPU. The WebGL2 TSL backend never finishes
@@ -19,8 +27,9 @@ env:
 # Every job below carries an explicit timeout-minutes. GitHub's default is
 # SIX HOURS, and a hung Playwright harness used to burn all of it (twice per
 # run). Actions has no workflow-level default for this, so it is per job:
-# 15 minutes for everything, 30 for the two that legitimately take longer
-# (emcc build, render capture).
+# 15 minutes by default, 20 where a lint pass rides along (test-solver), and 30
+# for the three that legitimately take longer (emcc build, render capture, and
+# the CMake parity build, which links both wasm profiles twice).
 
 jobs:
     build-js:
@@ -145,12 +154,57 @@ jobs:
                   retention-days: 7
 
     test-solver:
-        name: Native solver unit + fuzz
+        name: Native solver unit + fuzz + clang-tidy
         runs-on: ubuntu-latest
-        timeout-minutes: 15
+        timeout-minutes: 20
         steps:
             - uses: actions/checkout@v5
+            # build_solver_test.sh compiles with -Werror and, as a side effect,
+            # writes src/wasm/build-native/compile_commands.json — which the
+            # clang-tidy step below analyses against. Keep that order.
             - run: FUZZ_SEEDS=2000 npm run test:solver
+            - name: Install clang-tidy
+              run: |
+                  if ! command -v clang-tidy >/dev/null 2>&1; then
+                    sudo apt-get update
+                    sudo apt-get install -y clang-tidy
+                  fi
+                  clang-tidy --version
+            - run: npm run lint:cpp
+
+    # CMake is the database clangd and IDE tooling read, build.sh is what ships.
+    # This job proves they are the same build: it configures CMake through
+    # emcmake and byte-diffs its dice_physics.wasm against build.sh's, then
+    # publishes the merged (native + emcc) compile_commands.json so the
+    # __EMSCRIPTEN__ / __wasm_simd128__ branches are covered by something other
+    # than a developer's local checkout.
+    wasm-toolchain:
+        name: WASM toolchain (CMake parity + clangd DB)
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v5
+            - uses: mymindstorm/setup-emsdk@v15
+              with:
+                  version: ${{ env.EMSDK_VERSION }}
+                  actions-cache-folder: emsdk-cache
+            # Configure-only for the emcc half; also runs the native solver
+            # build for the native half. Cheap relative to the parity build, so
+            # it goes first and the artifact survives a parity failure.
+            - name: Merge clangd compile database (native + emcc)
+              run: npm run wasm:clangd-db
+            - uses: actions/upload-artifact@v6
+              if: always()
+              with:
+                  name: clangd-compile-commands
+                  path: src/wasm/compile_commands.json
+                  if-no-files-found: error
+                  retention-days: 7
+            # Builds both profiles twice (build.sh, then CMake) and cmp's the
+            # .wasm files. See scripts/verify-cmake-wasm-parity.sh for what a
+            # mismatch means and how to read its diagnostic.
+            - name: CMake ↔ build.sh byte parity
+              run: npm run verify:cmake-wasm
 
     test-solver-wasm-parity:
         name: Native ↔ WASM serialize parity

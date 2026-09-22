@@ -34,13 +34,24 @@ if [[ "${1:-}" == "--print-link-line" ]]; then
 fi
 
 if [[ "${1:-}" == "--print-compile-line" ]]; then
-    # Codegen flags for CMake COMPILE_OPTIONS. `-s KEY=VALUE` pairs are emcc
-    # *linker* settings; emcc warns when they appear on a compile command, so
-    # drop them here. Everything else (-O3, -flto, -msimd128,
-    # -DDICE_FORCE_SCALAR_SAT, --bind, -std=c++17, -g) must reach the compiler:
-    # -msimd128 is what defines __wasm_simd128__ and -D... selects the scalar
-    # SAT path, so passing these at link time only silently yields a non-SIMD
-    # build identical to the scalar one.
+    # Codegen flags for CMake COMPILE_OPTIONS. Two kinds of flag are dropped
+    # because they are emcc *linker* inputs and emcc warns on every translation
+    # unit when they appear on a compile command:
+    #   -s KEY=VALUE  linker settings.
+    #   --bind        shorthand for -lembind, a link-time library. build.sh
+    #                 compiles and links in one invocation so it needs --bind
+    #                 on that single command line; a per-TU compile does not,
+    #                 and emitting it produced
+    #                 "linker flag ignored during compilation: '--bind'"
+    #                 (plus "-lembind: 'linker' input unused") once per TU.
+    #                 Embind itself only needs <emscripten/bind.h> at compile
+    #                 time; -lembind is what the *link* step consumes, and the
+    #                 link line (--print-link-line) still carries it.
+    # Everything else (-O3, -flto, -msimd128, -DDICE_FORCE_SCALAR_SAT,
+    # -std=c++17, -g) must reach the compiler: -msimd128 is what defines
+    # __wasm_simd128__ and -D... selects the scalar SAT path, so passing these
+    # at link time only silently yields a non-SIMD build identical to the
+    # scalar one.
     profile="${2:-release}"
     emcc_build_flags "${profile}"
     COMPILE_FLAGS=()
@@ -48,6 +59,7 @@ if [[ "${1:-}" == "--print-compile-line" ]]; then
     for flag in "${EMCC_FLAGS[@]}"; do
         if [ "${skip_next}" = "1" ]; then skip_next=0; continue; fi
         if [ "${flag}" = "-s" ]; then skip_next=1; continue; fi
+        if [ "${flag}" = "--bind" ]; then continue; fi
         COMPILE_FLAGS+=("${flag}")
     done
     emcc_print_line "${COMPILE_FLAGS[@]}"
