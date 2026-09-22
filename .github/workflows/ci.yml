@@ -71,7 +71,15 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: .
+                  # The upload below lists two paths, so upload-artifact roots
+                  # the archive at their least common ancestor (`public/`) and
+                  # the entries are `wasm/…` + `wasm-scalar/…`. Extracting to
+                  # `.` therefore put them at the repo root, where nothing
+                  # looks: every browser harness 404'd, and the checks that
+                  # probe for the files (native<->WASM parity, the solver
+                  # golden, this PR's tower-drop replay) skipped and reported
+                  # green. Extract under `public/` so the paths round-trip.
+                  path: public
             - run: npm run build:js
             - run: npx playwright install --with-deps chromium
             - run: npm run verify:bundle-loading
@@ -217,7 +225,15 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: .
+                  # The upload below lists two paths, so upload-artifact roots
+                  # the archive at their least common ancestor (`public/`) and
+                  # the entries are `wasm/…` + `wasm-scalar/…`. Extracting to
+                  # `.` therefore put them at the repo root, where nothing
+                  # looks: every browser harness 404'd, and the checks that
+                  # probe for the files (native<->WASM parity, the solver
+                  # golden, this PR's tower-drop replay) skipped and reported
+                  # green. Extract under `public/` so the paths round-trip.
+                  path: public
             - run: npm run test:solver
 
     # These verify:* scripts each boot their own throwaway vite dev server
@@ -247,7 +263,15 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: .
+                  # The upload below lists two paths, so upload-artifact roots
+                  # the archive at their least common ancestor (`public/`) and
+                  # the entries are `wasm/…` + `wasm-scalar/…`. Extracting to
+                  # `.` therefore put them at the repo root, where nothing
+                  # looks: every browser harness 404'd, and the checks that
+                  # probe for the files (native<->WASM parity, the solver
+                  # golden, this PR's tower-drop replay) skipped and reported
+                  # green. Extract under `public/` so the paths round-trip.
+                  path: public
             - run: ls -la public/wasm public/wasm-scalar || true
             - run: npx playwright install --with-deps chromium
             - run: npm run ${{ matrix.script }}
@@ -286,7 +310,15 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: .
+                  # The upload below lists two paths, so upload-artifact roots
+                  # the archive at their least common ancestor (`public/`) and
+                  # the entries are `wasm/…` + `wasm-scalar/…`. Extracting to
+                  # `.` therefore put them at the repo root, where nothing
+                  # looks: every browser harness 404'd, and the checks that
+                  # probe for the files (native<->WASM parity, the solver
+                  # golden, this PR's tower-drop replay) skipped and reported
+                  # green. Extract under `public/` so the paths round-trip.
+                  path: public
             - run: ls -la public/wasm public/wasm-scalar || true
             - run: npx playwright install --with-deps chromium
             - run: npm run build:js
@@ -320,7 +352,15 @@ jobs:
               uses: actions/download-artifact@v7
               with:
                   name: wasm-artifacts
-                  path: .
+                  # The upload below lists two paths, so upload-artifact roots
+                  # the archive at their least common ancestor (`public/`) and
+                  # the entries are `wasm/…` + `wasm-scalar/…`. Extracting to
+                  # `.` therefore put them at the repo root, where nothing
+                  # looks: every browser harness 404'd, and the checks that
+                  # probe for the files (native<->WASM parity, the solver
+                  # golden, this PR's tower-drop replay) skipped and reported
+                  # green. Extract under `public/` so the paths round-trip.
+                  path: public
             - run: npx playwright install --with-deps chromium
             # Required profiles (?webgl&no-post, ?webgl) must capture and match
             # tests/baselines/. The optional ?webgpu capture is skipped on CPU CI

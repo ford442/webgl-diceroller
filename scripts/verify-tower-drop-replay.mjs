@@ -3,9 +3,9 @@
  *
  * Loads the real tower chute (src/environment/diceTowerLayout.js) into a
  * headless WASM engine, drops the same dice through it twice from one seed,
- * and requires the two runs to agree bit-for-bit: same settled state, same
- * face values. Then repeats with a different seed and requires them to
- * differ, so a chute that swallowed every die could not pass by accident.
+ * and requires the two runs to agree bit-for-bit: same solver state, same face
+ * values. Then repeats with a different seed and requires them to differ, so a
+ * chute that swallowed every die could not pass by accident.
  *
  * This is the acceptance harness for `?src=tower` share links and for a guest
  * replaying a host's drop in a `?room=` — a tower drop that drew from
@@ -14,9 +14,21 @@
  * Usage:
  *   npm run verify:tower-drop-replay
  *   node scripts/verify-tower-drop-replay.mjs --seed 12345 --dice d20,d20,d6
+ *   node scripts/verify-tower-drop-replay.mjs --require-settle
  *
- * Skips (exit 0) when public/wasm artifacts are absent — run
- * `npm run build:wasm` first for a real run.
+ * Without public/wasm artifacts it skips locally (run `npm run build:wasm`),
+ * but **fails under CI** (`$CI`), where the workflow downloads them on
+ * purpose: a silent skip there is a job that tests nothing while reporting
+ * green, which is exactly how the repo's WASM coverage went unnoticed.
+ *
+ * `--require-settle` additionally demands that the drop finish: every die
+ * asleep and reading a face. It is OFF by default because the chute does not
+ * currently let a die through — every ramp's low edge clears the opposing wall
+ * by 0.36-0.77 units where a d20 needs ~2.0, so dice wedge on the first ramp
+ * and never reach the tray. That is a prop-geometry defect, not a determinism
+ * one (the wedged state is bit-identical from the same seed, which is what
+ * this harness exists to prove), and it predates seeded drops. Turn the flag
+ * on by default once the chute is opened up.
  */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -54,10 +66,11 @@ const IDLE_STEPS_REQUIRED = 8;
 const WOOD_MATERIAL_TAG = 2;
 
 function parseArgs(argv) {
-    const args = { seed: 0x7a1e5, dice: ['d20', 'd20', 'd6'] };
+    const args = { seed: 0x7a1e5, dice: ['d20', 'd20', 'd6'], requireSettle: false };
     for (let i = 0; i < argv.length; i++) {
         if (argv[i] === '--seed') args.seed = Number.parseInt(argv[++i], 10) >>> 0;
         else if (argv[i] === '--dice') args.dice = argv[++i].split(',').map((s) => s.trim());
+        else if (argv[i] === '--require-settle') args.requireSettle = true;
     }
     return args;
 }
@@ -167,8 +180,19 @@ async function main() {
     const args = parseArgs(process.argv.slice(2));
 
     if (!wasmArtifactsPresent(PUBLIC_DIR)) {
+        const where = `${path.join(PUBLIC_DIR, 'wasm')} / ${path.join(PUBLIC_DIR, 'wasm-scalar')}`;
+        if (process.env.CI) {
+            console.error(
+                `[verify-tower-drop-replay] FAIL: no dice_physics.wasm under ${where}. ` +
+                    'CI downloads the wasm-artifacts bundle for this job, so a skip here would ' +
+                    'be a job that tests nothing and reports green.'
+            );
+            process.exitCode = 1;
+            return;
+        }
         console.log(
-            '[verify-tower-drop-replay] Skipping — public/wasm artifacts not present. Run `npm run build:wasm`.'
+            `[verify-tower-drop-replay] Skipping — no dice_physics.wasm under ${where}. ` +
+                'Run `npm run build:wasm`.'
         );
         return;
     }
