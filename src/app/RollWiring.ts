@@ -25,6 +25,7 @@ import {
 } from '../roll/Notation.js';
 import {
     REPLAY_VERSION,
+    SUPPORTED_REPLAY_VERSIONS,
     buildShareableRollUrl,
     generateRollSeed,
     parseShareableRollParams,
@@ -76,6 +77,10 @@ interface RollHistoryPanelLike {
     refresh: () => void;
 }
 
+interface DiceTowerControllerLike {
+    dropDice: (idsOrAll: 'all' | number[], options?: { seed?: number | null }) => number[];
+}
+
 interface CollisionAudioLike {
     handleCollisionEvent: (ev: unknown) => void;
     checkCollisionPropReactions?: (ev: unknown) => void;
@@ -97,6 +102,12 @@ export interface RollWiringDeps {
     getCollisionAudio: () => CollisionAudioLike | null | undefined;
     multiplayerRef: { current: RoomSession | null };
     useFairCommit?: boolean;
+    /**
+     * Replaying a `?src=tower` link needs the tower itself — it lives on a
+     * tier that loads well after the wiring is built, so this is a getter and
+     * may legitimately return null (tower not loaded → nothing to replay).
+     */
+    getDiceTowerController?: () => DiceTowerControllerLike | null | undefined;
 }
 
 interface LastRollRef {
@@ -174,12 +185,55 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         emitRollStarted({ source });
     }
 
+    /**
+     * A cup pour is deliberately unseeded: it is driven by where the player
+     * physically waves the cup, which no seed can reproduce. Pours stay local
+     * (`seed == null`) and never reach a share URL.
+     */
     function beginCupRoll(): void {
         beginPhysicalReroll('cup');
     }
 
-    function beginTowerRoll(): void {
-        beginPhysicalReroll('tower');
+    /**
+     * A tower drop, unlike a cup pour, *is* a roll: every pose and kick comes
+     * from the engine PRNG, so it seeds like a throw and rides the share URL
+     * as `?src=tower`. Returns the seed the drop must draw from — minting one
+     * when the caller has none (replays pass theirs in).
+     */
+    function beginTowerRoll(explicitSeed: number | null = null): number {
+        const seed = (explicitSeed ?? generateRollSeed()) >>> 0;
+        const diceSet = captureDiceSet();
+        pendingRollMeta = {
+            seed,
+            expression: null,
+            diceSet,
+            source: 'tower',
+        };
+        rollHandlerRef.lastRoll = {
+            seed,
+            counts: getSpawnedDiceCounts(),
+            source: 'tower',
+            expression: null,
+            system: activeRollSystem,
+        };
+        const shadowController = getShadowController();
+        shadowController?.pulse('roll');
+        getDiceGameFeel()?.clearRollState();
+        getCameraController()?.setState(DiceFocusState.WAITING_FOR_STOP);
+        hideResults();
+        const lampData = getLampData();
+        if (lampData) lampData.setRolling(true);
+        if (useFairCommit) {
+            // The caller needs the seed *now* to pose dice this frame, so the
+            // commit/reveal pair goes out alongside the drop instead of
+            // gating it. Guests still verify the hash before they replay —
+            // they just start a beat behind the host, the way a physical
+            // tower is a beat behind the hand that tipped it.
+            void broadcastFairCommit(seed, null, diceSet, 'tower');
+        } else {
+            emitRollStarted({ source: 'tower', seed });
+        }
+        return seed;
     }
 
     async function broadcastFairCommit(
@@ -400,6 +454,32 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         };
     }
 
+    /**
+     * Replay a drop through the tower the local scene actually has, reporting
+     * whether dice were in fact dropped.
+     *
+     * False means there was no tower (a low tier, or a scene that never loaded
+     * tier 2) or nothing to drop. The caller must *not* fall back to a throw:
+     * the same seed poses dice completely differently through the chute, so a
+     * fallback would quietly show different faces from the ones the host — or
+     * the link's author — saw.
+     *
+     * On success `dropDice` has already run `beginTowerRoll`, which owns the
+     * roll UI (camera, lamp, results). Callers therefore do not set that state
+     * themselves, and a refused drop leaves nothing waiting on a settle that
+     * will never come.
+     */
+    function replayTowerDrop(seed: number, context: string): boolean {
+        const tower = deps.getDiceTowerController?.();
+        if (!tower) {
+            console.warn(
+                `[${context}] a tower drop cannot be replayed without the dice tower, which is not loaded; skipping.`
+            );
+            return false;
+        }
+        return tower.dropDice('all', { seed: seed >>> 0 }).length > 0;
+    }
+
     function hasShareableRoll(): boolean {
         return rollHandlerRef.lastRoll?.seed != null;
     }
@@ -410,6 +490,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         return buildShareableRollUrl(last.seed, last.counts, undefined, getActiveDiceSet(), {
             expression: last.expression ?? null,
             system: last.system ?? null,
+            source: last.source === 'tower' ? 'tower' : null,
         });
     }
 
@@ -437,6 +518,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             seed: msg.seed >>> 0,
             notation: msg.notation ?? null,
             diceCounts: msg.diceCounts ?? null,
+            source: msg.source ?? null,
         });
     }
 
@@ -444,11 +526,24 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         seed,
         notation,
         diceCounts,
+        source,
     }: RemoteRollMessage): Promise<void> {
         if (diceCounts) {
             updateDiceSet(getScene(), getPhysicsWorld(), diceCounts);
             getUi()?.updateCounts?.(diceCounts);
         }
+
+        if (source === 'tower') {
+            // The drop drives the roll UI itself (see replayTowerDrop), so
+            // this branch returns before the generic setup below rather than
+            // duplicating it — and a refused drop leaves the table untouched.
+            if (!replayTowerDrop(seed, 'RoomSession')) return;
+            // beginTowerRoll stamped the meta as a local tower roll; this is
+            // the host's drop being reproduced, and history should say so.
+            pendingRollMeta = { ...pendingRollMeta, source: 'remote' };
+            return;
+        }
+
         pendingRollMeta = {
             seed: seed >>> 0,
             expression: notation,
@@ -483,11 +578,17 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
                   seed?: number | null;
                   notation?: string | null;
                   diceCounts?: Record<string, number> | null;
+                  source?: string | null;
               }
             | null
             | undefined;
         if (last?.seed != null && isWasmAvailable()) {
-            if (last.notation && rollSessionRef.current) {
+            if (last.source === 'tower') {
+                if (last.diceCounts) {
+                    updateDiceSet(getScene(), getPhysicsWorld(), last.diceCounts);
+                }
+                replayTowerDrop(last.seed, 'RoomSession');
+            } else if (last.notation && rollSessionRef.current) {
                 pendingRollMeta = {
                     seed: last.seed >>> 0,
                     expression: last.notation,
@@ -512,7 +613,9 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         if (replayRequest) {
             if ('error' in replayRequest) {
                 console.warn(
-                    `[ShareableRoll] Unsupported replay version v=${replayRequest.version} (need v=${REPLAY_VERSION}); skipping auto-replay.`
+                    `[ShareableRoll] Unsupported replay version v=${replayRequest.version} ` +
+                        `(this build reads v=${SUPPORTED_REPLAY_VERSIONS.join('/')}, writes up to ` +
+                        `v=${REPLAY_VERSION}); skipping auto-replay.`
                 );
             } else {
                 if (!isWasmAvailable()) {
@@ -528,7 +631,9 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
                 if (replayRequest.system && ROLL_SYSTEMS[replayRequest.system]) {
                     activeRollSystem = replayRequest.system;
                 }
-                if (replayRequest.expression) {
+                if (replayRequest.source === 'tower') {
+                    replayTowerDrop(replayRequest.seed, 'ShareableRoll');
+                } else if (replayRequest.expression) {
                     rollHandlerRef.lastRoll = {
                         seed: replayRequest.seed >>> 0,
                         counts: {},

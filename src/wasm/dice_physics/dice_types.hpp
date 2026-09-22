@@ -34,6 +34,12 @@ struct RigidBody {
     PolyHull hull;
     bool  useHull    = false;
     float radius     = 0.9f;
+    // Orientation-independent sweep proxy for the swept-contact path (see
+    // CCD_MOTION_FRACTION). Kept alongside `radius` rather than derived on
+    // demand because the hull's face loop is O(faces x verts) and the sweep
+    // runs per substep; refreshed by computeInertiaFromHull, the one hook
+    // every hull assignment already goes through.
+    float sweepRadius = 0.0f;
     float mass       = 5.0f;
     float invMass    = 0.2f;
 
@@ -57,6 +63,11 @@ struct RigidBody {
     void computeInertiaFromHull() {
         const float sphereI = std::max(0.4f * mass * radius * radius, 1e-8f);
         const auto sphereInv = Vec3{1.0f / sphereI, 1.0f / sphereI, 1.0f / sphereI};
+
+        // A hull-less die is already a sphere, so its bounding radius *is* its
+        // inscribed one.
+        const float inscribed = useHull ? hull.inscribedRadius() : radius;
+        sweepRadius = inscribed > 0.0f ? std::min(inscribed, radius) : radius;
 
         if (!useHull || hull.verts.empty()) {
             invInertia = sphereInv;

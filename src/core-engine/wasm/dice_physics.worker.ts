@@ -52,6 +52,7 @@ import {
     dynXfOffset,
 } from './workerLayout.js';
 import { computeSeededThrowParams, applyThrowParams } from './seededThrowParams.js';
+import { computeSeededHopperDropParams, applyDropParams } from './seededHopperDrop.js';
 import { dispatchLinear, drainRing } from './workerCommands.js';
 import { toRngSeedBigInt } from './seedUtil.js';
 import type { DicePhysicsModule, EmbindPhysicsEngine } from './physicsTypes.js';
@@ -614,6 +615,21 @@ function handle(type: string, payload: CommandPayload): void {
                 payload.tableSurfaceY
             );
             applyThrowParams(eng, params);
+            publish();
+            break;
+        }
+        case 'seededHopperDrop': {
+            // Same contract as seededThrow: seed, draw, apply — all on the
+            // worker, so the RNG draw order can't interleave with anything
+            // the main thread does while the message is in flight.
+            drainCommandQueue();
+            eng.seedRNG(toRngSeedBigInt(payload.seed));
+            const params = computeSeededHopperDropParams(
+                () => eng.randomFloat(),
+                payload.dice,
+                payload.frame
+            );
+            applyDropParams(eng, params);
             publish();
             break;
         }

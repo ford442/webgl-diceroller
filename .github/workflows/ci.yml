@@ -233,6 +233,7 @@ jobs:
                 script:
                     - verify:worker-physics
                     - verify:worker-replay
+                    - verify:tower-drop-replay
                     - verify:godrays
                     - verify:wasm-primitives
         steps:

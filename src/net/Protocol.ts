@@ -61,6 +61,15 @@ export interface RollFields {
     diceCounts?: Record<string, number> | null;
     presence?: unknown;
     throwAt?: number | null;
+    /**
+     * Which gameplay path produced the roll: omitted/`null` means a throw,
+     * `'tower'` a dice-tower hopper drop. The same seed poses dice completely
+     * differently for each, so a guest that replayed a drop as a throw would
+     * diverge from the host on every die. Safe to add without a protocol bump
+     * because a guest on a build that does not know the field is already
+     * rejected at join on `solverBuildId` (SOLVER_REVISION moved with it).
+     */
+    source?: string | null;
 }
 
 export interface CommitFields {
@@ -82,6 +91,8 @@ export interface RevealFields {
     diceCounts?: Record<string, number> | null;
     presence?: unknown;
     throwAt?: number | null;
+    /** See `RollFields.source`. */
+    source?: string | null;
 }
 
 export interface SessionSyncFields {
@@ -133,6 +144,7 @@ export interface RollMessage extends ProtocolEnvelope {
     diceCounts: Record<string, number> | null;
     presence: unknown;
     throwAt: number | null;
+    source: string | null;
 }
 
 export interface CommitMessage extends ProtocolEnvelope {
@@ -157,6 +169,7 @@ export interface RevealMessage extends ProtocolEnvelope {
     diceCounts: Record<string, number> | null;
     presence: unknown;
     throwAt: number | null;
+    source: string | null;
 }
 
 export interface SessionSyncMessage extends ProtocolEnvelope {
@@ -274,6 +287,7 @@ export function makeRoll(fields: RollFields, _version: number = PROTOCOL_VERSION
         diceCounts: fields.diceCounts ?? null,
         presence: fields.presence ?? null,
         throwAt: fields.throwAt ?? null,
+        source: fields.source ?? null,
     };
 }
 
@@ -313,6 +327,7 @@ export function makeReveal(
         diceCounts: fields.diceCounts ?? null,
         presence: fields.presence ?? null,
         throwAt: fields.throwAt ?? null,
+        source: fields.source ?? null,
     };
 }
 

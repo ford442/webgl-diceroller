@@ -291,6 +291,60 @@ inline void sphereContact(const RigidBody& a, const RigidBody& b,
 }
 
 // ---------------------------------------------------------------------------
+// Swept (continuous) tests
+// ---------------------------------------------------------------------------
+
+/**
+ * First time in [0, 1] at which a sphere of `radius`, travelling along
+ * `from` -> `to`, touches the oriented box (`center`, `rotation`,
+ * `halfExtents`); false when it never does, or when it starts already
+ * touching (t == 0 — that is the discrete solver's case, not ours).
+ *
+ * The sphere sweep is approximated by a ray against the box grown by `radius`
+ * on each axis. That grown box strictly contains the true Minkowski sum
+ * (which has rounded edges and corners), so the test never misses a real hit;
+ * the over-coverage at the corners can only stop a body a shade early, which
+ * a speculative contact would have done anyway.
+ */
+inline bool sweepSphereAgainstObb(
+    const Vec3& from, const Vec3& to, float radius,
+    const Vec3& center, const Quat& rotation, const Vec3& halfExtents,
+    float& tOut
+) {
+    const Quat inv = rotation.conjugate();
+    const Vec3 start = inv.rotate(from - center);
+    const Vec3 end = inv.rotate(to - center);
+    const Vec3 dir = end - start;
+
+    const float e[3] = {halfExtents.x + radius, halfExtents.y + radius, halfExtents.z + radius};
+    const float s[3] = {start.x, start.y, start.z};
+    const float d[3] = {dir.x, dir.y, dir.z};
+
+    float tmin = 0.0f;
+    float tmax = 1.0f;
+    for (int a = 0; a < 3; ++a) {
+        if (std::abs(d[a]) < 1e-9f) {
+            // Parallel to this slab: a start outside it never enters.
+            if (std::abs(s[a]) > e[a]) return false;
+            continue;
+        }
+        const float invD = 1.0f / d[a];
+        float t1 = (-e[a] - s[a]) * invD;
+        float t2 = (e[a] - s[a]) * invD;
+        if (t1 > t2) std::swap(t1, t2);
+        tmin = std::max(tmin, t1);
+        tmax = std::min(tmax, t2);
+        if (tmin > tmax) return false;
+    }
+    // tmin == 0 means the sweep began inside the grown box. The body is
+    // already in contact range and the discrete pass owns it; clipping to
+    // zero motion here would freeze anything resting on a collider.
+    if (tmin <= 0.0f) return false;
+    tOut = tmin;
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // Deterministic RNG
 // ---------------------------------------------------------------------------
 

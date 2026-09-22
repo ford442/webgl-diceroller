@@ -242,6 +242,7 @@ async function init() {
         multiplayerRef,
         getCollisionAudio: () => collisionAudio,
         useFairCommit: isFairCommitEnabled(searchParams),
+        getDiceTowerController: () => diceTowerController,
     });
 
     const rendererRecoveryDeps = {
@@ -329,6 +330,7 @@ async function init() {
         postRuntime,
         renderStats,
         debugEnabled,
+        frozenLights: searchParams.has('test'),
         isLockedRef,
         cursorPos,
         isXrPresentingRef,

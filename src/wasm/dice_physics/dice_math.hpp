@@ -199,6 +199,29 @@ struct PolyHull {
             }
         }
     }
+
+    /**
+     * Radius of the largest sphere about the hull's own origin that the hull
+     * strictly contains: min over face planes of the support distance along
+     * that face normal.
+     *
+     * The swept-contact path (see CCD_MOTION_FRACTION) uses it as a sweep
+     * proxy — a sphere this size can be swept in place of the hull without
+     * ever reporting a hit the hull itself would not have had, and unlike the
+     * bounding radius it does not depend on the hull's orientation, which is
+     * exactly what a proxy for a tumbling die needs. 0 when the hull has no
+     * usable faces.
+     */
+    float inscribedRadius() const {
+        if (verts.empty() || faceNormals.empty()) return 0.0f;
+        float inscribed = 1e30f;
+        for (const auto& n : faceNormals) {
+            float support = -1e30f;
+            for (const auto& v : verts) support = std::max(support, Vec3::dot(n, v));
+            inscribed = std::min(inscribed, support);
+        }
+        return (inscribed > 0.0f && std::isfinite(inscribed)) ? inscribed : 0.0f;
+    }
 };
 
 } // namespace dice_physics

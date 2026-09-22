@@ -48,6 +48,18 @@ export {
     type SeededThrowParam,
 } from './wasm/seededThrowParams.js';
 
+export {
+    HOPPER_DROP_SPEED,
+    HOPPER_LATERAL_KICK,
+    HOPPER_SPIN,
+    HOPPER_STACK_SPACING,
+    applyDropParams,
+    computeSeededHopperDropParams,
+    identityHopperFrame,
+    type SeededDropParam,
+    type SeededHopperFrame,
+} from './wasm/seededHopperDrop.js';
+
 export { PHYSICS_FLAG_NO_DRAG, parsePhysicsFlags } from './wasm/physicsFlags.js';
 
 export {

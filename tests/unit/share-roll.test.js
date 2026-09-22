@@ -6,8 +6,10 @@ import { createDefaultDiceSet, withComputedId } from '../../src/dice/DiceSetForm
 import { serializeLegacyDiceLook } from '../../src/dice/LegacyDiceLook.js';
 import {
     REPLAY_VERSION,
+    ROLL_SOURCE_PARAM,
     buildShareableRollUrl,
     parseDiceParam,
+    parseRollSource,
     parseShareableRollDiceSet,
     parseShareableRollParams,
     serializeDiceCounts,
@@ -35,11 +37,28 @@ describe('ShareableRoll', () => {
     });
 
     it('accepts v=1', () => {
-        const params = new URLSearchParams(`seed=12345&dice=d20:1&v=${REPLAY_VERSION}`);
+        const params = new URLSearchParams('seed=12345&dice=d20:1&v=1');
         const result = parseShareableRollParams(params);
         if (!result || 'error' in result) throw new Error('expected a successful parse');
         expect(result.seed).toBe(12345);
         expect(result.diceCounts.d20).toBe(1);
+        expect(result.source).toBe('throw');
+    });
+
+    it('accepts the current version', () => {
+        const params = new URLSearchParams(`seed=12345&dice=d20:1&v=${REPLAY_VERSION}`);
+        const result = parseShareableRollParams(params);
+        if (!result || 'error' in result) throw new Error('expected a successful parse');
+        expect(result.seed).toBe(12345);
+        expect(result.source).toBe('throw');
+    });
+
+    it('rejects a version this build cannot read', () => {
+        const params = new URLSearchParams(`seed=1&v=${REPLAY_VERSION + 1}`);
+        const result = parseShareableRollParams(params);
+        if (!result || !('error' in result))
+            throw new Error('expected an unsupported_version error');
+        expect(result.error).toBe('unsupported_version');
     });
 
     it('includes seed, dice, and version in the built URL', () => {
@@ -47,7 +66,42 @@ describe('ShareableRoll', () => {
         const parsed = new URL(url);
         expect(parsed.searchParams.get('seed')).toBe('42');
         expect(parsed.searchParams.get('dice')).toBe('d20:1');
-        expect(parsed.searchParams.get('v')).toBe(String(REPLAY_VERSION));
+        // A throw still writes v=1: `src` is the only thing v2 added, so links
+        // that don't need it keep replaying on clients that predate it.
+        expect(parsed.searchParams.get('v')).toBe('1');
+        expect(parsed.searchParams.get(ROLL_SOURCE_PARAM)).toBeNull();
+    });
+
+    it('marks a tower drop on the URL and reads it back', () => {
+        const url = buildShareableRollUrl(1234, { d6: 3 }, 'http://example.test/roller', null, {
+            source: 'tower',
+        });
+        const parsed = new URL(url);
+        expect(parsed.searchParams.get(ROLL_SOURCE_PARAM)).toBe('tower');
+        // A tower link must NOT claim v=1 — a v1 client would replay the seed
+        // as a throw and land different faces from the ones that were shared.
+        expect(parsed.searchParams.get('v')).toBe('2');
+
+        const replay = parseShareableRollParams(parsed.searchParams);
+        if (!replay || 'error' in replay) throw new Error('expected a successful parse');
+        expect(replay.source).toBe('tower');
+        expect(replay.seed).toBe(1234);
+        expect(replay.diceCounts.d6).toBe(3);
+    });
+
+    it('ignores src on a v1 link, which predates the param', () => {
+        const params = new URLSearchParams('seed=7&v=1&src=tower');
+        const result = parseShareableRollParams(params);
+        if (!result || 'error' in result) throw new Error('expected a successful parse');
+        expect(result.source).toBe('throw');
+    });
+
+    it('falls back to a throw for a source it does not know', () => {
+        expect(parseRollSource('catapult')).toBeNull();
+        const params = new URLSearchParams(`seed=7&v=${REPLAY_VERSION}&src=catapult`);
+        const result = parseShareableRollParams(params);
+        if (!result || 'error' in result) throw new Error('expected a successful parse');
+        expect(result.source).toBe('throw');
     });
 
     it('round-trips notation expression + system', () => {

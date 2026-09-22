@@ -7,8 +7,46 @@ import {
 import { DICE_SET_PARAM, decodeDiceSet, encodeDiceSet } from '../dice/ShareableDiceSet.js';
 import { getGlobalLocation, getSubtleCrypto } from '../runtimeEnv.js';
 
-/** URL replay format version — bump when solver/throw semantics change. */
-export const REPLAY_VERSION = 1;
+/**
+ * Highest URL replay format version this build writes or reads.
+ *
+ * v1: `?seed=` replays a thrown roll.
+ * v2: adds `?src=`, the gameplay path that produced the roll — a tower dump
+ *     is a different set of poses from the same seed, so a v1 client must not
+ *     silently replay one as a throw.
+ *
+ * Bump when solver/throw semantics change.
+ */
+export const REPLAY_VERSION = 2;
+
+/** Every version this build can still replay. Older links keep working. */
+export const SUPPORTED_REPLAY_VERSIONS: readonly number[] = [1, 2];
+
+/** Query param carrying the gameplay path a shared roll came from. */
+export const ROLL_SOURCE_PARAM = 'src';
+
+/** The roll sources a share link can name. */
+export const ROLL_SOURCES = ['throw', 'tower'] as const;
+export type RollSource = (typeof ROLL_SOURCES)[number];
+
+export const DEFAULT_ROLL_SOURCE: RollSource = 'throw';
+
+/**
+ * The oldest format version that can express each source. A plain throw still
+ * writes `v=1`, so links shared before `src` existed — and links shared by
+ * this build to clients that predate it — keep replaying; only the sources
+ * that genuinely need the new param carry the new version.
+ */
+const MIN_VERSION_FOR_SOURCE: Record<RollSource, number> = {
+    throw: 1,
+    tower: 2,
+};
+
+export function parseRollSource(raw: string | null | undefined): RollSource | null {
+    const trimmed = raw?.trim();
+    if (!trimmed) return null;
+    return (ROLL_SOURCES as readonly string[]).includes(trimmed) ? (trimmed as RollSource) : null;
+}
 
 /**
  * Die keys a shared roll can carry, derived from the catalog rather than listed.
@@ -33,6 +71,7 @@ export interface ShareableRollParams {
     diceCounts: DiceCounts | null;
     expression: string | null;
     system: string | null;
+    source: RollSource;
     version: number;
 }
 
@@ -45,6 +84,8 @@ export interface UnsupportedShareableRollVersion {
 export interface ShareableRollExtras {
     expression?: string | null;
     system?: string | null;
+    /** Defaults to `'throw'`; `'tower'` replays the roll as a dice-tower dump. */
+    source?: string | null;
 }
 
 /** Unsigned 32-bit roll seed. */
@@ -105,9 +146,16 @@ export function parseShareableRollParams(
     const version =
         versionRaw === null || versionRaw === '' ? null : Number.parseInt(versionRaw, 10);
 
-    if (version !== REPLAY_VERSION) {
+    if (version === null || !SUPPORTED_REPLAY_VERSIONS.includes(version)) {
         return { error: 'unsupported_version', version, seed: seed >>> 0 };
     }
+
+    // `src` only means anything from v2 on: a v1 link predates the param, so
+    // it can only ever have described a throw, whatever else is on the URL.
+    const source =
+        version >= MIN_VERSION_FOR_SOURCE.tower
+            ? (parseRollSource(searchParams.get(ROLL_SOURCE_PARAM)) ?? DEFAULT_ROLL_SOURCE)
+            : DEFAULT_ROLL_SOURCE;
 
     const diceCounts = parseDiceParam(searchParams.get('dice') ?? '');
     const expressionRaw = searchParams.get('expr') ?? searchParams.get('expression');
@@ -120,7 +168,8 @@ export function parseShareableRollParams(
         diceCounts,
         expression,
         system,
-        version: REPLAY_VERSION,
+        source,
+        version,
     };
 }
 
@@ -140,8 +189,11 @@ export function buildShareableRollUrl(
     extras: ShareableRollExtras = {}
 ): string {
     const url = new URL(baseUrl ?? getGlobalLocation()?.href ?? 'http://localhost/');
+    const source = parseRollSource(extras.source) ?? DEFAULT_ROLL_SOURCE;
     url.searchParams.set('seed', String(seed >>> 0));
-    url.searchParams.set('v', String(REPLAY_VERSION));
+    url.searchParams.set('v', String(MIN_VERSION_FOR_SOURCE[source]));
+    if (source === DEFAULT_ROLL_SOURCE) url.searchParams.delete(ROLL_SOURCE_PARAM);
+    else url.searchParams.set(ROLL_SOURCE_PARAM, source);
     const dice = serializeDiceCounts(counts ?? {});
     if (dice) url.searchParams.set('dice', dice);
     else url.searchParams.delete('dice');
