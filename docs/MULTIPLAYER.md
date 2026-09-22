@@ -39,6 +39,13 @@ Protocol v2 (`PROTOCOL_VERSION = 2`) uses commit-reveal instead of broadcasting 
 
 Add `?fair-commit` to the URL until v2 is the default.
 
+**Every roll path awaits its own commit/reveal before a single die moves** —
+throws, notation rolls and tower drops alike. Starting the local simulation
+first would let a host watch the outcome during the ack window and simply never
+send the reveal, re-rolling under a fresh seed; the commit it already published
+binds nothing if the roll it describes can be abandoned unseen. Guarded by a
+test over `RollWiring.ts` (see `tests/unit/seededHopperDrop.test.ts`).
+
 ### What is and is not a seeded roll
 
 | Path                   | Seed        | On the share URL         | Broadcast to guests |

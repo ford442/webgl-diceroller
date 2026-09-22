@@ -29,7 +29,7 @@ interface DropOptions {
 /**
  * @typedef {Object} DiceTowerControllerDeps
  * @property {ReturnType<import('../environment/DiceTower.js').createDiceTower>} towerProp
- * @property {(seed?: number | null) => number} beginTowerRoll
+ * @property {(seed?: number | null) => Promise<number>} beginTowerRoll
  * @property {(message: string) => void} [onFeedback]
  */
 
@@ -78,10 +78,15 @@ export function createDiceTowerController(deps: any) {
      * a share link exactly like a thrown roll does. Unlike a cup pour (which
      * is deliberately local-only, `seed == null`), a drop is a seeded roll.
      *
+     * Async because under `?fair-commit` the host must broadcast its commit and
+     * reveal *before* any die moves — starting the drop first would let it see
+     * the outcome and withhold the reveal. Off that path the await resolves
+     * immediately.
+     *
      * @param {'all'|number[]} idsOrAll
      * @param {DropOptions} options
      */
-    const dropDice = (idsOrAll: 'all' | number[] = 'all', options: DropOptions = {}) => {
+    const dropDice = async (idsOrAll: 'all' | number[] = 'all', options: DropOptions = {}) => {
         if (!isWasmAvailable()) {
             onFeedback?.('Dice tower requires WASM physics');
             return [];
@@ -104,8 +109,10 @@ export function createDiceTowerController(deps: any) {
 
         const requestedSeed = options.seed ?? null;
         // beginTowerRoll owns the seed so the roll it opens and the poses we
-        // draw are the same number — it mints one when we pass null.
-        const seed = (beginTowerRoll?.(requestedSeed) ?? requestedSeed ?? generateRollSeed()) >>> 0;
+        // draw are the same number — it mints one when we pass null, and does
+        // not resolve until any fair-commit reveal is on the wire.
+        const seed =
+            ((await beginTowerRoll?.(requestedSeed)) ?? requestedSeed ?? generateRollSeed()) >>> 0;
         lastSeed = seed;
 
         const dice: SeededDieRef[] = targets.map((die: any, index: number) => ({

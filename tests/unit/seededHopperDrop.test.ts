@@ -130,6 +130,32 @@ describe('applyDropParams', () => {
     });
 });
 
+describe('fair-commit ordering', () => {
+    it('never starts a roll before its commit/reveal is on the wire', () => {
+        // Commit-reveal only binds a host if it cannot see the outcome before
+        // revealing. Firing broadcastFairCommit and rolling immediately leaves
+        // the host free to watch the dice during the ack window and withhold
+        // an unfavourable reveal — the abort the scheme exists to prevent.
+        // The tower drop shipped that way once; this keeps every roll path
+        // (throw, notation, tower) awaiting it.
+        const source = readFileSync(path.join(REPO_ROOT, 'src/app/RollWiring.ts'), 'utf8');
+
+        const callSites = source
+            .split('\n')
+            .map((line, i) => ({ line: line.trim(), n: i + 1 }))
+            .filter(({ line }) => line.includes('broadcastFairCommit('))
+            // the declaration itself, not a call
+            .filter(({ line }) => !line.startsWith('async function'));
+
+        expect(callSites.length).toBeGreaterThanOrEqual(3);
+        for (const { line, n } of callSites) {
+            expect(line, `RollWiring.ts:${n} must await broadcastFairCommit`).toMatch(
+                /^await broadcastFairCommit\(/
+            );
+        }
+    });
+});
+
 describe('DiceTowerController', () => {
     it('draws no entropy of its own', () => {
         // Acceptance: the tower's scatter must come from the seeded engine
