@@ -48,6 +48,7 @@ import { OP, copyIntoRing, countRecords } from './workerCommands.js';
 import { parseCollisionEventBuffer } from './collisionEvents.js';
 import type { CollisionEvent, PhysicsEngine } from './physicsTypes.js';
 import type { SeededDieRef } from './seededThrowParams.js';
+import type { SeededHopperFrame } from './seededHopperDrop.js';
 
 interface StepStats {
     pairCandidates: number;
@@ -795,6 +796,9 @@ class WorkerEngineProxy implements PhysicsEngine {
     seededThrow(seed: number, dice: SeededDieRef[], tableSurfaceY: number): void {
         this._send('seededThrow', { seed, dice, tableSurfaceY });
     }
+    seededHopperDrop(seed: number, dice: SeededDieRef[], frame: SeededHopperFrame): void {
+        this._send('seededHopperDrop', { seed, dice, frame });
+    }
     async serializeStateAsync(): Promise<Uint8Array> {
         const res = await this._request('serializeState');
         return new Uint8Array(res.data, 0, res.byteLength);
@@ -945,6 +949,14 @@ export const seededPhysicsThrow = (
     tableSurfaceY: number
 ): void => {
     activeEngine()?.seededThrow(seed, dice, tableSurfaceY);
+};
+
+export const seededPhysicsHopperDrop = (
+    seed: number,
+    dice: SeededDieRef[],
+    frame: SeededHopperFrame
+): void => {
+    activeEngine()?.seededHopperDrop(seed, dice, frame);
 };
 
 export const deserializePhysicsState = (data: Uint8Array): void => {

@@ -48,6 +48,8 @@ export interface RemoteRollMessage {
     seed: number;
     notation: string | null;
     diceCounts: Record<string, number> | null;
+    /** `'tower'` replays as a dice-tower drop; anything else is a throw. */
+    source?: string | null;
 }
 
 export interface RemoteCommitMessage {
@@ -61,6 +63,8 @@ export interface RemoteRevealMessage {
     nonce: string;
     notation?: string | null;
     diceCounts?: Record<string, number> | null;
+    /** See `RemoteRollMessage.source`. */
+    source?: string | null;
 }
 
 export interface RemoteTableSyncMessage {
@@ -123,6 +127,9 @@ interface LastRoll {
     seed: number;
     notation: string | null;
     diceCounts: Record<string, number>;
+    /** See `RemoteRollMessage.source` — persisted so a late joiner's table
+     *  sync replays the host's last roll the way the host rolled it. */
+    source?: string | null;
     results?: unknown;
 }
 
@@ -333,11 +340,13 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                         seed: msg.seed >>> 0,
                         notation: msg.notation ?? null,
                         diceCounts: msg.diceCounts ?? null,
+                        source: msg.source ?? null,
                     });
                     lastRoll = {
                         seed: msg.seed >>> 0,
                         notation: msg.notation ?? null,
                         diceCounts: msg.diceCounts ?? deps.getDiceCounts(),
+                        source: msg.source ?? null,
                     };
                 } catch (err) {
                     console.warn('[RoomSession] remote roll failed', err);
@@ -379,6 +388,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                         seed: msg.seed >>> 0,
                         notation: msg.notation ?? null,
                         diceCounts: msg.diceCounts ?? deps.getDiceCounts(),
+                        source: msg.source ?? null,
                     };
                     pushPersistedRoomState();
                 } catch (err) {
@@ -589,6 +599,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                                 diceCounts,
                                 presence: deps.getPresencePayload(),
                                 throwAt: p.reveal.throwAt ?? performance.now(),
+                                source: p.source ?? null,
                             },
                             protocolVersion
                         )
@@ -597,6 +608,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                         seed: p.reveal.seed >>> 0,
                         notation: p.reveal.notation ?? p.expression ?? null,
                         diceCounts,
+                        source: p.source ?? null,
                     };
                     pushPersistedRoomState();
                     broadcastEncoded(buildPresenceMsg());
@@ -611,6 +623,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                     diceCounts,
                     presence: deps.getPresencePayload(),
                     throwAt: performance.now(),
+                    source: p.source ?? null,
                 },
                 protocolVersion
             );
@@ -618,6 +631,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                 seed: p.seed >>> 0,
                 notation: p.expression ?? null,
                 diceCounts,
+                source: p.source ?? null,
             };
             broadcastEncoded(msg);
             broadcastEncoded(buildPresenceMsg());

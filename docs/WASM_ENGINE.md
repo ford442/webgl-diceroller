@@ -381,7 +381,7 @@ Source layout:
 | `dice_physics/dice_engine_step.cpp`              | `step()`, buffer builders, serialize/deserialize, invariant helpers                                                                                            |
 | `dice_physics/dice_engine_collision_static.cpp`  | Shared helpers (radius, events, static materials) — contact generation is in `dice_engine_solver.cpp`                                                          |
 | `dice_physics/dice_engine_collision_dynamic.cpp` | Die–die grid helpers used by tests                                                                                                                             |
-| `dice_physics/dice_engine_integrate.cpp`         | Per-body integration, exponential damping, sleep bookkeeping                                                                                                   |
+| `dice_physics/dice_engine_integrate.cpp`         | Per-body integration, exponential damping, swept static clipping, sleep bookkeeping                                                                            |
 | `dice_physics/dice_engine_solver.cpp`            | Persistent manifolds, sequential impulse, speculative contacts, island sleep                                                                                   |
 | `dice_physics/dice_engine_face_value.cpp`        | Engine-authoritative die face settlement                                                                                                                       |
 | `dice_physics.cpp`                               | Emscripten Embind exports for the WASM build (links against the `.cpp` files above)                                                                            |
@@ -679,6 +679,54 @@ const engine = getWasmEngine();
 | `serializeState`   | `(): VectorU8`           | Snapshot all body states to a byte vector.  |
 | `deserializeState` | `(data: VectorU8): void` | Restore a snapshot.                         |
 
+Both seeded gameplay paths draw through `randomFloat()` in a fixed order, and
+both compute their parameters in shared TypeScript so the worker and the
+in-process bridge produce identical numbers:
+
+| Worker command     | Shared param module    | Applies                                             |
+| ------------------ | ---------------------- | --------------------------------------------------- |
+| `seededThrow`      | `seededThrowParams.ts` | Pose + impulse + torque across the table            |
+| `seededHopperDrop` | `seededHopperDrop.ts`  | Pose + velocity + tumble at the dice tower's hopper |
+
+`seededHopperDrop` takes the hopper mouth as a world-space origin plus an
+orthonormal basis (`SeededHopperFrame`), so the PRNG only ever draws unitless
+scatter and a drop replays wherever the tower prop happens to be placed. See
+`npm run verify:tower-drop-replay` for the end-to-end check.
+
+#### Swept contacts (continuous collision)
+
+`generateContacts` only ever sees the pose a substep _ends_ at. Speculative
+manifolds widen the contact search by the distance a body will travel, but they
+still work from that one discrete pose: a body clear of a collider at both ends
+of a substep produces no manifold at all.
+
+`sweepClipAgainstStatics` (in `dice_engine_integrate.cpp`) closes that gap for
+die-vs-static. When a substep's linear motion exceeds `CCD_MOTION_FRACTION` of
+the body's sweep proxy — its hull's inscribed sphere, `PolyHull::inscribedRadius()`,
+which is orientation-independent and therefore stable for a tumbling die — the
+path is swept against every static box/hull (`sweepSphereAgainstObb`) and the
+body is parked just short of first touch, so the discrete pass that follows has
+a pose in contact range. Velocity and rotation are untouched.
+
+Scope and limits, measured rather than assumed:
+
+- At the app's fixed 1/60 step the gate is effectively never reached, and the
+  existing speculative path already blocks a max-speed (`MAX_LINEAR_SPEED = 80`)
+  die against a 0.04-thick wall. **Tower-drop speeds do not tunnel with or
+  without this**, and neither do fast flicks.
+- Tunnelling does reproduce for callers stepping at `dt >= 0.1s` (12/40 launch
+  positions at `dt = 0.1`, 26/40 at `dt = 0.2`, with the sweep disabled), and
+  the sweep takes all of those to 0. `step(dt)` takes whatever it is handed —
+  `rollHeadless`, the native harnesses and any future variable-`dt` caller
+  included — so the guard is worth its (gated-out) cost.
+- Die–die CCD is deliberately not attempted: statics never move, so
+  `from -> position` is the whole relative motion and one sweep per collider is
+  exact; two moving hulls are not.
+
+Covered by `Swept contacts: a thin wall holds at substeps discrete SAT cannot
+see` and `Dice tower: a hopper drop never leaves the chute through a ramp` in
+`solver_tests.cpp`.
+
 ---
 
 ## Integration Points
@@ -861,7 +909,8 @@ const t2 = window.__app.getWasmEngine().getTransforms();
 
 - `randomFloat()` is not available synchronously across the worker boundary;
   deterministic rolls use the `seededThrow` worker command (via `seededPhysicsThrow`)
-  so RNG draws and impulses stay ordered in the worker. `serializePhysicsState()`
+  and tower drops use `seededHopperDrop` (via `seededPhysicsHopperDrop`),
+  so RNG draws and the poses/impulses they feed stay ordered in the worker. `serializePhysicsState()`
   is async on the worker path (request/response with a transferred `ArrayBuffer`).
 - `applyDiceMassBiases()` posts one `applyTorqueImpulse` message per mass-biased
   die per frame; batching into a single message would cut chatter at high counts.

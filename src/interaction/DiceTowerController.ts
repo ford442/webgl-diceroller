@@ -1,19 +1,35 @@
 import * as THREE from 'three';
+import { spawnedDice, setDieWasmKinematic } from '../dice.js';
 import {
-    spawnedDice,
-    driveDieWasmTransform,
-    setDieWasmVelocity,
-    setDieWasmKinematic,
-} from '../dice.js';
-import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
+    getWasmEngine,
+    isWasmAvailable,
+    isUsingWorkerPhysics,
+    randomPhysicsFloat,
+    seedPhysicsRNG,
+    seededPhysicsHopperDrop,
+} from '../wasm/PhysicsBridge.js';
+import {
+    applyDropParams,
+    computeSeededHopperDropParams,
+    type SeededHopperFrame,
+} from '../wasm/seededHopperDrop.js';
+import { generateRollSeed } from '../roll/ShareableRoll.js';
+import type { SeededDieRef } from '../wasm/seededThrowParams.js';
 
-const _worldPos = new THREE.Vector3();
-const _identityQuat = new THREE.Quaternion();
+const _axisX = new THREE.Vector3();
+const _axisY = new THREE.Vector3();
+const _axisZ = new THREE.Vector3();
+const _origin = new THREE.Vector3();
+
+interface DropOptions {
+    /** Replay a previous drop. Omit to mint a fresh seed for this one. */
+    seed?: number | null;
+}
 
 /**
  * @typedef {Object} DiceTowerControllerDeps
  * @property {ReturnType<import('../environment/DiceTower.js').createDiceTower>} towerProp
- * @property {() => void} beginTowerRoll
+ * @property {(seed?: number | null) => Promise<number>} beginTowerRoll
  * @property {(message: string) => void} [onFeedback]
  */
 
@@ -25,13 +41,52 @@ export function createDiceTowerController(deps: any) {
     const towerGroup = towerProp.group;
     const hopper = towerProp.hopper;
 
+    let lastSeed: number | null = null;
+
     /**
-     * Teleports the given dice to the hopper mouth and kicks them down the
-     * chute; the existing settle-watcher + roll-settled flow takes it from
-     * there (same as a cup pour).
-     * @param {'all'|number[]} idsOrAll
+     * The hopper mouth as a world-space origin + orthonormal basis.
+     *
+     * Read off the tower's live matrix rather than baked in, because the prop
+     * is placed (and rotated) by the tier definition: a replay reproduces the
+     * *scatter*, and the frame it scatters in comes from wherever the tower
+     * actually stands in this scene.
      */
-    const dropDice = (idsOrAll = 'all') => {
+    const hopperFrame = (): SeededHopperFrame => {
+        towerGroup.updateMatrixWorld(true);
+        towerGroup.matrixWorld.extractBasis(_axisX, _axisY, _axisZ);
+        _axisX.normalize();
+        _axisY.normalize();
+        _axisZ.normalize();
+        _origin.setFromMatrixPosition(towerGroup.matrixWorld);
+        return {
+            origin: { x: _origin.x, y: _origin.y, z: _origin.z },
+            axisX: { x: _axisX.x, y: _axisX.y, z: _axisX.z },
+            axisY: { x: _axisY.x, y: _axisY.y, z: _axisY.z },
+            axisZ: { x: _axisZ.x, y: _axisZ.y, z: _axisZ.z },
+            y: hopper.y,
+            halfWidth: hopper.halfWidth,
+            halfDepth: hopper.halfDepth,
+        };
+    };
+
+    /**
+     * Poses the given dice at the hopper mouth and kicks them down the chute;
+     * the existing settle-watcher + roll-settled flow takes it from there.
+     *
+     * Every draw comes from the engine PRNG seeded with `seed`, in the order
+     * `computeSeededHopperDropParams` documents — so a tower dump replays from
+     * a share link exactly like a thrown roll does. Unlike a cup pour (which
+     * is deliberately local-only, `seed == null`), a drop is a seeded roll.
+     *
+     * Async because under `?fair-commit` the host must broadcast its commit and
+     * reveal *before* any die moves — starting the drop first would let it see
+     * the outcome and withhold the reveal. Off that path the await resolves
+     * immediately.
+     *
+     * @param {'all'|number[]} idsOrAll
+     * @param {DropOptions} options
+     */
+    const dropDice = async (idsOrAll: 'all' | number[] = 'all', options: DropOptions = {}) => {
         if (!isWasmAvailable()) {
             onFeedback?.('Dice tower requires WASM physics');
             return [];
@@ -39,9 +94,9 @@ export function createDiceTowerController(deps: any) {
 
         const targets =
             idsOrAll === 'all'
-                ? spawnedDice.filter((die) => die.wasmId != null)
+                ? spawnedDice.filter((die: any) => die.wasmId != null)
                 : spawnedDice.filter(
-                      (die) =>
+                      (die: any) =>
                           die.wasmId != null &&
                           Array.isArray(idsOrAll) &&
                           idsOrAll.includes(die.wasmId)
@@ -52,34 +107,46 @@ export function createDiceTowerController(deps: any) {
             return [];
         }
 
-        towerGroup.updateMatrixWorld(true);
-        beginTowerRoll();
+        const requestedSeed = options.seed ?? null;
+        // beginTowerRoll owns the seed so the roll it opens and the poses we
+        // draw are the same number — it mints one when we pass null, and does
+        // not resolve until any fair-commit reveal is on the wire.
+        const seed =
+            ((await beginTowerRoll?.(requestedSeed)) ?? requestedSeed ?? generateRollSeed()) >>> 0;
+        lastSeed = seed;
 
-        const droppedIds: number[] = [];
-        targets.forEach((die, index) => {
-            const lx = (Math.random() - 0.5) * 2 * hopper.halfWidth;
-            const lz = (Math.random() - 0.5) * 2 * hopper.halfDepth;
-            const ly = hopper.y + index * 0.35;
-            _worldPos.set(lx, ly, lz).applyMatrix4(towerGroup.matrixWorld);
+        const dice: SeededDieRef[] = targets.map((die: any, index: number) => ({
+            id: die.wasmId as number,
+            index,
+        }));
+        const frame = hopperFrame();
 
-            setDieWasmKinematic(die.mesh, false);
-            driveDieWasmTransform(die.mesh, _worldPos, die.mesh.quaternion ?? _identityQuat);
-            setDieWasmVelocity(
-                die.mesh,
-                { x: 0, y: -1.5, z: (Math.random() - 0.5) * 0.5 },
-                { x: 0, y: 0, z: 0 }
+        // A die held by the cup/grab is kinematic; the drop has to hand it back
+        // to the solver before posing it, or the poses never integrate.
+        targets.forEach((die: any) => setDieWasmKinematic(die.mesh, false));
+
+        if (isUsingWorkerPhysics()) {
+            // RNG draws stay ordered on the worker — `randomFloat()` is not
+            // synchronous across the boundary (see docs/WASM_ENGINE.md).
+            seededPhysicsHopperDrop(seed, dice, frame);
+        } else {
+            seedPhysicsRNG(seed);
+            applyDropParams(
+                getWasmEngine(),
+                computeSeededHopperDropParams(() => randomPhysicsFloat(), dice, frame)
             );
-            if (die.wasmId != null) droppedIds.push(die.wasmId);
-        });
+        }
 
-        return droppedIds;
+        return dice.map((d) => d.id);
     };
 
     return {
         dropDice,
+        hopperFrame,
         getState: () => ({
             available: isWasmAvailable(),
-            diceCount: spawnedDice.filter((die) => die.wasmId != null).length,
+            diceCount: spawnedDice.filter((die: any) => die.wasmId != null).length,
+            lastSeed,
         }),
     };
 }

@@ -44,6 +44,78 @@ PolyHull makeTetraHull() {
     return hull;
 }
 
+/** Regular icosahedron, circumradius 1 — the d20 shape the tower drops. */
+PolyHull makeD20Hull() {
+    const float phi = 1.6180339887f;
+    std::vector<Vec3> verts = {
+        {0, 1, phi},  {0, -1, phi},  {0, 1, -phi},  {0, -1, -phi},
+        {1, phi, 0},  {-1, phi, 0},  {1, -phi, 0},  {-1, -phi, 0},
+        {phi, 0, 1},  {-phi, 0, 1},  {phi, 0, -1},  {-phi, 0, -1},
+    };
+    const float inv = 1.0f / std::sqrt(1.0f + phi * phi);
+    for (auto& v : verts) v = v * inv;
+    PolyHull hull;
+    hull.build(verts);
+    return hull;
+}
+
+/**
+ * The dice tower's static colliders, world-posed, mirroring
+ * src/environment/DiceTower.js: shaft walls, three alternating ramps, and the
+ * catch tray. Rebuilt here rather than loaded so the chute regression does not
+ * depend on Three.js, a GL context, or the rest of the tavern.
+ *
+ * Returns the tray floor's world Y — the height below which a die has left the
+ * tower through the bottom rather than out of it.
+ */
+struct TowerFixture {
+    float hopperY = 0.0f;
+    float hopperHalfWidth = 0.0f;
+    float hopperHalfDepth = 0.0f;
+    float trayFloorY = 0.0f;
+    float footprintHalfX = 0.0f;
+    Vec3 origin{};
+};
+
+TowerFixture addDiceTowerStatics(DicePhysicsEngine& engine, const Vec3& origin) {
+    const float W = 6.0f, D = 6.0f, H = 15.0f, T = 0.5f;
+    const float frontH = H / 3.0f;
+    const float rampThick = 0.2f;
+    const float rampW = W - T * 2.0f - 0.1f;
+    const float rampLen = D * 0.9f;
+    const float trayDepth = 8.0f, trayHeight = 2.0f;
+    const float trayZ = D / 2.0f + trayDepth / 2.0f - T;
+
+    int userId = 1;
+    auto box = [&](float cx, float cy, float cz, float hx, float hy, float hz, float rotX) {
+        const float qx = std::sin(rotX * 0.5f);
+        const float qw = std::cos(rotX * 0.5f);
+        engine.addStaticBox(userId++, origin.x + cx, origin.y + cy, origin.z + cz,
+            hx, hy, hz, qx, 0.0f, 0.0f, qw, 2);
+    };
+
+    box(0, H / 2, -D / 2 + T / 2, W / 2, H / 2, T / 2, 0);              // back wall
+    box(-W / 2 + T / 2, H / 2, 0, T / 2, H / 2, D / 2, 0);              // left wall
+    box(W / 2 - T / 2, H / 2, 0, T / 2, H / 2, D / 2, 0);               // right wall
+    box(0, H - frontH / 2, D / 2 - T / 2, W / 2, frontH / 2, T / 2, 0); // front (upper third)
+    box(0, 11, -0.5f, rampW / 2, rampThick / 2, rampLen / 2, 0.6f);
+    box(0, 7, 0.5f, rampW / 2, rampThick / 2, rampLen / 2, -0.6f);
+    box(0, 3, -0.5f, rampW / 2, rampThick / 2, (rampLen + 1.0f) / 2, 0.6f);
+    box(0, T / 2, trayZ, W / 2, T / 2, trayDepth / 2, 0);                              // tray floor
+    box(-W / 2 + T / 2, trayHeight / 2, trayZ, T / 2, trayHeight / 2, trayDepth / 2, 0);
+    box(W / 2 - T / 2, trayHeight / 2, trayZ, T / 2, trayHeight / 2, trayDepth / 2, 0);
+    box(0, trayHeight / 2, trayZ + trayDepth / 2 - T / 2, W / 2, trayHeight / 2, T / 2, 0);
+
+    TowerFixture fixture;
+    fixture.origin = origin;
+    fixture.hopperY = H - 1.0f;
+    fixture.hopperHalfWidth = (rampW / 2.0f) * 0.6f;
+    fixture.hopperHalfDepth = D / 2.0f - 1.0f;
+    fixture.trayFloorY = origin.y + T;
+    fixture.footprintHalfX = W / 2.0f;
+    return fixture;
+}
+
 std::vector<float> flattenHull(const PolyHull& hull) {
     std::vector<float> flat;
     flat.reserve(hull.verts.size() * 3);
@@ -564,6 +636,145 @@ TEST_CASE("Speculative contacts: thin wall is not tunneled at high speed") {
             CHECK(x < 2.4f);
         }
         CHECK(maxX < 2.15f);
+    }
+}
+
+TEST_CASE("Sweep proxy: inscribed radius is the largest sphere the hull contains") {
+    // A unit cube's inscribed sphere is its half-extent, not its (larger)
+    // vertex distance -- sweeping the vertex distance would stop dice short of
+    // every surface they approach.
+    CHECK(makeUnitCubeHull().inscribedRadius() == doctest::Approx(0.5f));
+    // Regular icosahedron of circumradius 1: r_in = phi^2 / (sqrt(3) * r_circ).
+    CHECK(makeD20Hull().inscribedRadius() == doctest::Approx(0.7947f).epsilon(0.001f));
+    // No faces to measure -> 0, and callers fall back to the bounding radius.
+    CHECK(PolyHull{}.inscribedRadius() == doctest::Approx(0.0f));
+}
+
+TEST_CASE("Sweep: a segment starting inside the grown box reports no entry") {
+    // Starting strictly inside is the discrete solver's case. Clipping to it
+    // would freeze anything already resting on a collider.
+    float t = -1.0f;
+    CHECK_FALSE(sweepSphereAgainstObb({0.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 0.0f}, 0.5f,
+        {0.0f, 0.0f, 0.0f}, Quat{0, 0, 0, 1}, {1.0f, 1.0f, 1.0f}, t));
+
+    // But a body sitting exactly ON the grown face and heading through is a
+    // real crossing, not an interior start, and must still be reported — a die
+    // teleported onto a face (as a seeded drop can do) has had no prior
+    // discrete pass to catch it. Grown half-extent here is 1.5.
+    t = -1.0f;
+    CHECK(sweepSphereAgainstObb({-1.5f, 0.0f, 0.0f}, {4.0f, 0.0f, 0.0f}, 0.5f,
+        {0.0f, 0.0f, 0.0f}, Quat{0, 0, 0, 1}, {1.0f, 1.0f, 1.0f}, t));
+    CHECK(t == doctest::Approx(0.0f));
+
+    // Crossing from outside does report the entry time.
+    CHECK(sweepSphereAgainstObb({-4.0f, 0.0f, 0.0f}, {4.0f, 0.0f, 0.0f}, 0.5f,
+        {0.0f, 0.0f, 0.0f}, Quat{0, 0, 0, 1}, {1.0f, 1.0f, 1.0f}, t));
+    // Grown half-extent is 1.5, so first touch is 2.5 into an 8-long segment.
+    CHECK(t == doctest::Approx(2.5f / 8.0f));
+
+    // A miss stays a miss.
+    CHECK_FALSE(sweepSphereAgainstObb({-4.0f, 9.0f, 0.0f}, {4.0f, 9.0f, 0.0f}, 0.5f,
+        {0.0f, 0.0f, 0.0f}, Quat{0, 0, 0, 1}, {1.0f, 1.0f, 1.0f}, t));
+}
+
+TEST_CASE("Swept contacts: an off-origin convex hull is swept where it actually is") {
+    // A hull whose local AABB is not centred on its own origin: sweeping the
+    // enclosing box at s.center would put the proxy somewhere the geometry
+    // is not, leaving part of the hull unswept. Box spans local x 2..4.
+    PolyHull offset;
+    offset.build({
+        {2.0f, -1.0f, -1.0f}, {4.0f, -1.0f, -1.0f}, {4.0f, 1.0f, -1.0f}, {2.0f, 1.0f, -1.0f},
+        {2.0f, -1.0f, 1.0f},  {4.0f, -1.0f, 1.0f},  {4.0f, 1.0f, 1.0f},  {2.0f, 1.0f, 1.0f},
+    });
+    CHECK(offset.aabbMin.x == doctest::Approx(2.0f));
+    CHECK(offset.aabbMax.x == doctest::Approx(4.0f));
+
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    std::vector<float> flat;
+    for (const auto& v : offset.verts) { flat.push_back(v.x); flat.push_back(v.y); flat.push_back(v.z); }
+    CHECK(engine.addStaticConvexHull(1, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, flat, 2) == 1);
+
+    PolyHull cube = makeUnitCubeHull();
+    auto cubeFlat = flattenHull(cube);
+    const int id = engine.addDie(6, -4.0f, -1.0f, 0.0f);
+    engine.setDieHull(id, cubeFlat);
+    engine.setDieVelocity(id, 80.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+    for (int frame = 0; frame < 20; ++frame) {
+        engine.step(0.1f);
+        float x = 0, y = 0, z = 0;
+        CHECK(engine.getDiePosition(id, x, y, z));
+        // The hull occupies x in [2, 4]; the die must not end up past it.
+        CHECK(x < 4.5f);
+    }
+}
+
+TEST_CASE("Swept contacts: a thin wall holds at substeps discrete SAT cannot see") {
+    // Without the sweep this tunnels for most launch positions once the
+    // substep exceeds roughly 2x the speculative window (dt >= 0.1s, i.e. a
+    // sub-10fps caller): the die is clear of the wall at both ends of the
+    // substep, so no manifold is ever generated. The app steps at a fixed
+    // 1/60 and never reaches this, but `step(dt)` takes whatever it is given
+    // -- rollHeadless and the native harnesses included.
+    PolyHull cube = makeUnitCubeHull();
+    auto cubeFlat = flattenHull(cube);
+    const float dts[] = {1.0f / 60.0f, 1.0f / 15.0f, 0.1f, 0.2f};
+    for (float dt : dts) {
+        for (int k = 0; k < 40; ++k) {
+            const float startX = -6.0f + static_cast<float>(k) * 0.1f;
+            DicePhysicsEngine engine;
+            engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+            // Tall and wide enough that going around it is not an option, so
+            // crossing the plane can only mean going through it.
+            CHECK(engine.addStaticBox(1, 2.0f, 2.0f, 0.0f, 0.02f, 6.0f, 17.0f,
+                0.0f, 0.0f, 0.0f, 1.0f, 2) == 1);
+            const int id = engine.addDie(6, startX, -1.0f, 0.0f);
+            engine.setDieHull(id, cubeFlat);
+            engine.setDieVelocity(id, 80.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+            for (int frame = 0; frame < 30; ++frame) {
+                engine.step(dt);
+                float x = 0, y = 0, z = 0;
+                CHECK(engine.getDiePosition(id, x, y, z));
+                CHECK(x < 2.5f);
+            }
+        }
+    }
+}
+
+TEST_CASE("Dice tower: a hopper drop never leaves the chute through a ramp") {
+    // The acceptance case for a seeded tower dump: a d20 posed at the hopper
+    // mouth with a small downward kick has to stay inside the tower. Dropping
+    // below the tray floor, or outside the shaft's footprint, means it passed
+    // through a ramp or a wall.
+    PolyHull d20 = makeD20Hull();
+    auto d20Flat = flattenHull(d20);
+    const Vec3 towerOrigin{0.0f, -3.0f, -14.0f};
+
+    for (int trial = 0; trial < 8; ++trial) {
+        DicePhysicsEngine engine;
+        engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+        const TowerFixture tower = addDiceTowerStatics(engine, towerOrigin);
+        engine.seedRNG(0xD1CE7000ULL + static_cast<uint64_t>(trial));
+
+        // Same scatter shape as computeSeededHopperDropParams.
+        const float lx = (engine.randomFloat() - 0.5f) * 2.0f * tower.hopperHalfWidth;
+        const float lz = (engine.randomFloat() - 0.5f) * 2.0f * tower.hopperHalfDepth;
+        const int id = engine.addDie(20, towerOrigin.x + lx,
+            towerOrigin.y + tower.hopperY, towerOrigin.z + lz);
+        engine.setDieHull(id, d20Flat);
+        engine.setDieVelocity(id, 0.0f, -1.5f, 0.0f, 1.0f, 2.0f, 3.0f);
+
+        for (int frame = 0; frame < 600; ++frame) {
+            engine.step(1.0f / 60.0f);
+            CHECK(engine.allBodyStatesFinite());
+            float x = 0, y = 0, z = 0;
+            CHECK(engine.getDiePosition(id, x, y, z));
+            // Below the tray floor => it went through the ramps and the floor.
+            CHECK(y > tower.trayFloorY - 0.5f);
+            // Outside the shaft in X => it went through a side wall.
+            CHECK(std::abs(x - towerOrigin.x) < tower.footprintHalfX);
+        }
     }
 }
 

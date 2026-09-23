@@ -53,17 +53,38 @@ export interface InstantiateDicePhysicsOptions extends ResolveWasmArtifactDirOpt
 
 /**
  * Vite-busting dynamic import of the Emscripten ES module loader.
+ *
+ * The glue is built with `MODULARIZE=1 -s EXPORT_ES6=1`, so it is an ES module
+ * whose default export is the factory. Where that lands depends on who is
+ * doing the importing:
+ *
+ *   - browser / plain Node: `namespace.default` is the factory.
+ *   - a CJS transpiling loader (tsx, ts-node) running a `.js` file in a
+ *     package with no `"type": "module"`: the module is rewritten to CommonJS
+ *     first, so the namespace is `{ default: { default: factory } }` and the
+ *     factory sits one level deeper.
+ *
+ * Unwrapping both shapes keeps the Node-side harnesses (`rollHeadless`,
+ * `verify:tower-drop-replay`) working under tsx. Without it they fell back to
+ * the JS stub and quietly simulated nothing.
  */
+export function resolveDicePhysicsFactory(namespace: unknown): DicePhysicsFactory | null {
+    const ns = namespace as { default?: unknown } | undefined;
+    const interopDefault = (ns?.default as { default?: unknown } | undefined)?.default;
+    const factory = [ns?.default, interopDefault, namespace].find(
+        (candidate) => typeof candidate === 'function'
+    );
+    return typeof factory === 'function' ? (factory as DicePhysicsFactory) : null;
+}
+
 export async function importDicePhysicsLoader(
     dir: string,
     assetUrl: (relativePath: string) => string = publicAssetUrl
 ): Promise<DicePhysicsFactory> {
-    const dynamicImport = new Function('u', 'return import(u)') as (
-        u: string
-    ) => Promise<{ default?: DicePhysicsFactory } & Partial<DicePhysicsFactory>>;
-    const moduleFactory = await dynamicImport(assetUrl(`${dir}/dice_physics.js`));
-    const factory = moduleFactory.default ?? (moduleFactory as unknown as DicePhysicsFactory);
-    if (typeof factory !== 'function') {
+    const dynamicImport = new Function('u', 'return import(u)') as (u: string) => Promise<unknown>;
+    const namespace = await dynamicImport(assetUrl(`${dir}/dice_physics.js`));
+    const factory = resolveDicePhysicsFactory(namespace);
+    if (!factory) {
         throw new Error(`dice_physics.js in ${dir} did not export a module factory`);
     }
     return factory;

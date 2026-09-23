@@ -386,6 +386,11 @@ export interface PhysicsBridgeModule {
         dice: { id: number; index: number }[],
         tableSurfaceY: number
     ): void;
+    seededPhysicsHopperDrop(
+        seed: number,
+        dice: { id: number; index: number }[],
+        frame: import('./seededHopperDrop.js').SeededHopperFrame
+    ): void;
     deserializePhysicsState(data: Uint8Array): void;
     setContainerActive(isActive: boolean): void;
     setContainerPlanes(planes: Float32Array | number[]): void;

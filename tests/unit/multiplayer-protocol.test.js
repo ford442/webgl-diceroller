@@ -25,6 +25,29 @@ function decode(raw) {
 }
 
 describe('multiplayer protocol', () => {
+    it('carries the roll source, defaulting to a throw', () => {
+        // A tower drop and a throw pose dice completely differently from the
+        // same seed, so a guest has to be told which one the host ran.
+        const thrown = decode(encodeMessage(makeRoll({ seed: 1, diceCounts: { d6: 1 } })));
+        expect(thrown.ok).toBe(true);
+        expect(thrown.msg.source).toBeNull();
+
+        const dropped = decode(
+            encodeMessage(makeRoll({ seed: 1, diceCounts: { d6: 1 }, source: 'tower' }))
+        );
+        expect(dropped.ok).toBe(true);
+        expect(dropped.msg.source).toBe('tower');
+
+        const revealed = decode(
+            encodeMessage(
+                makeReveal({ seed: 1, nonce: 'abc', source: 'tower' }, PROTOCOL_VERSION_V2),
+                PROTOCOL_VERSION_V2
+            )
+        );
+        expect(revealed.ok).toBe(true);
+        expect(revealed.msg.source).toBe('tower');
+    });
+
     it('round-trips a roll message', () => {
         const msg = makeRoll({
             seed: 42424242,

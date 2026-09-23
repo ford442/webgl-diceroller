@@ -103,8 +103,10 @@ export const TIER_PROP_DEFINITIONS = {
                 });
                 registerInteractable('diceTower', {
                     trigger: () => ctx.callbacks.onDiceTowerInteract?.(),
-                    drop: (idsOrAll) =>
-                        ctx.callbacks.getDiceTowerController?.()?.dropDice(idsOrAll),
+                    // `options` carries an explicit seed when a share link or
+                    // a room replay is reproducing a drop.
+                    drop: (idsOrAll, options) =>
+                        ctx.callbacks.getDiceTowerController?.()?.dropDice(idsOrAll, options),
                     getState: () =>
                         ctx.callbacks.getDiceTowerController?.()?.getState() ?? {
                             available: false,

@@ -33,11 +33,28 @@ static constexpr float LINEAR_DAMPING = 0.05f;
 static constexpr float ANGULAR_DAMPING = 0.10f;
 static constexpr float SPECULATIVE_SLOP = 0.02f;
 static constexpr float SPECULATIVE_MAX = 0.85f;
+
+// --- Continuous collision (swept die-vs-static) ---------------------------
+// Speculative manifolds widen the contact search by the distance a body will
+// travel this substep, but they are still generated from one discrete pose:
+// a body that starts clear of a collider and ends clear on the far side is
+// never seen at all. Above this fraction of the body's sweep proxy radius
+// (its inscribed sphere, see RigidBody::computeSweepRadius) the substep's
+// linear motion is swept against static boxes/hulls and clipped at the first
+// touch, so the discrete pass that follows always has a pose to work from.
+// Below it, the motion cannot skip a collider the proxy would have hit and
+// the speculative path is both sufficient and cheaper.
+static constexpr float CCD_MOTION_FRACTION = 0.5f;
+// Stop the clipped body this far short of first touch. Landing exactly on the
+// surface would hand solveContacts a zero-separation manifold built from a
+// grazing pose; a hair of daylight keeps it in speculative territory, which
+// is the case that path is tuned for.
+static constexpr float CCD_CONTACT_OFFSET = 0.01f;
 static constexpr float SLEEP_SPEED_THRESHOLD = 0.15f;
 static constexpr float SLEEP_DELAY = 0.5f;
 
 /** Snapshot + solver protocol. Bump when manifolds / impulses change behaviour. */
-static constexpr uint32_t SOLVER_REVISION = 7;
+static constexpr uint32_t SOLVER_REVISION = 8;
 
 enum class ManifoldKind : uint8_t {
     DieDie = 0,

@@ -18,6 +18,7 @@ import type {
     PhysicsEngine,
 } from './physicsTypes.js';
 import type { SeededDieRef } from './seededThrowParams.js';
+import type { SeededHopperFrame } from './seededHopperDrop.js';
 import {
     instantiateDicePhysicsModule,
     WASM_SCALAR_DIR,
@@ -302,6 +303,13 @@ export const seededPhysicsThrow = (
     _seed?: number,
     _dice?: SeededDieRef[],
     _tableSurfaceY?: number
+): void => {};
+
+/** No-op in the in-process bridge — drops are applied directly via the engine. */
+export const seededPhysicsHopperDrop = (
+    _seed?: number,
+    _dice?: SeededDieRef[],
+    _frame?: SeededHopperFrame
 ): void => {};
 
 export const deserializePhysicsState = (data: Uint8Array): void => {

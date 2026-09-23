@@ -18,6 +18,7 @@ export {
     pollCollisionEvents,
     randomPhysicsFloat,
     seedPhysicsRNG,
+    seededPhysicsHopperDrop,
     seededPhysicsThrow,
     serializePhysicsState,
     setContainerActive,

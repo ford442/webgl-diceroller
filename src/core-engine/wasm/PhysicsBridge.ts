@@ -8,6 +8,7 @@
 
 import type { CollisionEvent, PhysicsBridgeModule, PhysicsEngine } from './physicsTypes.js';
 import type { SeededDieRef } from './seededThrowParams.js';
+import type { SeededHopperFrame } from './seededHopperDrop.js';
 import { getPhysicsSearchParams } from './wasmArtifact.js';
 import * as mainBridge from './WasmPhysicsBridge.js';
 import * as workerBridge from './WorkerPhysicsBridge.js';
@@ -50,6 +51,11 @@ export const seededPhysicsThrow = (
     dice: SeededDieRef[],
     tableSurfaceY: number
 ): void => active.seededPhysicsThrow(seed, dice, tableSurfaceY);
+export const seededPhysicsHopperDrop = (
+    seed: number,
+    dice: SeededDieRef[],
+    frame: SeededHopperFrame
+): void => active.seededPhysicsHopperDrop(seed, dice, frame);
 export const deserializePhysicsState = (data: Uint8Array): void =>
     active.deserializePhysicsState(data);
 export const setContainerActive = (isActive: boolean): void => active.setContainerActive(isActive);

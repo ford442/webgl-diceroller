@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+    canonicalRollSource,
     commitHash,
     createCommit,
     generateNonce,
@@ -125,6 +126,62 @@ describe('CommitReveal', () => {
             const commit = await createCommit(seed, nonce, { dieCount: 1 });
             const ok = await verifyReveal(commit.hash, seed, nonce);
             expect(ok).toBe(true);
+        });
+    });
+
+    describe('the roll source is bound into the commitment', () => {
+        // A seed does not pin the trajectory: the same number poses a thrown
+        // roll and a dice-tower drop completely differently. If only
+        // `seed ‖ nonce` were hashed, a host could publish its commitment,
+        // wait for the acks, and only then pick the outcome it liked — guests
+        // would verify the hash happily and replay the late choice.
+        it('gives a different hash for the same seed and nonce', async () => {
+            const nonce = generateNonce();
+            const thrown = await commitHash(42, nonce, 'throw');
+            const tower = await commitHash(42, nonce, 'tower');
+            expect(thrown).not.toBe(tower);
+        });
+
+        it('rejects a reveal that switches the source after committing', async () => {
+            const nonce = generateNonce();
+            const commit = await createCommit(42, nonce, { dieCount: 3, source: 'throw' });
+
+            expect(await verifyReveal(commit.hash, 42, nonce, 'throw')).toBe(true);
+            // The attack: same seed, same nonce, different trajectory.
+            expect(await verifyReveal(commit.hash, 42, nonce, 'tower')).toBe(false);
+        });
+
+        it('rejects it in the other direction too', async () => {
+            const nonce = generateNonce();
+            const commit = await createCommit(7, nonce, { dieCount: 1, source: 'tower' });
+
+            expect(await verifyReveal(commit.hash, 7, nonce, 'tower')).toBe(true);
+            expect(await verifyReveal(commit.hash, 7, nonce, 'throw')).toBe(false);
+            expect(await verifyReveal(commit.hash, 7, nonce)).toBe(false);
+        });
+
+        it('canonicalises anything that is not a tower drop to a throw', async () => {
+            const nonce = generateNonce();
+            // 'ui' and 'notation' are both throws as far as the trajectory goes.
+            const base = await commitHash(9, nonce, 'throw');
+            expect(await commitHash(9, nonce, 'ui')).toBe(base);
+            expect(await commitHash(9, nonce, 'notation')).toBe(base);
+            expect(await commitHash(9, nonce, null)).toBe(base);
+            expect(await commitHash(9, nonce)).toBe(base);
+
+            expect(canonicalRollSource('tower')).toBe('tower');
+            expect(canonicalRollSource('ui')).toBe('throw');
+            expect(canonicalRollSource(undefined)).toBe('throw');
+        });
+
+        it('a commit announces the canonical source it bound', async () => {
+            const nonce = generateNonce();
+            expect((await createCommit(1, nonce, { dieCount: 1, source: 'tower' })).source).toBe(
+                'tower'
+            );
+            expect((await createCommit(1, nonce, { dieCount: 1, source: 'ui' })).source).toBe(
+                'throw'
+            );
         });
     });
 });

@@ -319,6 +319,7 @@ private:
 
     static void wake(RigidBody& b);
     void integrate(RigidBody& b, float dt);
+    void sweepClipAgainstStatics(RigidBody& b, const Vec3& from);
     void checkSleep(RigidBody& b, float dt) const;
     void refreshDieDerived(RigidBody& b) const;
     void refreshDynamicDerived(DynamicBody& b) const;

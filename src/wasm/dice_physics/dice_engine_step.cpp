@@ -21,7 +21,13 @@ void DicePhysicsEngine::step(float dt) {
         StepStats subStats{};
         for (auto& b : bodies_) {
             if (b.sleeping) continue;
+            const Vec3 before = b.position;
             integrate(b, subDt);
+            // Before anything reads the new pose: a fast body's motion is
+            // clipped at the first static surface it crossed, so the discrete
+            // contact pass below cannot be handed a pose on the far side of a
+            // ramp it never touched.
+            sweepClipAgainstStatics(b, before);
         }
         for (auto& d : dynamics_) {
             if (d.sleeping) continue;

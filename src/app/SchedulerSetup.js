@@ -61,6 +61,7 @@ export function registerFrameCallbacks(scheduler, deps) {
         postRuntime,
         renderStats,
         debugEnabled,
+        frozenLights = false,
         isLockedRef,
         cursorPos,
         isXrPresentingRef,
@@ -194,15 +195,17 @@ export function registerFrameCallbacks(scheduler, deps) {
         }
     });
 
+    // `frozenLights` (?test) pins both flames to one sample so a
+    // render-regression capture never depends on flicker phase.
     scheduler.register(
         'preRender',
         'candleFlicker',
-        createCandleFlickerSystem(pointLight, getCandleFlamePos)
+        createCandleFlickerSystem(pointLight, getCandleFlamePos, { frozen: frozenLights })
     );
     scheduler.register(
         'preRender',
         'fireplaceFlicker',
-        createFireplaceFlickerSystem(getFireplaceLight)
+        createFireplaceFlickerSystem(getFireplaceLight, { frozen: frozenLights })
     );
     scheduler.register('preRender', 'shadowController', ({ time }) => {
         if (!shadowController) return;
