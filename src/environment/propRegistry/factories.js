@@ -5,6 +5,7 @@ import '../BreadLoaf.js';
 import '../Chalk.js';
 import '../Quill.js';
 import '../GoblinSkull.js';
+import '../TavernCoaster.js';
 
 const environmentModules = import.meta.glob(
     ['../*.js', '!../PropRegistry.js', '!../propKit.js', '!../PropLifecycle.js'],

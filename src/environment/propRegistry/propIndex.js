@@ -48,7 +48,7 @@ const SEMANTIC_TAGS = {
     ],
     treasure: ['Coin', 'CoinPouch', 'Gemstones', 'Crown', 'Chalice', 'Amulet', 'Bone'],
     monster: ['GoblinSkull'],
-    food: ['TavernMeal', 'CheeseWheel', 'Apple'],
+    food: ['TavernMeal', 'CheeseWheel', 'Apple', 'TavernCoaster'],
     game: ['PlayingCards', 'TarotDeck', 'DiceTower', 'DiceTray', 'DiceJail', 'DiceBag', 'DiceCup'],
     tool: [
         'Compass',

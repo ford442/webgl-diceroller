@@ -602,6 +602,7 @@ export const TIER_PROP_DEFINITIONS = {
         }),
         factoryEntry('MysticTome', { randomPool: true }),
         factoryEntry('GoblinSkull', { randomPool: true }),
+        factoryEntry('TavernCoaster', { randomPool: true }),
     ],
 };
 
