@@ -244,7 +244,8 @@ export const TIER_PROP_DEFINITIONS = {
             randomPool: true,
             position: { x: -5, y: -2.75, z: 14 },
             rotation: Math.PI / 4,
-            dynamic: true,
+            // No `dynamic: true` needed here — spawn.js derives it from the
+            // collider spec's own `dynamic: true` via `userData.isDynamicProp`.
             afterCreate: (result, ctx) =>
                 result?.update && ctx.registerUpdate('mug', result.update),
         }),

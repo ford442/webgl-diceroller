@@ -33,6 +33,8 @@ export function createKey(
                 halfExtents: [sizeX / 2, sizeY / 2, sizeZ / 2],
                 offset: { x: centerX, y: 0, z: centerZ },
                 materialTag: STATIC_MATERIAL.METAL,
+                dynamic: true,
+                mass: 0.15,
             },
         ],
         build({ group }) {

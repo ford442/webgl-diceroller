@@ -1,16 +1,5 @@
-import {
-    createCoins,
-    createBook,
-    createD20Holder,
-    createGemstone,
-    createPotionBottle,
-} from './clutter/TabletopItems.js';
-import {
-    createParchment,
-    createTarotCards,
-    createWantedPoster,
-} from './clutter/DocumentsAndCards.js';
-import { createCandle, createQuill } from './clutter/ToolsAndGear.js';
+import { createCoins } from './clutter/TabletopItems.js';
+import { createCandle } from './clutter/ToolsAndGear.js';
 import { asClutter } from './clutter/adaptProp.js';
 // Shared prop modules — the clutter registry and PropRegistry spawn the *same*
 // geometry and collider spec, differing only in placement and tabletop scale.
@@ -21,6 +10,14 @@ import { createSpyglass } from './Spyglass.js';
 import { createMiniature } from './Miniature.js';
 import { createSmokingPipe } from './SmokingPipe.js';
 import { createDMScreen } from './DMScreen.js';
+import { createQuill } from './Quill.js';
+import { createBook } from './Book.js';
+import { createD20Holder } from './D20Holder.js';
+import { createGemstone } from './Gemstone.js';
+import { createPotionBottle } from './PotionBottle.js';
+import { createParchment } from './Parchment.js';
+import { createTarotCards } from './TarotCards.js';
+import { createWantedPoster } from './WantedPoster.js';
 import { generateClutterSlots } from './clutter/ClutterPlacement.js';
 import { createSeededRng, shuffleWithRng } from '../core/SeededRng.js';
 import { LAYOUT_THEMES } from '../core/TableLayoutConfig.js';
@@ -34,17 +31,17 @@ import { registerDynamicProp, unregisterDynamicProp } from './DynamicPropState.j
 export const CLUTTER_REGISTRY = [
     { id: 'mug', create: asClutter(createMug, { x: 5, z: 5, scale: 0.85 }), weight: 1 },
     { id: 'coins', create: createCoins, weight: 1 },
-    { id: 'book', create: createBook, weight: 1 },
-    { id: 'parchment', create: createParchment, weight: 1 },
+    { id: 'book', create: asClutter(createBook, { x: -6, z: -6 }), weight: 1 },
+    { id: 'parchment', create: asClutter(createParchment, { x: 4, z: -3 }), weight: 1 },
     {
         id: 'pencil',
         create: asClutter(createPencil, { x: 0, z: 4.5, scale: 0.42 }),
         weight: 1,
     },
-    { id: 'd20Holder', create: createD20Holder, weight: 1 },
-    { id: 'potionBottle', create: createPotionBottle, weight: 1 },
+    { id: 'd20Holder', create: asClutter(createD20Holder, { x: -2, z: -4 }), weight: 1 },
+    { id: 'potionBottle', create: asClutter(createPotionBottle, { x: 6, z: -2 }), weight: 1 },
     { id: 'key', create: asClutter(createKey, { x: 2, z: -5, scale: 0.5 }), weight: 1 },
-    { id: 'quill', create: createQuill, weight: 1 },
+    { id: 'quill', create: asClutter(createQuill, { x: 5.5, z: -2.0 }), weight: 1 },
     {
         id: 'pipe',
         create: asClutter(createSmokingPipe, { x: -3.5, z: -5, scale: 0.55 }),
@@ -55,9 +52,15 @@ export const CLUTTER_REGISTRY = [
         create: asClutter(createSpyglass, { x: 0, z: 6, scale: 0.6 }),
         weight: 1,
     },
-    { id: 'wantedPoster', create: createWantedPoster, weight: 1 },
-    { id: 'tarotCards', create: createTarotCards, weight: 1 },
-    { id: 'gemstone', create: createGemstone, weight: 0.35, rare: true, minCount: 6 },
+    { id: 'wantedPoster', create: asClutter(createWantedPoster, { x: 0, z: -2 }), weight: 1 },
+    { id: 'tarotCards', create: asClutter(createTarotCards, { x: -7, z: 6 }), weight: 1 },
+    {
+        id: 'gemstone',
+        create: asClutter(createGemstone, { x: -5, z: 0 }),
+        weight: 0.35,
+        rare: true,
+        minCount: 6,
+    },
     {
         id: 'miniature',
         create: asClutter(createMiniature, { x: -2, z: 2, scale: 0.9 }),
