@@ -57,6 +57,7 @@
         "test:wasm-authoritative": "node tests/wasm-authoritative.js",
         "test:wasm-gameplay-loop": "node tests/wasm-gameplay-loop.mjs",
         "test:a11y": "node tests/a11y.js",
+        "test:audio-worklet": "node tests/audio-worklet.js",
         "test:solver": "bash src/wasm/build_solver_test.sh",
         "signal:dev": "npm --prefix signaling run dev",
         "signal:deploy": "npm --prefix signaling run deploy"

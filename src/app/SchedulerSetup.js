@@ -258,6 +258,7 @@ export function registerFrameCallbacks(scheduler, deps) {
             if (/** @type {{ done?: boolean }} */ (adaptiveQualityState.probe).done) {
                 app.qualityProfile = postConfig.adaptiveProfile;
                 setDiceAppearanceQualityProfile(postConfig.adaptiveProfile);
+                getCollisionAudio()?.setQualityProfile?.(postConfig.adaptiveProfile);
                 runtimeGovernor?.refreshBaselineFromProfile?.(adaptiveQualityState.appliedProfile);
                 adaptiveQualityState.probe = null;
             }
