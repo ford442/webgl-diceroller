@@ -332,27 +332,20 @@ function createGodRays(group, x, y, z, nodeMaterialFactory = null) {
     const noiseTexture = generateNoiseTexture();
 
     // Material: TSL NodeMaterial on WebGPU (raw-GLSL ShaderMaterial is unsupported
-    // there), otherwise the classic ShaderMaterial on WebGL. Both share the same
-    // noise texture and produce the same scrolling-dust beam; `setTime` advances
-    // the animation regardless of which path built the material.
+    // there), otherwise the classic ShaderMaterial on WebGL. Both are built from
+    // `GodRayGraph` and `GOD_RAY_PARAMS`; `setTime` advances the animation
+    // regardless of which path built the material.
     let material;
     let setTime;
     if (nodeMaterialFactory) {
-        const built = nodeMaterialFactory({
-            noiseTexture,
-            color: new THREE.Color(0xddeeff),
-            speed: 0.1,
-        });
+        const built = nodeMaterialFactory({ noiseTexture });
         material = built.material;
         setTime = built.setTime;
     } else {
+        const uniforms = THREE.UniformsUtils.clone(GodRayShader.uniforms);
+        uniforms.tNoise.value = noiseTexture;
         material = new THREE.ShaderMaterial({
-            uniforms: {
-                uTime: { value: 0.0 },
-                tNoise: { value: noiseTexture },
-                uColor: { value: new THREE.Color(0xddeeff) },
-                uSpeed: { value: 0.1 },
-            },
+            uniforms,
             vertexShader: GodRayShader.vertexShader,
             fragmentShader: GodRayShader.fragmentShader,
             transparent: true,
