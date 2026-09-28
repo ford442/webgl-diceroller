@@ -109,10 +109,15 @@ export async function spawnProp(entry, context) {
         context.cullingSystem.register(root, { important: entry.important === true });
     }
 
+    // A prop's collider spec (`dynamic: true`) stamps `userData.isDynamicProp` on
+    // its root via StaticColliderBridge — that is the single source of truth for
+    // "is this dynamic", so no per-entry flag needs to be kept in sync with it.
+    const isDynamicProp = root?.userData?.isDynamicProp === true;
+
     const canStaticMerge =
         entry.staticMerge !== false &&
         !updateHandle &&
-        !entry.dynamic &&
+        !isDynamicProp &&
         !INTERACTIVE_NAMES.has(factoryName);
     let mergeStats = null;
     if (canStaticMerge) {
@@ -122,7 +127,7 @@ export async function spawnProp(entry, context) {
         }
     }
 
-    if (entry.dynamic && root) registerDynamicProp(root);
+    if (isDynamicProp && root) registerDynamicProp(root);
 
     const disposers = typeof result?.dispose === 'function' ? [result.dispose] : undefined;
     return { entry, result, updateHandle, disposers, mergeStats };

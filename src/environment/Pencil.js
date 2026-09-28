@@ -27,6 +27,8 @@ export function createPencil(
                 radius: pencilRadius,
                 halfHeight: totalLength / 2,
                 materialTag: STATIC_MATERIAL.WOOD,
+                dynamic: true,
+                mass: 0.05,
             },
         ],
         build({ group }) {

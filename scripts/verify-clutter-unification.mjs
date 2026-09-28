@@ -3,12 +3,15 @@
  * Verifies the unified prop-authoring path end to end in a real browser:
  *
  * 1. The clutter registry spawns the shared prop modules (`Mug`, `Pencil`,
- *    `Key`, `Spyglass`, `Miniature`, `SmokingPipe`, `DMScreen`) rather than the
- *    deleted `clutter/*` twins.
+ *    `Key`, `Spyglass`, `Miniature`, `SmokingPipe`, `DMScreen`, `Quill`,
+ *    `Book`, `D20Holder`, `Gemstone`, `PotionBottle`, `Parchment`,
+ *    `WantedPoster`, `TarotCards`) rather than a per-clutter `clutter/*` twin.
  * 2. Merged clutter geometry stays coincident with its prop root — the
  *    StaticPropMerger regression that offset merged meshes by the root's own
  *    transform.
  * 3. The WebGPU-only accent light rig stays inert on the WebGL baseline.
+ * 4. A die impulse knocks the (forced) dynamic Mug and `DynamicPropSync`
+ *    carries the WASM dynamic body's new transform onto the mesh.
  *
  * Usage: npm run preview & node scripts/verify-clutter-unification.mjs
  */
@@ -26,10 +29,22 @@ const SHARED_PROP_NAMES = [
     'Miniature',
     'SmokingPipe',
     'DMScreen',
+    'Quill',
+    'Book',
+    'D20Holder',
+    'Gemstone',
+    'PotionBottle',
+    'Parchment',
+    'WantedPoster',
+    'TarotCards',
 ];
 
 // A fixed seed + max clutter count so every registry entry gets a fair chance.
-const URL = `${BASE}/?webgl&no-post&test&layout-seed=8&clutter-count=10&density=high`;
+// `forceProps=Mug` guarantees a dynamic Mug spawns via the tier registry (at
+// its fixed tier2 slot) regardless of what the clutter weighted draw picks,
+// so the knock check below always has a target.
+const URL =
+    `${BASE}/?webgl&no-post&test&layout-seed=8&clutter-count=10&density=high` + `&forceProps=Mug`;
 
 runTest(async (page, errors) => {
     await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -165,6 +180,80 @@ runTest(async (page, errors) => {
 
     if (errors.length > 0) {
         console.error(`FAIL: ${errors.length} console/page error(s)`);
+        pass = false;
+    }
+
+    // --- dynamic prop knock: a die impulse should move the Mug's WASM dynamic
+    // body, and DynamicPropSync should carry that transform onto the mesh. ---
+    await page.evaluate(() => {
+        for (const type of ['d4', 'd6', 'd8', 'd10', 'd12', 'd20']) {
+            const input = document.getElementById(`dice-count-${type}`);
+            if (!input) continue;
+            input.value = type === 'd6' ? '1' : '0';
+            input.dispatchEvent(new Event('change'));
+        }
+    });
+    await page.waitForFunction(() => window.__app.dice?.areDiceSettled?.() === true, null, {
+        timeout: 60000,
+        polling: 100,
+    });
+
+    const knock = await page.evaluate(async () => {
+        const app = window.__app;
+        if (!app.isWasmAvailable?.()) return { skipped: 'wasm unavailable' };
+
+        const engine = app.getWasmEngine();
+        let mugGroup = null;
+        app.scene.traverse((obj) => {
+            if (!mugGroup && obj.name === 'EnhancedMug' && obj.userData?.isDynamicProp) {
+                mugGroup = obj;
+            }
+        });
+        if (!mugGroup) return { error: 'no dynamic Mug found in scene' };
+
+        const dieIds = engine.getDieIds?.();
+        if (!dieIds || dieIds.length === 0) return { error: 'no dice spawned' };
+        const dieId = Math.round(dieIds[0]);
+
+        const before = mugGroup.position.clone();
+        const mugWorldPos = mugGroup.getWorldPosition(new app.THREE.Vector3());
+
+        // Teleport the die to overlap the Mug's collider with a strong velocity
+        // toward it, so the next physics steps produce a real contact impulse.
+        engine.setDieKinematic(dieId, false);
+        engine.setDieTransform(
+            dieId,
+            mugWorldPos.x + 0.3,
+            mugWorldPos.y + 1.5,
+            mugWorldPos.z,
+            0,
+            0,
+            0,
+            1
+        );
+        engine.setDieVelocity(dieId, -3, -6, 0, 0, 0, 0);
+
+        const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+        for (let i = 0; i < 90; i++) await frame();
+
+        const after = mugGroup.position.clone();
+        return { displacement: before.distanceTo(after) };
+    });
+
+    if (knock.skipped) {
+        console.log(`skip: dynamic-prop knock check (${knock.skipped})`);
+    } else if (knock.error) {
+        console.error(`FAIL: dynamic-prop knock check could not run — ${knock.error}`);
+        pass = false;
+    } else if (knock.displacement > 0.05) {
+        console.log(
+            `ok: die impulse moved the dynamic Mug ${knock.displacement.toFixed(3)} units ` +
+                `(DynamicPropSync carried the WASM transform onto the mesh)`
+        );
+    } else {
+        console.error(
+            `FAIL: die impulse did not move the dynamic Mug (moved ${knock.displacement.toFixed(3)} units)`
+        );
         pass = false;
     }
 

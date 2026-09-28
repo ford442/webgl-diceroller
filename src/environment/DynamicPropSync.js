@@ -40,18 +40,21 @@ export const updatePropVisuals = () => {
     const ids = engine.getDynamicIds();
     if (!ids || !ids.length) return;
 
+    // Rebuilt every call rather than cached: `ids`' order can change frame to
+    // frame as dynamic bodies are added/removed, so a stale map would point at
+    // the wrong transform slot. O(dynamics) here + O(props) below beats the
+    // O(props * dynamics) nested scan this replaces.
+    const offsetById = new Map();
+    for (let i = 0; i < ids.length; i++) {
+        offsetById.set(Math.round(ids[i]), i * DYN_TRANSFORM_STRIDE);
+    }
+
     for (const group of spawnedProps) {
         const targetId = wasmIdForGroup(group);
         if (targetId == null) continue;
 
-        let offset = -1;
-        for (let i = 0; i < ids.length; i++) {
-            if (Math.round(ids[i]) === targetId) {
-                offset = i * DYN_TRANSFORM_STRIDE;
-                break;
-            }
-        }
-        if (offset < 0 || offset + (DYN_TRANSFORM_STRIDE - 1) >= transforms.length) continue;
+        const offset = offsetById.get(targetId);
+        if (offset == null || offset + (DYN_TRANSFORM_STRIDE - 1) >= transforms.length) continue;
 
         group.position.set(transforms[offset + 0], transforms[offset + 1], transforms[offset + 2]);
         group.quaternion.set(

@@ -1,12 +1,26 @@
 import * as THREE from 'three';
 import { createProp, materials, mesh } from './propKit.js';
 
-export function createQuill(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }, rotation = 0) {
+export function createQuill(
+    scene,
+    physicsWorld,
+    position = { x: 0, y: 0, z: 0 },
+    rotation = 0,
+    { scale = 1 } = {}
+) {
     return createProp(scene, physicsWorld, {
         name: 'Quill',
         position,
         rotation,
-        colliders: [{ type: 'box', halfExtents: [0.6, 0.05, 0.15] }],
+        scale,
+        colliders: [
+            {
+                type: 'box',
+                halfExtents: [0.6, 0.05, 0.15],
+                dynamic: true,
+                mass: 0.02,
+            },
+        ],
         build({ group }) {
             // Feather part (Cylinder, flattened, with a white/grey material)
             const featherMat = new THREE.MeshStandardMaterial({
