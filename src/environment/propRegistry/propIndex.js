@@ -30,6 +30,7 @@ const SEMANTIC_TAGS = {
         'ScrollCase',
         'LeatherJournal',
         'WritingSet',
+        'Inkwell',
         'DMScreen',
         'Spellbook',
         'Rulebook',

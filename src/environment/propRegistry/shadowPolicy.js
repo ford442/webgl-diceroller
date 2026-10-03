@@ -46,6 +46,7 @@ export const SHADOW_DISABLED_PROP_NAMES = new Set([
     'BreadLoaf',
     'GoblinSkull',
     'TavernCoaster',
+    'Inkwell',
 ]);
 
 export function resolveRootObject(result) {
