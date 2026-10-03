@@ -39,7 +39,7 @@ export function createInkwell(
                 type: 'cylinder',
                 radius: radius * 1.1,
                 halfHeight: height / 2,
-                materialTag: STATIC_MATERIAL.GLASS,
+                materialTag: STATIC_MATERIAL.DEFAULT,
             },
         ],
         build({ group }) {
