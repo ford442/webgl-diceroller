@@ -53,8 +53,22 @@ static constexpr float CCD_CONTACT_OFFSET = 0.01f;
 static constexpr float SLEEP_SPEED_THRESHOLD = 0.15f;
 static constexpr float SLEEP_DELAY = 0.5f;
 
+// --- Fixed clock ------------------------------------------------------------
+// The engine owns its integration quantum. step(dt) adds dt to an accumulator
+// and consumes it in FIXED_DT ticks of SUB_STEPS substeps each, so the worker
+// (step(1/120) per timer wakeup), the in-process ?no-worker path (frame time)
+// and rollHeadless() all run the identical substep sequence for a given amount
+// of simulated time. A single call runs at most MAX_TICKS_PER_STEP ticks and
+// drops the rest of the backlog rather than spiralling after a long stall.
+static constexpr float FIXED_DT = 1.0f / 120.0f;
+static constexpr int SUB_STEPS = 4;
+static constexpr int MAX_TICKS_PER_STEP = 8;
+// Absorbs float rounding when a caller's dt is a multiple of FIXED_DT
+// (step(1/60) must be exactly two ticks, not one tick and a 1e-9 s remainder).
+static constexpr double FIXED_DT_EPSILON = 1e-6;
+
 /** Snapshot + solver protocol. Bump when manifolds / impulses change behaviour. */
-static constexpr uint32_t SOLVER_REVISION = 8;
+static constexpr uint32_t SOLVER_REVISION = 9;
 
 enum class ManifoldKind : uint8_t {
     DieDie = 0,

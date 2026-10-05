@@ -70,6 +70,11 @@ export const flushWorkerCommandBatch = (): void => {
     if (active === workerBridge) workerBridge.flushWorkerCommandBatch();
 };
 
+/** Pause/resume the worker's step timer with page visibility (no-op in-process). */
+export const setPhysicsHidden = (hidden: boolean): void => {
+    if (active === workerBridge) workerBridge.setPhysicsHidden(hidden);
+};
+
 export const getWorkerPhysicsStats = () =>
     active === workerBridge ? workerBridge.getWorkerPhysicsStats() : null;
 

@@ -43,7 +43,7 @@ export const MAX_DICE = 500; // must match dice_physics.cpp MAX_DICE
 export const STRIDE = 7; // [px,py,pz, qx,qy,qz,qw] per die
 
 // Header (Int32).
-export const HEADER_INTS = 10;
+export const HEADER_INTS = 12;
 export const HEADER_BYTES = HEADER_INTS * 4;
 
 export const H_SEQNO = 0;
@@ -56,6 +56,12 @@ export const H_PAIR_CANDIDATES = 6;
 export const H_SPHERE_TESTS = 7;
 export const H_SAT_TESTS = 8;
 export const H_CONTACTS = 9;
+// 1 while the worker's step timer is parked (world asleep, or tab hidden). A
+// writer that enqueues into the command ring and then reads 1 here must post
+// a `wake` message; see WorkerEngineProxy.flushCommandBatch.
+export const H_IDLE = 10;
+// Low 32 bits of DicePhysicsEngine::getFixedTickCount() at the last publish.
+export const H_TICKS = 11;
 
 // Per-buffer byte sizes.
 export const IDS_BYTES = MAX_DICE * 4; // f32 ids

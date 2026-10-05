@@ -26,6 +26,8 @@ import {
     H_SPHERE_TESTS,
     H_SAT_TESTS,
     H_CONTACTS,
+    H_IDLE,
+    H_TICKS,
     idsOffset,
     xfOffset,
     faceValuesOffset,
@@ -42,7 +44,7 @@ import {
     dynXfOffset,
     DYNAMICS_SAB_BYTES,
 } from './workerLayout.js';
-import { parsePhysicsFlags } from './physicsFlags.js';
+import { parseMassBiasRatio, parsePhysicsFlags } from './physicsFlags.js';
 import { getPhysicsSearchParams, resolveWasmArtifactDir } from './wasmArtifact.js';
 import { OP, copyIntoRing, countRecords } from './workerCommands.js';
 import { parseCollisionEventBuffer } from './collisionEvents.js';
@@ -103,6 +105,8 @@ function _noteBatchMsg(recordCount: number): void {
 export function getWorkerPhysicsStats() {
     const now = typeof performance !== 'undefined' ? performance.now() : 0;
     const dt = (now - _stats.lastSampleAt) / 1000;
+    // Batch postMessages since the previous sample (0 on the SAB ring path).
+    const batchMsgs = _stats.batchMsgs;
     if (dt >= 0.2) {
         _stats.msgsPerSecond = dt > 0 ? (_stats.structuralMsgs + _stats.batchMsgs) / dt : 0;
         _stats.structuralMsgs = 0;
@@ -124,8 +128,13 @@ export function getWorkerPhysicsStats() {
         usingCommandBatch: true,
         usingSAB: _usingSAB,
         msgsPerSecond: _stats.msgsPerSecond,
+        batchMsgs,
         batchRecords: _stats.batchRecords,
         stepStats,
+        /** False while the worker's step timer is parked (world asleep / tab hidden). */
+        loopRunning: _engine?.isLoopRunning() ?? false,
+        /** Fixed 1/120 s ticks the worker's engine has run. */
+        fixedTicks: _engine?.getFixedTickCount() ?? 0,
     };
 }
 
@@ -175,6 +184,8 @@ class WorkerEngineProxy implements PhysicsEngine {
     private _snapFaceValues = new Int32Array(0);
     private _snapCount = 0;
     private _snapSettled = true;
+    private _snapTicks = 0;
+    private _loopRunning = false;
     private _eventChunks: Float32Array[] = [];
 
     private _dynSnapIds = new Float32Array(0);
@@ -246,6 +257,10 @@ class WorkerEngineProxy implements PhysicsEngine {
                 this._snapFaceValues = payload.faceValues ?? new Int32Array(0);
                 this._snapCount = payload.count;
                 this._snapSettled = payload.settled;
+                this._snapTicks = payload.ticks ?? this._snapTicks;
+                break;
+            case 'loopState':
+                this._loopRunning = payload.running === true;
                 break;
             case 'events':
                 this._eventChunks.push(payload.events);
@@ -343,6 +358,13 @@ class WorkerEngineProxy implements PhysicsEngine {
             const head = Atomics.load(this.header, H_CMD_HEAD);
             this._cmdHead = copyIntoRing(this.cmdRing, CMD_RING_FLOATS, head, batch);
             Atomics.store(this.header, H_CMD_HEAD, this._cmdHead);
+            // The worker parks its timer when the world is asleep and the ring
+            // is empty. It raises H_IDLE before re-checking the ring, so reading
+            // it *after* publishing the head cannot miss a park: either the
+            // worker saw these commands, or we see the flag and wake it.
+            if (Atomics.load(this.header, H_IDLE) === 1) {
+                this.worker.postMessage({ type: 'wake', payload: {} });
+            }
         } else {
             const copy = batch.slice();
             _noteBatchMsg(records);
@@ -360,6 +382,7 @@ class WorkerEngineProxy implements PhysicsEngine {
             tableHalfW,
             tableHalfD,
             flags: parsePhysicsFlags(_searchParams),
+            biasRatio: parseMassBiasRatio(_searchParams),
             sab: this.sab || null,
             sabDynamics: this.sabDynamics || null,
         });
@@ -703,6 +726,27 @@ class WorkerEngineProxy implements PhysicsEngine {
         /* sent via init() payload; see `init()` above. */
     }
 
+    /** Pause (hidden) or resume the worker's step timer; see setPhysicsHidden. */
+    setHidden(hidden: boolean): void {
+        this._send('setHidden', { hidden });
+    }
+
+    /** True unless the worker's step timer is parked. */
+    isLoopRunning(): boolean {
+        if (this.header) return Atomics.load(this.header, H_IDLE) === 0;
+        return this._loopRunning;
+    }
+
+    getFixedTickCount(): number {
+        if (this.header) return Atomics.load(this.header, H_TICKS) >>> 0;
+        return this._snapTicks;
+    }
+
+    /** No-op: the bias ratio is bundled into init() alongside the flags. */
+    setMassBiasRatio(_ratio: number): void {
+        /* sent via init() payload; see `init()` above. */
+    }
+
     // --- queries -----------------------------------------------------------
     getTransforms(): Float32Array {
         const { header, xfView } = this;
@@ -832,6 +876,15 @@ const _searchParams = getPhysicsSearchParams();
 
 export const flushWorkerCommandBatch = (): void => {
     _engine?.flushCommandBatch();
+};
+
+/**
+ * Tell the worker the page is hidden (pause its step timer) or visible again.
+ * Resuming does not fast-forward: the engine only ever receives one fixed
+ * tick per wakeup, so the time spent hidden is not simulated.
+ */
+export const setPhysicsHidden = (hidden: boolean): void => {
+    _engine?.setHidden(hidden);
 };
 
 export const loadWasmEngine = async (): Promise<boolean> => {

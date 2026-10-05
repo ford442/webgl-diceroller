@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getDieSides, getMassBiasRatio } from './DicePhysicsPresets.js';
+import { getDieSides } from './DicePhysicsPresets.js';
 import faceMaps from './diceFaceMaps.json';
 
 function _computeFaceNormals(geometry) {
@@ -147,31 +147,11 @@ function _assignFaceValues(faceNormals, type = null) {
     return values;
 }
 
-function _getFaceNormalForValue(faceNormals, faceValues, targetValue) {
-    if (!faceNormals || !faceValues) return null;
-    const index = faceValues.findIndex((value) => value === targetValue);
-    return index >= 0 ? (faceNormals[index]?.clone() ?? null) : null;
-}
-
-/** Precompute face normals, value map, and mass-bias offset on a die template mesh. */
+/** Precompute face normals and the value map on a die template mesh. */
 export function finalizeDieTemplateUserData(cleanMesh, type) {
     const sides = getDieSides(type);
     const allNormals = _computeFaceNormals(cleanMesh.geometry);
     const faceNormals = _selectPrincipalFaceNormals(allNormals, sides);
     cleanMesh.userData.faceNormals = faceNormals;
     cleanMesh.userData.faceValues = _assignFaceValues(faceNormals, type);
-
-    const oneFaceNormal = _getFaceNormalForValue(
-        cleanMesh.userData.faceNormals,
-        cleanMesh.userData.faceValues,
-        1
-    );
-    if (oneFaceNormal && cleanMesh.geometry.boundingBox) {
-        const bboxSize = new THREE.Vector3();
-        cleanMesh.geometry.boundingBox.getSize(bboxSize);
-        const massBiasMagnitude = bboxSize.y * getMassBiasRatio();
-        cleanMesh.userData.massBiasOffset = oneFaceNormal.multiplyScalar(massBiasMagnitude);
-    } else {
-        cleanMesh.userData.massBiasOffset = null;
-    }
 }

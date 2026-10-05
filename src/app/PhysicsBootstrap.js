@@ -8,7 +8,12 @@
  * product than a silently different physics engine.
  */
 
-import { loadWasmEngine, isWasmAvailable, getWasmEngine } from '../wasm/PhysicsBridge.js';
+import {
+    loadWasmEngine,
+    isWasmAvailable,
+    getWasmEngine,
+    setPhysicsHidden,
+} from '../wasm/PhysicsBridge.js';
 
 export function showLoadFailure(message) {
     const loadingText = document.getElementById('loading-text');
@@ -41,6 +46,14 @@ export async function bootstrapPhysics(app) {
     const eng = getWasmEngine();
     eng.init(-15.0, -2.75, 18.0, 18.0);
     console.log('[WasmPhysics] Engine initialized and ready.');
+
+    // A hidden tab parks the worker's step timer; coming back resumes from
+    // where it stopped rather than replaying the backlog. The in-process
+    // bridge needs nothing here: it only steps from rAF, which stops anyway.
+    if (typeof document !== 'undefined') {
+        setPhysicsHidden(document.hidden);
+        document.addEventListener('visibilitychange', () => setPhysicsHidden(document.hidden));
+    }
 
     return { wasmAvailable };
 }

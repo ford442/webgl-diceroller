@@ -18,6 +18,15 @@ void DicePhysicsEngine::wake(RigidBody& b) {
 void DicePhysicsEngine::integrate(RigidBody& b, float dt) {
     if (b.kinematic) return;
     b.velocity.y += gravity_ * dt;
+    // Pipping bias: gravity acts at the offset centre of mass, so the die feels
+    // r x mg about its geometric centre. Applied here, from the solver's own
+    // orientation, every substep -- never from the render loop -- and without
+    // waking the body: a sleeping die is skipped by the caller and stays put.
+    if (!fairDice_ && massBiasRatio_ > 0.0f && b.comAxis.lengthSq() > 0.0f) {
+        const Vec3 r = b.rotation.rotate(b.comAxis * massBiasRatio_);
+        const Vec3 torque = Vec3::cross(r, Vec3{0.0f, gravity_ * b.mass, 0.0f});
+        b.angularVelocity += b.applyInvInertiaWorld(torque) * dt;
+    }
     if (!noDrag_ && b.dragFactor > 0.0f) {
         const float speedSq = b.velocity.lengthSq();
         if (speedSq > 1e-6f) {

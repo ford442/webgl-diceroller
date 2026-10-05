@@ -30,7 +30,7 @@ export {
     updateDieEntry,
 } from './dice/DiceSetRuntime.js';
 
-export { PHYSICS_PRESETS, applyDiceMassBiases } from './dice/DicePhysicsPresets.js';
+export { PHYSICS_PRESETS } from './dice/DicePhysicsPresets.js';
 
 export {
     readDiceValue,

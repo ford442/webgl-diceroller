@@ -86,12 +86,14 @@ Playwright URLs should include `&test`, e.g. `?webgl&no-post&fair-dice&test`.
 | Phase             | Typical work                                                |
 | ----------------- | ----------------------------------------------------------- |
 | `preStep`         | Input, camera prep                                          |
-| `physicsStep`     | Fixed 1/60 s WASM step (may run multiple substeps)          |
+| `physicsStep`     | Hands elapsed time to the WASM engine (see below)           |
 | `postPhysicsSync` | `updateDiceVisuals()`, collision event polling              |
 | `updates`         | Prop animations, interaction, dice-case preview, atmosphere |
 | `preRender`       | Culling, shadow-map refresh hooks                           |
 | `render`          | Composer / TSL post stack                                   |
 | `postRender`      | Debug overlays, adaptive quality                            |
+
+The engine owns the physics clock: `step(dt)` banks `dt` and runs fixed 1/120 s ticks (4 substeps each, at most 8 ticks per call), so the worker (`step(1/120)` per 120 Hz timer wakeup), `?no-worker` (FrameScheduler's 1/60 chunks → 2 ticks each) and `rollHeadless()` all integrate identically. The worker parks its timer when the world is asleep or the page is hidden and resumes without replaying a backlog. The pipping centre-of-mass bias is applied inside each substep, not from the render loop. See "Fixed clock" and "Pipping bias" in [`WASM_ENGINE.md`](WASM_ENGINE.md).
 
 Systems register via `scheduler.register(phase, name, fn, { priority })`. Prop `update` callbacks and interactables hook into `updates` through [`LoadingTiers.js`](../src/core/LoadingTiers.js) and [`PropRegistry.js`](../src/environment/PropRegistry.js) `afterCreate` handlers — avoid ad-hoc per-frame calls in `main.js`.
 

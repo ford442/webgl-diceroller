@@ -414,6 +414,21 @@ TEST_CASE("Face value: d20 identity reads top face") {
     CHECK(engine.getDieFaceValue(id) == 13);
 }
 
+TEST_CASE("Face value: getDieFaceValue finds a die that is not first") {
+    // It used to return 0 at the first non-matching id, so in any multi-die
+    // roll every die after the first read 0 through this entry point.
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    const int first = engine.addDie(6, -2.0f, 0.0f, 0.0f);
+    const int second = engine.addDie(6, 2.0f, 0.0f, 0.0f);
+    uploadD6FaceTable(engine, first);
+    uploadD6FaceTable(engine, second);
+    engine.setDieSleepingForTesting(first, true);
+    engine.setDieSleepingForTesting(second, true);
+    CHECK(engine.getDieFaceValue(first) == 1);
+    CHECK(engine.getDieFaceValue(second) == 1);
+}
+
 TEST_CASE("Face value: returns zero while die is moving") {
     DicePhysicsEngine engine;
     const int id = engine.addDie(6, 0.0f, 0.0f, 0.0f);
@@ -576,8 +591,8 @@ TEST_CASE("Golden traces: seed and parity hashes are stable") {
     // Hashes below are SOLVER_REVISION-pinned; regenerate with
     // `solver_tests --dump-golden` (see scripts/compare-solver-golden.mjs and
     // tests/fixtures/solver-golden.json) whenever SOLVER_REVISION bumps.
-    CHECK(p1.hashSerializedState() == 0x9a82c5d0872fd75fULL);
-    CHECK(a.hashSerializedState() == 0xc3127461c4a976f0ULL);
+    CHECK(p1.hashSerializedState() == 0xeaf4036c7b67ac50ULL);
+    CHECK(a.hashSerializedState() == 0xfbb7051c8f2f80aaULL);
 }
 
 TEST_CASE("Determinism: same seed yields identical serialize output") {
@@ -586,6 +601,255 @@ TEST_CASE("Determinism: same seed yields identical serialize output") {
     runDeterministicScenario(a, seed);
     runDeterministicScenario(b, seed);
     CHECK(a.serializeState() == b.serializeState());
+}
+
+namespace {
+
+/**
+ * Fixed-literal throw for the clock tests: a d6 and a d20 with hulls and face
+ * tables (so the pipping bias is live), thrown with literal impulses.
+ */
+void setUpClockScenario(DicePhysicsEngine& engine) {
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    const int d6 = engine.addDie(6, -1.0f, 3.0f, 0.5f);
+    engine.setDieHull(d6, flattenHull(makeUnitCubeHull()));
+    engine.setDieDrag(d6, 0.002f);
+    uploadD6FaceTable(engine, d6);
+    const int d20 = engine.addDie(20, 1.5f, 4.0f, -0.5f);
+    engine.setDieHull(d20, flattenHull(makeD20Hull()));
+    engine.setDieDrag(d20, 0.0016f);
+    uploadD20FaceTable(engine, d20);
+    engine.setDieVelocity(d6, 4.0f, -2.0f, 1.5f, 7.0f, -3.0f, 5.0f);
+    engine.setDieVelocity(d20, -3.5f, -1.0f, 2.0f, -4.0f, 6.0f, 2.5f);
+}
+
+} // namespace
+
+TEST_CASE("Fixed clock: one step(1/60) matches two step(1/120)") {
+    DicePhysicsEngine coalesced, halves;
+    setUpClockScenario(coalesced);
+    setUpClockScenario(halves);
+    for (int frame = 0; frame < 240; ++frame) {
+        coalesced.step(1.0f / 60.0f);
+        halves.step(1.0f / 120.0f);
+        halves.step(1.0f / 120.0f);
+        REQUIRE(coalesced.getFixedTickCount() == halves.getFixedTickCount());
+        REQUIRE(coalesced.hashSerializedState() == halves.hashSerializedState());
+    }
+    CHECK(coalesced.getFixedTickCount() == 480);
+}
+
+TEST_CASE("Fixed clock: frame rate does not change the trajectory") {
+    // 30 Hz, 144 Hz and an irregular frame sequence all land on the same
+    // states whenever they have run the same number of ticks.
+    DicePhysicsEngine ref;
+    setUpClockScenario(ref);
+    std::vector<uint64_t> refHashes{ref.hashSerializedState()};
+    for (int t = 0; t < 600; ++t) {
+        ref.step(1.0f / 120.0f);
+        refHashes.push_back(ref.hashSerializedState());
+    }
+
+    const std::vector<std::vector<float>> frameSequences = {
+        {1.0f / 30.0f},
+        {1.0f / 144.0f},
+        {0.007f, 0.011f, 0.0153f, 0.0042f, 0.0221f, 0.0166f},
+    };
+    for (const auto& seq : frameSequences) {
+        DicePhysicsEngine engine;
+        setUpClockScenario(engine);
+        size_t i = 0;
+        int compared = 0;
+        while (engine.getFixedTickCount() < 600) {
+            engine.step(seq[i++ % seq.size()]);
+            const auto ticks = engine.getFixedTickCount();
+            if (ticks > 600) break;
+            REQUIRE(engine.hashSerializedState() == refHashes[ticks]);
+            ++compared;
+        }
+        CHECK(compared > 0);
+    }
+}
+
+TEST_CASE("Fixed clock: a long stall runs a capped number of ticks") {
+    DicePhysicsEngine engine;
+    setUpClockScenario(engine);
+    engine.step(1.0f);
+    CHECK(engine.getFixedTickCount() == static_cast<uint64_t>(MAX_TICKS_PER_STEP));
+    // The backlog is dropped, not carried into the next call.
+    CHECK(engine.getPendingTime() < static_cast<double>(FIXED_DT));
+    engine.step(1.0f / 120.0f);
+    CHECK(engine.getFixedTickCount() == static_cast<uint64_t>(MAX_TICKS_PER_STEP) + 1);
+
+    // Sub-tick time is banked, never integrated on its own.
+    DicePhysicsEngine slow;
+    setUpClockScenario(slow);
+    const uint64_t before = slow.hashSerializedState();
+    slow.step(FIXED_DT * 0.5f);
+    CHECK(slow.getFixedTickCount() == 0);
+    CHECK(slow.hashSerializedState() == before);
+    slow.step(FIXED_DT * 0.5f);
+    CHECK(slow.getFixedTickCount() == 1);
+}
+
+TEST_CASE("Mass bias: the offset is the value-1 normal times die height") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    float x = 0, y = 0, z = 0;
+
+    // Face table before hull, then hull: either order lands on the same axis.
+    const int d6 = engine.addDie(6, 0.0f, 0.0f, 0.0f);
+    uploadD6FaceTable(engine, d6);
+    engine.setDieHull(d6, flattenHull(makeUnitCubeHull()));
+    REQUIRE(engine.getDieComOffset(d6, x, y, z));
+    CHECK(x == doctest::Approx(0.0f));
+    CHECK(y == doctest::Approx(1.0f * DicePhysicsEngine::DEFAULT_MASS_BIAS_RATIO));
+    CHECK(z == doctest::Approx(0.0f));
+
+    const PolyHull d20Hull = makeD20Hull();
+    const int d20 = engine.addDie(20, 2.0f, 0.0f, 0.0f);
+    engine.setDieHull(d20, flattenHull(d20Hull));
+    uploadD20FaceTable(engine, d20);
+    REQUIRE(engine.getDieComOffset(d20, x, y, z));
+    const Vec3 oneNormal = Vec3{0.111f, 0.745f, 0.658f}.normalized();
+    const float scale = (d20Hull.aabbMax.y - d20Hull.aabbMin.y) * DicePhysicsEngine::DEFAULT_MASS_BIAS_RATIO;
+    CHECK(x == doctest::Approx(oneNormal.x * scale));
+    CHECK(y == doctest::Approx(oneNormal.y * scale));
+    CHECK(z == doctest::Approx(oneNormal.z * scale));
+
+    // No face table, no bias.
+    const int bare = engine.addDie(6, -2.0f, 0.0f, 0.0f);
+    engine.setDieHull(bare, flattenHull(makeUnitCubeHull()));
+    REQUIRE(engine.getDieComOffset(bare, x, y, z));
+    CHECK(Vec3{x, y, z}.lengthSq() == doctest::Approx(0.0f));
+
+    // ?bias-ratio is clamped; ?fair-dice zeroes it.
+    engine.setMassBiasRatio(1.0f);
+    REQUIRE(engine.getDieComOffset(d6, x, y, z));
+    CHECK(y == doctest::Approx(DicePhysicsEngine::MAX_MASS_BIAS_RATIO));
+    engine.setFlags(DicePhysicsEngine::FLAG_FAIR_DICE);
+    REQUIRE(engine.getDieComOffset(d6, x, y, z));
+    CHECK(Vec3{x, y, z}.lengthSq() == doctest::Approx(0.0f));
+}
+
+TEST_CASE("Mass bias: a d6 balanced on an edge falls onto its heavy 1 face") {
+    // Rotated 135 degrees about Z, the cube rests on the edge between its 1
+    // face (local +Y) and its 3 face (local -X), both pointing down at 45
+    // degrees. Geometrically that is a balance point; the offset centre of
+    // mass toward the 1 face tips it onto 1, leaving 6 on top.
+    auto run = [](bool fair, int frames) {
+        DicePhysicsEngine engine;
+        if (fair) engine.setFlags(DicePhysicsEngine::FLAG_FAIR_DICE);
+        engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+        const int id = engine.addDie(6, 0.0f, -2.75f + 0.7072f, 0.0f);
+        engine.setDieHull(id, flattenHull(makeUnitCubeHull()));
+        uploadD6FaceTable(engine, id);
+        const float half = 0.5f * 2.35619449f; // 135 degrees about Z
+        engine.setDieTransform(id, 0.0f, -2.75f + 0.7072f, 0.0f,
+            0.0f, 0.0f, std::sin(half), std::cos(half));
+        for (int frame = 0; frame < frames; ++frame) engine.step(1.0f / 60.0f);
+        return std::make_pair(engine.areAllSettled(), engine.getDieFaceValue(id));
+    };
+    const auto biased = run(false, 900);
+    CHECK(biased.first);
+    CHECK(biased.second == 6);
+}
+
+TEST_CASE("Mass bias: fair dice ignore the face table entirely") {
+    // With FLAG_FAIR_DICE a die carrying a face table must integrate exactly
+    // like one without: the table only feeds the bias and the readout.
+    auto run = [](bool withFaceTables) {
+        DicePhysicsEngine engine;
+        engine.setFlags(DicePhysicsEngine::FLAG_FAIR_DICE);
+        engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+        const int d6 = engine.addDie(6, -1.0f, 3.0f, 0.5f);
+        engine.setDieHull(d6, flattenHull(makeUnitCubeHull()));
+        const int d20 = engine.addDie(20, 1.5f, 4.0f, -0.5f);
+        engine.setDieHull(d20, flattenHull(makeD20Hull()));
+        if (withFaceTables) {
+            uploadD6FaceTable(engine, d6);
+            uploadD20FaceTable(engine, d20);
+        }
+        engine.setDieVelocity(d6, 4.0f, -2.0f, 1.5f, 7.0f, -3.0f, 5.0f);
+        engine.setDieVelocity(d20, -3.5f, -1.0f, 2.0f, -4.0f, 6.0f, 2.5f);
+        for (int frame = 0; frame < 240; ++frame) engine.step(1.0f / 60.0f);
+        return engine.hashSerializedState();
+    };
+    CHECK(run(true) == run(false));
+
+    // And with the bias on, the same throw goes somewhere else.
+    DicePhysicsEngine biased;
+    setUpClockScenario(biased);
+    for (int frame = 0; frame < 240; ++frame) biased.step(1.0f / 60.0f);
+    CHECK(biased.hashSerializedState() != run(false));
+}
+
+TEST_CASE("Mass bias: never wakes a sleeping die") {
+    // A sleeping die is skipped by integrate, so a biased engine and a fair
+    // one must agree byte-for-byte while it sleeps -- and it must stay asleep.
+    auto run = [](bool fair) {
+        DicePhysicsEngine engine;
+        if (fair) engine.setFlags(DicePhysicsEngine::FLAG_FAIR_DICE);
+        engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+        const int id = engine.addDie(6, 0.0f, 0.0f, 0.0f);
+        engine.setDieHull(id, flattenHull(makeUnitCubeHull()));
+        uploadD6FaceTable(engine, id);
+        // Tilted 30 degrees about Z so the bias torque would be non-zero, and
+        // held just clear of the table so no contact moves it either.
+        engine.setDieTransform(id, 0.0f, -2.75f + 0.70f, 0.0f, 0.0f, 0.0f, 0.2588f, 0.9659f);
+        engine.setDieSleepingForTesting(id, true);
+        for (int frame = 0; frame < 120; ++frame) engine.step(1.0f / 60.0f);
+        CHECK(engine.areAllSettled());
+        return engine.hashSerializedState();
+    };
+    CHECK(run(false) == run(true));
+}
+
+TEST_CASE("Mass bias: biased dice still come to rest") {
+    // The app used to apply the bias as a per-frame applyTorqueImpulse, which
+    // woke every die every frame, so nothing ever slept (#341). In the step it
+    // must not keep a resting die awake.
+    for (int trial = 0; trial < 6; ++trial) {
+        DicePhysicsEngine engine;
+        engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+        const bool d20 = (trial % 2) == 1;
+        const int id = engine.addDie(d20 ? 20 : 6, 0.3f * static_cast<float>(trial), 2.0f, 0.0f);
+        engine.setDieHull(id, flattenHull(d20 ? makeD20Hull() : makeUnitCubeHull()));
+        if (d20) uploadD20FaceTable(engine, id); else uploadD6FaceTable(engine, id);
+        engine.setDieVelocity(id, 3.0f - static_cast<float>(trial), -1.0f, 1.0f,
+            5.0f, 2.0f * static_cast<float>(trial), -4.0f);
+        bool settled = false;
+        for (int frame = 0; frame < 60 * 20 && !settled; ++frame) {
+            engine.step(1.0f / 60.0f);
+            settled = engine.areAllSettled();
+        }
+        CHECK_MESSAGE(settled, "trial " << trial);
+        CHECK(engine.getDieFaceValue(id) > 0);
+    }
+}
+
+TEST_CASE("World asleep: empty, moving, kinematic and settled worlds") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    CHECK(engine.isWorldAsleep());
+
+    const int id = engine.addDie(6, 0.0f, 0.0f, 0.0f);
+    engine.setDieHull(id, flattenHull(makeUnitCubeHull()));
+    CHECK_FALSE(engine.isWorldAsleep());
+    for (int frame = 0; frame < 60 * 10 && !engine.isWorldAsleep(); ++frame) {
+        engine.step(1.0f / 60.0f);
+    }
+    CHECK(engine.isWorldAsleep());
+
+    // A held die is driven from outside the step, so the world is not idle.
+    engine.setDieKinematic(id, true);
+    CHECK_FALSE(engine.isWorldAsleep());
+    engine.setDieKinematic(id, false);
+
+    // A knockable prop counts too.
+    CHECK(engine.addDynamicBox(7, 1.0f, 3.0f, 0.0f, 0.0f, 0.3f, 0.3f, 0.3f,
+        0.0f, 0.0f, 0.0f, 1.0f, 2) >= 0);
+    CHECK_FALSE(engine.isWorldAsleep());
 }
 
 TEST_CASE("Stack of 10 d6 is stable for 10 simulated seconds") {
@@ -700,6 +964,8 @@ TEST_CASE("Swept contacts: an off-origin convex hull is swept where it actually 
     const int id = engine.addDie(6, -4.0f, -1.0f, 0.0f);
     engine.setDieHull(id, cubeFlat);
     engine.setDieVelocity(id, 80.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    // 0.1 s ticks: far coarser than the fixed clock, so the sweep must fire.
+    engine.setFixedDtForTesting(0.1f);
 
     for (int frame = 0; frame < 20; ++frame) {
         engine.step(0.1f);
@@ -712,11 +978,11 @@ TEST_CASE("Swept contacts: an off-origin convex hull is swept where it actually 
 
 TEST_CASE("Swept contacts: a thin wall holds at substeps discrete SAT cannot see") {
     // Without the sweep this tunnels for most launch positions once the
-    // substep exceeds roughly 2x the speculative window (dt >= 0.1s, i.e. a
-    // sub-10fps caller): the die is clear of the wall at both ends of the
-    // substep, so no manifold is ever generated. The app steps at a fixed
-    // 1/60 and never reaches this, but `step(dt)` takes whatever it is given
-    // -- rollHeadless and the native harnesses included.
+    // substep exceeds roughly 2x the speculative window (tick >= 0.1s): the
+    // die is clear of the wall at both ends of the substep, so no manifold is
+    // ever generated. The fixed 1/120 clock never ticks that coarsely, so the
+    // tick length is forced here to keep the sweep itself under test; a d4 at
+    // the speed cap still crosses CCD_MOTION_FRACTION at the real clock.
     PolyHull cube = makeUnitCubeHull();
     auto cubeFlat = flattenHull(cube);
     const float dts[] = {1.0f / 60.0f, 1.0f / 15.0f, 0.1f, 0.2f};
@@ -732,6 +998,7 @@ TEST_CASE("Swept contacts: a thin wall holds at substeps discrete SAT cannot see
             const int id = engine.addDie(6, startX, -1.0f, 0.0f);
             engine.setDieHull(id, cubeFlat);
             engine.setDieVelocity(id, 80.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+            engine.setFixedDtForTesting(dt);
             for (int frame = 0; frame < 30; ++frame) {
                 engine.step(dt);
                 float x = 0, y = 0, z = 0;

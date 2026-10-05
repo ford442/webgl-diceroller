@@ -6,9 +6,18 @@
 
 export interface PhysicsEngine {
     setFlags(flags: number): void;
+    /** Pipping bias as a fraction of die height (clamped to [0, 0.05] in the engine). */
+    setMassBiasRatio(ratio: number): void;
     init(gravity: number, tableY: number, tableHalfW: number, tableHalfD: number): void;
     reset(): void;
+    /**
+     * Advance by `dt` seconds of wall time. The engine banks it and runs fixed
+     * 1/120 s ticks (see FIXED_DT in dice_contacts.hpp) — dt is never the
+     * integration quantum. A no-op on the worker proxy (the worker self-paces).
+     */
     step(dt?: number): void;
+    /** Fixed 1/120 s ticks the engine has run (monotonic). */
+    getFixedTickCount?(): number;
     addDie(sides: number, x: number, y: number, z: number): number;
     removeDie(id: number): void;
     clearAllDice(): void;
@@ -193,9 +202,12 @@ export interface EmbindVector<T> {
  */
 export interface EmbindPhysicsEngine {
     setFlags(flags: number): void;
+    setMassBiasRatio(ratio: number): void;
     init(gravity: number, tableY: number, tableHalfW: number, tableHalfD: number): void;
     reset(): void;
     step(dt?: number): void;
+    getFixedTickCount(): number;
+    isWorldAsleep(): boolean;
     addDie(sides: number, x: number, y: number, z: number): number;
     removeDie(id: number): void;
     clearAllDice(): void;
@@ -405,6 +417,7 @@ export interface PhysicsBridgeModule {
         usingCommandBatch: boolean;
         usingSAB: boolean;
         msgsPerSecond: number;
+        batchMsgs?: number;
         batchRecords: number;
         stepStats?: {
             pairCandidates: number;
@@ -412,5 +425,7 @@ export interface PhysicsBridgeModule {
             satTests: number;
             contacts: number;
         } | null;
+        loopRunning?: boolean;
+        fixedTicks?: number;
     } | null;
 }

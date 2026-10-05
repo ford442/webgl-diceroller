@@ -14,8 +14,28 @@ namespace dice_physics {
 
 void DicePhysicsEngine::step(float dt) {
     lastStepStats_ = {};
-    const int SUB_STEPS = 4;
-    const float subDt = dt / static_cast<float>(SUB_STEPS);
+    if (!(dt > 0.0f) || !std::isfinite(dt)) return;
+    accumulator_ += static_cast<double>(dt);
+    int ticks = 0;
+    const auto tickLen = static_cast<double>(fixedDt_);
+    while (accumulator_ + FIXED_DT_EPSILON >= tickLen) {
+        if (ticks == MAX_TICKS_PER_STEP) {
+            // Too far behind to catch up in one call: drop the backlog. The
+            // simulation runs slow for this call instead of spiralling, and
+            // the tick sequence a throw sees is unchanged.
+            accumulator_ = 0.0;
+            break;
+        }
+        fixedTick();
+        accumulator_ -= tickLen;
+        ++ticks;
+    }
+    if (accumulator_ < 0.0) accumulator_ = 0.0;
+}
+
+void DicePhysicsEngine::fixedTick() {
+    ++fixedTicks_;
+    const float subDt = fixedDt_ / static_cast<float>(SUB_STEPS);
 
     for (int s = 0; s < SUB_STEPS; ++s) {
         StepStats subStats{};
@@ -105,6 +125,16 @@ bool DicePhysicsEngine::areAllSettled() const {
     for (const auto& b : bodies_) {
         if (b.kinematic) continue;
         if (!b.sleeping) return false;
+    }
+    return true;
+}
+
+bool DicePhysicsEngine::isWorldAsleep() const {
+    for (const auto& b : bodies_) {
+        if (b.kinematic || !b.sleeping) return false;
+    }
+    for (const auto& d : dynamics_) {
+        if (d.kinematic || !d.sleeping) return false;
     }
     return true;
 }
@@ -226,6 +256,8 @@ std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
 
 void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
     if (data.size() < 8) return;
+    // Snapshots are taken between ticks; a restored world starts a fresh tick.
+    accumulator_ = 0.0;
     size_t off = 0;
     auto read = [&](void* ptr, size_t len) {
         if (off + len > data.size()) return false;
@@ -456,6 +488,19 @@ bool DicePhysicsEngine::getDiePosition(int id, float& x, float& y, float& z) con
         x = b.position.x;
         y = b.position.y;
         z = b.position.z;
+        return true;
+    }
+    return false;
+}
+
+bool DicePhysicsEngine::getDieComOffset(int id, float& x, float& y, float& z) const {
+    for (const auto& b : bodies_) {
+        if (b.id != id) continue;
+        const bool biased = !fairDice_ && massBiasRatio_ > 0.0f;
+        const Vec3 offset = biased ? b.comAxis * massBiasRatio_ : Vec3{};
+        x = offset.x;
+        y = offset.y;
+        z = offset.z;
         return true;
     }
     return false;

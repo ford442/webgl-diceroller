@@ -107,7 +107,7 @@ second, differently-behaving simulation.
 │  PhysicsBridge (facade) → WorkerPhysicsBridge (sync proxy)              │
 │    • addDie() returns id immediately (mirrored monotonic counter)       │
 │    • getTransforms()/getDieIds() = Atomics read of SAB front buffer     │
-│    • step() is a no-op (worker self-paces)                              │
+│    • step() is a no-op (worker self-paces, see "Fixed clock")          │
 └───────────┬───────────────────────────────────▲───────────────────────┘
    commands  │ postMessage                       │ SharedArrayBuffer (transforms)
    (init,    │                                   │ + postMessage (collision events)
@@ -115,7 +115,8 @@ second, differently-behaving simulation.
    impulse) ┌────────────────── physics worker ──┴───────────────────────┐
             │  dice_physics.worker.ts                                      │
             │   • owns DicePhysicsEngine (WASM)                            │
-            │   • setInterval fixed-timestep loop @ 120 Hz                 │
+            │   • setInterval wakeup @ 120 Hz → step(1/120) = one tick     │
+            │   • parks the timer when the world is asleep / tab hidden    │
             │   • copies heap transforms → SAB back buffer, flips `front`  │
             └──────────────────────────────────────────────────────────── ┘
 ```
@@ -620,11 +621,12 @@ const engine = getWasmEngine();
 
 #### Lifecycle
 
-| Method     | Signature                                         | Description                                                                                                               |
-| ---------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `setFlags` | `(flags: u32): void`                              | Engine options from the main thread (`FLAG_NO_DRAG = 1` disables quadratic drag). Call after construction, before `init`. |
-| `init`     | `(gravity, tableY, tableHalfW, tableHalfD): void` | Configure world parameters.                                                                                               |
-| `reset`    | `(): void`                                        | Remove all dice and reset the ID counter.                                                                                 |
+| Method             | Signature                                         | Description                                                                                                                                                               |
+| ------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setFlags`         | `(flags: u32): void`                              | Engine options from the main thread (`FLAG_NO_DRAG = 1` disables quadratic drag; `FLAG_FAIR_DICE = 2` disables the pipping bias). Call after construction, before `init`. |
+| `setMassBiasRatio` | `(ratio: f32): void`                              | Pipping bias as a fraction of die height (`?bias-ratio=`, default `0.0075`, clamped to `[0, 0.05]`). See "Pipping bias".                                                  |
+| `init`             | `(gravity, tableY, tableHalfW, tableHalfD): void` | Configure world parameters.                                                                                                                                               |
+| `reset`            | `(): void`                                        | Remove all dice and reset the ID counter.                                                                                                                                 |
 
 #### Die management
 
@@ -657,9 +659,11 @@ const engine = getWasmEngine();
 
 #### Simulation
 
-| Method | Signature         | Description                                       |
-| ------ | ----------------- | ------------------------------------------------- |
-| `step` | `(dt: f32): void` | Advance by `dt` seconds (4 sub-steps internally). |
+| Method              | Signature         | Description                                                                                                                  |
+| ------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `step`              | `(dt: f32): void` | Bank `dt` seconds and run as many fixed 1/120 s ticks (4 substeps each) as it covers, at most 8 per call. See "Fixed clock". |
+| `getFixedTickCount` | `(): f64`         | Fixed ticks run since construction (monotonic).                                                                              |
+| `isWorldAsleep`     | `(): bool`        | Every die and dynamic prop asleep and none kinematic (empty world: `true`). The worker parks its timer on this.              |
 
 #### Query
 
@@ -693,6 +697,79 @@ orthonormal basis (`SeededHopperFrame`), so the PRNG only ever draws unitless
 scatter and a drop replays wherever the tower prop happens to be placed. See
 `npm run verify:tower-drop-replay` for the end-to-end check.
 
+#### Fixed clock
+
+Every caller integrates on the same clock, and the clock lives in the engine.
+`step(dt)` adds `dt` to an accumulator and consumes it in fixed ticks:
+
+```cpp
+// dice_contacts.hpp
+FIXED_DT = 1/120;  SUB_STEPS = 4;  MAX_TICKS_PER_STEP = 8;
+
+// dice_engine_step.cpp (shape)
+void step(float dt) {
+    accumulator_ += dt;
+    while (accumulator_ + 1e-6 >= FIXED_DT) {
+        if (ticks == MAX_TICKS_PER_STEP) { accumulator_ = 0; break; } // drop backlog
+        fixedTick();               // 4 substeps of FIXED_DT / 4
+        accumulator_ -= FIXED_DT;
+    }
+}
+```
+
+| Caller                    | What it passes                           | Ticks                                |
+| ------------------------- | ---------------------------------------- | ------------------------------------ |
+| Physics worker            | `step(1/120)` per timer wakeup           | exactly 1 per wakeup                 |
+| `?no-worker` (in-process) | FrameScheduler's 1/60 chunks (≤ 5/frame) | 2 per chunk                          |
+| `rollHeadless()`          | `step(1/120)` (its `dt` option is time)  | 1 per call                           |
+| Native tests / benchmarks | anything                                 | `floor(banked / FIXED_DT)`, ≤ 8/call |
+
+So one `step(1/60)` is byte-identical to two `step(1/120)` calls, a 30 Hz and
+a 60 Hz caller reach the same state after the same number of ticks, and a
+dropped or late worker timer callback slows the simulation down without
+changing the tick sequence a throw sees. Sub-tick remainders are banked, never
+integrated on their own. `getFixedTickCount()` exposes the tick counter.
+`init`, `reset` and `deserializeState` clear the accumulator (snapshots are
+taken between ticks).
+
+The worker parks its interval once `isWorldAsleep()` has held for 30 ticks
+(0.25 s) with an empty command ring, and while the page is hidden
+(`setPhysicsHidden`, wired to `visibilitychange` in `PhysicsBootstrap.js`).
+Parking raises `H_IDLE` in the SAB header before it re-checks the ring; the
+proxy reads `H_IDLE` after publishing ring commands and posts `wake` when it
+is set, so a park can never swallow a command. Any structural message also
+restarts the loop. Resuming hands the engine one tick per wakeup again, so the
+time spent parked or hidden is simply not simulated — there is no backlog to
+replay. `getWorkerPhysicsStats()` reports `loopRunning` and `fixedTicks`.
+
+Covered by the `Fixed clock: …` and `World asleep: …` cases in
+`solver_tests.cpp`, `npm run verify:worker-replay` (worker = in-process at
+60 Hz = in-process at 30 Hz = `rollHeadless()`, bias on) and
+`npm run verify:worker-physics` (idle / hidden timer).
+
+#### Pipping bias
+
+Real dice lose more material to the 6 pips than to the 1, so their centre of
+mass sits slightly toward the 1 face. The engine models this itself:
+
+- `RigidBody::comAxis` is the die's value-1 face normal (from its face table)
+  times its local height (hull AABB Y extent), recomputed whenever
+  `setDieFaceTable` or `setDieHull` runs. Nothing is uploaded per die — the
+  face table every caller already attaches is the source.
+- `integrate()` adds `invI · (r × m·g) · dt` to the angular velocity each
+  substep, with `r = rotation · comAxis · massBiasRatio_` — the solver's own
+  orientation, the configured gravity, and the substep length. It never wakes
+  a sleeping die (sleeping bodies are not integrated).
+- `?fair-dice` sets `FLAG_FAIR_DICE`; `?bias-ratio=` calls `setMassBiasRatio`.
+  Both are parsed in `physicsFlags.ts` and forwarded like `?no-drag` (worker
+  init payload or the in-process bridge). `rollHeadless()` takes `fairDice` /
+  `massBiasRatio` options and defaults to the app's default (bias on, 0.0075).
+
+This replaced `applyDiceMassBiases()`, which computed the torque on the render
+thread from the mesh quaternion, scaled it by the _frame_ delta (a 30 Hz frame
+applied twice the bias of a 60 Hz one), and — because `applyTorqueImpulse`
+wakes its target — kept every die awake every frame.
+
 #### Swept contacts (continuous collision)
 
 `generateContacts` only ever sees the pose a substep _ends_ at. Speculative
@@ -710,15 +787,16 @@ a pose in contact range. Velocity and rotation are untouched.
 
 Scope and limits, measured rather than assumed:
 
-- At the app's fixed 1/60 step the gate is effectively never reached, and the
-  existing speculative path already blocks a max-speed (`MAX_LINEAR_SPEED = 80`)
-  die against a 0.04-thick wall. **Tower-drop speeds do not tunnel with or
-  without this**, and neither do fast flicks.
-- Tunnelling does reproduce for callers stepping at `dt >= 0.1s` (12/40 launch
-  positions at `dt = 0.1`, 26/40 at `dt = 0.2`, with the sweep disabled), and
-  the sweep takes all of those to 0. `step(dt)` takes whatever it is handed —
-  `rollHeadless`, the native harnesses and any future variable-`dt` caller
-  included — so the guard is worth its (gated-out) cost.
+- At the fixed 1/120 s tick (1/480 s substeps, see "Fixed clock") the gate is
+  only reached by the smallest dice near the speed cap, and the existing
+  speculative path already blocks a max-speed (`MAX_LINEAR_SPEED = 80`) die
+  against a 0.04-thick wall. **Tower-drop speeds do not tunnel with or without
+  this**, and neither do fast flicks.
+- Tunnelling does reproduce at ticks of `>= 0.1s` (12/40 launch positions at
+  0.1 s, 26/40 at 0.2 s, with the sweep disabled), and the sweep takes all of
+  those to 0. No caller can reach those any more — `step(dt)` no longer uses
+  `dt` as the quantum — so the tests force the tick length with
+  `setFixedDtForTesting` to keep the sweep itself under test.
 - Die–die CCD is deliberately not attempted: statics never move, so
   `from -> position` is the whole relative motion and one sweep per collider is
   exact; two moving hulls are not.
@@ -744,13 +822,15 @@ if (isWasmAvailable()) {
 
 By default `loadWasmEngine()` resolves to the **worker** bridge (see
 [Worker topology](#worker-topology-phase-4-default) above): the physics
-worker owns `DicePhysicsEngine` and self-paces its own fixed-timestep loop,
-so `getWasmEngine().step(dt)` on the main thread is a documented no-op there.
+worker owns `DicePhysicsEngine` and wakes on its own timer, so
+`getWasmEngine().step(dt)` on the main thread is a documented no-op there.
 `src/app/SchedulerSetup.js` registers the frame-scheduler phases:
 
 ```js
 scheduler.register('physicsStep', 'dicePhysics', ({ deltaTime }) => {
-    if (isWasmAvailable() && !isUsingWorkerPhysics()) getWasmEngine().step(deltaTime);
+    // Elapsed time, not an integration quantum: the engine banks it and runs
+    // fixed 1/120 s ticks (no-op on the worker bridge).
+    if (isWasmAvailable()) getWasmEngine().step(deltaTime);
 });
 
 scheduler.register('postPhysicsSync', 'diceVisualSync', () => {
@@ -827,9 +907,12 @@ engine.init(-15, -2.75, 18, 18);
 for (let i = 0; i < 50; i++) engine.addDie(6, 0, 5 + i * 0.1, 0);
 // Load hulls via loadHullForDie in a loop
 const t0 = performance.now();
+// step(1/60) is two fixed 1/120 s ticks — 600 calls = 1200 ticks.
 for (let i = 0; i < 600; i++) engine.step(1 / 60);
 const ms = performance.now() - t0;
-console.log(`WASM: 600 steps × 50 dice = ${ms.toFixed(1)} ms  (${(ms / 600).toFixed(3)} ms/step)`);
+console.log(
+    `WASM: 600 frames × 50 dice = ${ms.toFixed(1)} ms  (${(ms / 600).toFixed(3)} ms/frame)`
+);
 ```
 
 Native scalar baseline (no Emscripten):
@@ -912,13 +995,12 @@ const t2 = window.__app.getWasmEngine().getTransforms();
   and tower drops use `seededHopperDrop` (via `seededPhysicsHopperDrop`),
   so RNG draws and the poses/impulses they feed stay ordered in the worker. `serializePhysicsState()`
   is async on the worker path (request/response with a transferred `ArrayBuffer`).
-- `applyDiceMassBiases()` posts one `applyTorqueImpulse` message per mass-biased
-  die per frame; batching into a single message would cut chatter at high counts.
 - `serializeState()` / `randomFloat()` are not available synchronously across the
   worker boundary, so deterministic `replayRoll()` falls back to the in-process
   path. A request/response round-trip could restore them if needed.
-- URL-driven engine flags (`?no-drag`, etc.) are parsed on the main thread in
-  `physicsFlags.js` and forwarded into WASM via `DicePhysicsEngine.setFlags()`
+- URL-driven engine flags (`?no-drag`, `?fair-dice`, `?bias-ratio=`) are parsed
+  on the main thread in `physicsFlags.ts` and forwarded into WASM via
+  `DicePhysicsEngine.setFlags()` / `setMassBiasRatio()`
   (both the in-process bridge and the worker init payload). The C++ constructor
   no longer touches `window`.
 

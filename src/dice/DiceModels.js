@@ -111,8 +111,6 @@ function reshapeExistingDice(dieKey, template) {
     spawnedDice.forEach((die) => {
         if (die.type !== dieKey || !die.mesh) return;
         die.mesh.geometry = template.geometry;
-        die.massBiasOffset = template.userData.massBiasOffset?.clone() ?? null;
-        die.centerOfMassOffset = die.centerOfMassOffset ? die.massBiasOffset : null;
         die.physicsPreset = null; // recomputed from the new shape on the next sync
     });
 }

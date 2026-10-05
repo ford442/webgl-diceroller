@@ -293,11 +293,11 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 ### Pipping bias (mass-asymmetric dice)
 
 - Real dice lose material to recessed numbers, so the low-number face ("1") is heaviest and the high-number face is lightest.
-- `src/dice.js` computes a centre-of-mass offset toward the "1" face equal to `0.75%` of the die's bounding-box height (`DEFAULT_MASS_BIAS_RATIO`).
-- `applyDiceMassBiases` applies a gravity torque impulse to each die's WASM body that approximates the effect.
-- Toggle:
-    - `?fair-dice` disables the bias entirely (perfect Platonic-solid COM).
-    - `?bias-ratio=0.01` overrides the default magnitude (clamped to `[0, 0.05]`).
+- The WASM engine owns the bias: each die's centre-of-mass offset is its value-1 face normal (from the face table every caller already uploads) times its hull height times `0.75%` (`DEFAULT_MASS_BIAS_RATIO`), and `integrate()` applies the resulting `r × mg` torque every substep from the solver's own orientation. Nothing in the render loop touches it — the old per-frame `applyDiceMassBiases` (frame-rate dependent, and it woke every die every frame) is gone. See "Pipping bias" in [`docs/WASM_ENGINE.md`](docs/WASM_ENGINE.md).
+- Toggle (parsed in `src/core-engine/wasm/physicsFlags.ts`, forwarded like `?no-drag`):
+    - `?fair-dice` disables the bias entirely (perfect Platonic-solid COM) — engine flag `FLAG_FAIR_DICE`.
+    - `?bias-ratio=0.01` overrides the default magnitude (clamped to `[0, 0.05]`) — `setMassBiasRatio`.
+    - `rollHeadless()` takes `fairDice` / `massBiasRatio` options and defaults to bias on, like the app.
 
 ### Quadratic drag (air resistance)
 

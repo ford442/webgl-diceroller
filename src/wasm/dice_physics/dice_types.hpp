@@ -60,6 +60,26 @@ struct RigidBody {
 
     std::vector<FaceEntry> faceTable;
 
+    // Pipping bias direction at ratio 1, in the die's local frame: the "1"
+    // face's normal scaled by the die's local height. Real dice lose more
+    // material to the 6 pips than to the 1, so the centre of mass sits toward
+    // the 1 face; the engine scales this by massBiasRatio_ and applies the
+    // resulting gravity torque every substep. Zero until a face table with a
+    // value-1 entry is attached; refreshed by setDieFaceTable and setDieHull.
+    Vec3  comAxis{};
+
+    void refreshComAxis() {
+        comAxis = {};
+        for (const FaceEntry& face : faceTable) {
+            if (face.value != 1) continue;
+            const float height = (useHull && !hull.verts.empty())
+                ? hull.aabbMax.y - hull.aabbMin.y
+                : 2.0f * radius;
+            comAxis = face.normal * height;
+            return;
+        }
+    }
+
     void computeInertiaFromHull() {
         const float sphereI = std::max(0.4f * mass * radius * radius, 1e-8f);
         const auto sphereInv = Vec3{1.0f / sphereI, 1.0f / sphereI, 1.0f / sphereI};

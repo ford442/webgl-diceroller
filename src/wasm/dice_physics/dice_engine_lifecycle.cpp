@@ -15,6 +15,12 @@ DicePhysicsEngine::DicePhysicsEngine()
 
 void DicePhysicsEngine::setFlags(uint32_t flags) {
     noDrag_ = (flags & FLAG_NO_DRAG) != 0;
+    fairDice_ = (flags & FLAG_FAIR_DICE) != 0;
+}
+
+void DicePhysicsEngine::setMassBiasRatio(float ratio) {
+    massBiasRatio_ = std::isfinite(ratio) ? std::clamp(ratio, 0.0f, MAX_MASS_BIAS_RATIO)
+                                          : DEFAULT_MASS_BIAS_RATIO;
 }
 
 void DicePhysicsEngine::init(float gravity, float tableY, float tableHalfW, float tableHalfD) {
@@ -29,6 +35,7 @@ void DicePhysicsEngine::init(float gravity, float tableY, float tableHalfW, floa
     dieGridCells_.clear();
     dynGridCells_.clear();
     lastStepStats_ = {};
+    accumulator_ = 0.0;
     staticCapacityDroppedCount_ = 0;
     dynamicCapacityDroppedCount_ = 0;
 }
@@ -36,6 +43,7 @@ void DicePhysicsEngine::init(float gravity, float tableY, float tableHalfW, floa
 void DicePhysicsEngine::reset() {
     bodies_.clear(); manifolds_.clear(); events_.clear(); statics_.clear(); dynamics_.clear();
     nextId_ = 0;
+    accumulator_ = 0.0;
     staticCapacityDroppedCount_ = 0;
     dynamicCapacityDroppedCount_ = 0;
 }
@@ -97,6 +105,7 @@ void DicePhysicsEngine::setDieHull(int id, const std::vector<float>& flatVerts) 
         b.hull.build(verts);
         b.useHull = true;
         b.computeInertiaFromHull();
+        b.refreshComAxis();
         break;
     }
 }

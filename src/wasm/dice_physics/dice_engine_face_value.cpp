@@ -61,13 +61,14 @@ void DicePhysicsEngine::setDieFaceTable(int id, const std::vector<float>& packed
             if (value <= 0) continue;
             b.faceTable.push_back({Vec3{nx, ny, nz}.normalized(), value});
         }
+        b.refreshComAxis();
         break;
     }
 }
 
 int DicePhysicsEngine::getDieFaceValue(int id) const {
     for (const auto& b : bodies_) {
-        if (b.id != id) return 0;
+        if (b.id != id) continue;
         return computeDieFaceValue(b, true);
     }
     return 0;

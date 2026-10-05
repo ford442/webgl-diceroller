@@ -4,7 +4,6 @@ import { spawnedDice, clearSpawnedDice, allocateAudioBodyId } from './DiceState.
 import {
     getDieSides,
     isUsingWasmPhysics,
-    useMassBias,
     getSecureRandom,
     estimateInertiaScalar,
 } from './DicePhysicsPresets.js';
@@ -64,9 +63,6 @@ export const spawnObjects = (scene: any, world: any, config: any = null) => {
         scene.add(mesh);
 
         const physicsPreset = presetForShape(shape);
-        const centerOfMassOffset = useMassBias()
-            ? (template.userData.massBiasOffset?.clone() ?? null)
-            : null;
 
         const audioBodyId = allocateAudioBodyId();
         const inertiaScalar = estimateInertiaScalar(template.geometry, physicsPreset.mass);
@@ -101,8 +97,6 @@ export const spawnObjects = (scene: any, world: any, config: any = null) => {
             physicsPreset,
             audioBodyId,
             inertiaScalar,
-            centerOfMassOffset,
-            massBiasOffset: template.userData.massBiasOffset?.clone() ?? null,
             role: spec.role ?? null,
             groupIndex: spec.groupIndex ?? 0,
             dieIndex: spec.dieIndex ?? index,

@@ -23,6 +23,7 @@ export {
     serializePhysicsState,
     setContainerActive,
     setContainerPlanes,
+    setPhysicsHidden,
 } from '../core-engine/wasm/PhysicsBridge.js';
 
 import type { Object3D } from 'three';
