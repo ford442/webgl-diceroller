@@ -17,8 +17,8 @@ import {
     computeSeededHopperDropParams,
     identityHopperFrame,
     type SeededHopperFrame,
-} from '../../src/wasm/seededHopperDrop.js';
-import { createSeededRng } from '../../src/wasm/seededThrowParams.js';
+} from '../../src/core-engine/wasm/seededHopperDrop.js';
+import { createSeededRng } from '../../src/core-engine/wasm/seededThrowParams.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 

@@ -5,11 +5,11 @@ like and how their faces are numbered. It is plain data — no Three.js, no DOM,
 no GLB references beyond a shape id — so it can be hashed, shared as a link,
 stored, sent over multiplayer presence, and read by a headless consumer.
 
-- `src/dice/DiceSetFormat.ts` — the types, defaults, normalisation and hash.
-- `src/dice/ShareableDiceSet.ts` — URL token, `localStorage`, presence payload.
+- `src/core-engine/dice/DiceSetFormat.ts` — the types, defaults, normalisation and hash.
+- `src/core-engine/dice/ShareableDiceSet.ts` — URL token, `localStorage`, presence payload.
 - `src/dice/DiceFaceGlyphs.ts` — which glyph each face shows.
 - `src/dice/DiceShadingParams.ts` — the numbers the two material twins shade from.
-- `src/dice/LegacyDiceLook.ts` — decoder for the v0 `?dice-look=` short code.
+- `src/core-engine/dice/LegacyDiceLook.ts` — decoder for the v0 `?dice-look=` short code.
 - `src/dice/DiceSetRuntime.ts` — the live set: resolve, patch, notify, presence.
 
 All of these are dependency-free and import cleanly in Node with no renderer in

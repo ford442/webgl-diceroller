@@ -100,7 +100,7 @@ npm run format              # Prettier write
 npm run format:check        # Prettier check (CI)
 ```
 
-- ammo.js was retired — WASM is the only physics backend, and there is no fallback rigid-body implementation left in `src/`. `?no-wasm` (or missing/broken `public/wasm/` artifacts) no longer loads a different simulation; it forces `WasmPhysicsBridge.js`'s existing no-op JS stub, `isWasmAvailable()` reports `false`, and `PhysicsBootstrap.showLoadFailure()` shows an honest error banner. The tavern (table, walls, props) still loads and `window.__app.ready` still becomes `true` — dice are simply never spawned.
+- ammo.js was retired — WASM is the only physics backend, and there is no fallback rigid-body implementation left in `src/`. `?no-wasm` (or missing/broken `public/wasm/` artifacts) no longer loads a different simulation; it forces `WasmPhysicsBridge.ts`'s existing no-op JS stub, `isWasmAvailable()` reports `false`, and `PhysicsBootstrap.showLoadFailure()` shows an honest error banner. The tavern (table, walls, props) still loads and `window.__app.ready` still becomes `true` — dice are simply never spawned.
 - `npm run dev` without compiled WASM artifacts (`public/wasm/`) hits that same failure path. Run `npm run build:wasm` (needs Emscripten) first to get real physics locally.
 - The `?dual-physics`, `?ammo-drag`, and `?wasm-drag` flags were removed earlier and remain gone; there is no dual-authority sync in `src/dice/`.
 - `?worker-physics` (no value) is an explicit opt-in for the (already-default) worker backend; `?no-worker` / `?worker-physics=off` forces the main-thread WASM bridge instead.
@@ -131,7 +131,7 @@ Initiative / turn tracking and durable multiplayer rooms are wired through **`Ap
 - [`src/session/SessionState.ts`](src/session/SessionState.ts) — seat list, current actor, last expression; `localStorage` per room code.
 - [`src/app/SessionWiring.js`](src/app/SessionWiring.js) + [`src/ui/SessionStrip.js`](src/ui/SessionStrip.js) — desktop strip (`session:initiative`, `session:turn`).
 - [`signaling/src/RoomDurableObject.js`](signaling/src/RoomDurableObject.js) — persisted room state + hibernating WebSockets; `solverBuildId` mismatch rejected at join.
-- [`src/net/CommitReveal.ts`](src/net/CommitReveal.ts) — SHA-256 commit-reveal when `?fair-commit` is set.
+- [`src/core-engine/net/CommitReveal.ts`](src/core-engine/net/CommitReveal.ts) — SHA-256 commit-reveal when `?fair-commit` is set.
 - [`src/xr/XrResultsHud.js`](src/xr/XrResultsHud.js) — world-space totals on `xrWorld`; DOM HUD hidden while presenting.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md).
@@ -222,7 +222,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 - Props that need per-frame animation provide an `update(deltaTime, elapsedTime)` function.
 - `LoadingTiers.js` wires these into `FrameScheduler` through the prop registry; do not add ad-hoc per-frame calls in `main.js`.
 - Interactive props return callbacks (e.g., `interact`, `toggleGlow`) that are registered in the prop entry’s `afterCreate` hook.
-- Registered props use `createProp` + declarative `colliders` via [`StaticColliderBridge.js`](src/core/StaticColliderBridge.js), which registers every collider type (box, plane, cylinder/openCylinder, convexHull, compound) directly on the WASM engine — there is no other collider backend.
+- Registered props use `createProp` + declarative `colliders` via [`StaticColliderBridge.ts`](src/core/StaticColliderBridge.ts), which registers every collider type (box, plane, cylinder/openCylinder, convexHull, compound) directly on the WASM engine — there is no other collider backend.
 - Shadows are aggressively optimized: small decorative props are listed in `SHADOW_DISABLED_PROP_NAMES` in `src/environment/PropRegistry.js`.
 
 ### Rendering Notes
@@ -328,7 +328,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 1. Create `src/environment/PropName.js` using `createProp` from [`src/environment/propKit.js`](src/environment/propKit.js).
 2. Export a factory: `(scene, physicsWorld?, position?, rotation?, options?)`. Accept `{ scale = 1 } = {}` as the fifth argument and pass it to `createProp` if the prop should also be usable as tabletop clutter.
 3. Build geometry inside the `build({ group, materials, mesh })` callback; use `materials.*` from the kit (backed by [`MaterialPalette.js`](src/core/MaterialPalette.js)) instead of inline `MeshStandardMaterial`.
-4. Declare colliders as a spec array — routed through [`StaticColliderBridge.js`](src/core/StaticColliderBridge.js).
+4. Declare colliders as a spec array — routed through [`StaticColliderBridge.ts`](src/core/StaticColliderBridge.ts).
 5. Return `{ group }` plus optional `update`, `interact`, `body`, etc.
 6. Register in the appropriate tier in [`PropRegistry.js`](src/environment/PropRegistry.js).
 7. Wire `afterCreate` for per-frame updates or click handlers.

@@ -11,7 +11,7 @@ import {
     countRecords,
     dispatchLinear,
     drainRing,
-} from '../../src/wasm/workerCommands.js';
+} from '../../src/core-engine/wasm/workerCommands.js';
 
 function makeMockEngine() {
     return {

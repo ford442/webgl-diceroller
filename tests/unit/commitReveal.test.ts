@@ -10,7 +10,7 @@ import {
     createCommit,
     generateNonce,
     verifyReveal,
-} from '../../src/net/CommitReveal.js';
+} from '../../src/core-engine/net/CommitReveal.js';
 
 describe('CommitReveal', () => {
     describe('verifyReveal tampering', () => {

@@ -83,7 +83,7 @@ function applyShadingParams(material, params, options) {
  * marking (the descriptor asked for what the mesh has), or it is stale relief to
  * be flattened back into the face while the atlas draws the real glyphs.
  *
- * @param {import('./DiceSetFormat.js').DiceSetEntry} entry
+ * @param {import('../core-engine/dice/DiceSetFormat.js').DiceSetEntry} entry
  * @param {THREE.Mesh} template the die template the material will be worn by
  * @param {{ envMap?: THREE.Texture|null, highQuality?: boolean }} [options]
  * @returns {{ materials: THREE.MeshPhysicalMaterial[], dispose: () => void }}

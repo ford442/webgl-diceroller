@@ -6,8 +6,8 @@ High-level map of how the WebGPU Dice Roller is structured. For agent-oriented d
 
 [`src/main.js`](../src/main.js) bootstraps the scene, renderer, physics world, and frame loop. It wires:
 
-- **Renderer** — created via [`RendererFactory.js`](../src/core/RendererFactory.js) (see below).
-- **Frame scheduler** — [`FrameScheduler.js`](../src/core/FrameScheduler.js) runs named phases each frame.
+- **Renderer** — created via [`RendererFactory.ts`](../src/core/RendererFactory.ts) (see below).
+- **Frame scheduler** — [`FrameScheduler.ts`](../src/core/FrameScheduler.ts) runs named phases each frame.
 - **Tier loading** — [`LoadingTiers.js`](../src/core/LoadingTiers.js) async-loads environment, dice, UI, and interaction before the overlay fades.
 - **AppContext + AppEvents** — internal service bag and pub/sub; see below. Production loads do **not** publish `window.*` app globals.
 
@@ -22,9 +22,9 @@ main.js
 
 ## AppContext and AppEvents
 
-[`AppContext.js`](../src/core/AppContext.js) is a mutable bag filled during init (`scene`, `camera`, `renderer`, `scheduler`, `physics`, `dice`, `audio`, `ui`, `interactables`, …). Features take services from this object or subscribe to events — they should not reach for `window`.
+[`AppContext.ts`](../src/core/AppContext.ts) is a mutable bag filled during init (`scene`, `camera`, `renderer`, `scheduler`, `physics`, `dice`, `audio`, `ui`, `interactables`, …). Features take services from this object or subscribe to events — they should not reach for `window`.
 
-[`AppEvents.js`](../src/core/AppEvents.js) is a tiny synchronous pub/sub. Documented event names (`AppEvent`):
+[`AppEvents.ts`](../src/core/AppEvents.ts) is a tiny synchronous pub/sub. Documented event names (`AppEvent`):
 
 | Event                | Payload (typical)                        | Producers                                | Consumers                                                       |
 | -------------------- | ---------------------------------------- | ---------------------------------------- | --------------------------------------------------------------- |
@@ -48,10 +48,10 @@ Host-authoritative WebRTC tables use deterministic WASM seeded replay. See [`MUL
 
 Desktop **initiative / turn strip** and multiplayer session sync live outside `main.js`:
 
-- [`SessionState.ts`](src/session/SessionState.ts) — seat list, current actor, `lastExpression`; persisted in `localStorage` per room code.
-- [`SessionWiring.js`](src/app/SessionWiring.js) — subscribes to `roll:settled` / `roll:evaluated`; emits `session:initiative` and `session:turn`; host broadcasts `session-sync` via [`RoomSession.ts`](src/net/RoomSession.ts).
-- [`SessionStrip.js`](src/ui/SessionStrip.js) — DOM strip (pass turn, current actor).
-- XR roll totals: [`XrResultsHud.js`](src/xr/XrResultsHud.js) on `xrWorld`; DOM HUD suppressed while presenting (`setDomResultsSuppressed`).
+- [`SessionState.ts`](../src/session/SessionState.ts) — seat list, current actor, `lastExpression`; persisted in `localStorage` per room code.
+- [`SessionWiring.js`](../src/app/SessionWiring.js) — subscribes to `roll:settled` / `roll:evaluated`; emits `session:initiative` and `session:turn`; host broadcasts `session-sync` via [`RoomSession.ts`](../src/net/RoomSession.ts).
+- [`SessionStrip.js`](../src/ui/SessionStrip.js) — DOM strip (pass turn, current actor).
+- XR roll totals: [`XrResultsHud.js`](../src/xr/XrResultsHud.js) on `xrWorld`; DOM HUD suppressed while presenting (`setDomResultsSuppressed`).
 
 State flows through **`AppContext`** (`app.session`, `app.multiplayer`) and **`AppEvents`** — not new `window.*` globals.
 
@@ -81,7 +81,7 @@ Playwright URLs should include `&test`, e.g. `?webgl&no-post&fair-dice&test`.
 
 ## Frame scheduler phases
 
-[`FrameScheduler`](../src/core/FrameScheduler.js) executes systems in a fixed order with optional priorities within each phase:
+[`FrameScheduler`](../src/core/FrameScheduler.ts) executes systems in a fixed order with optional priorities within each phase:
 
 | Phase             | Typical work                                                |
 | ----------------- | ----------------------------------------------------------- |
@@ -125,7 +125,7 @@ Shared KTX2/JPG textures, dice GLBs, Draco/Basis transcoders, and other files un
 - Static mesh merge — eligible static props batch leaf meshes via [`StaticPropMerger.js`](../src/core/StaticPropMerger.js). Merged geometry is baked **relative to the prop root**, which stays the physics anchor; props that animate (`update`) or move (`dynamic`) are excluded.
 - Interaction — `afterCreate` registers `registerInteractiveObject` / `registerInteractable` as needed.
 
-**New props** must use [`propKit.js`](../src/environment/propKit.js) (`createProp`, `materials.*`, collider specs via [`StaticColliderBridge.js`](../src/core/StaticColliderBridge.js)). See AGENTS.md “Adding New Environment Props”.
+**New props** must use [`propKit.js`](../src/environment/propKit.js) (`createProp`, `materials.*`, collider specs via [`StaticColliderBridge.ts`](../src/core/StaticColliderBridge.ts)). See AGENTS.md “Adding New Environment Props”.
 
 ### One prop, two placement paths
 
@@ -153,7 +153,7 @@ poster, gemstone, potion, d20 holder) has no named twin — give it one under
 
 ## Renderer selection
 
-[`RendererFactory.js`](../src/core/RendererFactory.js):
+[`RendererFactory.ts`](../src/core/RendererFactory.ts):
 
 | Condition                             | Renderer                                                         |
 | ------------------------------------- | ---------------------------------------------------------------- |
@@ -214,14 +214,14 @@ Candle, fireplace and prop flames ([`LightingSystems.js`](../src/core/LightingSy
 WASM `DicePhysicsEngine` is the only physics backend — ammo.js was retired. It is
 authoritative for dice simulation, drag, and levitation whenever `public/wasm/`
 is built and loads successfully. If it isn't (`?no-wasm`, or missing/broken
-artifacts), `WasmPhysicsBridge.js`'s existing no-op JS stub takes over,
+artifacts), `WasmPhysicsBridge.ts`'s existing no-op JS stub takes over,
 `isWasmAvailable()` reports `false`, `PhysicsBootstrap.showLoadFailure()` shows
 an error banner, and the tavern still loads with zero dice — an honest failure
 mode rather than a second, differently-behaving engine.
 
-Bridges: [`WasmPhysicsBridge.js`](../src/wasm/WasmPhysicsBridge.js) (main-thread), [`WorkerPhysicsBridge.ts`](../src/wasm/WorkerPhysicsBridge.ts) (default), selected by [`PhysicsBridge.js`](../src/wasm/PhysicsBridge.js). Flags: `?no-wasm` (forces the no-op stub), `?no-worker` / `?worker-physics=off` (forces the main-thread bridge) — see AGENTS.md and WASM_ENGINE.md.
+Bridges: [`WasmPhysicsBridge.ts`](../src/core-engine/wasm/WasmPhysicsBridge.ts) (main-thread), [`WorkerPhysicsBridge.ts`](../src/core-engine/wasm/WorkerPhysicsBridge.ts) (default), selected by [`PhysicsBridge.ts`](../src/wasm/PhysicsBridge.ts). Flags: `?no-wasm` (forces the no-op stub), `?no-worker` / `?worker-physics=off` (forces the main-thread bridge) — see AGENTS.md and WASM_ENGINE.md.
 
-Declarative static and dynamic colliders go through [`StaticColliderBridge.js`](../src/core/StaticColliderBridge.js), which registers every collider type (box, plane, cylinder/openCylinder, convexHull, compound) directly on the WASM engine — there is no other collider backend. `DicePhysicsEngine::MAX_STATICS` (512, see [`WASM_ENGINE.md`](WASM_ENGINE.md)) caps the WASM static registry; `addStaticBox`/etc. report drops past that cap via `getStaticCapacityDroppedCount()` rather than silently no-op'ing.
+Declarative static and dynamic colliders go through [`StaticColliderBridge.ts`](../src/core/StaticColliderBridge.ts), which registers every collider type (box, plane, cylinder/openCylinder, convexHull, compound) directly on the WASM engine — there is no other collider backend. `DicePhysicsEngine::MAX_STATICS` (512, see [`WASM_ENGINE.md`](WASM_ENGINE.md)) caps the WASM static registry; `addStaticBox`/etc. report drops past that cap via `getStaticCapacityDroppedCount()` rather than silently no-op'ing.
 
 ## Key directories
 
@@ -229,9 +229,9 @@ Declarative static and dynamic colliders go through [`StaticColliderBridge.js`](
 src/
   core/           Frame loop, renderer, loading, textures, culling, metrics
   environment/    Prop modules + PropRegistry + propKit
-  wasm/           C++ engine, bridges, worker
+  core-engine/    Three-free headless core: WASM bridges + worker, notation, rolls, dice-set format
+  wasm/           C++ engine, page-facing PhysicsBridge facade, collider registration
   shaders/        ShaderKit graphs (god rays, vignette, post params) → GLSL + TSL
-  roll/           Notation, history, shareable rolls
   ui/             DOM panels beyond core ui.js
 tests/            Playwright smoke / a11y scripts (see AGENTS.md)
 scripts/          Asset conversion, verify-* harnesses

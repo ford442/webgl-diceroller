@@ -150,7 +150,7 @@ export function scaleColliderSpec(spec, factor) {
 /**
  * Standard prop factory scaffold: group setup, build callback, colliders, scene add.
  * @param {THREE.Scene} scene
- * @param {import('../wasm/physicsTypes').PhysicsEngine | null | undefined} physicsWorld
+ * @param {import('../core-engine/wasm/physicsTypes').PhysicsEngine | null | undefined} physicsWorld
  * @param {{
  *   name?: string,
  *   position?: { x?: number, y?: number, z?: number },

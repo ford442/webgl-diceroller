@@ -92,7 +92,9 @@ try {
     page.on('worker', (w) => {
         w.on('console', (m) => errors.push('worker ' + m.type() + ': ' + m.text()));
     });
-    await page.goto(`${BASE}/src/wasm/physicsFlags.js`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${BASE}/src/core-engine/wasm/physicsFlags.ts`, {
+        waitUntil: 'domcontentloaded',
+    });
     result = await page.evaluate(async () => {
         try {
             const m = await import('/src/__worker_replay_test.js');

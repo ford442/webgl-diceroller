@@ -248,7 +248,7 @@ export function createDiceGameFeelSystem(scene, { postConfig = null, rendererSta
 
     /**
      * Notation rolls carry explicit crit/fumble flags (and optional system bands).
-     * @param {import('../roll/Notation.js').EvaluatedRoll} evaluated
+     * @param {import('../core-engine/roll/Notation.js').EvaluatedRoll} evaluated
      */
     function onNotationResult(evaluated) {
         if (disabled || !evaluated?.flags) return;

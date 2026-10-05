@@ -11,7 +11,7 @@ const TEST_MODULE = new URL('../src/__wasm_prim_test.js', import.meta.url);
 const TEST_SRC = `
 import {
     loadWasmEngine, isWasmAvailable, getWasmEngine
-} from './wasm/WasmPhysicsBridge.js';
+} from './core-engine/wasm/WasmPhysicsBridge.js';
 export async function run() {
     const ok = await loadWasmEngine();
     if (!ok || !isWasmAvailable()) return { ok: false, reason: 'WASM not available' };

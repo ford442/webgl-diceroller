@@ -14,7 +14,7 @@ import { createRoomSession, resolveSignalingUrl } from '../net/RoomSession.js';
 import type { RoomSession } from '../net/RoomSession.js';
 import { createMultiplayerPanel } from '../ui/MultiplayerPanel.js';
 import { isTouchPrimaryDevice } from '../core/DeviceCapabilities.js';
-import { loadSolverBuildId } from '../wasm/SolverBuildId.js';
+import { loadSolverBuildId } from '../core-engine/wasm/SolverBuildId.js';
 import { resolveNegotiatedProtocolVersion, isFairCommitEnabled } from '../net/protocolFlags.js';
 import type { AppContext, AppEvents } from '../types/app';
 import type { createRollWiring } from './RollWiring.js';

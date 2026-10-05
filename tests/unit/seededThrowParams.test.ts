@@ -1,5 +1,5 @@
 /**
- * Additional edge-case coverage for src/wasm/seededThrowParams.ts.
+ * Additional edge-case coverage for src/core-engine/wasm/seededThrowParams.ts.
  * tests/unit/share-roll.test.js already covers determinism for a fixed seed
  * via computeSeededThrowParams; these tests cover createSeededRng behavior,
  * per-die output shape, and applyThrowParams engine wiring.
@@ -9,7 +9,7 @@ import {
     applyThrowParams,
     computeSeededThrowParams,
     createSeededRng,
-} from '../../src/wasm/seededThrowParams.js';
+} from '../../src/core-engine/wasm/seededThrowParams.js';
 
 describe('createSeededRng', () => {
     it('produces values in [0, 1) across many calls', () => {

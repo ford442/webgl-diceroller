@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { PhysicsEngine } from './physicsTypes.js';
+import type { PhysicsEngine } from '../core-engine/wasm/physicsTypes.js';
 import type { StaticColliderSpec } from '../types/staticCollider.js';
 import { computeWorldPose } from './staticColliders.js';
 

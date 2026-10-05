@@ -8,7 +8,7 @@ import {
     createRollHistory,
     formatDiceSet,
     formatResultsSummary,
-} from '../../src/roll/RollHistory.js';
+} from '../../src/core-engine/roll/RollHistory.js';
 
 beforeEach(() => {
     localStorage.clear();

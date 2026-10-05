@@ -107,7 +107,7 @@ export function getDiceMaterialBackend() {
 /**
  * Build the material for one die, from its descriptor entry.
  *
- * @param {import('./DiceSetFormat.js').DiceSetEntry} entry
+ * @param {import('../core-engine/dice/DiceSetFormat.js').DiceSetEntry} entry
  * @param {import('three').Mesh} template die template the material will be worn by
  * @param {{ envMap?: import('three').Texture|null, qualityProfile?: object|null, forceWebGL?: boolean }} [options]
  * @returns {{ materials: import('three').Material[], dispose: () => void }}
