@@ -169,7 +169,45 @@ The Dice Case preview uses a **lazy low-power** WebGL context (not high-performa
 
 Post flags (`?no-post`, `?low-post`, `?no-bloom`, `?no-godrays`) apply to both paths where supported.
 
-**God rays** — scene-space moonlight beams in [`TavernWalls.js`](../src/environment/TavernWalls.js): WebGL uses [`GodRayShader.js`](../src/shaders/GodRayShader.js); WebGPU uses [`GodRayNodeMaterial.js`](../src/shaders/GodRayNodeMaterial.js). Toggle with `?no-godrays`.
+**God rays** — scene-space moonlight beams in [`TavernWalls.js`](../src/environment/TavernWalls.js): WebGL uses [`GodRayShader.js`](../src/shaders/GodRayShader.js); WebGPU uses [`GodRayNodeMaterial.js`](../src/shaders/GodRayNodeMaterial.js). Both are built from one graph (below). Toggle with `?no-godrays`.
+
+### One shader graph, two backends
+
+`WebGLRenderer` needs GLSL; `WebGPURenderer` needs TSL nodes. `WebGLRenderer` cannot run a `NodeMaterial`, and the WebGL2 node backend of `WebGPURenderer` is the path that breaks under SwiftShader, so `?webgl` / XR / CI stay on GLSL. Rather than hand-writing each effect twice, the maths is written once against [`ShaderKit`](../src/shaders/graph/ShaderKit.js): `createGlslKit()` turns the calls into GLSL source, `createTslKit(TSL)` into nodes (`three/tsl` is passed in, so WebGL never loads it). A term added to a graph lands in both renderers; there is no second copy to forget.
+
+| Graph                                                                                                                             | WebGL (GLSL, generated)                                                                                                         | WebGPU (TSL)                                                                                                                                                             | Parameters                                |
+| --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| [`DiceSurfaceGraph.js`](../src/dice/DiceSurfaceGraph.js) — face pick, glyph SDF, engraved/inlaid/painted, inclusions, normal bend | [`DiceFaceMarkingShader.js`](../src/dice/DiceFaceMarkingShader.js) chunks via `onBeforeCompile` in `DiceFaceMarkingMaterial.js` | [`DiceFaceMarkingNodeMaterial.js`](../src/dice/DiceFaceMarkingNodeMaterial.js) slots (`colorNode`, `roughnessNode`, `normalNode`, `clearcoatNormalNode`, `emissiveNode`) | `DiceShadingParams` → `diceUniformValues` |
+| [`GodRayGraph.js`](../src/shaders/GodRayGraph.js)                                                                                 | `GodRayShader.js` `ShaderMaterial`                                                                                              | `GodRayNodeMaterial.js` `MeshBasicNodeMaterial`                                                                                                                          | `GOD_RAY_PARAMS`                          |
+| `vignette` in [`PostStackParams.js`](../src/shaders/PostStackParams.js)                                                           | `VignetteShader.js` `ShaderPass`                                                                                                | `createWebGpuPostPipeline` in `SceneSetup.js`                                                                                                                            | `VIGNETTE_PARAMS`                         |
+
+Rules that keep it honest:
+
+- The twin modules contain wiring only — which uniform or slot a graph output lands in. No shading maths.
+- Branches a graph resolves in JS (marking style, inclusion type, atlas vs baked, draw group) are part of `diceGraphKey`, which is also the WebGL `customProgramCacheKey`; anything that varies at runtime stays a uniform.
+- Use the kit's functional `k.mix(a, b, t)`, never TSL's method form: `a.mix(b, t)` is `mix(b, t, a)` (the receiver is the blend factor). The hand-written WebGPU dice twin fell into exactly that trap and shaded every engraved die wrong.
+- Add an op to **both** kits (`SHADER_KIT_OPS`); `tests/unit/shaderKit.test.js` fails otherwise.
+
+`npm run verify:shader-parity` renders a grid of die descriptors (every style, every inclusion, baked and atlas glyphs, both draw groups), a beam and a vignette card on both renderers and diffs them. WebGPU is skipped under `DICE_CI_NO_WEBGPU=1`; locally (SwiftShader's WebGPU works headless) it is a hard requirement.
+
+### Post stack mapping
+
+One set of numbers, two pipelines — both read [`PostStackParams.js`](../src/shaders/PostStackParams.js):
+
+| Stage                | WebGL (`EffectComposer`)                 | WebGPU (TSL `PostProcessing`)               | Source of truth          |
+| -------------------- | ---------------------------------------- | ------------------------------------------- | ------------------------ |
+| Scene                | `RenderPass`                             | `pass(scene, camera)`                       | —                        |
+| Bloom                | `UnrealBloomPass` at 1/`resolutionScale` | `bloom()` node, blended by a uniform        | `bloomParams(quality)`   |
+| Vignette             | `ShaderPass(VignetteShader)`             | `vignette` graph on `screenUV`              | `VIGNETTE_PARAMS`        |
+| Chromatic aberration | —                                        | `chromaticAberration()` (high quality only) | `CHROMATIC_PARAMS`       |
+| AA                   | `FXAAPass` when `usePostAA`              | `fxaa()` when `usePostAA`                   | `postConfig.fxaaEnabled` |
+| Output               | `OutputPass`                             | implicit                                    | —                        |
+
+`postConfig` (built once in `SceneSetup.js`) decides which stages exist; `PostRuntimeControls.js` blends bloom / chromatic at runtime on either pipeline without rebuilding it.
+
+### Flame lighting
+
+Candle, fireplace and prop flames ([`LightingSystems.js`](../src/core/LightingSystems.js)) flicker from deterministic value noise over `elapsedTime` — no `Math.random()` — and `?test` freezes every flame (`setFlameFlickerFrozen`). Flicker moves intensity only on a shadow-casting light (the table candle key light, the lantern): shadow maps are static between rolls, so a jittering caster would light from somewhere its shadow map was not drawn from. Shadowless floating candles still sway.
 
 ## Physics
 
@@ -193,7 +231,7 @@ src/
   environment/    Prop modules + PropRegistry + propKit
   core-engine/    Three-free headless core: WASM bridges + worker, notation, rolls, dice-set format
   wasm/           C++ engine, page-facing PhysicsBridge facade, collider registration
-  shaders/        GLSL (WebGL god rays, vignette) + TSL node materials
+  shaders/        ShaderKit graphs (god rays, vignette, post params) → GLSL + TSL
   ui/             DOM panels beyond core ui.js
 tests/            Playwright smoke / a11y scripts (see AGENTS.md)
 scripts/          Asset conversion, verify-* harnesses

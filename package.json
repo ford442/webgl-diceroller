@@ -30,6 +30,7 @@
         "verify:worker-replay": "tsx scripts/verify-worker-replay.mjs",
         "verify:tower-drop-replay": "tsx scripts/verify-tower-drop-replay.mjs",
         "verify:godrays": "node scripts/verify-godrays.mjs",
+        "verify:shader-parity": "node scripts/verify-shader-parity.mjs",
         "verify:clutter-unification": "node scripts/verify-clutter-unification.mjs",
         "verify:wasm-primitives": "node scripts/verify-wasm-primitives.mjs",
         "verify:wasm-interaction": "node scripts/verify-wasm-interaction.mjs",
@@ -57,6 +58,7 @@
         "test:wasm-authoritative": "node tests/wasm-authoritative.js",
         "test:wasm-gameplay-loop": "node tests/wasm-gameplay-loop.mjs",
         "test:a11y": "node tests/a11y.js",
+        "test:audio-worklet": "node tests/audio-worklet.js",
         "test:solver": "bash src/wasm/build_solver_test.sh",
         "signal:dev": "npm --prefix signaling run dev",
         "signal:deploy": "npm --prefix signaling run deploy"

@@ -24,6 +24,7 @@ import { LampMode } from '../environment/Lamp.js';
 import {
     createCandleFlickerSystem,
     createFireplaceFlickerSystem,
+    setFlameFlickerFrozen,
 } from '../core/LightingSystems.js';
 import { updateAdaptiveQualityProbe, updateMotionProfileState } from '../core/AdaptiveQuality.js';
 import { hideResults, updateDiceHud } from '../results.js';
@@ -195,8 +196,9 @@ export function registerFrameCallbacks(scheduler, deps) {
         }
     });
 
-    // `frozenLights` (?test) pins both flames to one sample so a
+    // `frozenLights` (?test) pins every flame to one sample so a
     // render-regression capture never depends on flicker phase.
+    setFlameFlickerFrozen(frozenLights);
     scheduler.register(
         'preRender',
         'candleFlicker',
@@ -258,6 +260,7 @@ export function registerFrameCallbacks(scheduler, deps) {
             if (/** @type {{ done?: boolean }} */ (adaptiveQualityState.probe).done) {
                 app.qualityProfile = postConfig.adaptiveProfile;
                 setDiceAppearanceQualityProfile(postConfig.adaptiveProfile);
+                getCollisionAudio()?.setQualityProfile?.(postConfig.adaptiveProfile);
                 runtimeGovernor?.refreshBaselineFromProfile?.(adaptiveQualityState.appliedProfile);
                 adaptiveQualityState.probe = null;
             }

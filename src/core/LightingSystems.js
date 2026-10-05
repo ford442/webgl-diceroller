@@ -1,13 +1,20 @@
 /**
- * Candle + fireplace flicker.
+ * Candle + fireplace flicker, and the flame noise every prop light shares.
  *
- * Both used to draw `Math.random()` every frame, which made two runs of the
+ * Flames used to draw `Math.random()` every frame, which made two runs of the
  * same scene differ: `?debug` screenshots and the render-regression baselines
  * picked up whatever phase the flame happened to be in, and a replayed table
  * could never match the run it replayed. Flicker is now a pure function of
  * `time` — smoothed value noise over a deterministic integer hash — so the
  * same second of the same scene always lights the same way, and `?test`
  * freezes it outright so a baseline capture never races the flame.
+ *
+ * Flicker moves *intensity*, never the position of a shadow-casting light:
+ * shadow maps are static until something on the table moves
+ * (`renderer.shadowMap.autoUpdate = false`), so a jittering shadow caster
+ * would either force a re-render every frame or light from somewhere its
+ * shadow map was not drawn from. Only shadowless lights (floating candles)
+ * sway.
  */
 
 /** Flicker samples per second. Fixed so the look does not track frame rate. */
@@ -47,13 +54,51 @@ function signedFlicker(time, channel) {
 
 const CHANNEL = {
     candleIntensity: 0,
-    candleJitterX: 1,
-    candleJitterY: 2,
-    candleJitterZ: 3,
     fireplaceCrackle: 4,
 };
 
+/** Noise channels for prop flames (`flameFlicker`); 0–4 belong to the table lights. */
+export const FLAME_CHANNEL = Object.freeze({
+    intensity: 5,
+    size: 6,
+    sway: 7,
+});
+
+/** Seconds of noise between two props' flames, so they do not flicker in step. */
+const FLAME_SEED_SPACING = 13.7;
+
+let flamesFrozen = false;
+
 /**
+ * Pin every prop flame to one sample (`?test`), the way the candle and
+ * fireplace systems take `frozen`. Props are built by the registry without
+ * app options, hence module state rather than a parameter.
+ */
+export function setFlameFlickerFrozen(frozen) {
+    flamesFrozen = Boolean(frozen);
+}
+
+/** The time a flame should be sampled at: `time`, or the frozen sample. */
+export function flameTime(time) {
+    return flamesFrozen ? FROZEN_TIME : time;
+}
+
+/**
+ * Signed flame noise in [-0.5, 0.5) for a prop light — the deterministic
+ * replacement for `Math.random() - 0.5` in a per-frame update.
+ *
+ * @param {number} time elapsed seconds
+ * @param {number} channel a `FLAME_CHANNEL` value
+ * @param {number} [seed] distinguishes flames (e.g. a candle's index)
+ */
+export function flameFlicker(time, channel, seed = 0) {
+    return signedFlicker(flameTime(time) + seed * FLAME_SEED_SPACING, channel);
+}
+
+/**
+ * The key light casts the table's candle shadow, so it sits still just above
+ * the flame and only its intensity flickers (see the module note).
+ *
  * Typed by what the system actually touches rather than by `THREE.PointLight`
  * — the whole surface here is one scalar and a `position.set`, and a narrower
  * type keeps a test able to hand in a plain object.
@@ -74,13 +119,7 @@ export function createCandleFlickerSystem(pointLight, getFlamePosition, options 
         const flicker = signedFlicker(t, CHANNEL.candleIntensity) * 0.3;
 
         pointLight.intensity = 2.5 + breathing + flicker;
-
-        const jitterAmount = 0.03;
-        pointLight.position.set(
-            flamePosition.x + signedFlicker(t, CHANNEL.candleJitterX) * jitterAmount,
-            flamePosition.y + 0.1 + signedFlicker(t, CHANNEL.candleJitterY) * jitterAmount * 0.5,
-            flamePosition.z + signedFlicker(t, CHANNEL.candleJitterZ) * jitterAmount
-        );
+        pointLight.position.set(flamePosition.x, flamePosition.y + 0.1, flamePosition.z);
     };
 }
 

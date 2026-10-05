@@ -4,17 +4,12 @@ import { canUseBakedMarkings, collectGlyphKeys, planFaceGlyphs } from './DiceFac
 import { computeFaceFrames } from './DiceFaceFrames.js';
 import { diceShadingParams } from './DiceShadingParams.js';
 import {
-    DICE_FRAGMENT_COLOR,
-    DICE_FRAGMENT_EMISSIVE,
-    DICE_FRAGMENT_HEADER,
-    DICE_FRAGMENT_NORMAL,
-    DICE_FRAGMENT_NORMAL_BEGIN,
-    DICE_FRAGMENT_ROUGHNESS,
-    DICE_MAX_FACES,
     DICE_VERTEX_HEADER,
     DICE_VERTEX_NORMAL,
     DICE_VERTEX_POSITION,
+    diceFragmentChunks,
 } from './DiceFaceMarkingShader.js';
+import { diceGraphConfig, diceGraphKey, diceUniformValues } from './DiceSurfaceGraph.js';
 
 /**
  * The die material for the WebGL backend.
@@ -24,42 +19,11 @@ import {
  * gemstone / translucency) transmit, and re-implementing all of that to stamp a
  * numeral on a face would be a worse trade than an `onBeforeCompile`.
  *
- * `DiceFaceMarkingNodeMaterial` is the WebGPU twin — keep the two in step.
+ * The chunks and the uniform values both come from `DiceSurfaceGraph`, which
+ * `DiceFaceMarkingNodeMaterial` (WebGPU) builds too.
  */
 
 const _color = new THREE.Color();
-
-/** Uniform slots are fixed-length; unused faces read as "no glyph here". */
-function emptyFaceUniforms() {
-    return {
-        cells: Array.from({ length: DICE_MAX_FACES }, () => new THREE.Vector4()),
-        normalRadius: Array.from({ length: DICE_MAX_FACES }, () => new THREE.Vector4()),
-        tangent: Array.from({ length: DICE_MAX_FACES }, () => new THREE.Vector4()),
-        center: Array.from({ length: DICE_MAX_FACES }, () => new THREE.Vector4()),
-    };
-}
-
-function createUniforms() {
-    const faces = emptyFaceUniforms();
-    return {
-        uGlyphAtlas: { value: null },
-        uFaceCell: { value: faces.cells },
-        uFaceNormalRadius: { value: faces.normalRadius },
-        uFaceTangent: { value: faces.tangent },
-        uFaceCenter: { value: faces.center },
-        uFaceCount: { value: 0 },
-        uMarkingColor: { value: new THREE.Color('#ffffff') },
-        uMarkingStyle: { value: 1 },
-        uMarkingDepth: { value: 0.35 },
-        uMarkingRoughness: { value: 0.4 },
-        uGlyphScale: { value: 0.82 },
-        uAtlasMarkings: { value: 1 },
-        uBakedGroup: { value: 0 },
-        uInclusionColor: { value: new THREE.Color('#ffffff') },
-        uInclusionType: { value: 0 },
-        uInclusionIntensity: { value: 0 },
-    };
-}
 
 /**
  * Resolve the glyph atlas and per-face frames for an entry, or `null` when the
@@ -75,35 +39,25 @@ function buildAtlasBinding(entry, template) {
     return { atlas, frames, glyphs: planFaceGlyphs(entry) };
 }
 
-function applyFaceUniforms(uniforms, binding) {
-    const count = binding ? Math.min(binding.frames.length, DICE_MAX_FACES) : 0;
-    uniforms.uFaceCount.value = count;
-
-    for (let i = 0; i < DICE_MAX_FACES; i++) {
-        const cell = uniforms.uFaceCell.value[i];
-        const normalRadius = uniforms.uFaceNormalRadius.value[i];
-        const tangent = uniforms.uFaceTangent.value[i];
-        const center = uniforms.uFaceCenter.value[i];
-
-        if (i >= count) {
-            center.w = 0;
-            continue;
-        }
-
-        const frame = binding.frames[i];
-        const glyph = binding.glyphs[i];
-        const rect = glyph ? binding.atlas.cells[glyph.key] : null;
-
-        normalRadius.set(frame.normal.x, frame.normal.y, frame.normal.z, frame.radius);
-        tangent.set(frame.tangent.x, frame.tangent.y, frame.tangent.z, 0);
-        // w doubles as "this face has a glyph" — a face the plan skipped stays blank.
-        center.set(frame.center.x, frame.center.y, frame.center.z, rect ? 1 : 0);
-        if (rect) cell.copy(rect);
-        else cell.set(0, 0, 0, 0);
-    }
+/** `diceUniformValues` in the `{ uName: { value } }` shape `onBeforeCompile` takes. */
+function createUniforms(values) {
+    return {
+        uGlyphAtlas: { value: values.glyphAtlas },
+        uFaceCell: { value: values.faceCell },
+        uFaceNormalRadius: { value: values.faceNormalRadius },
+        uFaceTangent: { value: values.faceTangent },
+        uFaceCenter: { value: values.faceCenter },
+        uFaceCount: { value: values.faceCount },
+        uMarkingColor: { value: values.markingColor },
+        uMarkingDepth: { value: values.markingDepth },
+        uMarkingRoughness: { value: values.markingRoughness },
+        uGlyphScale: { value: values.glyphScale },
+        uInclusionColor: { value: values.inclusionColor },
+        uInclusionIntensity: { value: values.inclusionIntensity },
+    };
 }
 
-function applyShadingParams(material, uniforms, params, options) {
+function applyShadingParams(material, params, options) {
     material.color.set(params.bodyColor);
     material.roughness = params.roughness;
     material.metalness = params.metalness;
@@ -117,15 +71,6 @@ function applyShadingParams(material, uniforms, params, options) {
     material.emissive.copy(_color.set(params.emissiveColor));
     material.emissiveIntensity = params.emissiveIntensity;
     material.envMap = options.envMap ?? null;
-
-    uniforms.uMarkingColor.value.set(params.markingColor);
-    uniforms.uMarkingStyle.value = params.markingStyle;
-    uniforms.uMarkingDepth.value = params.markingDepth;
-    uniforms.uMarkingRoughness.value = params.markingRoughness;
-    uniforms.uGlyphScale.value = params.glyphScale;
-    uniforms.uInclusionColor.value.set(params.inclusionColor);
-    uniforms.uInclusionType.value = params.inclusionType;
-    uniforms.uInclusionIntensity.value = params.inclusionIntensity;
 }
 
 /**
@@ -150,18 +95,18 @@ export function createDiceFaceMarkingMaterial(entry, template, options = {}) {
     const params = diceShadingParams(entry, { highQuality: options.highQuality });
 
     const build = (isBakedGroup) => {
-        const uniforms = createUniforms();
-        uniforms.uAtlasMarkings.value = binding ? 1 : 0;
-        uniforms.uBakedGroup.value = isBakedGroup ? 1 : 0;
-        uniforms.uGlyphAtlas.value = binding?.atlas.texture ?? null;
-        applyFaceUniforms(uniforms, binding);
+        const config = diceGraphConfig(params, {
+            atlasMode: Boolean(binding),
+            bakedGroup: isBakedGroup,
+        });
+        const uniforms = createUniforms(diceUniformValues(params, binding));
+        const chunks = diceFragmentChunks(config);
 
         const material = new THREE.MeshPhysicalMaterial();
-        applyShadingParams(material, uniforms, params, options);
+        applyShadingParams(material, params, options);
 
         material.onBeforeCompile = (shader) => {
             Object.assign(shader.uniforms, uniforms);
-            shader.defines = { ...shader.defines, DICE_MAX_FACES };
 
             shader.vertexShader = shader.vertexShader
                 .replace('void main() {', `${DICE_VERTEX_HEADER}\nvoid main() {`)
@@ -175,25 +120,19 @@ export function createDiceFaceMarkingMaterial(entry, template, options = {}) {
                 );
 
             shader.fragmentShader = shader.fragmentShader
-                .replace('void main() {', `${DICE_FRAGMENT_HEADER}\nvoid main() {`)
-                .replace('#include <color_fragment>', DICE_FRAGMENT_COLOR)
-                .replace('#include <roughnessmap_fragment>', DICE_FRAGMENT_ROUGHNESS)
-                .replace('#include <normal_fragment_begin>', DICE_FRAGMENT_NORMAL_BEGIN)
-                .replace('#include <normal_fragment_maps>', DICE_FRAGMENT_NORMAL)
-                .replace('#include <emissivemap_fragment>', DICE_FRAGMENT_EMISSIVE);
+                .replace('void main() {', `${chunks.fragmentHeader}\nvoid main() {`)
+                .replace('#include <color_fragment>', chunks.color)
+                .replace('#include <roughnessmap_fragment>', chunks.roughness)
+                .replace('#include <normal_fragment_begin>', chunks.normalBegin)
+                .replace('#include <normal_fragment_maps>', chunks.normalMaps)
+                .replace('#include <emissivemap_fragment>', chunks.emissive);
         };
 
-        // Two entries that shade differently must not share a compiled program,
-        // so the key carries everything the injection branches on.
+        // The graph is resolved at build time, so everything it branches on is
+        // in the key: two entries that build different graphs must not share a
+        // compiled program.
         material.customProgramCacheKey = () =>
-            [
-                'dice',
-                binding ? 'atlas' : 'baked',
-                isBakedGroup ? 'marks' : 'body',
-                params.markingStyle,
-                params.inclusionType,
-                material.transmission > 0 ? 't' : '-',
-            ].join(':');
+            ['dice', diceGraphKey(config), material.transmission > 0 ? 't' : '-'].join(':');
 
         return material;
     };

@@ -5,9 +5,12 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+    FLAME_CHANNEL,
     createCandleFlickerSystem,
     createFireplaceFlickerSystem,
+    flameFlicker,
     flickerNoise,
+    setFlameFlickerFrozen,
 } from '../../src/core/LightingSystems.js';
 
 function fakePointLight() {
@@ -94,6 +97,21 @@ describe('candle flicker', () => {
         expect(light.position.y).toBe(snapshot.y);
     });
 
+    it('keeps the shadow-casting key light still', () => {
+        // Shadow maps are static between rolls; a jittering caster would light
+        // from somewhere its shadow map was not drawn from.
+        const light = fakePointLight();
+        const system = createCandleFlickerSystem(light, () => FLAME);
+        for (const time of [0.2, 1.7, 44.1]) {
+            system({ time });
+            expect([light.position.x, light.position.y, light.position.z]).toEqual([
+                FLAME.x,
+                FLAME.y + 0.1,
+                FLAME.z,
+            ]);
+        }
+    });
+
     it('does nothing without a flame position', () => {
         const light = fakePointLight();
         createCandleFlickerSystem(light, () => undefined)({ time: 1 });
@@ -118,5 +136,32 @@ describe('fireplace flicker', () => {
         const held = frozen.intensity;
         frozenSystem({ time: 120 });
         expect(frozen.intensity).toBe(held);
+    });
+});
+
+describe('prop flame flicker', () => {
+    it('is deterministic, signed, and distinct per flame', () => {
+        const a = flameFlicker(2.5, FLAME_CHANNEL.intensity, 0);
+        expect(flameFlicker(2.5, FLAME_CHANNEL.intensity, 0)).toBe(a);
+        expect(flameFlicker(2.5, FLAME_CHANNEL.intensity, 1)).not.toBe(a);
+        expect(flameFlicker(2.5, FLAME_CHANNEL.size, 0)).not.toBe(a);
+        for (let i = 0; i < 200; i++) {
+            const v = flameFlicker(i * 0.05, FLAME_CHANNEL.sway, i % 4);
+            expect(v).toBeGreaterThanOrEqual(-0.5);
+            expect(v).toBeLessThan(0.5);
+        }
+    });
+
+    it('freezes with the table lights under ?test', () => {
+        try {
+            setFlameFlickerFrozen(true);
+            const held = flameFlicker(0, FLAME_CHANNEL.intensity, 3);
+            expect(flameFlicker(57.3, FLAME_CHANNEL.intensity, 3)).toBe(held);
+        } finally {
+            setFlameFlickerFrozen(false);
+        }
+        expect(flameFlicker(57.3, FLAME_CHANNEL.intensity, 3)).not.toBe(
+            flameFlicker(0, FLAME_CHANNEL.intensity, 3)
+        );
     });
 });

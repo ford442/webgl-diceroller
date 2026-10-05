@@ -22,9 +22,13 @@ import { guessInitialQualityProfile } from './AdaptiveQuality.js';
 import { createAccentLightRig } from './AccentLightRig.js';
 import { prefersReducedMotion } from './AccessibilityPrefs.js';
 import { createPostRuntimeControls } from './PostRuntimeControls.js';
-
-const VIGNETTE_OFFSET = 1.0;
-const VIGNETTE_DARKNESS = 1.0;
+import { createTslKit } from '../shaders/graph/ShaderKit.js';
+import {
+    CHROMATIC_PARAMS,
+    VIGNETTE_PARAMS,
+    bloomParams,
+    vignette,
+} from '../shaders/PostStackParams.js';
 
 async function createWebGpuPostPipeline(renderer, scene, camera, { width, height, postConfig }) {
     const [{ PostProcessing }, tsl, { bloom }, { chromaticAberration }, { fxaa }] =
@@ -35,7 +39,8 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
             import('three/addons/tsl/display/ChromaticAberrationNode.js'),
             import('three/addons/tsl/display/FXAANode.js'),
         ]);
-    const { pass, uniform, vec2, vec3, vec4, mix, Fn, screenUV, clamp } = /** @type {any} */ (tsl);
+    const { pass, uniform, vec2, mix, Fn, screenUV } = /** @type {any} */ (tsl);
+    const bloomTuning = bloomParams(postConfig.quality);
 
     const postProcessing = new PostProcessing(renderer);
     const scenePass = pass(scene, camera);
@@ -48,23 +53,26 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
     if (postConfig.bloomEnabled) {
         const bloomNode = bloom(
             sceneColorNode,
-            postConfig.quality === 'low' ? 0.35 : 0.6,
-            postConfig.quality === 'low' ? 0.25 : 0.4,
-            0.6
+            bloomTuning.strength,
+            bloomTuning.radius,
+            bloomTuning.threshold
         );
         bloomedColorNode = mix(sceneColorNode, sceneColorNode.add(bloomNode), bloomBlendUniform);
     }
 
     const colorNode = bloomedColorNode;
 
-    const vignetteStrength = uniform(0.85);
-    const vignetteOffset = uniform(VIGNETTE_OFFSET);
-    const _vignetteDarkness = uniform(VIGNETTE_DARKNESS);
-    const vignetteNode = Fn(() => {
-        const vignetteUv = screenUV.sub(vec2(0.5, 0.5)).mul(vignetteOffset);
-        const vignetteMix = clamp(vignetteUv.dot(vignetteUv).mul(vignetteStrength), 0, 1);
-        return vec4(mix(colorNode.rgb, vec3(0, 0, 0), vignetteMix), colorNode.a);
-    })();
+    const vignetteOffset = uniform(VIGNETTE_PARAMS.offset);
+    const vignetteDarkness = uniform(VIGNETTE_PARAMS.darkness);
+    const kit = createTslKit(tsl);
+    const vignetteNode = Fn(() =>
+        vignette(kit, {
+            color: colorNode,
+            uv: screenUV,
+            offset: vignetteOffset,
+            darkness: vignetteDarkness,
+        })
+    )();
 
     const chromaticMixUniform = uniform(postConfig.chromaticAberrationEnabled ? 1 : 0);
     let outputNode = vignetteNode;
@@ -72,9 +80,9 @@ async function createWebGpuPostPipeline(renderer, scene, camera, { width, height
     if (postConfig.chromaticAberrationEnabled) {
         const chromaticNode = chromaticAberration(
             vignetteNode,
-            /** @type {any} */ (0.2),
-            vec2(0.5, 0.5),
-            /** @type {any} */ (1.08)
+            /** @type {any} */ (CHROMATIC_PARAMS.strength),
+            vec2(...CHROMATIC_PARAMS.center),
+            /** @type {any} */ (CHROMATIC_PARAMS.scale)
         );
         outputNode = mix(vignetteNode, chromaticNode, chromaticMixUniform);
     }
@@ -315,27 +323,22 @@ export async function setupScene(container) {
             postPasses.renderPass = renderPass;
 
             if (postConfig.bloomEnabled) {
-                const bloomScale = postQuality === 'low' ? 4 : 2;
+                const bloomTuning = bloomParams(postQuality);
                 const bloomPass = new UnrealBloomPass(
                     new THREE.Vector2(
-                        Math.round(containerWidth / bloomScale),
-                        Math.round(containerHeight / bloomScale)
+                        Math.round(containerWidth / bloomTuning.resolutionScale),
+                        Math.round(containerHeight / bloomTuning.resolutionScale)
                     ),
-                    postQuality === 'low' ? 1.0 : 1.5,
-                    postQuality === 'low' ? 0.25 : 0.4,
-                    0.85
+                    bloomTuning.strength,
+                    bloomTuning.radius,
+                    bloomTuning.threshold
                 );
-                bloomPass.threshold = 0.6;
-                bloomPass.strength = postQuality === 'low' ? 0.35 : 0.6;
-                bloomPass.radius = postQuality === 'low' ? 0.25 : 0.4;
                 composer.addPass(bloomPass);
                 postPasses.bloomPass = bloomPass;
             }
 
-            // Vignette
+            // Vignette (defaults are VIGNETTE_PARAMS, shared with WebGPU)
             const vignettePass = new ShaderPass(VignetteShader);
-            vignettePass.uniforms['offset'].value = 1.2;
-            vignettePass.uniforms['darkness'].value = 0.85;
             composer.addPass(vignettePass);
             postPasses.vignettePass = vignettePass;
 

@@ -251,6 +251,7 @@ jobs:
                     - verify:worker-replay
                     - verify:tower-drop-replay
                     - verify:godrays
+                    - verify:shader-parity
                     - verify:wasm-primitives
         steps:
             - uses: actions/checkout@v5
