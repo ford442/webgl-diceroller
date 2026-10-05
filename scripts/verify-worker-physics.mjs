@@ -148,7 +148,7 @@ try {
     page.on('worker', (w) => {
         w.on('console', (m) => errors.push('worker ' + m.type() + ': ' + m.text()));
     });
-    await page.goto(`${BASE}/src/core-engine/wasm/physicsFlags.js`, {
+    await page.goto(`${BASE}/src/core-engine/wasm/physicsFlags.ts`, {
         waitUntil: 'domcontentloaded',
     });
     result = await page.evaluate(async () => {
