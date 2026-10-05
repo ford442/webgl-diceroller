@@ -75,6 +75,14 @@ export const spawnObjects = (scene: any, world: any, config: any = null) => {
             const engine = getWasmEngine();
             const sides = getDieSides(shape);
             wasmId = engine.addDie(sides, x, y, z);
+            if (!(wasmId >= 0)) {
+                // The engine refused the body (MAX_DICE, or a non-finite pose).
+                // A mesh with no body can never settle, so it must not join
+                // spawnedDice — that is a roll that waits forever (#341).
+                console.warn(`[Dice] engine rejected a ${type} (addDie → ${wasmId}); not spawned.`);
+                releaseDiceMesh(scene, type, mesh);
+                return;
+            }
             engine.setDieMaterial(wasmId, physicsPreset.friction, physicsPreset.rollingFriction);
             engine.setDieDrag(wasmId, physicsPreset.dragFactor ?? 0);
             loadHullForDie(wasmId, sides);
@@ -188,4 +196,38 @@ export const syncAllDiceToWasm = () => {
             die.mesh.quaternion.w
         );
     });
+};
+
+/**
+ * Resolves once every spawned die's body is visible in the engine's published
+ * ids. In-process that is immediate; on the worker the proxy hands out ids
+ * before the worker has run `addDie`, so a throw or a settle check issued
+ * right after a spawn can see last frame's table. Spawn → registered → throw
+ * is the chain share-URL replay and notation rolls await (#341).
+ *
+ * Never rejects: after `timeoutMs` it warns and resolves, and the roll's
+ * settle watch then reports `missingBodies` rather than waiting forever.
+ */
+export const whenDiceRegistered = async ({ timeoutMs = 3000, pollMs = 16 } = {}) => {
+    if (!isUsingWasmPhysics()) return true;
+    const engine = getWasmEngine();
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+        const wanted = spawnedDice.map((die) => die.wasmId).filter((id) => id != null);
+        const published = new Set(Array.from(engine.getDieIds(), (id) => Math.round(id)));
+        if (
+            engine.getDieCount() === wanted.length &&
+            wanted.every((id) => published.has(id as number))
+        ) {
+            return true;
+        }
+        if (Date.now() >= deadline) {
+            console.warn(
+                `[Dice] engine has ${engine.getDieCount()} bodies for ${wanted.length} spawned dice ` +
+                    `after ${timeoutMs} ms (ids ${wanted.join(',')} vs ${[...published].join(',')})`
+            );
+            return false;
+        }
+        await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
 };

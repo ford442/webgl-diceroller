@@ -217,7 +217,15 @@ inline bool satTestFromWorld(
 
     outPenetration = 1e20f;
     bool normalFromA = true;
-    const Vec3 deltaCenters = posB - posA;
+    // Orient by the hulls' vertex centroids, not their origins: a static
+    // hull's vertices need not surround its origin (an off-centre prop
+    // part), and an origin-based direction then flips the normal.
+    Vec3 centroidA{}, centroidB{};
+    for (int i = 0; i < na; ++i) centroidA += wa[i];
+    for (int i = 0; i < nb; ++i) centroidB += wb[i];
+    centroidA = na > 0 ? centroidA * (1.0f / static_cast<float>(na)) : posA;
+    centroidB = nb > 0 ? centroidB * (1.0f / static_cast<float>(nb)) : posB;
+    const Vec3 deltaCenters = centroidB - centroidA;
     const float deltaLen = deltaCenters.length();
     const Vec3 deltaDir = deltaLen > 1e-6f ? deltaCenters * (1.0f / deltaLen) : Vec3{0, 1, 0};
     float bestAlign = -1.0f;
@@ -242,18 +250,23 @@ inline bool satTestFromWorld(
         }
     }
 
-    if (Vec3::dot(outNormal, posB - posA) < 0) outNormal = outNormal * -1.0f;
+    if (Vec3::dot(outNormal, deltaCenters) < 0) outNormal = outNormal * -1.0f;
 
+    // outNormal points from A to B. The deepest incident vertex is the one
+    // furthest *into* the reference body: B's lowest projection when A holds
+    // the reference face, A's highest when B does. (Picking the furthest
+    // vertex the other way put the contact on the far side of the incident
+    // hull, overstating penetration by its whole thickness — #341.)
     float deepest = -1e20f;
     int supportIndex = 0;
     if (normalFromA) {
         for (int i = 0; i < nb; ++i) {
-            float d = Vec3::dot(wb[i] - posA, outNormal);
+            const float d = -Vec3::dot(wb[i], outNormal);
             if (d > deepest) { deepest = d; outContact = wb[i]; supportIndex = i; }
         }
     } else {
         for (int i = 0; i < na; ++i) {
-            float d = Vec3::dot(wa[i] - posB, outNormal * -1.0f);
+            const float d = Vec3::dot(wa[i], outNormal);
             if (d > deepest) { deepest = d; outContact = wa[i]; supportIndex = i; }
         }
     }

@@ -478,13 +478,13 @@ class WorkerEngineProxy implements PhysicsEngine {
         this._send('clearStatics');
     }
 
-    // Structural static-collider commands are fire-and-forget postMessages —
-    // the worker can't report success/id synchronously, so these return the
-    // same "unknown" sentinel the interface uses for a failed synchronous call
-    // (`false` / `-1`) rather than claim a result we don't have.
+    // Structural collider commands are fire-and-forget postMessages. The
+    // caller supplies the id, so — like addDie's mirrored id — the proxy
+    // returns it optimistically. Returning -1 here made every prop collider
+    // unremovable and every dynamic prop unsynced in worker mode (#341).
     removeStatic(userId: number): boolean {
         this._send('removeStatic', { userId });
-        return false;
+        return userId >= 0;
     }
 
     addStaticBox(
@@ -515,7 +515,7 @@ class WorkerEngineProxy implements PhysicsEngine {
             qw,
             materialTag,
         });
-        return -1;
+        return userId >= 0 ? userId : -1;
     }
 
     addStaticPlane(
@@ -527,7 +527,7 @@ class WorkerEngineProxy implements PhysicsEngine {
         materialTag: number
     ): number {
         this._send('addStaticPlane', { userId, nx, ny, nz, dist, materialTag });
-        return -1;
+        return userId >= 0 ? userId : -1;
     }
 
     addStaticConvexHull(
@@ -554,7 +554,7 @@ class WorkerEngineProxy implements PhysicsEngine {
             vertices: Array.from(flatVerts),
             materialTag,
         });
-        return -1;
+        return userId >= 0 ? userId : -1;
     }
 
     addStaticOpenCylinder(
@@ -579,7 +579,7 @@ class WorkerEngineProxy implements PhysicsEngine {
             closedBottom: !!closedBottom,
             materialTag,
         });
-        return -1;
+        return userId >= 0 ? userId : -1;
     }
 
     // --- dynamic (non-die) rigid-body props ---------------------------------
@@ -628,7 +628,7 @@ class WorkerEngineProxy implements PhysicsEngine {
             qw,
             materialTag,
         });
-        return -1;
+        return userId >= 0 ? userId : -1;
     }
 
     addDynamicHull(
@@ -657,7 +657,7 @@ class WorkerEngineProxy implements PhysicsEngine {
             vertices: Array.from(flatVerts),
             materialTag,
         });
-        return -1;
+        return userId >= 0 ? userId : -1;
     }
 
     // --- dynamic prop forces / state sync (batched) -------------------------
@@ -847,6 +847,13 @@ class WorkerEngineProxy implements PhysicsEngine {
         const res = await this._request('serializeState');
         return new Uint8Array(res.data, 0, res.byteLength);
     }
+    async getSleepDiagnosticsAsync(): Promise<Float32Array> {
+        const res = await this._request('getSleepDiagnostics');
+        return new Float32Array(res.data, 0, res.byteLength / Float32Array.BYTES_PER_ELEMENT);
+    }
+    hasDice(): boolean {
+        return this.getDieCount() > 0;
+    }
     randomFloat(): number {
         console.warn(
             '[WorkerPhysics] randomFloat() is unavailable synchronously in worker mode; use seededThrow() for deterministic rolls.'
@@ -994,6 +1001,12 @@ export const serializePhysicsState = async (): Promise<Uint8Array> => {
     const engine = activeEngine();
     if (!engine) return new Uint8Array(0);
     return engine.serializeStateAsync();
+};
+
+export const readSleepDiagnostics = async (): Promise<Float32Array> => {
+    const engine = activeEngine();
+    if (!engine) return new Float32Array(0);
+    return engine.getSleepDiagnosticsAsync();
 };
 
 export const seededPhysicsThrow = (

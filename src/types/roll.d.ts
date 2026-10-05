@@ -35,6 +35,8 @@ export interface DieOutcome {
     originalValue?: number | null;
     /** Percentile display override or explosion slot total. */
     displayValue?: number | null;
+    /** Read after a settle timeout without lying flat (see SettleWatch). */
+    cocked?: boolean;
 }
 
 export interface RollOutcomeEntry {
@@ -75,6 +77,8 @@ export interface EvaluatedRoll {
     total: number;
     flags: RollFlags;
     seed: number | null;
+    /** A side hit the settle timeout and was read as it lay. */
+    timedOut?: boolean;
     opposed: {
         expression: string;
         total: number;
@@ -126,13 +130,22 @@ export interface RollSessionDeps {
     world: null;
     replaceDiceSet: (scene: unknown, world: null, specs: DieSpec[]) => void;
     throwDice: (scene: unknown, world: null, seed?: number | null) => void;
-    readAllDiceValues: () => Array<{
+    /** `allowCocked`: read awake dice from their mesh after a settle timeout. */
+    readAllDiceValues: (options?: { allowCocked?: boolean }) => Array<{
         type: string;
         value: number | null;
         role?: 'tens' | 'ones' | null;
         groupIndex?: number;
+        cocked?: boolean;
     }>;
     areDiceSettled: () => boolean;
+    /**
+     * A fresh settle watch per throw (core-engine/roll/SettleWatch). Without
+     * one the session falls back to polling `areDiceSettled` with a frame cap.
+     */
+    createSettleWatch?: () => import('../core-engine/roll/SettleWatch').SettleWatch;
+    /** Resolves once every spawned die has an engine body (worker round trip). */
+    whenDiceRegistered?: () => Promise<void>;
     waitFrame?: () => Promise<void>;
     setDeferAutoResults?: (active: boolean) => void;
     onComplete?: (result: EvaluatedRoll) => void;

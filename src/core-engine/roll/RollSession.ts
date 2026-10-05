@@ -14,6 +14,7 @@ import {
     NotationError,
 } from './Notation.js';
 import type { DiceGroup, DieOutcome, ParsedSide, SpawnDieSpec } from './Notation.js';
+import type { SettleStatus } from './SettleWatch.js';
 
 export interface RollSessionDeps extends BaseRollSessionDeps {
     getSystem?: () => string;
@@ -62,12 +63,19 @@ export function createRollSession(deps: RollSessionDeps) {
                 modifier: parsed.modifier,
                 raw: parsed.raw,
             };
-            const leftDice = await resolveSide(deps, leftSide, seed, waitFrame);
+            const timeouts = { count: 0 };
+            const leftDice = await resolveSide(deps, leftSide, seed, waitFrame, timeouts);
 
             let opposedDice: DieOutcome[] | null = null;
             if (parsed.opposed) {
                 const rightSeed = seed != null ? (seed + 0x9e3779b9) >>> 0 : null;
-                opposedDice = await resolveSide(deps, parsed.opposed, rightSeed, waitFrame);
+                opposedDice = await resolveSide(
+                    deps,
+                    parsed.opposed,
+                    rightSeed,
+                    waitFrame,
+                    timeouts
+                );
             }
 
             deps.onStateChange?.('evaluating');
@@ -76,6 +84,7 @@ export function createRollSession(deps: RollSessionDeps) {
                 seed: seed != null ? seed >>> 0 : null,
                 system,
             });
+            if (timeouts.count > 0) result.timedOut = true;
             deps.onComplete?.(result);
             return result;
         } finally {
@@ -93,7 +102,8 @@ async function resolveSide(
     deps: RollSessionDeps,
     side: { groups: DiceGroup[]; modifier: number; raw: string },
     seed: number | null,
-    waitFrame: (ms?: number) => Promise<void>
+    waitFrame: (ms?: number) => Promise<void>,
+    timeouts: { count: number }
 ): Promise<DieOutcome[]> {
     let specs: SpawnDieSpec[] = buildSpawnSpecsForGroups(side.groups);
     let subSeed = seed;
@@ -105,15 +115,23 @@ async function resolveSide(
     while (true) {
         deps.onStateChange?.(explosionRound === 0 && !didRerollPass ? 'spawning' : 'respawning');
         deps.replaceDiceSet(deps.scene, deps.world, specs);
+        // Spawn → body registered → throw is an awaited chain: a throw sent
+        // to dice the engine does not have yet can never settle (#341).
+        await deps.whenDiceRegistered?.();
 
         deps.onStateChange?.('throwing');
         deps.throwDice(deps.scene, deps.world, subSeed);
         subSeed = subSeed != null ? (subSeed + 1) >>> 0 : null;
 
         deps.onStateChange?.('waiting');
-        await waitForSettled(deps.areDiceSettled, waitFrame);
+        const status = await waitForSettled(deps, waitFrame);
+        const timedOut = status.state === 'timedOut';
+        if (timedOut) {
+            timeouts.count += 1;
+            deps.onStateChange?.('timedOut');
+        }
 
-        const raw = deps.readAllDiceValues();
+        const raw = deps.readAllDiceValues(timedOut ? { allowCocked: true } : undefined);
         const roundDice: DieOutcome[] = raw.map((r, i) => ({
             groupIndex: specs[i]?.groupIndex ?? 0,
             dieIndex: specs[i]?.dieIndex ?? i,
@@ -122,6 +140,7 @@ async function resolveSide(
             role: specs[i]?.role ?? (r.role as DieOutcome['role']) ?? null,
             exploded: Boolean(specs[i]?.replacesDieIndex != null && !specs[i]?.isReroll),
             rerolled: Boolean(specs[i]?.isReroll),
+            ...(timedOut && r.cocked ? { cocked: true } : {}),
         }));
 
         if (explosionRound === 0 && !didRerollPass) {
@@ -188,16 +207,30 @@ async function resolveSide(
     return accumulatedDice;
 }
 
+/** Frame cap for the no-watch fallback (~50 s at the default 16 ms frame). */
+const FALLBACK_MAX_FRAMES = 3000;
+
 async function waitForSettled(
-    areDiceSettled: () => boolean,
+    deps: RollSessionDeps,
     waitFrame: (ms?: number) => Promise<void>
-): Promise<void> {
-    let idleFrames = 0;
-    while (idleFrames < 3) {
-        await waitFrame();
-        if (areDiceSettled()) idleFrames += 1;
-        else idleFrames = 0;
+): Promise<SettleStatus> {
+    const watch = deps.createSettleWatch?.();
+    if (watch) {
+        watch.begin();
+        for (;;) {
+            await waitFrame();
+            const status = watch.poll();
+            if (status.state !== 'pending') return status;
+        }
     }
+    let idleFrames = 0;
+    for (let frame = 0; frame < FALLBACK_MAX_FRAMES; frame++) {
+        await waitFrame();
+        if (deps.areDiceSettled()) idleFrames += 1;
+        else idleFrames = 0;
+        if (idleFrames >= 3) return { state: 'settled', simSeconds: null };
+    }
+    return { state: 'timedOut', reason: 'simTimeout', simSeconds: null };
 }
 
 export { NotationError, parseNotation };

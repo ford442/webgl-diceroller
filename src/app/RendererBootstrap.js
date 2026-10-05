@@ -19,8 +19,11 @@ import { setDiceAppearanceQualityProfile, spawnedDice, areDiceSettled } from '..
 import {
     getWorkerPhysicsStats,
     getPhysicsStepStats,
+    getWasmEngine,
     isWasmAvailable,
+    readSleepDiagnostics,
 } from '../wasm/PhysicsBridge.js';
+import { awakeBodies, decodeSleepDiagnostics } from '../core-engine/wasm/sleepDiagnostics.js';
 import {
     createRendererBadge,
     applyLivePixelRatio,
@@ -78,6 +81,23 @@ export function bootstrapRendererExtras(app, deps) {
     });
 
     if (debugEnabled) {
+        // ?debug-perf: poll the engine's sleep diagnostics about once a second
+        // while dice are moving, so the HUD names the body that won't sleep.
+        let awakeLabel = '';
+        let awakePollAt = 0;
+        const pollAwake = () => {
+            const now = performance.now();
+            if (now < awakePollAt) return;
+            awakePollAt = now + 1000;
+            readSleepDiagnostics()
+                .then((buf) => {
+                    const top = awakeBodies(decodeSleepDiagnostics(buf))[0];
+                    awakeLabel = top
+                        ? `${top.body} ${top.id} v=${top.speed} ke=${top.islandEnergy} pts=${top.contactPoints}`
+                        : '';
+                })
+                .catch(() => {});
+        };
         renderStats = createRenderStats({
             renderer,
             scene,
@@ -100,7 +120,17 @@ export function bootstrapRendererExtras(app, deps) {
                     throttled: shadowController?.state.throttleRefresh ?? false,
                 };
             },
-            getDice: () => ({ count: spawnedDice.length, settled: areDiceSettled() }),
+            getDice: () => {
+                const settled = areDiceSettled();
+                const wasm = isWasmAvailable();
+                if (wasm && !settled && searchParams.has('debug-perf')) pollAwake();
+                return {
+                    count: spawnedDice.length,
+                    engineCount: wasm ? getWasmEngine().getDieCount() : null,
+                    settled,
+                    awake: settled ? '' : awakeLabel,
+                };
+            },
             getWasm: () => ({
                 available: isWasmAvailable(),
                 active: isWasmAvailable(),

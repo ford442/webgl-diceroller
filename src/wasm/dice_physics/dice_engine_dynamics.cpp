@@ -95,23 +95,6 @@ void DicePhysicsEngine::integrateDynamic(DynamicBody& b, float dt) {
     b.rotation = b.rotation.integrate(b.angularVelocity, dt);
 }
 
-void DicePhysicsEngine::checkSleepDynamic(DynamicBody& b, float dt) const {
-    if (b.kinematic) return;
-    const float SPEED_THRESHOLD = 0.05f;
-    const float SLEEP_DELAY = 0.5f;
-    float speed = b.velocity.length() + b.angularVelocity.length() * b.radius;
-    if (speed < SPEED_THRESHOLD) {
-        b.sleepTimer += dt;
-        if (b.sleepTimer >= SLEEP_DELAY) {
-            b.sleeping = true;
-            b.velocity = {};
-            b.angularVelocity = {};
-        }
-    } else {
-        b.sleepTimer = 0.0f;
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------

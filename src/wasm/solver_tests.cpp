@@ -1075,6 +1075,137 @@ TEST_CASE("Fuzz: table non-penetration stays bounded") {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Resting on static boxes (#341). The tavern's table is a stack of SAT boxes
+// 0.5-0.6 thick, thinner than every die hull, so these are the contacts every
+// roll in the app ends on. The analytic table plane (DieTable) never sees them.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+PolyHull scaledHull(const PolyHull& src, float s) {
+    std::vector<Vec3> verts = src.verts;
+    for (auto& v : verts) v = v * s;
+    PolyHull hull;
+    hull.build(verts);
+    return hull;
+}
+
+/** Table.js's main surface + velvet zone, as createWasmTableBoundsForEngine registers them. */
+void addTavernTableStatics(DicePhysicsEngine& engine) {
+    engine.addStaticBox(1, 0.0f, 0.75f, 0.0f, 18.0f, 0.25f, 18.0f, 0, 0, 0, 1, 2 /* wood */);
+    engine.addStaticBox(2, 0.0f, 0.80f, 0.0f, 8.0f, 0.30f, 8.0f, 0, 0, 0, 1, 1 /* velvet */);
+}
+
+/** Steps up to maxFrames at 60 Hz; returns the frame the world fell asleep, or -1. */
+int stepUntilAsleep(DicePhysicsEngine& engine, int maxFrames) {
+    for (int frame = 0; frame < maxFrames; ++frame) {
+        engine.step(1.0f / 60.0f);
+        if (!engine.allBodyStatesFinite()) return -1;
+        if (engine.areAllSettled() && engine.isWorldAsleep()) return frame;
+    }
+    return -1;
+}
+
+} // namespace
+
+TEST_CASE("Resting contact: a cube on a static box thinner than itself sleeps at the right height") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    // Top face at y = 1.1; the 1x1 cube's centre rests at 1.6.
+    engine.addStaticBox(1, 0.0f, 0.8f, 0.0f, 4.0f, 0.3f, 4.0f, 0, 0, 0, 1, 1);
+    const int id = engine.addDie(6, 0.0f, 2.5f, 0.0f);
+    engine.setDieHull(id, flattenHull(makeUnitCubeHull()));
+
+    const int frame = stepUntilAsleep(engine, 600);
+    float x = 0, y = 0, z = 0;
+    REQUIRE(engine.getDiePosition(id, x, y, z));
+    CHECK_MESSAGE(frame >= 0, "die never slept; y=" << y);
+    CHECK(y == doctest::Approx(1.6f).epsilon(0.0125));
+}
+
+TEST_CASE("Resting contact: a cube on a static box thicker than itself sleeps at the right height") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    engine.addStaticBox(1, 0.0f, -0.4f, 0.0f, 4.0f, 1.5f, 4.0f, 0, 0, 0, 1, 1);
+    const int id = engine.addDie(6, 0.0f, 2.5f, 0.0f);
+    engine.setDieHull(id, flattenHull(makeUnitCubeHull()));
+
+    const int frame = stepUntilAsleep(engine, 600);
+    float x = 0, y = 0, z = 0;
+    REQUIRE(engine.getDiePosition(id, x, y, z));
+    CHECK_MESSAGE(frame >= 0, "die never slept; y=" << y);
+    CHECK(y == doctest::Approx(1.6f).epsilon(0.0125));
+}
+
+TEST_CASE("Resting contact: SAT contact points lie inside both penetrating hulls") {
+    // A 1x1 cube sunk 0.05 into a thin slab. Whichever body supplies the
+    // reference face, the deepest point must be a cube vertex inside the slab
+    // (y in [0.5, 1.1]), never the cube's top or the slab's far side.
+    PolyHull cube = makeUnitCubeHull();
+    PolyHull slab;
+    slab.build({
+        {-4, -0.3f, -4}, {4, -0.3f, -4}, {4, 0.3f, -4}, {-4, 0.3f, -4},
+        {-4, -0.3f, 4},  {4, -0.3f, 4},  {4, 0.3f, 4},  {-4, 0.3f, 4},
+    });
+    const Quat ident{};
+    for (int flip = 0; flip < 2; ++flip) {
+        const PolyHull& ha = flip ? slab : cube;
+        const PolyHull& hb = flip ? cube : slab;
+        const Vec3 pa = flip ? Vec3{0, 0.8f, 0} : Vec3{0.1f, 1.55f, 0.2f};
+        const Vec3 pb = flip ? Vec3{0.1f, 1.55f, 0.2f} : Vec3{0, 0.8f, 0};
+        Vec3 n, c;
+        float pen = 0;
+        REQUIRE(satTest(ha, pa, ident, hb, pb, ident, n, pen, c));
+        CHECK(pen == doctest::Approx(0.05f).epsilon(0.02));
+        CHECK(c.y >= 0.5f - 1e-4f);
+        CHECK(c.y <= 1.1f + 1e-4f);
+    }
+}
+
+TEST_CASE("Resting contact: dice thrown onto the tavern table boxes all sleep") {
+    // The app's world minus props: analytic plane far below (tableY -2.75)
+    // and the dice resting on Table.js's SAT boxes instead.
+    const PolyHull d6 = scaledHull(makeUnitCubeHull(), 1.5f);
+    const PolyHull d20 = scaledHull(makeD20Hull(), 1.2f);
+    int failures = 0;
+    for (uint64_t seed = 1; seed <= 20; ++seed) {
+        DicePhysicsEngine engine;
+        engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+        engine.seedRNG(seed);
+        addTavernTableStatics(engine);
+        for (int k = 0; k < 2; ++k) {
+            const int id = engine.addDie(k ? 20 : 6, -2.0f + 4.0f * k, 6.0f, 0.0f);
+            engine.setDieHull(id, flattenHull(k ? d20 : d6));
+            const float r = engine.randomFloat();
+            engine.applyImpulse(id, (r - 0.5f) * 20.0f, -5.0f, (engine.randomFloat() - 0.5f) * 20.0f);
+            engine.applyTorqueImpulse(id, engine.randomFloat() * 3.0f, engine.randomFloat() * 3.0f, 0.0f);
+        }
+        if (stepUntilAsleep(engine, 60 * 12) < 0) {
+            ++failures;
+            MESSAGE("seed " << seed << " never slept");
+        }
+    }
+    CHECK(failures == 0);
+}
+
+TEST_CASE("Resting contact: a dynamic box on a thin static box sleeps at the right height") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    engine.addStaticBox(1, 0.0f, 0.75f, 0.0f, 18.0f, 0.25f, 18.0f, 0, 0, 0, 1, 2);
+    engine.addDynamicBox(2, 0.3f, 0.0f, 2.0f, 0.0f, 0.3f, 0.3f, 0.3f, 0, 0, 0, 1, 0);
+
+    bool asleep = false;
+    for (int frame = 0; frame < 600 && !asleep; ++frame) {
+        engine.step(1.0f / 60.0f);
+        asleep = engine.isWorldAsleep();
+    }
+    const auto& xf = engine.buildDynamicTransformBuffer();
+    REQUIRE(xf.size() == 7);
+    CHECK_MESSAGE(asleep, "dynamic box never slept; y=" << xf[1]);
+    CHECK(xf[1] == doctest::Approx(1.3f).epsilon(0.0125));
+}
+
 TEST_CASE("Static box: die bounces off wall without tunneling") {
     DicePhysicsEngine engine;
     engine.init(-15.0f, -2.75f, 18.0f, 18.0f);

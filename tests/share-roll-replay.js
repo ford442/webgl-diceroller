@@ -4,10 +4,13 @@
  *
  * Prereq: npx vite build && npm run preview
  */
-const { launchPage } = require('./helpers/browser');
+const { launchPage, waitForRollFinished } = require('./helpers/browser');
 const { BASE } = require('./helpers/server');
 
-const REPLAY_QUERY = '?webgl&no-post&fair-dice&test&seed=42424242&dice=d20:1,d6:1&v=1';
+// layout-seed/density/theme pin the clutter colliders the way a real share
+// link does (buildShareableRollUrl), so the two loads simulate the same world.
+const REPLAY_QUERY =
+    '?webgl&no-post&fair-dice&test&seed=42424242&dice=d20:1,d6:1&v=1&layout-seed=1&density=med&theme=default';
 const LOAD_TIMEOUT_MS = 120000;
 const SETTLE_TIMEOUT_MS = 180000;
 
@@ -19,15 +22,10 @@ async function waitForReplaySettled(page) {
     if (!wasmReady) {
         return { skipped: true, reason: 'WASM physics not available (run npm run build:wasm)' };
     }
-    await page.waitForFunction(
-        () => {
-            const settled = window.__app?.areDiceSettled;
-            return typeof settled === 'function' && settled() === true;
-        },
-        null,
-        { timeout: SETTLE_TIMEOUT_MS }
-    );
-    await page.waitForTimeout(500);
+    // Wait for the replayed roll itself to finish: `ready` fires before the
+    // replay spawns its dice, so areDiceSettled() alone can pass on an empty
+    // table. A settle timeout fails here with the engine's sleep diagnostics.
+    await waitForRollFinished(page, { timeout: SETTLE_TIMEOUT_MS });
     return { skipped: false };
 }
 

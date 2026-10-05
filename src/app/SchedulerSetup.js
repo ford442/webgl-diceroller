@@ -149,8 +149,8 @@ export function registerFrameCallbacks(scheduler, deps) {
                 hideResults,
                 lampData: getLampData(),
                 LampMode,
-                onSettled: (results) => {
-                    appEvents.emit(AppEvent.ROLL_SETTLED, { results });
+                onSettled: (results, outcome) => {
+                    appEvents.emit(AppEvent.ROLL_SETTLED, { results, ...outcome });
                 },
                 touchPrimary: inputState?.touchPrimary === true,
                 xrPresenting: isXrPresentingRef.value,

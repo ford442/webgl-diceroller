@@ -46,6 +46,7 @@ export const pollCollisionEvents = (): CollisionEvent[] => active.pollCollisionE
 export const seedPhysicsRNG = (seed: number): void => active.seedPhysicsRNG(seed);
 export const randomPhysicsFloat = (): number => active.randomPhysicsFloat();
 export const serializePhysicsState = (): Promise<Uint8Array> => active.serializePhysicsState();
+export const readSleepDiagnostics = (): Promise<Float32Array> => active.readSleepDiagnostics();
 export const seededPhysicsThrow = (
     seed: number,
     dice: SeededDieRef[],

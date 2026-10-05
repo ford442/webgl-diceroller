@@ -17,6 +17,7 @@ export {
     loadWasmEngine,
     pollCollisionEvents,
     randomPhysicsFloat,
+    readSleepDiagnostics,
     seedPhysicsRNG,
     seededPhysicsHopperDrop,
     seededPhysicsThrow,

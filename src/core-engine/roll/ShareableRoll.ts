@@ -86,7 +86,21 @@ export interface ShareableRollExtras {
     system?: string | null;
     /** Defaults to `'throw'`; `'tower'` replays the roll as a dice-tower dump. */
     source?: string | null;
+    /**
+     * The table layout the roll landed on (TableLayoutConfig). Written as
+     * `layout-seed` + `density` + `theme`, which the receiving page's layout
+     * resolver already reads — all three, since a missing one falls back to
+     * the *receiver's* stored preference. The clutter colliders
+     * are part of the simulation, so a replay must rebuild the same table.
+     * Older clients ignore the extra params, so the format version is unchanged.
+     */
+    layout?: { seed: number; density?: string | null; theme?: string | null } | null;
 }
+
+/** Layout params `buildShareableRollUrl` writes (see ShareableRollExtras.layout). */
+export const LAYOUT_SEED_PARAM = 'layout-seed';
+const DEFAULT_LAYOUT_DENSITY = 'med';
+const DEFAULT_LAYOUT_THEME = 'default';
 
 /** Unsigned 32-bit roll seed. */
 export function generateRollSeed(): number {
@@ -210,6 +224,14 @@ export function buildShareableRollUrl(
     const system = extras.system?.trim();
     if (system) url.searchParams.set('sys', system);
     else url.searchParams.delete('sys');
+
+    const layout = extras.layout;
+    if (layout && Number.isFinite(layout.seed)) {
+        url.searchParams.set(LAYOUT_SEED_PARAM, String(layout.seed >>> 0));
+        url.searchParams.delete('clutter-seed');
+        url.searchParams.set('density', layout.density?.trim() || DEFAULT_LAYOUT_DENSITY);
+        url.searchParams.set('theme', layout.theme?.trim() || DEFAULT_LAYOUT_THEME);
+    }
 
     return url.toString();
 }

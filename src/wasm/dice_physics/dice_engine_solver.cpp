@@ -103,20 +103,6 @@ int collectPlanePoints(
     return take;
 }
 
-bool manifoldTouchesDie(const ContactManifold& m) {
-    switch (m.kind) {
-        case ManifoldKind::DieDie:
-        case ManifoldKind::DieStatic:
-        case ManifoldKind::DieTable:
-        case ManifoldKind::DieWall:
-        case ManifoldKind::DieContainer:
-        case ManifoldKind::DieDynamic:
-            return true;
-        default:
-            return false;
-    }
-}
-
 } // namespace
 
 float DicePhysicsEngine::speculativeFor(const Vec3& velocity, float dt) const {
@@ -235,40 +221,102 @@ void DicePhysicsEngine::addSatContacts(
         return;
     }
 
-    const std::vector<Vec3>& incident = normalFromA ? wb : wa;
+    // Contact points are the vertices of either hull that sit inside the
+    // other one (or within the speculative margin of it), each with its gap
+    // measured against the other hull's support along the normal. Both
+    // directions matter: a die face on a table box contributes the die's
+    // vertices, a die corner against a ramp edge may contribute the ramp's.
+    // A face-on rest therefore gets the whole face (up to four points) rather
+    // than one corner, which is what lets it stop rocking and sleep.
+    const float tol = std::max(spec, 0.0f) + 0.01f;
+    float maxA = -1e20f, minB = 1e20f;
+    for (const auto& v : wa) maxA = std::max(maxA, Vec3::dot(v, normal));
+    for (const auto& v : wb) minB = std::min(minB, Vec3::dot(v, normal));
+
+    // Signed slack of `p` against every face plane of a hull: <= tol means
+    // inside the hull grown by tol.
+    auto insideHull = [&](const Vec3& p, const PolyHull& h, const Quat& rot,
+                          const std::vector<Vec3>& w) {
+        for (const auto& ln : h.faceNormals) {
+            const Vec3 fn = rot.rotate(ln);
+            float support = -1e20f;
+            for (const auto& v : w) support = std::max(support, Vec3::dot(fn, v));
+            if (Vec3::dot(fn, p) - support > tol) return false;
+        }
+        return true;
+    };
+
     struct Cand {
         Vec3 p;
         float sep;
         uint32_t id;
     };
-    Cand cands[64];
+    Cand cands[128];
     int nC = 0;
-    const float dDeep = Vec3::dot(normal, contact);
-    for (size_t i = 0; i < incident.size() && nC < 64; ++i) {
-        const float dV = Vec3::dot(normal, incident[i]);
-        const float penV = pen - (dDeep - dV);
-        const float sep = -penV;
-        if (sep < spec) {
-            cands[nC++] = {incident[i], sep, feature ^ (static_cast<uint32_t>(i) << 4)};
+    const uint32_t axisBits = feature & 0xFFFF0000u;
+    for (size_t i = 0; i < wa.size() && nC < 128; ++i) {
+        const float sep = minB - Vec3::dot(wa[i], normal);
+        if (sep < spec && insideHull(wa[i], hb, rotB, wb)) {
+            cands[nC++] = {wa[i], sep, axisBits | static_cast<uint32_t>(i)};
+        }
+    }
+    for (size_t i = 0; i < wb.size() && nC < 128; ++i) {
+        const float sep = Vec3::dot(wb[i], normal) - maxA;
+        if (sep < spec && insideHull(wb[i], ha, rotA, wa)) {
+            cands[nC++] = {wb[i], sep, axisBits | 0x8000u | static_cast<uint32_t>(i)};
         }
     }
     if (nC == 0) {
-        cands[nC++] = {contact, -pen, feature};
+        // Edge-edge: no vertex is inside the other hull. Use the midpoint of
+        // the two deepest supports, which lies on both edges' common normal.
+        Vec3 sa = wa[0], sb = wb[0];
+        float da = -1e20f, db = 1e20f;
+        for (const auto& v : wa) { const float d = Vec3::dot(v, normal); if (d > da) { da = d; sa = v; } }
+        for (const auto& v : wb) { const float d = Vec3::dot(v, normal); if (d < db) { db = d; sb = v; } }
+        cands[nC++] = {(sa + sb) * 0.5f, -pen, axisBits | 0x7FFFu};
     }
     std::sort(cands, cands + nC, [](const Cand& a, const Cand& b) { return a.sep < b.sep; });
+
     const bool keepSpeculative = spec > SPECULATIVE_SLOP + 0.01f;
     const float deepestSep = cands[0].sep;
-    const int maxTake = 1;
-    int take = 0;
-    ContactPoint pts[MAX_MANIFOLD_POINTS];
-    for (int i = 0; i < maxTake; ++i) {
+    Cand pool[128];
+    int nP = 0;
+    for (int i = 0; i < nC; ++i) {
         if (cands[i].sep > deepestSep + 0.02f) break;
-        if (cands[i].sep <= 0.004f || keepSpeculative) {
-            pts[take].point = cands[i].p;
-            pts[take].separation = cands[i].sep;
-            pts[take].featureId = cands[i].id;
-            take++;
+        if (cands[i].sep <= 0.004f || keepSpeculative) pool[nP++] = cands[i];
+    }
+    if (nP <= 0) return;
+
+    // Reduce to MAX_MANIFOLD_POINTS by spread: the deepest point, the one
+    // furthest from it, then the furthest on each side of that segment.
+    int pick[MAX_MANIFOLD_POINTS] = {0, -1, -1, -1};
+    int take = 1;
+    if (nP > 1) {
+        float best = -1.0f;
+        for (int i = 1; i < nP; ++i) {
+            const float d = (pool[i].p - pool[0].p).lengthSq();
+            if (d > best) { best = d; pick[1] = i; }
         }
+        if (best > 1e-6f) {
+            take = 2;
+            const Vec3 a = pool[pick[0]].p;
+            const Vec3 b = pool[pick[1]].p;
+            float bestPos = 1e-6f, bestNeg = -1e-6f;
+            for (int i = 0; i < nP; ++i) {
+                const float area = Vec3::dot(Vec3::cross(b - a, pool[i].p - a), normal);
+                if (area > bestPos) { bestPos = area; pick[2] = i; }
+                if (area < bestNeg) { bestNeg = area; pick[3] = i; }
+            }
+            if (pick[2] >= 0) pick[take++] = pick[2];
+            if (pick[3] >= 0) pick[take++] = pick[3];
+        }
+    }
+    ContactPoint pts[MAX_MANIFOLD_POINTS];
+    for (int i = 0; i < take; ++i) {
+        const Cand& c = pool[pick[i]];
+        pts[i].point = c.p;
+        pts[i].separation = c.sep;
+        pts[i].featureId = c.id;
     }
     if (take <= 0) return;
 
@@ -279,6 +327,11 @@ void DicePhysicsEngine::addSatContacts(
     m->friction = friction;
     m->restitution = restitution;
     if (kind == ManifoldKind::DieStatic || kind == ManifoldKind::DynamicStatic) {
+        // Static props have no rolling-resistance model, so full Coulomb grip
+        // turns a sliding die into a long roll: measured on the tavern table
+        // boxes (#341), lifting this cap to the material's 0.6 moved the
+        // median settle from ~5 s to ~6.6 s and left more throws awake at
+        // 12 s, not fewer.
         m->friction = std::min(friction, 0.25f);
     }
     commitManifoldPoints(*m, pts, take, normal);
@@ -544,11 +597,10 @@ void DicePhysicsEngine::generateStaticContacts(RigidBody& b, size_t dieIndex, fl
     (void)dieIndex;
     if (b.kinematic) return;
     for (const auto& s : statics_) {
-        const float sr = (s.shape == StaticShapeType::OpenCylinder)
-            ? (s.cylinderRadius + s.cylinderHalfHeight)
-            : (s.halfExtents.length() + 0.01f);
+        const bool cylinder = s.shape == StaticShapeType::OpenCylinder;
+        const float sr = cylinder ? (s.cylinderRadius + s.cylinderHalfHeight) : (s.boundRadius + 0.01f);
         const float maxR = b.radius + sr + spec + 0.05f;
-        const Vec3 delta = s.center - b.position;
+        const Vec3 delta = (cylinder ? s.center : s.boundCenter) - b.position;
         if (s.shape != StaticShapeType::Plane && delta.lengthSq() > maxR * maxR) {
             continue;
         }
@@ -993,10 +1045,12 @@ void DicePhysicsEngine::solvePositionConstraints() {
     }
 }
 
-void DicePhysicsEngine::updateIslandSleep(float dt) {
+void DicePhysicsEngine::computeIslands(std::vector<int>& root, std::vector<float>& islandKe) const {
     const int dieN = static_cast<int>(bodies_.size());
     const int dynN = static_cast<int>(dynamics_.size());
     const int n = dieN + dynN;
+    root.assign(static_cast<size_t>(n), 0);
+    islandKe.assign(static_cast<size_t>(n), 0.0f);
     if (n <= 0) return;
     std::vector<int> parent(static_cast<size_t>(n));
     for (int i = 0; i < n; ++i) parent[static_cast<size_t>(i)] = i;
@@ -1013,43 +1067,45 @@ void DicePhysicsEngine::updateIslandSleep(float dt) {
         if (x != y) parent[static_cast<size_t>(y)] = x;
     };
 
+    for (const auto& m : manifolds_) {
+        if (m.indexA < 0 || m.indexB < 0) continue;
+        if (m.kind == ManifoldKind::DieDie) {
+            unite(m.indexA, m.indexB);
+        } else if (m.kind == ManifoldKind::DieDynamic) {
+            unite(m.indexA, dieN + m.indexB);
+        } else if (m.kind == ManifoldKind::DynamicDynamic) {
+            unite(dieN + m.indexA, dieN + m.indexB);
+        }
+    }
+
+    for (int i = 0; i < n; ++i) root[static_cast<size_t>(i)] = find(i);
+    auto accumulate = [&](int node, const auto& b) {
+        if (b.kinematic) return;
+        const float ke = 0.5f * b.mass * b.velocity.lengthSq()
+            + 0.5f * inertiaScalar(b) * b.angularVelocity.lengthSq();
+        float& slot = islandKe[static_cast<size_t>(root[static_cast<size_t>(node)])];
+        slot = std::max(slot, ke);
+    };
+    for (int i = 0; i < dieN; ++i) accumulate(i, bodies_[static_cast<size_t>(i)]);
+    for (int i = 0; i < dynN; ++i) accumulate(dieN + i, dynamics_[static_cast<size_t>(i)]);
+}
+
+void DicePhysicsEngine::updateIslandSleep(float dt) {
+    const int dieN = static_cast<int>(bodies_.size());
+    const int dynN = static_cast<int>(dynamics_.size());
+    if (dieN + dynN <= 0) return;
+    std::vector<int> roots;
+    std::vector<float> islandKe;
+    computeIslands(roots, islandKe);
+    auto find = [&](int node) { return roots[static_cast<size_t>(node)]; };
     auto dieNode = [&](int idx) { return idx; };
     auto dynNode = [&](int idx) { return dieN + idx; };
 
-    for (const auto& m : manifolds_) {
-        if (m.kind == ManifoldKind::DieDie && m.indexA >= 0 && m.indexB >= 0) {
-            unite(dieNode(m.indexA), dieNode(m.indexB));
-        } else if (m.kind == ManifoldKind::DieDynamic && m.indexA >= 0 && m.indexB >= 0) {
-            unite(dieNode(m.indexA), dynNode(m.indexB));
-        } else if (m.kind == ManifoldKind::DynamicDynamic && m.indexA >= 0 && m.indexB >= 0) {
-            unite(dynNode(m.indexA), dynNode(m.indexB));
-        }
-    }
-
-    std::vector<float> islandKe(static_cast<size_t>(n), 0.0f);
-
     for (int i = 0; i < dieN; ++i) {
         auto& b = bodies_[static_cast<size_t>(i)];
         if (b.kinematic) continue;
         const int root = find(dieNode(i));
-        const float ke = 0.5f * b.mass * b.velocity.lengthSq()
-            + 0.5f * inertiaScalar(b) * b.angularVelocity.lengthSq();
-        islandKe[static_cast<size_t>(root)] = std::max(islandKe[static_cast<size_t>(root)], ke);
-    }
-    for (int i = 0; i < dynN; ++i) {
-        auto& b = dynamics_[static_cast<size_t>(i)];
-        if (b.kinematic) continue;
-        const int root = find(dynNode(i));
-        const float ke = 0.5f * b.mass * b.velocity.lengthSq()
-            + 0.5f * inertiaScalar(b) * b.angularVelocity.lengthSq();
-        islandKe[static_cast<size_t>(root)] = std::max(islandKe[static_cast<size_t>(root)], ke);
-    }
-
-    for (int i = 0; i < dieN; ++i) {
-        auto& b = bodies_[static_cast<size_t>(i)];
-        if (b.kinematic) continue;
-        const int root = find(dieNode(i));
-        if (islandKe[static_cast<size_t>(root)] >= 0.08f) {
+        if (islandKe[static_cast<size_t>(root)] >= SLEEP_ENERGY_THRESHOLD) {
             if (b.sleeping) wake(b);
             else b.sleepTimer = 0.0f;
         } else {
@@ -1065,7 +1121,7 @@ void DicePhysicsEngine::updateIslandSleep(float dt) {
         auto& b = dynamics_[static_cast<size_t>(i)];
         if (b.kinematic) continue;
         const int root = find(dynNode(i));
-        if (islandKe[static_cast<size_t>(root)] >= 0.08f) {
+        if (islandKe[static_cast<size_t>(root)] >= SLEEP_ENERGY_THRESHOLD) {
             if (b.sleeping) wake(b);
             else b.sleepTimer = 0.0f;
         } else {
@@ -1077,7 +1133,6 @@ void DicePhysicsEngine::updateIslandSleep(float dt) {
             }
         }
     }
-    (void)manifoldTouchesDie;
 }
 
 void DicePhysicsEngine::solveContacts(float dt) {

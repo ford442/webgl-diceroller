@@ -199,6 +199,16 @@ export interface AppContextPhysics {
     world: null;
     getWasmEngine: (() => import('./physics').PhysicsEngine) | null;
     isWasmAvailable: (() => boolean) | null;
+    /** Debug/test only (`DebugGlobals`): per-body sleep state, for settle timeouts. */
+    getSleepDiagnostics?: () => Promise<{
+        engineDieCount: number;
+        spawnedDice: number;
+        settled: boolean;
+        bodies: import('../core-engine/wasm/sleepDiagnostics').SleepDiagnostic[];
+        summary: string;
+    }>;
+    /** Test hook: report every roll as still moving, to exercise the settle timeout. */
+    forceNoSettle?: (value?: boolean) => void;
 }
 
 export interface AppContextDice {
@@ -262,6 +272,14 @@ export interface AppContext {
     rerollTableLayout: ((overrides?: unknown) => Promise<unknown>) | null;
     getTableLayoutConfig: (() => unknown) | null;
     getLastRollShareUrl: (() => string | null) | null;
+    /** Roll lifecycle for automation: idle → rolling → settled | timedOut. */
+    getRollState?: () => {
+        phase: 'idle' | 'rolling' | 'settled' | 'timedOut';
+        startedCount: number;
+        settledCount: number;
+        lastTimeoutReason: string | null;
+        lastResults: unknown;
+    };
     getActiveDiceSet: (() => unknown) | null;
     setDieAppearance: ((dieKey: string, patch: unknown) => unknown) | null;
     getDicePresencePayload: (() => unknown) | null;

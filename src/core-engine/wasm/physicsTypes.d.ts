@@ -171,7 +171,14 @@ export interface PhysicsEngine {
      * forget commands can't report engine state back) — undefined there.
      */
     getStaticCapacityDroppedCount?(): number;
+    /** hasDice() && allAsleep(). False for an empty engine. */
     areAllSettled(): boolean;
+    /** At least one die body is registered. */
+    hasDice?(): boolean;
+    /** Every non-kinematic die is asleep (true for an empty engine). */
+    allAsleep?(): boolean;
+    /** Packed per-body sleep records (see sleepDiagnostics.ts); in-process engines only. */
+    getSleepDiagnostics?(): Float32Array;
     seedRNG(seed: number): void;
     randomFloat(): number;
     getCollisionEvents(): Float32Array;
@@ -356,6 +363,9 @@ export interface EmbindPhysicsEngine {
     };
     getStaticCapacityDroppedCount?(): number;
     areAllSettled(): boolean;
+    hasDice(): boolean;
+    allAsleep(): boolean;
+    getSleepDiagnostics(): Float32Array;
     /** uint64_t on the C++/WASM side (-s WASM_BIGINT=1) — pass a bigint, not a number; see seedUtil.ts. */
     seedRNG(seed: bigint): void;
     randomFloat(): number;
@@ -393,6 +403,8 @@ export interface PhysicsBridgeModule {
     seedPhysicsRNG(seed: number): void;
     randomPhysicsFloat(): number;
     serializePhysicsState(): Promise<Uint8Array>;
+    /** Packed sleep diagnostics (see sleepDiagnostics.ts); empty when unavailable. */
+    readSleepDiagnostics(): Promise<Float32Array>;
     seededPhysicsThrow(
         seed: number,
         dice: { id: number; index: number }[],
