@@ -1359,8 +1359,9 @@ TEST_CASE("Tavern world: every seeded throw sleeps within 12 s of simulated time
     const auto& world = tavernWorld().world;
     REQUIRE(world["version"].i() == 1);
     const int sidesCycle[] = {20, 6, 4, 8, 10, 12};
-    // FUZZ_SEEDS overrides the default 200 (capped at 2000).
-    const char* env = std::getenv("FUZZ_SEEDS");
+    // TAVERN_SEEDS overrides the default 200 (capped at 2000). Separate from
+    // FUZZ_SEEDS, which CI raises to 2000 for the cheap fuzz loops.
+    const char* env = std::getenv("TAVERN_SEEDS");
     int seeds = env ? std::atoi(env) : 200;
     if (seeds < 1) seeds = 200;
     seeds = std::min(seeds, 2000);

@@ -167,6 +167,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MU
 - Manages the **dice focus state machine** after a roll:
   `IDLE` → `WAITING_FOR_STOP` → `FOCUSING` → `HOLDING` (2s) → `RETURNING` → `IDLE`
   When focusing, the camera dynamically calculates distance based on dice spread.
+  `WAITING_FOR_STOP` always ends: a `SettleWatch` ([`src/core-engine/roll/SettleWatch.ts`](src/core-engine/roll/SettleWatch.ts), shared with notation rolls in `RollSession`) reports `settled`, or `timedOut` after 12 s of simulated time, when the engine stops ticking with dice awake, or when the table has dice the engine never registered. A timed-out roll reads faces from the mesh orientation, marks dice that never lay flat as **cocked** in the results HUD, and offers a re-roll; `ROLL_SETTLED` carries `{ results, timedOut, reason }`.
 - Exposes `app.stats` (shim `window.__renderStats` under test/debug flags) for scheduler timings / renderer info when `?debug-perf` is enabled.
 - Under `?test` / `?debug` / `?debug-perf`, installs `window.__app` (stable API) plus deprecated flat shims. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -186,8 +187,9 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MU
 - Left-click on a die starts WASM kinematic drag by default (`setDieKinematic` + `setDieVelocity` toward the cursor). Mouse movement updates the die inside the WASM worker.
 - Double-clicking a die (within 300ms) triggers **levitation** in WASM: the die rises with a blue glow (`0x0088ff` PointLight), spins, then is released with a random throw after 1.5s.
 - **Dice cup (`DiceCup` prop):** WASM-only scoop/shake/pour ritual. Click the cup to scoop nearby dice, hold and wiggle to rattle (interior container planes + muffled leather audio), release or press `T` to pour onto the velvet zone. Cup pours use `seed = null` and are excluded from share URLs. Test hook: `window.__app.interactables.diceCup`.
-- **Dice tower (`DiceTower` prop):** WASM-only hopper drop. Click the tower (or `interactables.diceTower.drop()`) to pose every spawned die at the hopper mouth and send it down the zig-zag chute into the catch tray. Unlike a cup pour, a drop **is** a seeded roll: pose, lateral kick and tumble all come from the engine PRNG via the `seededHopperDrop` worker command, so a drop mints a seed, shares as `?seed=…&v=2&src=tower`, and replays identically for a guest in a `?room=`. Geometry lives in [`src/environment/diceTowerLayout.ts`](src/environment/diceTowerLayout.ts) so the headless replay harness loads the same chute the tavern builds. Test hook: `window.__app.interactables.diceTower`.
+- **Dice tower (`DiceTower` prop):** WASM-only hopper drop. Click the tower (or `interactables.diceTower.drop()`) to pose every spawned die at the hopper mouth and send it down the zig-zag chute into the catch tray. Unlike a cup pour, a drop **is** a seeded roll: pose, lateral kick and tumble all come from the engine PRNG via the `seededHopperDrop` worker command, so a drop mints a seed, shares as `?seed=…&v=2&src=tower`, and replays identically for a guest in a `?room=`. Geometry lives in [`src/environment/diceTowerLayout.ts`](src/environment/diceTowerLayout.ts) so the headless replay harness loads the same chute the tavern builds; every ramp leaves `CHUTE_MIN_CLEARANCE` (2.4, above a d20's 2.22 circumscribed diameter) to the opposite wall, checked by `computeChuteClearances()` in a unit test. Test hook: `window.__app.interactables.diceTower`.
     - A share link for a tower drop carries `v=2`; plain throws still write `v=1`, so links shared before `src=` existed (and new throw links) keep replaying on older clients, while a tower link is rejected rather than silently replayed as a throw.
+    - Share links also carry the table layout (`layout-seed`, `density`, `theme`): the clutter around the dice zone is part of the collider world, so a replay must rebuild the same table. All three are written, since a missing one falls back to the receiver's stored preference. Replays await `whenDiceRegistered()` (every spawned die visible in the engine) before throwing.
 - The WASM control primitives live in `src/dice.js`: `driveDieWasmTransform`, `setDieWasmVelocity`, `getDieWasmTransform` (alongside `applyWasmImpulseForDie`).
 - `getHoveredDie(camera, normX, normY)` — returns the die under the cursor for hover cursor changes.
 - `updateInteraction(deltaTime)` — drives the active WASM grab and updates levitation state each frame.
@@ -448,6 +450,7 @@ npm run test:mobile-touch     # Touch input smoke
 npm run test:wasm-authoritative  # Visual sync + interaction with physicsWorld === null (#250)
 npm run test:wasm-gameplay-loop  # Full-app: visual sync, drag interaction, collision audio (getStats().played)
 npm run test:share-roll-replay   # Two page loads of the same share URL settle to identical readAllDiceValues()
+npm run test:roll-timeout     # forceNoSettle: a roll that never settles still ends (timedOut, HUD result, re-roll)
 npm run test:a11y             # axe accessibility scan
 npm run test:notation         # Roll notation parser (Node, no browser)
 npm run test:share-roll       # Shareable roll encoding (Node)
@@ -462,7 +465,10 @@ npm run verify:cmake-wasm           # CMake vs build.sh .wasm byte parity (needs
 node scripts/verify-wasm-primitives.mjs
 npm run verify:wasm-interaction     # drag + levitation on the WASM-only path (needs a build)
 npm run verify:worker-replay        # Worker-module replay determinism (seededPhysicsThrow) — isolated from the app UI
-npm run verify:tower-drop-replay    # Dice-tower drops replay from a seed (seededHopperDrop) against the real chute
+npm run verify:tower-drop-replay    # Dice-tower drops replay from a seed and settle in the tray (--no-require-settle to relax)
+npm run test:tavern-world           # 200 WASM rolls into tests/fixtures/tavern-world.json settle within 12 s sim (#341)
+npm run fixture:world               # Re-export the tavern collider fixture from the built app (needs build:wasm + build:js)
+npm run check:world-fixture         # Fails if the checked-in fixture no longer matches what the app registers
 npm run verify:bundle-loading       # ?webgl never fetches three.webgpu; ?no-wasm spawns no dice
 node scripts/verify-renderer-factory.mjs
 npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when baselines exist)
@@ -484,11 +490,14 @@ npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when b
 
 - **Every job has a `timeout-minutes`.** GitHub's default is six hours. Keep new jobs at 15 minutes so a hang fails fast instead of burning the account's CI budget. Current exceptions: 20 for `test-solver` (the fuzz run plus a clang-tidy pass), and 30 for `build-wasm`, `render-regression`, and `wasm-toolchain` (the last links both wasm profiles twice for the CMake parity diff).
 
-- `test:wasm-gameplay-loop`, `test:wasm-authoritative`, and `test:share-roll-replay` all run in CI (`verify-tests` matrix); `verify:worker-replay` and `verify:tower-drop-replay` run in the `verify` matrix. All of them need the `wasm-artifacts` build (`npm run build:wasm`) to exercise the WASM-authoritative path rather than skipping.
+- `test:wasm-gameplay-loop`, `test:wasm-authoritative`, `test:share-roll-replay`, `test:roll-timeout` and `check:world-fixture` run in CI (`verify-tests` matrix); `verify:worker-replay`, `verify:tower-drop-replay` and `test:tavern-world` run in the `verify` matrix. All of them need the `wasm-artifacts` build (`npm run build:wasm`) to exercise the WASM-authoritative path rather than skipping.
+- **Settle waits.** Use `waitForRollFinished()` (a roll's own `settled | timedOut`, via `__app.getRollState()`) or `waitForSettle()` from [`tests/helpers/browser.js`](tests/helpers/browser.js) — never a hand-rolled `waitForFunction(areDiceSettled)`. `ready` fires before a share-URL replay spawns its dice, so `areDiceSettled()` alone can pass on an empty table, and both helpers append the engine's sleep diagnostics to a timeout.
 
 **Automation hooks** (require `?test`, `?debug`, or `?debug-perf`):
 
 - `window.__app` — stable API (`ready`, `scene`, `camera`, `renderer`, `interactables`, `replayRoll`, …). All Playwright scripts use this exclusively.
+- `window.__app.getRollState()` — `{ phase: idle | rolling | settled | timedOut, startedCount, settledCount, lastTimeoutReason, lastResults }`.
+- `window.__app.physics.getSleepDiagnostics()` — engine vs spawned die counts plus one record per awake body ("why is it awake?"); `physics.forceNoSettle(bool)` forces the settle timeout; `physics.exportWorld()` / `physics.getDieLog()` (`?test` only) return the recorded collider world and recent die adds/removes.
 - Smoke scripts use `?no-post` (and often `?webgl&fair-dice&test` in headless CI) to reduce GPU load.
 - `?test` also **freezes candle and fireplace flicker** at a fixed sample, so a render-regression capture never races the flame. Without it the flicker still runs, but it is a pure function of elapsed time (`LightingSystems.js`), not `Math.random()` — two runs of the same scene light identically at the same timestamp.
 

@@ -7,7 +7,7 @@
  *
  * 24 seeds by default to keep `npm run test:unit` quick; `npm run
  * test:tavern-world` runs the full 200 (TAVERN_SEEDS). Skips without WASM
- * artifacts locally, fails under CI like the other WASM harnesses.
+ * artifacts, except in the dedicated CI job, where that is an error.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -49,8 +49,10 @@ describe('tavern world fixture', () => {
 
 describe('tavern world settle', () => {
     const hasWasm = wasmArtifactsPresent();
-    if (!hasWasm && process.env.CI) {
-        it('has WASM artifacts under CI', () => {
+    // The plain unit run (build-js, no WASM) skips; the dedicated CI job sets
+    // TAVERN_SEEDS and downloads the artifacts, so a miss there is an error.
+    if (!hasWasm && process.env.CI && process.env.TAVERN_SEEDS) {
+        it('has WASM artifacts in the tavern-world job', () => {
             throw new Error('public/wasm artifacts missing — CI must download them');
         });
     }

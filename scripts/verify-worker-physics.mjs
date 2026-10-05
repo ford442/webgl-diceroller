@@ -207,24 +207,31 @@ try {
     await rm(TEST_MODULE, { force: true });
 }
 
-// Non-zero exit on logical failure so CI can gate on it.
-const pass =
-    result &&
-    result.ok &&
-    result.usingWorker &&
-    result.idsSync &&
-    result.fellUnderGravity &&
-    result.torqueApplied &&
-    result.batchedTransport &&
-    (!result.hasKinematic || (result.dragHeld && result.dragMovedOnRelease)) &&
-    result.idleWhenEmpty &&
-    result.runningAfterAdd &&
-    result.pausedWhenHidden &&
-    result.noTicksWhileHidden &&
-    result.resumedWithoutBacklog;
+// Non-zero exit on logical failure so CI can gate on it — naming each check
+// that failed, rather than one AND of all of them.
+const checks = result
+    ? {
+          ok: result.ok,
+          usingWorker: result.usingWorker,
+          idsSync: result.idsSync,
+          fellUnderGravity: result.fellUnderGravity,
+          torqueApplied: result.torqueApplied,
+          batchedTransport: result.batchedTransport,
+          dragHeldAndReleased:
+              !result.hasKinematic || (result.dragHeld && result.dragMovedOnRelease),
+          idleWhenEmpty: result.idleWhenEmpty,
+          runningAfterAdd: result.runningAfterAdd,
+          pausedWhenHidden: result.pausedWhenHidden,
+          noTicksWhileHidden: result.noTicksWhileHidden,
+          resumedWithoutBacklog: result.resumedWithoutBacklog,
+      }
+    : { result: false };
+const failed = Object.entries(checks)
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
 
-if (!pass) {
-    console.error('[verify] FAILED');
+if (failed.length) {
+    console.error(`[verify] FAILED: ${failed.join(', ')}`);
     process.exit(1);
 }
 console.log('[verify] PASSED');

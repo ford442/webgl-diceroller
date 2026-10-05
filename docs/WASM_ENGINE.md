@@ -317,7 +317,18 @@ npm run test:solver
 
 # Tune fuzz volume (default 2000 seeds, ~6 s on CI):
 FUZZ_SEEDS=500 npm run test:solver
+
+# The "Tavern world" case rolls into tests/fixtures/tavern-world.json — the
+# colliders the app actually registers — with the shipped hulls and the app's
+# own throw parameters. Every seed must sleep within 12 s of simulated time.
+TAVERN_SEEDS=500 npm run test:solver
 ```
+
+The tavern-world fixture is exported from the running app (`npm run
+fixture:world`, which needs `build:wasm` + `build:js`); CI re-exports it and
+fails on a diff (`npm run check:world-fixture`), so a prop whose colliders move
+shows up as a fixture change. `npm run test:tavern-world` runs the same 200
+seeds through the WASM build via `rollHeadless(…, { world })`.
 
 Compiled with `-std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror`. The engine TUs
 are warning-clean under g++ 13 and clang 18 and CI pins `ubuntu-latest`, so a
@@ -384,6 +395,7 @@ Source layout:
 | `dice_physics/dice_engine_collision_dynamic.cpp` | Die–die grid helpers used by tests                                                                                                                             |
 | `dice_physics/dice_engine_integrate.cpp`         | Per-body integration, exponential damping, swept static clipping, sleep bookkeeping                                                                            |
 | `dice_physics/dice_engine_solver.cpp`            | Persistent manifolds, sequential impulse, speculative contacts, island sleep                                                                                   |
+| `dice_physics/dice_engine_diagnostics.cpp`       | `allAsleep()` and `buildSleepDiagnostics()` — read-only "why is it awake?" records                                                                             |
 | `dice_physics/dice_engine_face_value.cpp`        | Engine-authoritative die face settlement                                                                                                                       |
 | `dice_physics.cpp`                               | Emscripten Embind exports for the WASM build (links against the `.cpp` files above)                                                                            |
 | `solver_tests.cpp`                               | doctest unit + fuzz harness (`--dump-serialize`, `--bench`); also links against the `.cpp` files above                                                         |
@@ -667,12 +679,15 @@ const engine = getWasmEngine();
 
 #### Query
 
-| Method               | Signature          | Description                                              |
-| -------------------- | ------------------ | -------------------------------------------------------- |
-| `getDieCount`        | `(): i32`          | Number of dice in the world.                             |
-| `areAllSettled`      | `(): bool`         | True when all dice are sleeping.                         |
-| `getTransforms`      | `(): Float32Array` | Zero-copy view of `[px,py,pz,qx,qy,qz,qw]` per die.      |
-| `getCollisionEvents` | `(): Float32Array` | Events as `[idA, idB, impactSpeed, …]`. Cleared on read. |
+| Method                | Signature          | Description                                              |
+| --------------------- | ------------------ | -------------------------------------------------------- |
+| `getDieCount`         | `(): i32`          | Number of dice in the world.                             |
+| `areAllSettled`       | `(): bool`         | `hasDice() && allAsleep()` — false for an empty engine.  |
+| `hasDice`             | `(): bool`         | At least one die body is registered.                     |
+| `allAsleep`           | `(): bool`         | Every non-kinematic die sleeps (empty engine: `true`).   |
+| `getSleepDiagnostics` | `(): Float32Array` | Per-body sleep records (copy); see "Contacts and sleep". |
+| `getTransforms`       | `(): Float32Array` | Zero-copy view of `[px,py,pz,qx,qy,qz,qw]` per die.      |
+| `getCollisionEvents`  | `(): Float32Array` | Events as `[idA, idB, impactSpeed, …]`. Cleared on read. |
 
 #### Determinism & replay
 
@@ -696,6 +711,47 @@ in-process bridge produce identical numbers:
 orthonormal basis (`SeededHopperFrame`), so the PRNG only ever draws unitless
 scatter and a drop replays wherever the tower prop happens to be placed. See
 `npm run verify:tower-drop-replay` for the end-to-end check.
+
+#### Contacts and sleep
+
+Die/prop contacts against static boxes and hulls, other dice and dynamic props
+go through SAT (`satTestFromWorld`) and `addSatContacts`:
+
+- **Axis:** the minimum-overlap axis, with face axes preferred over edge-edge
+  axes unless an edge is clearly shallower (Box2D's relative/absolute
+  tolerance), and last substep's normal kept while it is within 5 mm of the
+  best. The normal is oriented by the hulls' vertex centroids.
+- **Points:** every vertex of either hull inside the other (grown by the
+  speculative margin), with its separation measured as its _exit distance_
+  from the other hull along the normal. Up to four points are kept by spread,
+  so a die resting on a face has the whole face. With no vertex inside
+  (edge-edge), one point sits on the smaller hull's support feature.
+- **Speculative points** stop only the approach that would close their gap
+  this substep (`velN + sep/dt`), so near-but-open vertices of a resting face
+  are safe to keep.
+- **Open cylinders** (mugs, goblets) are inward radial planes for a body
+  inside the radius and a single solid wall from outside.
+
+Sleep is per contact island (dice and dynamic props joined by body-body
+manifolds; statics never join an island): an island whose most energetic
+member stays under `SLEEP_ENERGY_THRESHOLD` (0.08 J) for `SLEEP_DELAY` (0.5 s)
+sleeps. A body-body contact only wakes the sleeper — waking both every substep
+reset the sleep timer and kept dice resting against props awake for ever.
+
+`getSleepDiagnostics()` packs one `SLEEP_DIAG_STRIDE`-float record per die,
+then per dynamic prop: id, sleeping, kinematic, speed, spin, sleep timer, own
+and island energy, island size, manifold/point counts, deepest separation,
+and the four deepest touching manifolds (kind, other id, material). Decode it
+with `src/core-engine/wasm/sleepDiagnostics.ts`; the app exposes it as
+`window.__app.physics.getSleepDiagnostics()` under `?test` / `?debug`, the
+`?debug-perf` overlay names the most energetic awake body, and every settle
+wait in `tests/helpers/browser.js` prints it on timeout.
+
+A roll still ends if something never sleeps: `SettleWatch`
+(`src/core-engine/roll/SettleWatch.ts`) times out after 12 s of simulated
+time, when the engine stops ticking with dice awake, or when the table has
+dice the engine never registered, and the faces are then read from the mesh
+orientation and flagged `cocked` (see AGENTS.md).
 
 #### Fixed clock
 
