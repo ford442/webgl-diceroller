@@ -73,7 +73,9 @@ write_build_info() {
     emcc_version="$(echo "${emcc_full_version}" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo unknown)"
     git_sha="$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
     local solver_revision
-    solver_revision="$(grep -E 'SOLVER_REVISION' "${SCRIPT_DIR}/dice_physics/dice_contacts.hpp" | head -n1 | grep -oE '[0-9]+' | tail -n1 || echo 0)"
+    # Match the definition, not the first mention: comments in dice_contacts.hpp
+    # name SOLVER_REVISION too, and the first of those has no digits.
+    solver_revision="$(grep -E 'constexpr[[:space:]]+uint32_t[[:space:]]+SOLVER_REVISION' "${SCRIPT_DIR}/dice_physics/dice_contacts.hpp" | head -n1 | grep -oE '[0-9]+' | tail -n1 || echo 0)"
     built_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     js_bytes="$(wc -c < "${out_dir}/dice_physics.js" | tr -d ' ')"
     wasm_bytes="$(wc -c < "${out_dir}/dice_physics.wasm" | tr -d ' ')"

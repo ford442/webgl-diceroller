@@ -3,6 +3,8 @@
  * worker. Keeps RNG draw order identical across in-process and worker paths.
  */
 
+import { toRngSeedBigInt } from './seedUtil.js';
+
 export interface SeededDieRef {
     id: number;
     index: number;
@@ -67,16 +69,24 @@ function eulerToQuaternion(ex: number, ey: number, ez: number) {
 
 const DEFAULT_RNG_STATE = 0x123456789abcdef0n;
 const RNG_MUL = 0x2545f4914f6cdd1dn;
+const MASK_64 = 0xffffffffffffffffn;
 
-/** xorshift64* PRNG matching DicePhysicsEngine::DeterministicRNG in dice_physics.cpp */
-export function createSeededRng(seed: number): () => number {
-    let state = BigInt(seed >>> 0) || DEFAULT_RNG_STATE;
+/**
+ * xorshift64* PRNG, bit-for-bit DeterministicRNG::nextFloat in dice_sat.hpp:
+ * the multiply scrambles the *output* only (the state stays the xorshift
+ * state), the state is 64-bit, and the result goes through a float32 like the
+ * C++ `static_cast<float>`. A throw computed from this stream on the main
+ * thread (?no-worker, rollHeadless) therefore matches one computed from
+ * `engine.randomFloat()` in the worker.
+ */
+export function createSeededRng(seed: number | bigint): () => number {
+    let state = toRngSeedBigInt(seed) || DEFAULT_RNG_STATE;
     return () => {
         state ^= state >> 12n;
-        state ^= state << 25n;
+        state ^= (state << 25n) & MASK_64;
         state ^= state >> 27n;
-        state = (state * RNG_MUL) & 0xffffffffffffffffn;
-        return Number(state >> 32n) * (1.0 / 4294967296.0);
+        const out = (state * RNG_MUL) & MASK_64;
+        return Math.fround(Number(out >> 32n)) / 4294967296;
     };
 }
 
