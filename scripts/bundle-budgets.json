@@ -22,6 +22,10 @@
         },
         { "pattern": "^assets/Xr.*\\.js$", "reason": "WebXR seated spike; ?xr only" },
         {
+            "pattern": "^assets/tavernDsp-.*\\.js$",
+            "reason": "Audio DSP engine on the main thread; ScriptProcessor fallback only (no AudioWorklet, or ?audio-fallback). The normal path runs the same engine inside the TavernProcessor worklet chunk."
+        },
+        {
             "pattern": "^assets/three\\.webgpu-.*\\.js$",
             "reason": "WebGPU backend + TSL; WebGPU sessions only"
         }
