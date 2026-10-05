@@ -30,6 +30,7 @@
         "verify:worker-replay": "tsx scripts/verify-worker-replay.mjs",
         "verify:tower-drop-replay": "tsx scripts/verify-tower-drop-replay.mjs",
         "verify:godrays": "node scripts/verify-godrays.mjs",
+        "verify:shader-parity": "node scripts/verify-shader-parity.mjs",
         "verify:clutter-unification": "node scripts/verify-clutter-unification.mjs",
         "verify:wasm-primitives": "node scripts/verify-wasm-primitives.mjs",
         "verify:wasm-interaction": "node scripts/verify-wasm-interaction.mjs",

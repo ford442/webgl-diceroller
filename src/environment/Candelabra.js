@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createFire } from './Fire.js';
 import { createProp, mesh, STATIC_MATERIAL } from './propKit.js';
+import { FLAME_CHANNEL, flameFlicker, flameTime } from '../core/LightingSystems.js';
 
 export function createCandelabra(
     scene,
@@ -144,14 +145,15 @@ export function createCandelabra(
             }
         },
         update(deltaTime, time) {
-            flames.forEach((f) => {
+            const t = flameTime(time);
+            flames.forEach((f, index) => {
                 f.fire.update(deltaTime);
 
-                const breathing = Math.sin(time * 2.0) * 0.08;
-                const flicker = (Math.random() - 0.5) * 0.12;
+                const breathing = Math.sin(t * 2.0) * 0.08;
+                const flicker = flameFlicker(time, FLAME_CHANNEL.intensity, index) * 0.12;
                 f.light.intensity = 0.5 + breathing + flicker;
 
-                const hueShift = Math.sin(time * 3.5) * 0.03;
+                const hueShift = Math.sin(t * 3.5) * 0.03;
                 f.light.color.setHSL(0.08 + hueShift, 1.0, 0.52);
             });
         },

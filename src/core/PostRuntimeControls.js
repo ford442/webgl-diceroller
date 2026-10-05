@@ -2,6 +2,8 @@
  * Runtime knobs for the post pipeline without rebuilding composers or TSL graphs.
  */
 
+import { CHROMATIC_PARAMS, bloomParams } from '../shaders/PostStackParams.js';
+
 /**
  * @param {object} options
  * @param {import('../types/app').ComposerLike | null | undefined} options.composer
@@ -17,10 +19,9 @@ export function createPostRuntimeControls({ composer, postPasses = {}, postConfi
             composer?.type === 'webgpu-post' ? composer : null
         );
 
-    const baselineBloomStrength =
-        bloomPass?.strength ?? (postConfig.quality === 'low' ? 0.35 : 0.6);
+    const baselineBloomStrength = bloomPass?.strength ?? bloomParams(postConfig.quality).strength;
     const baselineBloomBlend = postConfig.bloomEnabled ? 1 : 0;
-    const baselineChromatic = postConfig.chromaticAberrationEnabled ? 0.2 : 0;
+    const baselineChromatic = postConfig.chromaticAberrationEnabled ? CHROMATIC_PARAMS.strength : 0;
 
     let bloomBlend = baselineBloomBlend;
     let chromaticIntensity = baselineChromatic;

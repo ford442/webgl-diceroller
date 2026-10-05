@@ -1,15 +1,39 @@
+import { createGlslKit } from './graph/ShaderKit.js';
+import { VIGNETTE_PARAMS, vignette } from './PostStackParams.js';
+
 /**
- * Vignette Shader
- * A simple vignette to darken the corners of the screen.
+ * Vignette Shader (WebGL `ShaderPass`)
+ *
+ * Darkens the corners of the screen. The fragment is generated from the
+ * `vignette` graph the WebGPU post stack builds as TSL, and the defaults are
+ * `VIGNETTE_PARAMS`.
  */
+
+function fragmentShader() {
+    const k = createGlslKit({ prefix: 'vig' });
+    const color = k.variable('vec4', k.sample('tDiffuse', 'vUv'));
+    const result = vignette(k, { color, uv: 'vUv', offset: 'offset', darkness: 'darkness' });
+    return /* glsl */ `
+		uniform float offset;
+		uniform float darkness;
+
+		uniform sampler2D tDiffuse;
+
+		varying vec2 vUv;
+
+		void main() {
+			${k.takeStatements()}
+			gl_FragColor = ${result};
+		}`;
+}
 
 export const VignetteShader = {
     name: 'VignetteShader',
 
     uniforms: {
         tDiffuse: { value: null },
-        offset: { value: 1.0 },
-        darkness: { value: 1.0 },
+        offset: { value: VIGNETTE_PARAMS.offset },
+        darkness: { value: VIGNETTE_PARAMS.darkness },
     },
 
     vertexShader: /* glsl */ `
@@ -23,21 +47,5 @@ export const VignetteShader = {
 
 		}`,
 
-    fragmentShader: /* glsl */ `
-
-		uniform float offset;
-		uniform float darkness;
-
-		uniform sampler2D tDiffuse;
-
-		varying vec2 vUv;
-
-		void main() {
-
-			vec4 texel = texture2D( tDiffuse, vUv );
-			vec2 uv = ( vUv - vec2( 0.5 ) ) * vec2( offset );
-			float vignette = clamp( dot( uv, uv ) * darkness, 0.0, 1.0 );
-			gl_FragColor = vec4( mix( texel.rgb, vec3( 0.0 ), vignette ), texel.a );
-
-		}`,
+    fragmentShader: fragmentShader(),
 };

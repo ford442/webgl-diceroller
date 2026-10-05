@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { FLAME_CHANNEL, flameFlicker } from '../core/LightingSystems.js';
 
 /**
  * Creates magical floating candles that bob gently in the air
@@ -153,7 +154,7 @@ export function createFloatingCandles(scene) {
     // Update function for animations
     const update = (deltaTime, time) => {
         // Animate each candle
-        candles.forEach((candle) => {
+        candles.forEach((candle, index) => {
             // Bobbing motion (sine wave)
             const bobOffset = Math.sin(time * candle.speed + candle.phase) * 0.15;
             candle.group.position.y = candle.baseY + bobOffset;
@@ -163,17 +164,17 @@ export function createFloatingCandles(scene) {
             candle.group.rotation.x = Math.cos(time * 0.4 + candle.phase) * 0.03;
 
             // Flame flicker
-            const flicker = 0.9 + Math.random() * 0.2;
+            const flicker = 1 + flameFlicker(time, FLAME_CHANNEL.intensity, index) * 0.2;
             candle.light.intensity = 1.5 * flicker;
 
             // Flame size variation
-            const flameScale = 1 + (Math.random() - 0.5) * 0.2;
+            const flameScale = 1 + flameFlicker(time, FLAME_CHANNEL.size, index) * 0.2;
             candle.flameCore.scale.setScalar(flameScale);
             candle.flameOuter.scale.set(1.2 * flameScale, 1.5 * flameScale, 1.2 * flameScale);
 
-            // Light position jitter (flame movement)
-            candle.light.position.x = (Math.random() - 0.5) * 0.02;
-            candle.light.position.z = (Math.random() - 0.5) * 0.02;
+            // Light position sway (flame movement) — these lights cast no shadow
+            candle.light.position.x = flameFlicker(time, FLAME_CHANNEL.sway, index * 2) * 0.02;
+            candle.light.position.z = flameFlicker(time, FLAME_CHANNEL.sway, index * 2 + 1) * 0.02;
         });
 
         // Animate wax drip particles

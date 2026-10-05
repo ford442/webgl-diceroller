@@ -3,6 +3,7 @@ import { createStaticCollider } from '../../core/StaticColliderBridge.js';
 import { createFire } from '../Fire.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
 import { getWaxMaterial, getWickMaterial } from '../../core/MaterialPalette.js';
+import { FLAME_CHANNEL, flameFlicker, flameTime } from '../../core/LightingSystems.js';
 
 const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
 const randomUnit = (options) => (options?.rng ?? Math.random)();
@@ -88,14 +89,15 @@ export function createCandle(scene, physicsWorld, options = {}) {
     function update(deltaTime, time) {
         fire.update(deltaTime);
 
-        const breathing = Math.sin(time * 1.5) * 0.15;
-        const flicker = Math.sin(time * 8) * 0.1;
-        const jitter = (Math.random() - 0.5) * 0.2;
+        const t = flameTime(time);
+        const breathing = Math.sin(t * 1.5) * 0.15;
+        const flicker = Math.sin(t * 8) * 0.1;
+        const jitter = flameFlicker(time, FLAME_CHANNEL.intensity) * 0.2;
 
         const intensity = 1.0 + breathing + flicker + jitter;
         flameLight.intensity = Math.max(0.5, intensity);
 
-        const hueShift = Math.sin(time * 3) * 0.05;
+        const hueShift = Math.sin(t * 3) * 0.05;
         flameLight.color.setHSL(0.08 + hueShift, 1.0, 0.5);
 
         const flameScale = 0.5 + (intensity - 1.0) * 0.1;

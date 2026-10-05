@@ -31,10 +31,13 @@ webgl-diceroller/
 │   ├── interaction/            # Dice cup / tower / tray / jail + shared WasmDieGrab helper
 │   ├── xr/                     # WebXR seated-table spike (?xr)
 │   ├── ui.js                   # DOM-based UI controls and crosshair
-│   ├── shaders/                # Custom GLSL + TSL node materials
-│   │   ├── VignetteShader.js   # WebGL post vignette pass
-│   │   ├── GodRayShader.js     # WebGL scene-space moonlight beams (TavernWalls)
-│   │   └── GodRayNodeMaterial.js # WebGPU god-ray twin
+│   ├── shaders/                # Shader graphs, built as GLSL (WebGL) and TSL (WebGPU)
+│   │   ├── graph/ShaderKit.js  # One op vocabulary, GLSL-string + TSL-node backends
+│   │   ├── GodRayGraph.js      # Moonlight beam graph + GOD_RAY_PARAMS
+│   │   ├── PostStackParams.js  # Vignette graph + bloom / vignette / chromatic params
+│   │   ├── VignetteShader.js   # WebGL post vignette pass (GLSL generated from the graph)
+│   │   ├── GodRayShader.js     # WebGL beam ShaderMaterial (GLSL generated from the graph)
+│   │   └── GodRayNodeMaterial.js # WebGPU beam (TSL built from the same graph)
 │   └── environment/            # Scene environment (~95 prop modules)
 │       ├── PropRegistry.js     # Auto-discovers prop factories + tier definitions
 │       ├── propKit.js          # createProp / materials / mesh helpers (required for new props)
@@ -219,8 +222,11 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 - WebGPU is the default on supported browsers; WebGL is the automatic fallback and the most compatible baseline (force it with `?webgl`).
 - WebGPU uses `WebGPURenderer` plus the TSL post pipeline (bloom, vignette, optional chromatic aberration in high quality).
-- The tavern window god rays render on both paths: WebGL uses the raw-GLSL `GodRayShader.js` `ShaderMaterial`; WebGPU uses the TSL `MeshBasicNodeMaterial` in `src/shaders/GodRayNodeMaterial.js`. Toggle with `?no-godrays` independent of renderer.
+- The tavern window god rays render on both paths: WebGL uses the GLSL `GodRayShader.js` `ShaderMaterial`; WebGPU uses the TSL `MeshBasicNodeMaterial` in `src/shaders/GodRayNodeMaterial.js`. Toggle with `?no-godrays` independent of renderer.
 - `GodRayShader.js` is used for the scene-space moonlight beam mesh in `TavernWalls.js`; it is not part of the fullscreen composer pipeline.
+- **Never hand-write a shader twice.** Dice surface, god rays and vignette are each one graph written against `src/shaders/graph/ShaderKit.js` and built by both backends (GLSL for `WebGLRenderer`, TSL for `WebGPURenderer`); the `*Shader.js` / `*NodeMaterial.js` modules only wire outputs into uniforms or material slots. A new marking term, inclusion or post effect goes in the graph (`DiceSurfaceGraph.js`, `GodRayGraph.js`, `PostStackParams.js`). Post-stack numbers (bloom, vignette, chromatic) live in `PostStackParams.js` for both pipelines. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (One shader graph, two backends).
+- `npm run verify:shader-parity` renders every die marking style / inclusion, a beam and a vignette card on WebGL and WebGPU and diffs them (WebGPU skipped under `DICE_CI_NO_WEBGPU=1`).
+- Flame lights never use `Math.random()`: use `flameFlicker` / `flameTime` from `src/core/LightingSystems.js` (deterministic, frozen under `?test`), and do not jitter the position of a shadow-casting light.
 
 ## Asset Pipeline
 
@@ -465,6 +471,7 @@ npm run verify:worker-replay        # Worker-module replay determinism (seededPh
 npm run verify:tower-drop-replay    # Dice-tower drops replay from a seed (seededHopperDrop) against the real chute
 npm run verify:bundle-loading       # ?webgl never fetches three.webgpu; ?no-wasm spawns no dice
 node scripts/verify-renderer-factory.mjs
+npm run verify:shader-parity        # Dice / god-ray / vignette graphs: WebGL vs WebGPU pixel diff (no WASM needed)
 npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when baselines exist)
 ```
 
@@ -521,7 +528,7 @@ python deploy.py
 - **ColladaLoader migration is complete** — dice models now load as Draco-compressed `.glb` files from `public/images/dice/`.
 - **WASM die-to-die contacts are now SAT-based polyhedral** (Phase 3). Bounding spheres remain as a fallback when hulls are not loaded.
 - **No automated test coverage** beyond ad-hoc Playwright scripts in `tests/` and verify harnesses in `scripts/`.
-- **GodRayShader** drives the scene-space moonlight beam mesh in `TavernWalls.js` (not the fullscreen composer); WebGPU uses `GodRayNodeMaterial.js`. Toggle with `?no-godrays`.
+- **GodRayShader** drives the scene-space moonlight beam mesh in `TavernWalls.js` (not the fullscreen composer); WebGPU uses `GodRayNodeMaterial.js`, built from the same `GodRayGraph.js`. Toggle with `?no-godrays`.
 - **Roadmap** lives in [GitHub Issues](https://github.com/ford442/webgl-diceroller/issues); `plan.md` is a pointer only.
 
 ## Cursor Cloud specific instructions
