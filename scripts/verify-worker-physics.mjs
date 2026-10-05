@@ -148,7 +148,9 @@ try {
     page.on('worker', (w) => {
         w.on('console', (m) => errors.push('worker ' + m.type() + ': ' + m.text()));
     });
-    await page.goto(`${BASE}/src/wasm/physicsFlags.js`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${BASE}/src/core-engine/wasm/physicsFlags.js`, {
+        waitUntil: 'domcontentloaded',
+    });
     result = await page.evaluate(async () => {
         try {
             // @ts-ignore — runtime-generated test module written just before this browser-side import runs.

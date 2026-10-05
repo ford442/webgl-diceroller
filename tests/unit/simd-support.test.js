@@ -7,8 +7,8 @@ import {
     WASM_SIMD_DIR,
     resolveWasmArtifactDir,
     wasmArtifactFallbackDirs,
-} from '../../src/wasm/wasmArtifact.js';
-import { WASM_SIMD_PROBE_BYTES, supportsWasmSimd } from '../../src/wasm/simdSupport.js';
+} from '../../src/core-engine/wasm/wasmArtifact.js';
+import { WASM_SIMD_PROBE_BYTES, supportsWasmSimd } from '../../src/core-engine/wasm/simdSupport.js';
 
 describe('WASM SIMD probe', () => {
     it('probe bytes start with the wasm magic \\0asm', () => {

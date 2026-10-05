@@ -4,7 +4,7 @@ import {
     DICE_PRESET_IDS,
     isHighQualityProfile,
 } from '../dice/DiceMaterials.js';
-import { MARKING_STYLES } from '../dice/DiceSetFormat.js';
+import { MARKING_STYLES } from '../core-engine/dice/DiceSetFormat.js';
 import { prefersReducedMotion } from '../core/AccessibilityPrefs.js';
 import { createHudPanel, hudSelect } from './hudPanel.js';
 
@@ -19,7 +19,7 @@ const DICE_TYPES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
  * behind it any more, so what the panel shows is what a share link carries.
  *
  * @param {object} hooks
- * @param {() => import('../dice/DiceSetFormat.js').DiceSet} hooks.getDiceSet
+ * @param {() => import('../core-engine/dice/DiceSetFormat.js').DiceSet} hooks.getDiceSet
  * @param {(dieKey: string, patch: object) => void} hooks.onEntryChange
  * @param {(type: string) => THREE.Mesh|null} hooks.getTemplateMesh
  * @param {(dieKey: string) => { materials: THREE.Material[], dispose: () => void }|null} [hooks.buildPreviewMaterials]

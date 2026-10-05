@@ -10,7 +10,7 @@ import {
     computeSeededThrowParams,
     applyThrowParams,
     createSeededRng,
-} from '../wasm/seededThrowParams.js';
+} from '../core-engine/wasm/seededThrowParams.js';
 import { TABLE_SURFACE_Y } from '../core/SceneMetrics.js';
 import { spawnedDice } from './DiceState.js';
 import { isUsingWasmPhysics, getSecureRandom } from './DicePhysicsPresets.js';

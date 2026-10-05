@@ -11,7 +11,7 @@
 
 /** @typedef {import('./types/dice').DiceReadValue} DiceReadValue */
 
-import { formatDieLabel } from './roll/Notation.js';
+import { formatDieLabel } from './core-engine/roll/Notation.js';
 import {
     prefersReducedMotion,
     resultCardStaggerMs,
@@ -166,7 +166,7 @@ export function showResults(diceResults) {
 
 /**
  * Show notation roll breakdown with kept/dropped highlighting.
- * @param {import('./roll/Notation.js').EvaluatedRoll} evaluated
+ * @param {import('./core-engine/roll/Notation.js').EvaluatedRoll} evaluated
  */
 export function showNotationResults(evaluated) {
     if (domResultsSuppressed) return;

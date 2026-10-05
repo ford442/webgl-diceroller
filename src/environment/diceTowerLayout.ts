@@ -8,7 +8,7 @@
  * a replay is only worth anything if it runs against the real geometry.
  */
 
-import type { SeededHopperFrame } from '../wasm/seededHopperDrop.js';
+import type { SeededHopperFrame } from '../core-engine/wasm/seededHopperDrop.js';
 
 export interface DiceTowerColliderSpec {
     type: 'box';

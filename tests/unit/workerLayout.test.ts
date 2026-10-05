@@ -42,8 +42,8 @@ import {
     idsOffset,
     sabSupported,
     xfOffset,
-} from '../../src/wasm/workerLayout.js';
-import { MAX_RECORD_LEN } from '../../src/wasm/workerCommands.js';
+} from '../../src/core-engine/wasm/workerLayout.js';
+import { MAX_RECORD_LEN } from '../../src/core-engine/wasm/workerCommands.js';
 
 describe('header layout', () => {
     it('has ten distinct Int32 header slots', () => {

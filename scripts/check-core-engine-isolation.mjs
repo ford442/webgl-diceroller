@@ -9,7 +9,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'core-engine');
+const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src');
+const ROOT = path.join(SRC, 'core-engine');
 
 const FORBIDDEN_SPECIFIERS = [
     /from\s+['"]three(?:\/[^'"]*)?['"]/,
@@ -67,6 +68,25 @@ for (const file of files) {
     }
 }
 
+// A module outside core-engine whose whole body is `export * from
+// '…/core-engine/…'` hides the Three-free boundary from its importers.
+// Call sites import src/core-engine/ directly instead.
+const PASSTHROUGH_LINE = /^export\s+(?:type\s+)?\*\s+from\s+['"][^'"]*\/core-engine\/[^'"]*['"];?$/;
+const shellFiles = (await walk(SRC)).filter((f) => !f.startsWith(ROOT + path.sep));
+for (const file of shellFiles) {
+    const lines = (await readFile(file, 'utf8'))
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/.*$/gm, '')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
+    if (lines.length && lines.every((l) => PASSTHROUGH_LINE.test(l))) {
+        violations.push(
+            `${path.relative(SRC, file)}: re-export barrel of core-engine — import src/core-engine/ directly`
+        );
+    }
+}
+
 if (violations.length) {
     console.error(
         '[check:core-engine] isolation failed:\n' + violations.map((v) => `  - ${v}`).join('\n')
@@ -75,5 +95,6 @@ if (violations.length) {
 }
 
 console.log(
-    `[check:core-engine] ${files.length} files in src/core-engine/ are three/DOM-import free.`
+    `[check:core-engine] ${files.length} files in src/core-engine/ are three/DOM-import free; ` +
+        `no core-engine re-export barrels in the other ${shellFiles.length} src/ files.`
 );

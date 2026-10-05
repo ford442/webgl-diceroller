@@ -14,7 +14,7 @@ import {
     resolveFaceValues,
     type DiceSetEntry,
     type GlyphSet,
-} from './DiceSetFormat.js';
+} from '../core-engine/dice/DiceSetFormat.js';
 
 /** How a glyph is drawn, once the atlas gets hold of it. */
 export type GlyphKind = 'text' | 'pips' | 'symbol';

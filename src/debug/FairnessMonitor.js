@@ -1,4 +1,4 @@
-import { DEFAULT_MIN_SAMPLE_SIZE } from '../roll/RollStats.js';
+import { DEFAULT_MIN_SAMPLE_SIZE } from '../core-engine/roll/RollStats.js';
 import { createHudPanel } from '../ui/hudPanel.js';
 
 const LABEL = '#e8c882';
@@ -129,4 +129,4 @@ export function createFairnessMonitor({
     };
 }
 
-export { computeChiSquared } from '../roll/RollStats.js';
+export { computeChiSquared } from '../core-engine/roll/RollStats.js';

@@ -12,9 +12,9 @@ import {
     applyDropParams,
     computeSeededHopperDropParams,
     type SeededHopperFrame,
-} from '../wasm/seededHopperDrop.js';
-import { generateRollSeed } from '../roll/ShareableRoll.js';
-import type { SeededDieRef } from '../wasm/seededThrowParams.js';
+} from '../core-engine/wasm/seededHopperDrop.js';
+import { generateRollSeed } from '../core-engine/roll/ShareableRoll.js';
+import type { SeededDieRef } from '../core-engine/wasm/seededThrowParams.js';
 
 const _axisX = new THREE.Vector3();
 const _axisY = new THREE.Vector3();

@@ -99,7 +99,7 @@ Rebuild-required UX: any behavioural solver change bumps `SOLVER_REVISION` in `d
 
 ## Protocol (DataChannel JSON)
 
-Default wire version: `PROTOCOL_VERSION = 1` ([`src/net/Protocol.ts`](src/net/Protocol.ts)). With `?fair-commit`, clients negotiate v2.
+Default wire version: `PROTOCOL_VERSION = 1` ([`src/net/Protocol.ts`](../src/net/Protocol.ts)). With `?fair-commit`, clients negotiate v2.
 
 | type                               | direction     | purpose                                                 |
 | ---------------------------------- | ------------- | ------------------------------------------------------- |
@@ -138,7 +138,7 @@ The Vite app serves:
 - `Cross-Origin-Opener-Policy: same-origin`
 - `Cross-Origin-Embedder-Policy: require-corp`
 
-so SharedArrayBuffer / worker physics stay available ([`vite.config.js`](vite.config.js)).
+so SharedArrayBuffer / worker physics stay available ([`vite.config.js`](../vite.config.js)).
 
 Implications:
 
@@ -166,15 +166,15 @@ Cup pours (`seed == null`) are not broadcast. Guests cannot roll (UI hint: “On
 
 ## Code map
 
-| Path                                                         | Role                                    |
-| ------------------------------------------------------------ | --------------------------------------- |
-| [`signaling/`](signaling/)                                   | Cloudflare Worker + `RoomDurableObject` |
-| [`src/net/Protocol.ts`](src/net/Protocol.ts)                 | Message codec                           |
-| [`src/net/CommitReveal.ts`](src/net/CommitReveal.ts)         | SHA-256 commit-reveal                   |
-| [`src/net/SignalingClient.ts`](src/net/SignalingClient.ts)   | HTTP/WS to Worker                       |
-| [`src/net/PeerMesh.js`](src/net/PeerMesh.js)                 | Star WebRTC + DataChannels              |
-| [`src/net/RoomSession.ts`](src/net/RoomSession.ts)           | Host/guest session                      |
-| [`src/session/SessionState.ts`](src/session/SessionState.ts) | Initiative / turn snapshot              |
-| [`src/app/SessionWiring.js`](src/app/SessionWiring.js)       | Session strip + `AppEvents`             |
-| [`src/ui/MultiplayerPanel.js`](src/ui/MultiplayerPanel.js)   | Create / join UI                        |
-| [`src/ui/SessionStrip.js`](src/ui/SessionStrip.js)           | Desktop turn strip                      |
+| Path                                                                            | Role                                    |
+| ------------------------------------------------------------------------------- | --------------------------------------- |
+| [`signaling/`](../signaling/)                                                   | Cloudflare Worker + `RoomDurableObject` |
+| [`src/net/Protocol.ts`](../src/net/Protocol.ts)                                 | Message codec                           |
+| [`src/core-engine/net/CommitReveal.ts`](../src/core-engine/net/CommitReveal.ts) | SHA-256 commit-reveal                   |
+| [`src/net/SignalingClient.ts`](../src/net/SignalingClient.ts)                   | HTTP/WS to Worker                       |
+| [`src/net/PeerMesh.js`](../src/net/PeerMesh.js)                                 | Star WebRTC + DataChannels              |
+| [`src/net/RoomSession.ts`](../src/net/RoomSession.ts)                           | Host/guest session                      |
+| [`src/session/SessionState.ts`](../src/session/SessionState.ts)                 | Initiative / turn snapshot              |
+| [`src/app/SessionWiring.js`](../src/app/SessionWiring.js)                       | Session strip + `AppEvents`             |
+| [`src/ui/MultiplayerPanel.js`](../src/ui/MultiplayerPanel.js)                   | Create / join UI                        |
+| [`src/ui/SessionStrip.js`](../src/ui/SessionStrip.js)                           | Desktop turn strip                      |

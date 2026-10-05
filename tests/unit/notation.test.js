@@ -16,7 +16,7 @@ import {
     getRerollRespawnSpecs,
     mapPercentileComponent,
     parseNotation,
-} from '../../src/roll/Notation.js';
+} from '../../src/core-engine/roll/Notation.js';
 
 describe('parseNotation', () => {
     it('parses 3d6+2', () => {

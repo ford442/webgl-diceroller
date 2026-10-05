@@ -9,7 +9,7 @@ import {
     DIE_SIDES,
     computeChiSquared,
     createRollStats,
-} from '../../src/roll/RollStats.js';
+} from '../../src/core-engine/roll/RollStats.js';
 
 beforeEach(() => {
     localStorage.clear();
