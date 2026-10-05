@@ -46,6 +46,7 @@ import {
 import { formatSolverBuildId } from './wasm/SolverBuildId.js';
 import { createInProcessPhysicsSession } from './wasm/WasmPhysicsBridge.js';
 import type { PhysicsEngine } from './wasm/physicsTypes.js';
+import { applyWorld, type WorldFixture } from './wasm/WorldRecorder.js';
 import { WASM_SCALAR_DIR, WASM_SIMD_DIR, type WasmArtifactDir } from './wasm/wasmArtifact.js';
 
 const FIXED_DT = 1 / 120;
@@ -94,6 +95,12 @@ export interface RollHeadlessOptions {
     fairDice?: boolean;
     /** Pipping bias ratio (the app's `?bias-ratio=`); defaults to 0.0075. */
     massBiasRatio?: number;
+    /**
+     * A recorded collider world (tests/fixtures/tavern-world.json, see
+     * WorldRecorder) to roll into instead of the bare analytic table — its
+     * own `init` replaces the default one.
+     */
+    world?: WorldFixture;
 }
 
 /** The URL flags an app page would carry for these options. */
@@ -321,7 +328,18 @@ export async function rollHeadless(
     }
 
     const engine = session.engine;
-    engine.init(PHYSICS_GRAVITY, PHYSICS_TABLE_Y, PHYSICS_TABLE_HALF, PHYSICS_TABLE_HALF);
+    const worldInit = options.world?.init;
+    if (worldInit) {
+        engine.init(
+            worldInit.gravity,
+            worldInit.tableY,
+            worldInit.tableHalfW,
+            worldInit.tableHalfD
+        );
+    } else {
+        engine.init(PHYSICS_GRAVITY, PHYSICS_TABLE_Y, PHYSICS_TABLE_HALF, PHYSICS_TABLE_HALF);
+    }
+    if (options.world) applyWorld(engine, options.world);
 
     const parsed = parseNotation(expression);
     const set = diceSet ?? createDefaultDiceSet();

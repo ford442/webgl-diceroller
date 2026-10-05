@@ -71,7 +71,7 @@ static constexpr int MAX_TICKS_PER_STEP = 8;
 static constexpr double FIXED_DT_EPSILON = 1e-6;
 
 /** Snapshot + solver protocol. Bump when manifolds / impulses change behaviour. */
-static constexpr uint32_t SOLVER_REVISION = 9;
+static constexpr uint32_t SOLVER_REVISION = 10;
 
 enum class ManifoldKind : uint8_t {
     DieDie = 0,

@@ -4,7 +4,12 @@
  * after the roll session and table layout are ready.
  */
 
-import { isWasmAvailable, getWasmEngine, readSleepDiagnostics } from '../wasm/PhysicsBridge.js';
+import {
+    isWasmAvailable,
+    getWasmEngine,
+    getWorldRecorder,
+    readSleepDiagnostics,
+} from '../wasm/PhysicsBridge.js';
 import {
     decodeSleepDiagnostics,
     summarizeSleepDiagnostics,
@@ -54,6 +59,7 @@ export function installDebugGlobals(app, deps) {
         const engine = isWasmAvailable() ? getWasmEngine() : null;
         const bodies = decodeSleepDiagnostics(await readSleepDiagnostics());
         return {
+            dieLog: getWorldRecorder()?.dieLog().slice(-20) ?? [],
             engineDieCount: engine?.getDieCount() ?? 0,
             spawnedDice: spawnedDice.length,
             settled: areDiceSettled(),
@@ -79,6 +85,10 @@ export function installDebugGlobals(app, deps) {
     // idle → rolling → settled | timedOut, with counters (RollWiring).
     app.getRollState = () => rollWiring.getRollState();
     app.physics.forceNoSettle = (value = true) => setForceNoSettle(value);
+    // ?test only: the collider world the page built (tests/fixtures/tavern-world.json)
+    // and the recent die add/remove log for "engine has 0 dice" failures.
+    app.physics.exportWorld = () => getWorldRecorder()?.exportWorld() ?? null;
+    app.physics.getDieLog = () => getWorldRecorder()?.dieLog() ?? [];
     app.getActiveDiceSet = getActiveDiceSet;
     // Documented for Playwright: patch one die's descriptor entry and the table
     // re-dresses without reloading an asset.

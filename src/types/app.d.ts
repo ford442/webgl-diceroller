@@ -201,6 +201,7 @@ export interface AppContextPhysics {
     isWasmAvailable: (() => boolean) | null;
     /** Debug/test only (`DebugGlobals`): per-body sleep state, for settle timeouts. */
     getSleepDiagnostics?: () => Promise<{
+        dieLog: import('../core-engine/wasm/WorldRecorder').DieLogEntry[];
         engineDieCount: number;
         spawnedDice: number;
         settled: boolean;
@@ -209,6 +210,9 @@ export interface AppContextPhysics {
     }>;
     /** Test hook: report every roll as still moving, to exercise the settle timeout. */
     forceNoSettle?: (value?: boolean) => void;
+    /** `?test` only: the collider world the page registered (WorldRecorder). */
+    exportWorld?: () => import('../core-engine/wasm/WorldRecorder').WorldFixture | null;
+    getDieLog?: () => import('../core-engine/wasm/WorldRecorder').DieLogEntry[];
 }
 
 export interface AppContextDice {

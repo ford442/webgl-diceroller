@@ -9,6 +9,7 @@
 #include "third_party/doctest.h"
 
 #include "dice_physics_engine.hpp"
+#include "test_support/mini_json.hpp"
 
 #include <cstdlib>
 #include <cstring>
@@ -82,8 +83,11 @@ TowerFixture addDiceTowerStatics(DicePhysicsEngine& engine, const Vec3& origin) 
     const float frontH = H / 3.0f;
     const float rampThick = 0.2f;
     const float rampW = W - T * 2.0f - 0.1f;
-    const float rampLen = D * 0.9f;
     const float trayDepth = 8.0f, trayHeight = 2.0f;
+    // Ramps as diceTowerLayout.ts builds them: each spans from its wall
+    // (embedded 0.3) to CHUTE_MIN_CLEARANCE short of the opposite wall.
+    const float zBack = -D / 2 + T, zFront = D / 2 - T;
+    const float clearance = 2.4f, embed = 0.3f, angle = 0.6f;
     const float trayZ = D / 2.0f + trayDepth / 2.0f - T;
 
     int userId = 1;
@@ -98,9 +102,14 @@ TowerFixture addDiceTowerStatics(DicePhysicsEngine& engine, const Vec3& origin) 
     box(-W / 2 + T / 2, H / 2, 0, T / 2, H / 2, D / 2, 0);              // left wall
     box(W / 2 - T / 2, H / 2, 0, T / 2, H / 2, D / 2, 0);               // right wall
     box(0, H - frontH / 2, D / 2 - T / 2, W / 2, frontH / 2, T / 2, 0); // front (upper third)
-    box(0, 11, -0.5f, rampW / 2, rampThick / 2, rampLen / 2, 0.6f);
-    box(0, 7, 0.5f, rampW / 2, rampThick / 2, rampLen / 2, -0.6f);
-    box(0, 3, -0.5f, rampW / 2, rampThick / 2, (rampLen + 1.0f) / 2, 0.6f);
+    auto ramp = [&](float y, float zHigh, float zLow) {
+        const float halfLen = std::abs(zLow - zHigh) / std::cos(angle) / 2.0f;
+        box(0, y, (zHigh + zLow) / 2, rampW / 2, rampThick / 2, halfLen,
+            zLow > zHigh ? angle : -angle);
+    };
+    ramp(11, zBack - embed, zFront - clearance);
+    ramp(7, zFront + embed, zBack + clearance);
+    ramp(3, zBack - embed, zFront - 0.3f);
     box(0, T / 2, trayZ, W / 2, T / 2, trayDepth / 2, 0);                              // tray floor
     box(-W / 2 + T / 2, trayHeight / 2, trayZ, T / 2, trayHeight / 2, trayDepth / 2, 0);
     box(W / 2 - T / 2, trayHeight / 2, trayZ, T / 2, trayHeight / 2, trayDepth / 2, 0);
@@ -591,8 +600,8 @@ TEST_CASE("Golden traces: seed and parity hashes are stable") {
     // Hashes below are SOLVER_REVISION-pinned; regenerate with
     // `solver_tests --dump-golden` (see scripts/compare-solver-golden.mjs and
     // tests/fixtures/solver-golden.json) whenever SOLVER_REVISION bumps.
-    CHECK(p1.hashSerializedState() == 0xeaf4036c7b67ac50ULL);
-    CHECK(a.hashSerializedState() == 0xfbb7051c8f2f80aaULL);
+    CHECK(p1.hashSerializedState() == 0xa1d45868a58d37daULL);
+    CHECK(a.hashSerializedState() == 0xbacbcf9091d212f9ULL);
 }
 
 TEST_CASE("Determinism: same seed yields identical serialize output") {
@@ -1009,7 +1018,7 @@ TEST_CASE("Swept contacts: a thin wall holds at substeps discrete SAT cannot see
     }
 }
 
-TEST_CASE("Dice tower: a hopper drop never leaves the chute through a ramp") {
+TEST_CASE("Dice tower: a hopper drop passes the chute and settles in the tray") {
     // The acceptance case for a seeded tower dump: a d20 posed at the hopper
     // mouth with a small downward kick has to stay inside the tower. Dropping
     // below the tray floor, or outside the shaft's footprint, means it passed
@@ -1042,6 +1051,12 @@ TEST_CASE("Dice tower: a hopper drop never leaves the chute through a ramp") {
             // Outside the shaft in X => it went through a side wall.
             CHECK(std::abs(x - towerOrigin.x) < tower.footprintHalfX);
         }
+        // And it finishes: through every ramp and asleep in the catch tray,
+        // in front of the shaft (#341 — the old chute wedged every d20).
+        float x = 0, y = 0, z = 0;
+        CHECK(engine.getDiePosition(id, x, y, z));
+        CHECK_MESSAGE(engine.areAllSettled(), "trial " << trial << " still moving at y=" << y);
+        CHECK_MESSAGE(z > towerOrigin.z + 2.5f, "trial " << trial << " stuck in the shaft at z=" << z);
     }
 }
 
@@ -1204,6 +1219,188 @@ TEST_CASE("Resting contact: a dynamic box on a thin static box sleeps at the rig
     REQUIRE(xf.size() == 7);
     CHECK_MESSAGE(asleep, "dynamic box never slept; y=" << xf[1]);
     CHECK(xf[1] == doctest::Approx(1.3f).epsilon(0.0125));
+}
+
+// ---------------------------------------------------------------------------
+// Tavern world (#341): the collider set the app actually registers, exported
+// by `npm run fixture:world` to tests/fixtures/tavern-world.json, with the
+// shipped dice hulls and the app's own throw parameters. The bare solver
+// settling on a plane says nothing about this world; this test does.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+struct TavernWorld {
+    mini_json::Value world;
+    mini_json::Value hulls;
+};
+
+const TavernWorld& tavernWorld() {
+    static const TavernWorld w{
+        mini_json::parseFile("tests/fixtures/tavern-world.json"),
+        mini_json::parseFile("public/wasm/hulls.json"),
+    };
+    return w;
+}
+
+void applyTavernWorld(DicePhysicsEngine& engine, const mini_json::Value& world) {
+    const auto& init = world["init"];
+    engine.init(init["gravity"].f(), init["tableY"].f(), init["tableHalfW"].f(),
+                init["tableHalfD"].f());
+    for (const auto& s : world["statics"].array) {
+        const std::string& type = s["type"].string;
+        const int id = s["id"].i();
+        const int mat = s["material"].i();
+        if (type == "box") {
+            const auto c = s["center"].floats(), h = s["halfExtents"].floats(),
+                       q = s["rotation"].floats();
+            REQUIRE(engine.addStaticBox(id, c[0], c[1], c[2], h[0], h[1], h[2], q[0], q[1], q[2],
+                                        q[3], mat) == id);
+        } else if (type == "plane") {
+            const auto n = s["normal"].floats();
+            REQUIRE(engine.addStaticPlane(id, n[0], n[1], n[2], s["dist"].f(), mat) == id);
+        } else if (type == "convexHull") {
+            const auto c = s["center"].floats(), q = s["rotation"].floats();
+            REQUIRE(engine.addStaticConvexHull(id, c[0], c[1], c[2], q[0], q[1], q[2], q[3],
+                                               s["vertices"].floats(), mat) == id);
+        } else if (type == "openCylinder") {
+            const auto c = s["center"].floats();
+            REQUIRE(engine.addStaticOpenCylinder(id, c[0], c[1], c[2], s["radius"].f(),
+                                                 s["halfHeight"].f(), s["segments"].i(),
+                                                 s["closedBottom"].boolean, mat) == id);
+        }
+    }
+    for (const auto& d : world["dynamics"].array) {
+        const int id = d["id"].i();
+        const auto c = d["center"].floats(), q = d["rotation"].floats();
+        if (d["type"].string == "box") {
+            const auto h = d["halfExtents"].floats();
+            REQUIRE(engine.addDynamicBox(id, d["mass"].f(), c[0], c[1], c[2], h[0], h[1], h[2],
+                                         q[0], q[1], q[2], q[3], d["material"].i()) == id);
+        } else {
+            REQUIRE(engine.addDynamicHull(id, d["mass"].f(), c[0], c[1], c[2], q[0], q[1], q[2],
+                                          q[3], d["vertices"].floats(),
+                                          d["material"].i()) == id);
+        }
+    }
+}
+
+std::vector<float> shippedHull(int sides) {
+    const auto& entry = tavernWorld().hulls["d" + std::to_string(sides)];
+    std::vector<float> flat;
+    for (const auto& v : entry["vertices"].array) {
+        flat.push_back(v[0].f());
+        flat.push_back(v[1].f());
+        flat.push_back(v[2].f());
+    }
+    return flat;
+}
+
+/** THREE.js XYZ Euler → quaternion (eulerToQuaternion in seededThrowParams.ts). */
+Quat eulerXYZ(float ex, float ey, float ez) {
+    const float c1 = std::cos(ex / 2), c2 = std::cos(ey / 2), c3 = std::cos(ez / 2);
+    const float s1 = std::sin(ex / 2), s2 = std::sin(ey / 2), s3 = std::sin(ez / 2);
+    return Quat{s1 * c2 * c3 + c1 * s2 * s3, c1 * s2 * c3 - s1 * c2 * s3,
+                c1 * c2 * s3 + s1 * s2 * c3, c1 * c2 * c3 - s1 * s2 * s3};
+}
+
+/**
+ * computeSeededThrowParams + applyThrowParams, drawing from the engine RNG in
+ * the same order the worker does (seededThrowParams.ts). TABLE_SURFACE_Y = 1.
+ */
+void seededThrow(DicePhysicsEngine& engine, uint64_t seed, const std::vector<int>& ids) {
+    const float tableSurfaceY = 1.0f;
+    const float twoPi = 6.28318530718f;
+    engine.seedRNG(seed);
+    for (size_t index = 0; index < ids.size(); ++index) {
+        const float x = (engine.randomFloat() - 0.5f) * 4.0f;
+        const float y = tableSurfaceY + 6.75f + static_cast<float>(index) * 0.5f;
+        const float z = (engine.randomFloat() - 0.5f) * 4.0f;
+        const float ex = engine.randomFloat() * twoPi;
+        const float ey = engine.randomFloat() * twoPi;
+        const float ez = engine.randomFloat() * twoPi;
+        const Quat q = eulerXYZ(ex, ey, ez);
+        const float fx = (engine.randomFloat() - 0.5f) * 25.0f;
+        const float fy = engine.randomFloat() * 10.0f - 5.0f;
+        const float fz = (engine.randomFloat() - 0.5f) * 25.0f;
+        const float sx = (engine.randomFloat() - 0.5f) * 100.0f;
+        const float sy = (engine.randomFloat() - 0.5f) * 100.0f;
+        const float sz = (engine.randomFloat() - 0.5f) * 100.0f;
+        const int id = ids[index];
+        engine.setDieTransform(id, x, y, z, q.x, q.y, q.z, q.w);
+        engine.setDieVelocity(id, 0, 0, 0, 0, 0, 0);
+        engine.applyImpulse(id, fx, fy, fz);
+        engine.applyTorqueImpulse(id, sx, sy, sz);
+    }
+}
+
+std::string describeAwake(DicePhysicsEngine& engine) {
+    std::ostringstream out;
+    const auto& d = engine.buildSleepDiagnostics();
+    const int stride = DicePhysicsEngine::SLEEP_DIAG_STRIDE;
+    for (size_t r = 0; (r + 1) * static_cast<size_t>(stride) <= d.size(); ++r) {
+        const float* q = d.data() + r * static_cast<size_t>(stride);
+        if (q[2] != 0.0f || q[3] != 0.0f) continue;
+        out << (q[0] == 0.0f ? " die " : " dynamic ") << q[1] << ": v=" << q[4]
+            << " spin=" << q[5] << " islandKE=" << q[8] << " pts=" << q[11] << " touching";
+        for (int k = 0; k < DicePhysicsEngine::SLEEP_DIAG_MANIFOLDS; ++k) {
+            const float* m = q + 13 + k * 4;
+            if (m[0] < 0.0f) break;
+            out << " (kind " << m[0] << " #" << m[1] << " sep " << m[3] << ")";
+        }
+        out << ";";
+    }
+    return out.str();
+}
+
+} // namespace
+
+TEST_CASE("Tavern world: every seeded throw sleeps within 12 s of simulated time") {
+    const auto& world = tavernWorld().world;
+    REQUIRE(world["version"].i() == 1);
+    const int sidesCycle[] = {20, 6, 4, 8, 10, 12};
+    // FUZZ_SEEDS overrides the default 200 (capped at 2000).
+    const char* env = std::getenv("FUZZ_SEEDS");
+    int seeds = env ? std::atoi(env) : 200;
+    if (seeds < 1) seeds = 200;
+    seeds = std::min(seeds, 2000);
+    int failures = 0;
+    std::vector<int> settleFrames;
+    for (int k = 0; k < seeds; ++k) {
+        const uint64_t seed = 0x5EED0000ULL + static_cast<uint64_t>(k) * 7919ULL;
+        DicePhysicsEngine engine;
+        applyTavernWorld(engine, world);
+        const int count = 1 + k % 6;
+        std::vector<int> ids;
+        for (int n = 0; n < count; ++n) {
+            const int sides = sidesCycle[(k + n) % 6];
+            const int id = engine.addDie(sides, 0.0f, 8.0f, 0.0f);
+            engine.setDieHull(id, shippedHull(sides));
+            ids.push_back(id);
+        }
+        seededThrow(engine, seed, ids);
+        int frame = 0;
+        const int maxFrames = 60 * 12;
+        for (; frame < maxFrames; ++frame) {
+            engine.step(1.0f / 60.0f);
+            if (engine.areAllSettled()) break;
+        }
+        REQUIRE(engine.allBodyStatesFinite());
+        if (frame >= maxFrames) {
+            ++failures;
+            MESSAGE("seed " << seed << " (" << count << " dice) awake after 12 s:"
+                            << describeAwake(engine));
+        } else {
+            settleFrames.push_back(frame);
+        }
+    }
+    if (!settleFrames.empty()) {
+        std::sort(settleFrames.begin(), settleFrames.end());
+        MESSAGE("tavern world: " << settleFrames.size() << "/" << seeds << " settled; median "
+                                 << settleFrames[settleFrames.size() / 2] / 60.0f << " s, max "
+                                 << settleFrames.back() / 60.0f << " s");
+    }
+    CHECK(failures == 0);
 }
 
 TEST_CASE("Static box: die bounces off wall without tunneling") {

@@ -9,6 +9,7 @@ export {
     getPhysicsStepStats,
     getWasmEngine,
     getWorkerPhysicsStats,
+    getWorldRecorder,
     isUsingSharedArrayBuffer,
     isUsingWorkerPhysics,
     isWasmAvailable,

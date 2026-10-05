@@ -57,6 +57,8 @@
         "test:wasm-authoritative": "node tests/wasm-authoritative.js",
         "test:wasm-gameplay-loop": "node tests/wasm-gameplay-loop.mjs",
         "test:a11y": "node tests/a11y.js",
+        "fixture:world": "node scripts/export-collider-fixture.mjs",
+        "test:tavern-world": "TAVERN_SEEDS=200 vitest run tests/unit/tavernWorldSettle.test.ts",
         "test:solver": "bash src/wasm/build_solver_test.sh",
         "signal:dev": "npm --prefix signaling run dev",
         "signal:deploy": "npm --prefix signaling run deploy"

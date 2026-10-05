@@ -33,9 +33,13 @@ function createStubContext2D(canvas) {
     );
 }
 
-// Cast through `any`: the stub only implements the '2d' overload, which does
-// not satisfy the full overloaded getContext() signature.
-/** @type {any} */ (HTMLCanvasElement.prototype).getContext = function getContext(type) {
-    if (type === '2d') return createStubContext2D(this);
-    return null;
-};
+// Skipped for files that opt into `// @vitest-environment node` (no DOM),
+// such as the WASM rollHeadless tests.
+if (typeof HTMLCanvasElement !== 'undefined') {
+    // Cast through `any`: the stub only implements the '2d' overload, which does
+    // not satisfy the full overloaded getContext() signature.
+    /** @type {any} */ (HTMLCanvasElement.prototype).getContext = function getContext(type) {
+        if (type === '2d') return createStubContext2D(this);
+        return null;
+    };
+}

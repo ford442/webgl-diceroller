@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 
 namespace dice_physics {
 
@@ -125,7 +126,7 @@ const std::vector<float>& DicePhysicsEngine::buildSleepDiagnostics() {
         rec[11] = static_cast<float>(points);
         rec[12] = refs.empty() ? 0.0f : refs.front().deepest;
         for (int k = 0; k < SLEEP_DIAG_MANIFOLDS && k < static_cast<int>(refs.size()); ++k) {
-            float* slot = rec + 13 + k * 4;
+            float* slot = rec + 13 + static_cast<ptrdiff_t>(k) * 4;
             slot[0] = static_cast<float>(refs[static_cast<size_t>(k)].kind);
             slot[1] = static_cast<float>(refs[static_cast<size_t>(k)].otherId);
             slot[2] = static_cast<float>(refs[static_cast<size_t>(k)].materialTag);
