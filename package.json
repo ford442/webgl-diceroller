@@ -59,6 +59,7 @@
         "test:unit": "vitest run --project dice-core --project ui",
         "test:unit:coverage": "vitest run --project dice-core --project ui --coverage",
         "test:unit:wasm": "vitest run --project dice-core-wasm",
+        "test:unit:wasm:coverage": "DICE_CORE_COVERAGE=1 vitest run --project dice-core --project dice-core-wasm --coverage",
         "test:share-roll-replay": "node tests/share-roll-replay.js",
         "test:roll-timeout": "node tests/roll-timeout.js",
         "test:wasm-authoritative": "node tests/wasm-authoritative.js",

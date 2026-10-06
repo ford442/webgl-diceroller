@@ -139,6 +139,19 @@ jobs:
                   version: ${{ env.EMSDK_VERSION }}
                   actions-cache-folder: emsdk-cache
             - run: npm run build:wasm
+            # Rooms compare solverBuildId at join; the SIMD and scalar builds
+            # must carry the same content-addressed id (build.sh) or a SIMD
+            # host and a scalar guest could never share a table.
+            - name: Both builds carry one content-addressed solverBuildId
+              run: |
+                  python3 - <<'PY'
+                  import json, re
+                  ids = [json.load(open(f"public/{d}/build-info.json")).get("solver_build_id")
+                         for d in ("wasm", "wasm-scalar")]
+                  print("solverBuildId:", ids)
+                  assert ids[0] == ids[1], ids
+                  assert re.fullmatch(r"[1-9][0-9]*:[0-9a-f]{12}", ids[0] or ""), ids
+                  PY
             - run: bash scripts/verify-emcc-flags-sync.sh
             - run: BENCH_SOLVER=1 npm run test:solver
             - run: node scripts/bench-solver-wasm.mjs | tee bench-results.txt
@@ -160,6 +173,42 @@ jobs:
                   name: solver-bench
                   path: bench-results.txt
                   retention-days: 7
+
+    # The dice-core vitest projects with the compiled engine present: the
+    # dice-core-wasm project's setup throws without public/wasm*, so nothing
+    # here can report green having rolled nothing. Coverage is measured on
+    # the package alone, against its own floor (vitest.config.js).
+    unit-wasm:
+        name: Unit (dice-core + WASM)
+        needs: build-wasm
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 24
+                  cache: npm
+            - run: npm ci
+            - name: Download WASM artifacts
+              uses: actions/download-artifact@v7
+              with:
+                  name: wasm-artifacts
+                  # Extract under public/ — see the verify job below.
+                  path: public
+            - run: npm run test:unit:wasm:coverage
+            - run: npm run build:dice-core
+            # The Node entry the #315 consumers import, from tsc's dist/ (no
+            # source condition, no tsx): it must load hulls and read faces.
+            - name: Plain Node imports dice-core/node and rolls
+              run: |
+                  node --input-type=module -e "
+                  const { rollHeadless } = await import('dice-core/node');
+                  const r = await rollHeadless('4d6', 777);
+                  const faces = r.results.map((d) => d.naturalValue);
+                  console.log('4d6 seed 777 ->', faces, r.trace.solverBuildId);
+                  if (faces.length !== 4 || faces.some((f) => !(f >= 1 && f <= 6))) process.exit(1);
+                  "
 
     test-solver:
         name: Native solver unit + fuzz + clang-tidy

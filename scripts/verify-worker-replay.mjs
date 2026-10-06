@@ -249,7 +249,10 @@ if (result?.ok && wasmArtifactsPresent()) {
         failures.push(`rollHeadless solverBuildId is ${headless.trace.solverBuildId}`);
     }
 } else if (result?.ok) {
-    console.log('[verify] skipping rollHeadless compare (WASM artifacts not present)');
+    // CI downloads the artifacts; a miss there means the check silently
+    // compared nothing, so it is a failure, not a skip.
+    if (process.env.CI) failures.push('WASM artifacts missing: rollHeadless compare did not run');
+    else console.log('[verify] skipping rollHeadless compare (WASM artifacts not present)');
 }
 
 if (failures.length) {

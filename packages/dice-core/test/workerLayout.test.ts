@@ -208,6 +208,7 @@ describe('double-buffer tear-free reads under real concurrency', () => {
             const H_FRONT = ${H_FRONT};
             const H_COUNT = ${H_COUNT};
             const H_SETTLED = ${H_SETTLED};
+            const H_SEQNO = ${H_SEQNO};
             const sleepPad = new Int32Array(new SharedArrayBuffer(4));
             let front = 0;
             for (let g = 1; g <= ${GENERATIONS}; g++) {
@@ -220,6 +221,7 @@ describe('double-buffer tear-free reads under real concurrency', () => {
                 const newFront = front === 0 ? 1 : 0;
                 Atomics.store(header, H_COUNT, g);
                 Atomics.store(header, H_FRONT, newFront);
+                Atomics.add(header, H_SEQNO, 1); // as publishSAB() does
                 front = newFront;
                 Atomics.wait(sleepPad, 0, 0, 1);
             }
@@ -235,14 +237,26 @@ describe('double-buffer tear-free reads under real concurrency', () => {
 
         const tears: Array<{ front: number; values: number[] }> = [];
         const seenGenerations = new Set<number>();
+        let laps = 0;
+        let reads = 0;
         const deadline = Date.now() + 10000;
 
         while (Atomics.load(header, H_SETTLED) === 0 && Date.now() < deadline) {
+            const seqBefore = Atomics.load(header, H_SEQNO);
             const front = Atomics.load(header, H_FRONT);
             const view = front === 1 ? ids1 : ids0;
             // Snapshot immediately — it's a zero-copy view into shared
             // memory and the worker keeps writing after this read.
             const snapshot = view.slice(0, 8);
+            // Two flips during the read mean the writer lapped us and refilled
+            // the buffer we were reading — the case the double buffer does not
+            // claim to cover (frame pacing rules it out in the app; a reader
+            // descheduled for >1 ms here, e.g. under coverage, does not).
+            if (Atomics.load(header, H_SEQNO) - seqBefore >= 2) {
+                laps++;
+                continue;
+            }
+            reads++;
             const first = snapshot[0];
             seenGenerations.add(first);
             for (const value of snapshot) {
@@ -258,7 +272,9 @@ describe('double-buffer tear-free reads under real concurrency', () => {
 
         expect(tears).toEqual([]);
         // Sanity check the loop actually raced across multiple generations
-        // rather than trivially reading once before the worker started.
+        // rather than trivially reading once before the worker started, and
+        // that laps stayed the exception rather than hiding every read.
         expect(seenGenerations.size).toBeGreaterThan(1);
+        expect(reads).toBeGreaterThan(laps);
     }, 15000);
 });

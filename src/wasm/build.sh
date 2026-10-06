@@ -131,6 +131,49 @@ write_build_info() {
 EOF
 }
 
+# solverBuildId = "<solver_revision>:<first 12 hex of sha256(.wasm)>". Rooms
+# compare it at join (RoomSession / RoomDurableObject), so it must name what
+# decides a roll — the solver source *and* the codegen — and nothing else:
+# the same engine rebuilt at a docs-only commit keeps its id, a different
+# emsdk or flag set gets a new one. The SIMD build is canonical and its id is
+# written into the scalar build-info too: the two are bit-identical
+# (compare-solver-simd's hull pile, the dice-core goldens), so a SIMD host
+# and a scalar guest share a room. A single-target build hashes what it
+# built and says so (`solver_build_id_canonical: false`).
+sha256_12() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | cut -c1-12
+    else
+        shasum -a 256 "$1" | cut -c1-12
+    fi
+}
+
+stamp_solver_build_id() {
+    local source_rel="$1"
+    local canonical="$2"
+    shift 2
+    local source_wasm="${REPO_ROOT}/public/${source_rel}"
+    local solver_revision id
+    solver_revision="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["solver_revision"])' "$(dirname "${source_wasm}")/build-info.json")"
+    id="${solver_revision}:$(sha256_12 "${source_wasm}")"
+    local out_dir
+    for out_dir in "$@"; do
+        python3 - "${out_dir}/build-info.json" "${id}" "${source_rel}" "${canonical}" <<'PY'
+import json, sys
+path, build_id, source, canonical = sys.argv[1:5]
+with open(path) as f:
+    info = json.load(f)
+info["solver_build_id"] = build_id
+info["solver_build_id_source"] = source
+info["solver_build_id_canonical"] = canonical == "true"
+with open(path, "w") as f:
+    json.dump(info, f, indent=2)
+    f.write("\n")
+PY
+    done
+    echo "[build:wasm] solverBuildId ${id} (from ${source_rel}) → $*"
+}
+
 compile_profile() {
     local profile="$1"
     local out_dir="$2"
@@ -151,14 +194,19 @@ case "${MODE}" in
     both)
         compile_profile release "${REPO_ROOT}/public/wasm"
         compile_profile release-scalar "${REPO_ROOT}/public/wasm-scalar"
+        stamp_solver_build_id wasm/dice_physics.wasm true \
+            "${REPO_ROOT}/public/wasm" "${REPO_ROOT}/public/wasm-scalar"
         ;;
     simd)
         compile_profile release "${REPO_ROOT}/public/wasm"
+        stamp_solver_build_id wasm/dice_physics.wasm true "${REPO_ROOT}/public/wasm"
         ;;
     scalar)
         compile_profile release-scalar "${REPO_ROOT}/public/wasm-scalar"
+        stamp_solver_build_id wasm-scalar/dice_physics.wasm false "${REPO_ROOT}/public/wasm-scalar"
         ;;
     debug)
         compile_profile debug "${REPO_ROOT}/public/wasm"
+        stamp_solver_build_id wasm/dice_physics.wasm false "${REPO_ROOT}/public/wasm"
         ;;
 esac

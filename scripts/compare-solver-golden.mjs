@@ -10,6 +10,7 @@
 import { spawn } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -84,8 +85,18 @@ console.log('[compare-solver-golden] Native dump matches tests/fixtures/solver-g
 
 const wasmJs = path.join(REPO_ROOT, 'public/wasm/dice_physics.js');
 const wasmBin = path.join(REPO_ROOT, 'public/wasm/dice_physics.wasm');
-try {
-    await readFile(wasmJs);
+// Only a missing artifact is a skip (and only outside CI). Anything thrown
+// while loading or running a present one used to be swallowed as "not
+// present" too, so a broken engine reported green.
+if (!existsSync(wasmJs) || !existsSync(wasmBin)) {
+    if (process.env.CI) {
+        console.error('[compare-solver-golden] FAIL: public/wasm artifacts missing in CI.');
+        process.exit(1);
+    }
+    console.log(
+        '[compare-solver-golden] Skipping WASM golden (public/wasm artifacts not present).'
+    );
+} else {
     const wasmBinary = new Uint8Array(await readFile(wasmBin));
     const createModule = (await import(pathToFileURL(wasmJs).href)).default;
     const factory = await createModule({ wasmBinary });
@@ -106,8 +117,4 @@ try {
         process.exit(1);
     }
     console.log('[compare-solver-golden] WASM parity-fixed hash matches fixture');
-} catch {
-    console.log(
-        '[compare-solver-golden] Skipping WASM golden (public/wasm artifacts not present).'
-    );
 }
