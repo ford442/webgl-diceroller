@@ -111,6 +111,7 @@ npm run format:check        # Prettier check (CI)
     - `?pr=N` sets render pixel ratio (clamped to `[0.5, 3]`); default is `min(devicePixelRatio, 2)`. At `pr=1` MSAA is enabled; above 1.0 FXAA is used in the post chain instead.
     - Pixel ratio auto step-down: when sustained frame times exceed ~32 ms, ratio steps down toward 1.0 (skipped when `?pr=` forces a ratio).
     - Software WebGL rasterizers (SwiftShader, llvmpipe, etc.) auto-enable the `low-post` profile.
+    - Context attributes come from the boot `DeviceSession` (`src/core/DeviceSession.ts`): `?xr`, touch, low core count, or a software rasterizer request `low-power`; desktop stays `high-performance`. The WebGL software probe (`low-power` WebGL2, awaited `webglcontextlost`) never runs on the WebGPU path, and a failed curated WebGPU device falls back to WebGL instead of a device-less `WebGPURenderer`. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Device session).
     - GPU context/device loss surfaces the renderer badge and attempts WebGL fallback recovery.
     - `?no-post` disables the composer entirely (both renderers).
     - `?low-post` keeps post enabled but lowers bloom quality (both renderers).
@@ -149,6 +150,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MU
 - Ambient bed: looping room rumble, irregular fire crackle, rare wood creak; louder in pointer-lock FPS mode via `setAmbientIntensity`.
 - Master volume slider + mute toggle in `ui.js` (persisted in `localStorage`). Hard impacts near the billiard lamp trigger a shade jiggle + faint chain click.
 - Audio starts suspended and resumes on the first pointer or key event. Under `?test` the engine's noise/jitter PRNG is seeded deterministically.
+- The `AudioContext` is created with the `DeviceSession` audio options (`latencyHint: 'interactive'`, `sampleRate: 48000`), falling back to the device rate if the browser rejects it; the worklet and room IR always use the context's actual rate. `getStats()` reports `sampleRate`, `requestedSampleRate`, `latencyHint`, and `baseLatency`.
 - `getStats()` reports `played` (collisions accepted), `synth` (`worklet` / `script-processor` / `pending` / `none`), `panMode`, `reverb`, and `engine` (processor-side `started` / `dropped` / `stolen` / `active` / `peakActive`).
 - Tests: `tests/unit/tavernDsp.test.ts` (energy→gain, voice cap, pan law, IR, processor with mocked worklet globals) and `npm run test:audio-worklet` (browser: fixed graph, no main-thread oscillators, audible output on each synth path; no WASM needed).
 

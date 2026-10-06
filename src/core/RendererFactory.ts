@@ -2,43 +2,21 @@ import * as THREE from 'three';
 import type { WebGPURenderer } from 'three/webgpu';
 import type { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import type { ComposerLike, RendererState } from '../types/app';
-import { isXrRequested } from '../xr/XrFlags.js';
+import {
+    getDeviceSession,
+    resolvePowerPreference,
+    type DeviceSession,
+    type GlPowerPreference,
+    type RendererPreference,
+} from './DeviceSession.js';
 
 export { isXrRequested, getXrSnapDegrees } from '../xr/XrFlags.js';
+export { getRendererPreference } from './DeviceSession.js';
+export type { GetRendererPreferenceOptions, RendererPreference } from './DeviceSession.js';
 
 const DEFAULT_PIXEL_RATIO_CAP = 2;
 const FRAME_BUDGET_MS = 32; // ~30 fps — step down when sustained above this
 const SLOW_FRAME_STREAK = 90; // ~1.5 s of slow frames before stepping down
-
-export type RendererPreference = 'webgl' | 'webgpu';
-
-export interface GetRendererPreferenceOptions {
-    forceWebGl?: boolean;
-}
-
-export function getRendererPreference(
-    searchParams: URLSearchParams,
-    { forceWebGl = false }: GetRendererPreferenceOptions = {}
-): RendererPreference {
-    // WebXR spike requires WebGLRenderer.xr; ignore conflicting ?webgpu/?wgpu.
-    if (
-        forceWebGl ||
-        searchParams.has('webgl') ||
-        searchParams.has('xr') ||
-        searchParams.has('xr-emulator')
-    ) {
-        return 'webgl';
-    }
-
-    if (searchParams.has('webgpu') || searchParams.has('wgpu')) {
-        return 'webgpu';
-    }
-
-    // Default to the modern WebGPU path. When the browser lacks `navigator.gpu`
-    // or WebGPU init fails, createRenderer() gracefully falls back to WebGL.
-    // `?webgl` is the explicit escape hatch to the stable baseline renderer.
-    return 'webgpu';
-}
 
 export interface PixelRatioConfig {
     pixelRatio: number;
@@ -83,40 +61,101 @@ export function resolveAntialias(pixelRatio: number): boolean {
     return pixelRatio <= 1.0;
 }
 
+/** Renderer / adapter strings that identify a software rasterizer. */
+const SOFTWARE_RENDERER_PATTERN = /swiftshader|llvmpipe|software|mesa.*soft|virgl|lavapipe/i;
+
+export function isSoftwareRendererString(value: string | null | undefined): boolean {
+    return Boolean(value) && SOFTWARE_RENDERER_PATTERN.test(value as string);
+}
+
+export interface SoftwareProbeResult {
+    isSoftware: boolean;
+    /** Unmasked WebGL2 renderer string, when the debug extension exposes it. */
+    renderer: string | null;
+    /** How the probe's context was released before returning. */
+    released: 'event' | 'timeout' | 'none';
+}
+
+export interface ProbeSoftwareWebGlOptions {
+    /** Upper bound on waiting for `webglcontextlost` after `loseContext()`. */
+    timeoutMs?: number;
+    doc?: Pick<Document, 'createElement'>;
+}
+
+/** Context attributes for the probe: a detector, not the renderer. */
+export const SOFTWARE_PROBE_CONTEXT_ATTRIBUTES = {
+    powerPreference: 'low-power',
+    failIfMajorPerformanceCaveat: true,
+    alpha: false,
+    depth: false,
+    stencil: false,
+    antialias: false,
+} as const;
+
 /**
  * Probe for software rasterizers (SwiftShader, llvmpipe, etc.) where we should
  * auto-apply the low-post profile. Uses failIfMajorPerformanceCaveat plus the
  * unmasked renderer string when available.
+ *
+ * Only run on the WebGL path — WebGPU reads the same answer off its adapter.
+ * The probe asks for `low-power` WebGL2 (so the renderer string matches the
+ * context the tavern keeps) on a canvas that is never attached, and resolves
+ * only once that context is lost (or `timeoutMs` passes): `loseContext()` is
+ * asynchronous, and on Intel / SwiftShader / Quest a still-live probe context
+ * can hold the slot the tavern context is about to ask for.
  */
-export function detectSoftwareWebGL(): boolean {
-    if (typeof document === 'undefined') return false;
+export async function probeSoftwareWebGL({
+    timeoutMs = 250,
+    doc = typeof document !== 'undefined' ? document : undefined,
+}: ProbeSoftwareWebGlOptions = {}): Promise<SoftwareProbeResult> {
+    if (!doc) return { isSoftware: false, renderer: null, released: 'none' };
 
+    let canvas: HTMLCanvasElement | null = null;
     try {
-        const canvas = document.createElement('canvas');
-        const gl = canvas.getContext('webgl', {
-            failIfMajorPerformanceCaveat: true,
-            powerPreference: 'high-performance',
-            alpha: false,
-            stencil: false,
-        });
-
+        canvas = doc.createElement('canvas');
+        const gl = canvas.getContext(
+            'webgl2',
+            SOFTWARE_PROBE_CONTEXT_ATTRIBUTES
+        ) as WebGL2RenderingContext | null;
         if (!gl) {
-            return true;
+            // failIfMajorPerformanceCaveat refused (or no WebGL2 at all).
+            return { isSoftware: true, renderer: null, released: 'none' };
         }
 
+        let renderer: string | null = null;
         const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
         if (debugInfo) {
-            const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
-            if (/swiftshader|llvmpipe|software|mesa.*soft|virgl|lavapipe/i.test(renderer)) {
-                return true;
-            }
+            renderer = String(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '') || null;
         }
+        const isSoftware = isSoftwareRendererString(renderer);
 
         const loseContext = gl.getExtension('WEBGL_lose_context');
-        loseContext?.loseContext();
-        return false;
+        if (!loseContext) {
+            return { isSoftware, renderer, released: 'none' };
+        }
+        const probeCanvas = canvas;
+        const released = await new Promise<'event' | 'timeout'>((resolve) => {
+            const timer = setTimeout(() => {
+                probeCanvas.removeEventListener('webglcontextlost', onLost);
+                resolve('timeout');
+            }, timeoutMs);
+            // No preventDefault(): the probe never wants its context restored.
+            function onLost(): void {
+                clearTimeout(timer);
+                probeCanvas.removeEventListener('webglcontextlost', onLost);
+                resolve('event');
+            }
+            probeCanvas.addEventListener('webglcontextlost', onLost);
+            loseContext.loseContext();
+        });
+        return { isSoftware, renderer, released };
     } catch {
-        return false;
+        return { isSoftware: false, renderer: null, released: 'none' };
+    } finally {
+        if (canvas) {
+            canvas.width = 0;
+            canvas.height = 0;
+        }
     }
 }
 
@@ -201,37 +240,44 @@ export function getWebGpuRequiredFeatures(
 export interface WebGlContextAttributeOptions {
     antialias: boolean;
     xrCompatible?: boolean;
+    powerPreference?: GlPowerPreference;
+    /** Opaque tavern by default; a transparent profile (preview, #315 overlay) flips it. */
+    alpha?: boolean;
 }
 
 export interface TavernWebGlContextAttributes {
-    alpha: false;
+    alpha: boolean;
     depth: true;
     stencil: false;
     antialias: boolean;
     premultipliedAlpha: true;
     preserveDrawingBuffer: false;
-    powerPreference: 'high-performance';
+    powerPreference: GlPowerPreference;
     failIfMajorPerformanceCaveat: false;
     xrCompatible: boolean;
 }
 
 /**
- * Explicit WebGL2 context attributes for the tavern canvas.
+ * The single WebGL attribute bag. Every app context (tavern, dice-case preview,
+ * future overlay) derives from this so the list cannot drift between copies.
  * `xrCompatible` must be set at context creation — Three r181 does not
  * forward it, and Chrome may recreate the context on `requestSession` otherwise.
+ * Never add `desynchronized: true` without a screenshot test (fights capturePng()).
  */
 export function getWebGlContextAttributes({
     antialias,
     xrCompatible = false,
+    powerPreference = 'high-performance',
+    alpha = false,
 }: WebGlContextAttributeOptions): TavernWebGlContextAttributes {
     return {
-        alpha: false,
+        alpha,
         depth: true,
         stencil: false,
         antialias,
         premultipliedAlpha: true,
         preserveDrawingBuffer: false,
-        powerPreference: 'high-performance',
+        powerPreference,
         failIfMajorPerformanceCaveat: false,
         xrCompatible,
     };
@@ -240,79 +286,122 @@ export function getWebGlContextAttributes({
 /** Constructor bag passed to `THREE.WebGLRenderer` (plus `xrCompatible` for tests). */
 export function getWebGlRendererParameters(options: WebGlContextAttributeOptions): {
     antialias: boolean;
-    alpha: false;
+    alpha: boolean;
     stencil: false;
     depth: true;
     preserveDrawingBuffer: false;
-    powerPreference: 'high-performance';
+    powerPreference: GlPowerPreference;
     xrCompatible: boolean;
 } {
-    const attrs = getWebGlContextAttributes(options);
+    const {
+        antialias,
+        alpha,
+        stencil,
+        depth,
+        preserveDrawingBuffer,
+        powerPreference,
+        xrCompatible,
+    } = getWebGlContextAttributes(options);
     return {
-        antialias: Boolean(attrs.antialias),
-        alpha: false,
-        stencil: false,
-        depth: true,
-        preserveDrawingBuffer: false,
-        powerPreference: 'high-performance',
-        xrCompatible: Boolean(attrs.xrCompatible),
+        antialias,
+        alpha,
+        stencil,
+        depth,
+        preserveDrawingBuffer,
+        powerPreference,
+        xrCompatible,
     };
 }
 
-export function getWebGpuRendererParameters({ antialias }: { antialias: boolean }): {
+/**
+ * Lazy dice-case preview context: transparent, low-power, no MSAA. Browsers cap
+ * GL contexts (8–16) and Intel / SwiftShader / Quest hit that first, so a
+ * secondary canvas never asks for the high-performance slot. The #315 overlay
+ * should become a sibling profile here, not another attribute object.
+ */
+export const PREVIEW_WEBGL_CONTEXT = {
+    antialias: false,
+    alpha: true,
+    powerPreference: 'low-power',
+} as const satisfies WebGlContextAttributeOptions;
+
+export function getWebGpuRendererParameters({
+    antialias,
+    powerPreference = 'high-performance',
+    alpha = false,
+}: {
     antialias: boolean;
-    alpha: false;
+    powerPreference?: GlPowerPreference;
+    alpha?: boolean;
+}): {
+    antialias: boolean;
+    alpha: boolean;
     stencil: false;
-    powerPreference: 'high-performance';
+    powerPreference: GlPowerPreference;
     requiredLimits: Record<string, number>;
 } {
     return {
         antialias,
-        alpha: false,
+        alpha,
         stencil: false,
-        powerPreference: 'high-performance',
+        powerPreference,
         requiredLimits: { ...WEBGPU_REQUIRED_LIMITS },
     };
 }
 
 /**
- * Compare adapter.limits against {@link WEBGPU_REQUIRED_LIMITS}.
- * Used when `requestDevice` / `WebGPURenderer.init` fails so `?renderer-info`
- * can show which limit was short.
+ * Compare adapter limits against {@link WEBGPU_REQUIRED_LIMITS}. Pure — callers
+ * pass the limits of the adapter they already requested, so a failure path never
+ * needs a second `requestAdapter` round-trip just to explain itself.
  */
-export async function describeWebGpuLimitMismatches(
+export function describeLimitMismatches(
+    adapterLimits: Record<string, number> | null | undefined,
     requiredLimits: Record<string, number> = WEBGPU_REQUIRED_LIMITS
-): Promise<string | null> {
-    try {
-        // Cast locally rather than relying on the ambient `Navigator.gpu`
-        // augmentation (src/global.d.ts) — under tsconfig.strict.json's
-        // broader lib/type set that augmentation resolves through a
-        // fragile @types/node conditional type and loses its shape.
-        const nav = typeof navigator !== 'undefined' ? navigator : undefined;
-        const gpu = (
-            nav as { gpu?: { requestAdapter(opts?: unknown): Promise<{ limits: unknown } | null> } }
-        )?.gpu;
-        if (!gpu?.requestAdapter) return 'navigator.gpu.requestAdapter missing';
-        const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
-        if (!adapter) return 'no WebGPU adapter';
-        const parts: string[] = [];
-        const limits = adapter.limits as unknown as Record<string, number>;
-        for (const [key, need] of Object.entries(requiredLimits)) {
-            const have = limits[key];
-            if (typeof have === 'number' && have < need) {
-                parts.push(`${key}: need ${need}, adapter ${have}`);
-            }
+): string | null {
+    if (!adapterLimits) return null;
+    const parts: string[] = [];
+    for (const [key, need] of Object.entries(requiredLimits)) {
+        const have = adapterLimits[key];
+        if (typeof have === 'number' && have < need) {
+            parts.push(`${key}: need ${need}, adapter ${have}`);
         }
-        return parts.length > 0 ? parts.join('; ') : null;
-    } catch (err) {
-        return err instanceof Error ? err.message : String(err);
     }
+    return parts.length > 0 ? parts.join('; ') : null;
 }
 
 export interface CuratedWebGpuDevice {
     device: unknown;
     trackTimestamp: boolean;
     requiredFeatures: string[];
+    adapterLimits: Record<string, number> | null;
+    /** From `adapter.info` — replaces the WebGL software probe on the WebGPU path. */
+    isSoftware: boolean;
+}
+
+export interface CuratedWebGpuFailure {
+    device: null;
+    reason: string;
+    limitNote: string | null;
+}
+
+interface AdapterInfoLike {
+    vendor?: string;
+    architecture?: string;
+    device?: string;
+    description?: string;
+    isFallbackAdapter?: boolean;
+}
+
+/** Software / fallback adapter (SwiftShader-Vulkan, lavapipe, WARP fallback). */
+export function isSoftwareWebGpuAdapter(
+    info: AdapterInfoLike | null | undefined,
+    isFallbackAdapter = false
+): boolean {
+    if (isFallbackAdapter || info?.isFallbackAdapter) return true;
+    if (!info) return false;
+    return isSoftwareRendererString(
+        [info.vendor, info.architecture, info.device, info.description].filter(Boolean).join(' ')
+    );
 }
 
 /**
@@ -323,48 +412,91 @@ export interface CuratedWebGpuDevice {
  * constructor — `WebGPUBackend.init()` uses a caller-supplied `device`
  * as-is and skips its own (kitchen-sink) adapter/device request entirely.
  *
- * Returns `null` when `navigator.gpu`/`requestAdapter` is unavailable, or
- * when `requestDevice` rejects (e.g. our curated `requiredLimits` floor
- * genuinely exceeds the adapter) — callers should fall back to letting
- * `WebGPURenderer` request its own device in that case, same as any other
- * WebGPU init failure.
+ * Makes exactly one `requestAdapter` call. Returns `null` when
+ * `navigator.gpu`/`requestAdapter` is unavailable, or a `{ device: null }`
+ * failure (with the limit note from that same adapter) when there is no
+ * adapter or `requestDevice` rejects. Callers must treat either as a WebGL
+ * fallback — never construct `WebGPURenderer` without a curated device.
  */
 export async function requestCuratedWebGpuDevice(
-    wantTimestampQuery: boolean
-): Promise<CuratedWebGpuDevice | null> {
-    // Same rationale as describeWebGpuLimitMismatches for the local cast.
+    wantTimestampQuery: boolean,
+    { powerPreference = 'high-performance' }: { powerPreference?: GlPowerPreference } = {}
+): Promise<CuratedWebGpuDevice | CuratedWebGpuFailure | null> {
+    // Cast locally rather than relying on the ambient `Navigator.gpu`
+    // augmentation (src/global.d.ts) — under tsconfig.strict.json's
+    // broader lib/type set that augmentation resolves through a
+    // fragile @types/node conditional type and loses its shape.
     const nav = typeof navigator !== 'undefined' ? navigator : undefined;
-    const gpu = (
-        nav as {
-            gpu?: {
-                requestAdapter(
-                    opts?: unknown
-                ): Promise<{ features: { has(name: string): boolean } } | null>;
-            };
-        }
-    )?.gpu;
+    const gpu = (nav as { gpu?: { requestAdapter(opts?: unknown): Promise<unknown> } })?.gpu;
     if (!gpu?.requestAdapter) return null;
-    const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
-    if (!adapter) return null;
 
+    type AdapterLike = {
+        features: { has(name: string): boolean };
+        limits: unknown;
+        info?: AdapterInfoLike;
+        isFallbackAdapter?: boolean;
+        requestDevice(descriptor?: {
+            requiredFeatures?: string[];
+            requiredLimits?: Record<string, number>;
+        }): Promise<unknown>;
+    };
+    let adapter: AdapterLike | null;
+    try {
+        adapter = (await gpu.requestAdapter({ powerPreference })) as AdapterLike | null;
+    } catch (err) {
+        return {
+            device: null,
+            reason: `requestAdapter threw: ${errorMessage(err)}`,
+            limitNote: null,
+        };
+    }
+    if (!adapter) return { device: null, reason: 'no WebGPU adapter', limitNote: null };
+
+    const adapterLimits = readAdapterLimits(adapter.limits);
     const requiredFeatures = getWebGpuRequiredFeatures(adapter.features, { wantTimestampQuery });
-    const device = await (
-        adapter as unknown as {
-            requestDevice(descriptor?: {
-                requiredFeatures?: string[];
-                requiredLimits?: Record<string, number>;
-            }): Promise<unknown>;
-        }
-    ).requestDevice({
-        requiredFeatures,
-        requiredLimits: WEBGPU_REQUIRED_LIMITS,
-    });
+    let device: unknown;
+    try {
+        device = await adapter.requestDevice({
+            requiredFeatures,
+            requiredLimits: WEBGPU_REQUIRED_LIMITS,
+        });
+    } catch (err) {
+        return {
+            device: null,
+            reason: `requestDevice rejected: ${errorMessage(err)}`,
+            limitNote: describeLimitMismatches(adapterLimits),
+        };
+    }
+    if (!device) {
+        return {
+            device: null,
+            reason: 'requestDevice returned no device',
+            limitNote: describeLimitMismatches(adapterLimits),
+        };
+    }
 
     return {
         device,
         trackTimestamp: requiredFeatures.includes(WEBGPU_TIMESTAMP_QUERY_FEATURE),
         requiredFeatures,
+        adapterLimits,
+        isSoftware: isSoftwareWebGpuAdapter(adapter.info, adapter.isFallbackAdapter === true),
     };
+}
+
+/** GPUSupportedLimits exposes getters on the prototype; copy what we compare. */
+function readAdapterLimits(limits: unknown): Record<string, number> | null {
+    if (!limits || typeof limits !== 'object') return null;
+    const out: Record<string, number> = {};
+    for (const key of Object.keys(WEBGPU_REQUIRED_LIMITS)) {
+        const value = (limits as Record<string, unknown>)[key];
+        if (typeof value === 'number') out[key] = value;
+    }
+    return out;
+}
+
+function errorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : String(err);
 }
 
 function applySharedRendererConfig(
@@ -393,6 +525,17 @@ interface WebGlRendererBundle {
     fallbackReason: string | null;
 }
 
+export interface WebGlRendererArgs {
+    antialias: boolean;
+    width: number;
+    height: number;
+    pixelRatio: number;
+    requestedRenderer: RendererPreference;
+    fallbackReason: string | null;
+    xrCompatible: boolean;
+    powerPreference: GlPowerPreference;
+}
+
 function createWebGlRenderer({
     antialias,
     width,
@@ -401,17 +544,14 @@ function createWebGlRenderer({
     requestedRenderer,
     fallbackReason,
     xrCompatible,
-}: {
-    antialias: boolean;
-    width: number;
-    height: number;
-    pixelRatio: number;
-    requestedRenderer: RendererPreference;
-    fallbackReason: string | null;
-    xrCompatible: boolean;
-}): WebGlRendererBundle {
-    const contextAttributes = getWebGlContextAttributes({ antialias, xrCompatible });
-    const params = getWebGlRendererParameters({ antialias, xrCompatible });
+    powerPreference,
+}: WebGlRendererArgs): WebGlRendererBundle {
+    const contextAttributes = getWebGlContextAttributes({
+        antialias,
+        xrCompatible,
+        powerPreference,
+    });
+    const params = getWebGlRendererParameters({ antialias, xrCompatible, powerPreference });
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('webgl2', contextAttributes);
     if (!context) {
@@ -438,6 +578,54 @@ function createWebGlRenderer({
         fallbackReason,
     };
 }
+
+export interface WebGpuRendererArgs {
+    antialias: boolean;
+    width: number;
+    height: number;
+    pixelRatio: number;
+    powerPreference: GlPowerPreference;
+    curated: CuratedWebGpuDevice;
+}
+
+async function createWebGpuRenderer({
+    antialias,
+    width,
+    height,
+    pixelRatio,
+    powerPreference,
+    curated,
+}: WebGpuRendererArgs): Promise<WebGPURenderer> {
+    const THREE_WEBGPU = await import('three/webgpu');
+    // Own the canvas here rather than letting WebGPURenderer create
+    // its own (the WebGL path already creates one first) — recovery,
+    // XR, and a second view all need one stable element to hold on to.
+    const canvas = document.createElement('canvas');
+    const renderer = new THREE_WEBGPU.WebGPURenderer({
+        ...getWebGpuRendererParameters({ antialias, powerPreference }),
+        canvas,
+        device: curated.device as GPUDevice,
+        trackTimestamp: curated.trackTimestamp,
+    });
+    applySharedRendererConfig(renderer, width, height, pixelRatio);
+    await renderer.init();
+    return renderer;
+}
+
+/** Seams `verify:renderer-factory` stubs; production always uses the defaults. */
+export interface RendererDeps {
+    probeSoftwareWebGL: () => Promise<SoftwareProbeResult>;
+    requestCuratedWebGpuDevice: typeof requestCuratedWebGpuDevice;
+    createWebGlRenderer: (args: WebGlRendererArgs) => WebGlRendererBundle;
+    createWebGpuRenderer: (args: WebGpuRendererArgs) => Promise<WebGPURenderer>;
+}
+
+const DEFAULT_RENDERER_DEPS: RendererDeps = {
+    probeSoftwareWebGL: () => probeSoftwareWebGL(),
+    requestCuratedWebGpuDevice,
+    createWebGlRenderer,
+    createWebGpuRenderer,
+};
 
 export interface RendererRecoveryHandlers {
     onContextLost?: (state: RendererState, message: string) => void;
@@ -596,26 +784,33 @@ export interface CreateRendererOptions {
     forceWebGl?: boolean;
     pixelRatio?: number;
     antialias?: boolean;
+    /** Known software-ness (renderer recovery) — skips the WebGL probe. */
     isSoftwareRenderer?: boolean;
+    /** Defaults to the memoised boot {@link getDeviceSession}. */
+    session?: DeviceSession;
+    searchParams?: URLSearchParams;
+    deps?: Partial<RendererDeps>;
 }
 
 export async function createRenderer(
     container: HTMLElement,
     options: CreateRendererOptions = {}
 ): Promise<RendererState> {
+    const deps: RendererDeps = { ...DEFAULT_RENDERER_DEPS, ...options.deps };
     const width = container.clientWidth;
     const height = container.clientHeight;
-    const searchParams = new URLSearchParams(window.location.search);
-    const forceWebGl = Boolean(options.forceWebGl);
-    const preferredRenderer = getRendererPreference(searchParams, { forceWebGl });
+    const searchParams = options.searchParams ?? new URLSearchParams(window.location.search);
+    const session = options.session ?? getDeviceSession(searchParams);
+    const preferredRenderer: RendererPreference = options.forceWebGl
+        ? 'webgl'
+        : session.preferredRenderer;
     const webgpuExplicit = searchParams.has('webgpu') || searchParams.has('wgpu');
-    const xrCompatible = isXrRequested(searchParams);
+    const xrCompatible = session.xrCompatible;
     const rendererInfo = searchParams.has('renderer-info') || searchParams.has('debug');
 
     const pixelConfig = resolvePixelRatioConfig(searchParams);
     const pixelRatio = options.pixelRatio ?? pixelConfig.pixelRatio;
     const antialias = options.antialias ?? resolveAntialias(pixelRatio);
-    const isSoftwareRenderer = options.isSoftwareRenderer ?? detectSoftwareWebGL();
 
     const sharedMeta = {
         pixelRatio,
@@ -623,7 +818,6 @@ export async function createRenderer(
         pixelRatioCap: pixelConfig.cap,
         deviceDpr: pixelConfig.deviceDpr,
         antialias,
-        isSoftwareRenderer,
         usePostAA: !antialias && pixelRatio > 1,
         contextStatus: 'ok' as const,
         contextMessage: null as string | null,
@@ -631,114 +825,127 @@ export async function createRenderer(
         gpuLimitNote: null as string | null,
     };
 
-    const webGlArgs = {
-        antialias,
-        width,
-        height,
-        pixelRatio,
-        requestedRenderer: preferredRenderer,
-        xrCompatible,
+    /**
+     * WebGL path: run the software probe (unless recovery already knows the
+     * answer) and wait for its context to be released *before* creating the
+     * tavern context, then let a software rasterizer lower the power preference.
+     */
+    const buildWebGl = async (
+        fallbackReason: string | null,
+        gpuLimitNote: string | null = null
+    ): Promise<RendererState> => {
+        let softwareProbe: SoftwareProbeResult | null = null;
+        let isSoftwareRenderer = options.isSoftwareRenderer;
+        if (isSoftwareRenderer === undefined) {
+            softwareProbe = await deps.probeSoftwareWebGL();
+            isSoftwareRenderer = softwareProbe.isSoftware;
+        }
+        const power = resolvePowerPreference(session, isSoftwareRenderer);
+        if (rendererInfo) {
+            console.info('[RendererFactory] WebGL context', {
+                powerPreference: power.powerPreference,
+                reasons: power.reasons,
+                softwareProbe,
+            });
+        }
+        return {
+            ...deps.createWebGlRenderer({
+                antialias,
+                width,
+                height,
+                pixelRatio,
+                requestedRenderer: preferredRenderer,
+                fallbackReason,
+                xrCompatible,
+                powerPreference: power.powerPreference,
+            }),
+            ...sharedMeta,
+            isSoftwareRenderer,
+            glPowerPreference: power.powerPreference,
+            powerReasons: power.reasons,
+            softwareProbe,
+            gpuLimitNote,
+        };
     };
 
-    if (preferredRenderer === 'webgpu') {
-        const hasWebGpuApi = typeof navigator !== 'undefined' && Boolean(navigator.gpu);
-
-        if (!hasWebGpuApi) {
-            const reason = 'WebGPU unavailable (navigator.gpu missing); using WebGLRenderer.';
-            (webgpuExplicit ? console.warn : console.info)(`[RendererFactory] ${reason}`);
-            return {
-                ...createWebGlRenderer({
-                    ...webGlArgs,
-                    fallbackReason: reason,
-                }),
-                ...sharedMeta,
-            };
-        }
-
-        // Hoisted so a failure after device creation (below) can best-effort
-        // release the GPUDevice in the catch block instead of leaking it.
-        let curated: CuratedWebGpuDevice | null = null;
-        try {
-            const THREE_WEBGPU = await import('three/webgpu');
-            const gpuParams = getWebGpuRendererParameters({ antialias });
-            // Own the canvas here rather than letting WebGPURenderer create
-            // its own (the WebGL path already creates one first) — recovery,
-            // XR, and a second view all need one stable element to hold on to.
-            const canvas = document.createElement('canvas');
-            const wantTimestampQuery = wantsWebGpuTimestampQuery(searchParams);
-            // null when navigator.gpu/requestAdapter is unavailable or our
-            // curated requiredLimits/requiredFeatures request fails — falls
-            // through to letting WebGPURenderer request its own device
-            // (the pre-existing kitchen-sink behavior) rather than losing
-            // WebGPU entirely over a device-curation problem.
-            curated = await requestCuratedWebGpuDevice(wantTimestampQuery);
-            const renderer = new THREE_WEBGPU.WebGPURenderer({
-                ...gpuParams,
-                canvas,
-                ...(curated
-                    ? {
-                          device: curated.device as GPUDevice,
-                          trackTimestamp: curated.trackTimestamp,
-                      }
-                    : {}),
-            });
-            applySharedRendererConfig(renderer, width, height, pixelRatio);
-            await renderer.init();
-
-            if (rendererInfo) {
-                console.info(
-                    '[RendererFactory] WebGPU requiredLimits floor',
-                    WEBGPU_REQUIRED_LIMITS
-                );
-                console.info(
-                    '[RendererFactory] WebGPU requiredFeatures',
-                    curated
-                        ? curated.requiredFeatures
-                        : '(curated device request unavailable; WebGPUBackend requested its own device/features)'
-                );
-            }
-
-            return {
-                renderer,
-                rendererType: 'webgpu',
-                usingWebGPU: true,
-                usingWebGL: false,
-                requestedRenderer: preferredRenderer,
-                fallbackReason: null,
-                ...sharedMeta,
-            };
-        } catch (error) {
-            // Best-effort: renderer.init() (or something before it) failed
-            // after we'd already obtained a curated device — release it
-            // rather than leaving an unused GPUDevice around while we fall
-            // back to WebGL.
-            (curated?.device as { destroy?: () => void } | undefined)?.destroy?.();
-            const message = error instanceof Error ? error.message : String(error);
-            const gpuLimitNote = await describeWebGpuLimitMismatches();
-            const limitSuffix = gpuLimitNote ? `; ${gpuLimitNote}` : '';
-            const reason = `WebGPU init failed (${message}${limitSuffix}); using WebGLRenderer fallback.`;
-            console.warn(`[RendererFactory] ${reason}`, error);
-            if (rendererInfo && gpuLimitNote) {
-                console.info('[RendererFactory] WebGPU requiredLimits mismatch:', gpuLimitNote);
-            }
-            return {
-                ...createWebGlRenderer({
-                    ...webGlArgs,
-                    fallbackReason: reason,
-                }),
-                ...sharedMeta,
-                gpuLimitNote,
-            };
-        }
+    if (preferredRenderer !== 'webgpu') {
+        return buildWebGl(null);
     }
 
-    return {
-        ...createWebGlRenderer({
-            ...webGlArgs,
+    if (!session.hasWebGpuApi) {
+        const reason = 'WebGPU unavailable (navigator.gpu missing); using WebGLRenderer.';
+        (webgpuExplicit ? console.warn : console.info)(`[RendererFactory] ${reason}`);
+        return buildWebGl(reason);
+    }
+
+    // WebGPU path: no WebGL probe — the adapter reports software-ness itself.
+    const wantTimestampQuery = wantsWebGpuTimestampQuery(searchParams);
+    const powerPreference = session.glPowerPreference;
+    let curated: CuratedWebGpuDevice | CuratedWebGpuFailure | null = null;
+    try {
+        curated = await deps.requestCuratedWebGpuDevice(wantTimestampQuery, { powerPreference });
+    } catch (error) {
+        curated = { device: null, reason: errorMessage(error), limitNote: null };
+    }
+
+    if (!curated || !curated.device) {
+        // Never fall through to a device-less WebGPURenderer: that is the
+        // kitchen-sink path that requests every adapter feature.
+        const failure = curated as CuratedWebGpuFailure | null;
+        const detail = failure?.reason ?? 'navigator.gpu.requestAdapter missing';
+        const limitNote = failure?.limitNote ?? null;
+        const limitSuffix = limitNote ? `; ${limitNote}` : '';
+        const reason = `WebGPU curated device unavailable (${detail}${limitSuffix}); using WebGLRenderer fallback.`;
+        console.warn(`[RendererFactory] ${reason}`);
+        return buildWebGl(reason, limitNote);
+    }
+
+    // `device` is `unknown`, so the `!curated.device` guard above cannot narrow.
+    const device = curated as CuratedWebGpuDevice;
+    try {
+        const renderer = await deps.createWebGpuRenderer({
+            antialias,
+            width,
+            height,
+            pixelRatio,
+            powerPreference,
+            curated: device,
+        });
+
+        if (rendererInfo) {
+            console.info('[RendererFactory] WebGPU requiredLimits floor', WEBGPU_REQUIRED_LIMITS);
+            console.info('[RendererFactory] WebGPU requiredFeatures', device.requiredFeatures);
+            console.info('[RendererFactory] WebGPU adapter', {
+                powerPreference,
+                reasons: session.powerReasons,
+                isSoftware: device.isSoftware,
+            });
+        }
+
+        return {
+            renderer,
+            rendererType: 'webgpu',
+            usingWebGPU: true,
+            usingWebGL: false,
+            requestedRenderer: preferredRenderer,
             fallbackReason: null,
-        }),
-        ...sharedMeta,
-    };
+            ...sharedMeta,
+            isSoftwareRenderer: options.isSoftwareRenderer ?? device.isSoftware,
+            glPowerPreference: powerPreference,
+            powerReasons: session.powerReasons,
+            softwareProbe: null,
+        };
+    } catch (error) {
+        // renderer.init() (or something before it) failed after we'd already
+        // obtained a curated device — release it rather than leaving an unused
+        // GPUDevice around while we fall back to WebGL.
+        (device.device as { destroy?: () => void } | undefined)?.destroy?.();
+        const gpuLimitNote = describeLimitMismatches(device.adapterLimits);
+        const limitSuffix = gpuLimitNote ? `; ${gpuLimitNote}` : '';
+        const reason = `WebGPU init failed (${errorMessage(error)}${limitSuffix}); using WebGLRenderer fallback.`;
+        console.warn(`[RendererFactory] ${reason}`, error);
+        return buildWebGl(reason, gpuLimitNote);
+    }
 }
 
 /**

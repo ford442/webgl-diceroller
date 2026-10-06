@@ -27,6 +27,7 @@
 import * as THREE from 'three';
 import tavernProcessorUrl from './worklet/TavernProcessor.ts?worker&url';
 import { generateRoomImpulse } from './roomImpulse.js';
+import { getDeviceSession } from '../core/DeviceSession.js';
 import { TAVERN_PROCESSOR_NAME, VOICE_HOLD_SECONDS } from './worklet/protocol.js';
 import type { EngineStats, PanMode, TavernMessage } from './worklet/tavernDsp.js';
 
@@ -111,7 +112,8 @@ export function selectVoice(event: any) {
 }
 
 export function createDiceCollisionAudio(options: any = {}) {
-    const config = { ...DEFAULTS, ...options };
+    const { contextOptions = getDeviceSession().audio, ...overrides } = options;
+    const config = { ...DEFAULTS, ...overrides };
     const params = searchParams();
     const isTest = params.has('test');
 
@@ -165,17 +167,37 @@ export function createDiceCollisionAudio(options: any = {}) {
         return isLowCost() ? 'stereo' : 'hrtf';
     }
 
+    /**
+     * Ask for the session's options (48 kHz, `interactive`). A browser that
+     * rejects the rate (NotSupportedError) or the options bag entirely (old
+     * `webkitAudioContext`) gets progressively plainer requests. Everything
+     * downstream — worklet `processorOptions.sampleRate`, the biquads, and
+     * `generateRoomImpulse` — reads `audioContext.sampleRate`, so a fallback
+     * rate stays self-consistent; it just isn't the 48 kHz `?test` captures pin.
+     */
+    function createAudioContext(Ctx: any) {
+        const attempts = [
+            { latencyHint: contextOptions.latencyHint, sampleRate: contextOptions.sampleRate },
+            { latencyHint: contextOptions.latencyHint },
+            undefined,
+        ];
+        for (const attempt of attempts) {
+            try {
+                return attempt ? new Ctx(attempt) : new Ctx();
+            } catch (err) {
+                lastError = String(err);
+            }
+        }
+        return null;
+    }
+
     function ensureContext() {
         if (audioContext) return audioContext;
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) return null;
 
-        try {
-            audioContext = new Ctx();
-        } catch (err) {
-            lastError = String(err);
-            return null;
-        }
+        audioContext = createAudioContext(Ctx);
+        if (!audioContext) return null;
         masterGain = audioContext.createGain();
         masterGain.gain.value = effectiveGain();
         masterGain.connect(audioContext.destination);
@@ -595,6 +617,10 @@ export function createDiceCollisionAudio(options: any = {}) {
             reverb: !!reverbSend && reverbEnabled && !isLowCost(),
             engine: workletStats,
             error: lastError,
+            sampleRate: audioContext?.sampleRate ?? null,
+            requestedSampleRate: contextOptions.sampleRate,
+            latencyHint: contextOptions.latencyHint,
+            baseLatency: audioContext?.baseLatency ?? null,
         }),
     };
     activeInstance = api;

@@ -39,6 +39,15 @@ export interface RendererState {
     pixelRatioForced?: boolean;
     antialias?: boolean;
     isSoftwareRenderer?: boolean;
+    /** Power preference the live context was created with (see DeviceSession). */
+    glPowerPreference?: 'high-performance' | 'low-power';
+    powerReasons?: string[];
+    /** WebGL software probe result; `null` when it did not run (WebGPU, recovery). */
+    softwareProbe?: {
+        isSoftware: boolean;
+        renderer: string | null;
+        released: 'event' | 'timeout' | 'none';
+    } | null;
     usePostAA?: boolean;
     _recoveryCleanup?: (() => void) | null;
     [key: string]: unknown;

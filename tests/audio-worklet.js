@@ -128,10 +128,14 @@ async function checkProfile(page, profile) {
             (stats.engine?.peakActive ?? Infinity) <= stats.maxVoices,
         ],
         ['audible output on the master bus', peak > 0.001],
+        // DeviceSession pins 48 kHz under ?test so the room IR / DSP are stable.
+        ['AudioContext requested 48 kHz', stats.requestedSampleRate === 48000],
+        ['AudioContext runs at 48 kHz', stats.sampleRate === 48000],
+        ['latencyHint is interactive', stats.latencyHint === 'interactive'],
     ];
     console.log(`\n[${profile.name}]`);
     console.log(
-        `  stats: played=${stats.played} engine=${JSON.stringify(stats.engine)} reverb=${stats.reverb} peak=${peak.toFixed(4)}`
+        `  stats: sampleRate=${stats.sampleRate} baseLatency=${stats.baseLatency} played=${stats.played} engine=${JSON.stringify(stats.engine)} reverb=${stats.reverb} peak=${peak.toFixed(4)}`
     );
     if (grew.length) console.log(`  nodes created during play: ${grew.join(', ')}`);
     let ok = true;

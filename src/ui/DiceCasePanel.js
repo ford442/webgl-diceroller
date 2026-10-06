@@ -6,6 +6,7 @@ import {
 } from '../dice/DiceMaterials.js';
 import { MARKING_STYLES } from '../dice/DiceSetFormat.js';
 import { prefersReducedMotion } from '../core/AccessibilityPrefs.js';
+import { getWebGlRendererParameters, PREVIEW_WEBGL_CONTEXT } from '../core/RendererFactory.js';
 import { createHudPanel, hudSelect } from './hudPanel.js';
 
 /** Die keys the case offers. The derived types are descriptor-only for now. */
@@ -157,19 +158,15 @@ export function createDiceCasePanel(hooks) {
      * Live PBR preview needs its own GL context (cloned die + env map). Do not
      * use high-performance: browsers cap GL contexts (8–16) and Intel /
      * SwiftShader / Quest hit that first. Lazy-create a low-power context and
-     * dispose it on collapse so the slot is released.
+     * dispose it on collapse so the slot is released. Attributes come from the
+     * shared RendererFactory bag (PREVIEW_WEBGL_CONTEXT) so they cannot drift.
+     * WebGL on purpose — never share the tavern's GPUDevice.
      */
     function ensurePreviewRenderer() {
         if (previewRenderer || hudPanel.isCollapsed()) return previewRenderer;
-        previewRenderer = new THREE.WebGLRenderer({
-            canvas: previewCanvas,
-            antialias: false,
-            alpha: true,
-            stencil: false,
-            depth: true,
-            powerPreference: 'low-power',
-            preserveDrawingBuffer: false,
-        });
+        const { xrCompatible: _xrCompatible, ...params } =
+            getWebGlRendererParameters(PREVIEW_WEBGL_CONTEXT);
+        previewRenderer = new THREE.WebGLRenderer({ canvas: previewCanvas, ...params });
         previewRenderer.outputColorSpace = THREE.SRGBColorSpace;
         previewRenderer.setPixelRatio(1);
         previewRenderer.setSize(previewCanvas.width, previewCanvas.height, false);
