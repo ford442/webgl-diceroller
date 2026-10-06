@@ -7,8 +7,8 @@ import {
     WASM_SIMD_DIR,
     resolveWasmArtifactDir,
     wasmArtifactFallbackDirs,
-} from '../../src/wasm/wasmArtifact.js';
-import { WASM_SIMD_PROBE_BYTES, supportsWasmSimd } from '../../src/wasm/simdSupport.js';
+} from 'dice-core/wasm/wasmArtifact';
+import { WASM_SIMD_PROBE_BYTES, supportsWasmSimd } from 'dice-core/wasm/simdSupport';
 
 describe('WASM SIMD probe', () => {
     it('probe bytes start with the wasm magic \\0asm', () => {

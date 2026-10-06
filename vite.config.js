@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defaultClientConditions, defaultServerConditions, defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -51,8 +51,24 @@ function injectCriticalPreloads() {
     };
 }
 
+/**
+ * `dice-core` (packages/dice-core) exports `source` → its .ts files and
+ * `default` → the tsc-emitted dist/. The app bundles the source; plain Node
+ * consumers get dist/.
+ */
+const SOURCE_CONDITIONS = ['source'];
+
 export default defineConfig({
     base: './',
+    resolve: {
+        conditions: [...SOURCE_CONDITIONS, ...defaultClientConditions],
+    },
+    ssr: {
+        resolve: {
+            conditions: [...SOURCE_CONDITIONS, ...defaultServerConditions],
+            externalConditions: SOURCE_CONDITIONS,
+        },
+    },
     server: {
         open: process.env.BROWSER === 'none' ? false : true,
         allowedHosts: ['code.noahcohn.com', 'localhost', '127.0.0.1'],

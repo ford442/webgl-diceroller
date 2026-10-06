@@ -15,31 +15,31 @@ import {
     diceSettleProbe,
     readDiceValueAllowingCocked,
 } from '../dice.js';
-import { createSettleWatch } from '../core-engine/roll/SettleWatch.js';
+import { createSettleWatch } from 'dice-core/roll/SettleWatch';
 import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
 import { DiceFocusState } from '../core/CameraController.js';
 import { showResults, hideResults, showNotationResults } from '../results.js';
 import { AppEvent } from '../core/AppEvents.js';
-import { createRollSession, shouldDeferAutoResults } from '../roll/RollSession.js';
+import { createRollSession, shouldDeferAutoResults } from 'dice-core/roll/RollSession';
 import {
     ROLL_SYSTEMS,
     DEFAULT_ROLL_SYSTEM,
     applyExpressionChip,
     defaultExpressionForSystem,
-} from '../roll/Notation.js';
+} from 'dice-core/roll/Notation';
 import {
     REPLAY_VERSION,
     SUPPORTED_REPLAY_VERSIONS,
     buildShareableRollUrl,
     generateRollSeed,
     parseShareableRollParams,
-} from '../roll/ShareableRoll.js';
-import { createCommit, generateNonce, verifyReveal } from '../net/CommitReveal.js';
+} from 'dice-core/roll/ShareableRoll';
+import { createCommit, generateNonce, verifyReveal } from 'dice-core/net/CommitReveal';
 import type { AppContext, AppEvents, PendingRollMeta } from '../types/app';
 import type { DiceReadValue } from '../types/dice.js';
-import type { EvaluatedRoll } from '../types/roll.js';
-import type { RollHistory } from '../roll/RollHistory.js';
-import type { RollStats } from '../roll/RollStats.js';
+import type { EvaluatedRoll } from 'dice-core/types/roll';
+import type { RollHistory } from 'dice-core/roll/RollHistory';
+import type { RollStats } from 'dice-core/roll/RollStats';
 import type {
     RemoteCommitMessage,
     RemoteRevealMessage,

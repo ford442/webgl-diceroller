@@ -15,7 +15,7 @@ import {
     toLegacyAppearanceConfig,
     withComputedId,
     type DiceSet,
-} from '../../src/dice/DiceSetFormat.js';
+} from 'dice-core/dice/DiceSetFormat';
 import {
     DICE_SET_PARAM,
     DICE_SET_STORAGE_KEY,
@@ -29,7 +29,7 @@ import {
     parseDiceSetPresencePayload,
     persistDiceSet,
     resolveDiceSet,
-} from '../../src/dice/ShareableDiceSet.js';
+} from 'dice-core/dice/ShareableDiceSet';
 
 describe('DiceSetFormat', () => {
     it('creates a default set covering every shipped die type', () => {

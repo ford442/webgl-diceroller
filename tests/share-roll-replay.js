@@ -4,8 +4,8 @@
  *
  * Prereq: npx vite build && npm run preview
  */
-const { launchPage, waitForRollFinished } = require('./helpers/browser');
-const { BASE } = require('./helpers/server');
+import { launchPage, waitForRollFinished } from './helpers/browser.js';
+import { BASE } from './helpers/server.js';
 
 // layout-seed/density/theme pin the clutter colliders the way a real share
 // link does (buildShareableRollUrl), so the two loads simulate the same world.

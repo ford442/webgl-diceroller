@@ -44,8 +44,8 @@ import {
     idsOffset,
     sabSupported,
     xfOffset,
-} from '../../src/wasm/workerLayout.js';
-import { MAX_RECORD_LEN } from '../../src/wasm/workerCommands.js';
+} from 'dice-core/wasm/workerLayout';
+import { MAX_RECORD_LEN } from 'dice-core/wasm/workerCommands';
 
 describe('header layout', () => {
     it('has twelve distinct Int32 header slots', () => {

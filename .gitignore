@@ -21,3 +21,6 @@ a.out
 # src/wasm/generate-clangd-db.sh)
 src/wasm/build-emcc/
 src/wasm/compile_commands.json
+
+# dice-core tsc output (npm run build:dice-core)
+packages/*/dist/

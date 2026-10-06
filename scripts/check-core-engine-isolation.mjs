@@ -1,15 +1,22 @@
 #!/usr/bin/env node
 /**
- * Fail the build if src/core-engine grows a Three.js or DOM-document import.
+ * Fail the build if packages/dice-core/src grows a Three.js or DOM-document import.
  * `window` / `document` as *identifiers* in typeof checks are allowed;
  * module specifiers named `three`, and identifier imports of `document`
- * from a module, are not.
+ * from a module, are not. `tsc -p packages/dice-core` (no DOM lib) is the
+ * stronger half of this check; the regexes also catch `three` imports.
  */
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'core-engine');
+const ROOT = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'packages',
+    'dice-core',
+    'src'
+);
 
 const FORBIDDEN_SPECIFIERS = [
     /from\s+['"]three(?:\/[^'"]*)?['"]/,
@@ -75,5 +82,5 @@ if (violations.length) {
 }
 
 console.log(
-    `[check:core-engine] ${files.length} files in src/core-engine/ are three/DOM-import free.`
+    `[check:core-engine] ${files.length} files in packages/dice-core/src/ are three/DOM-import free.`
 );

@@ -10,7 +10,7 @@ import {
     createCommit,
     generateNonce,
     verifyReveal,
-} from '../../src/net/CommitReveal.js';
+} from 'dice-core/net/CommitReveal';
 
 describe('CommitReveal', () => {
     describe('verifyReveal tampering', () => {

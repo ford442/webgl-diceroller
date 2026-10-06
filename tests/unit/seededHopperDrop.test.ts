@@ -17,8 +17,8 @@ import {
     computeSeededHopperDropParams,
     identityHopperFrame,
     type SeededHopperFrame,
-} from '../../src/wasm/seededHopperDrop.js';
-import { createSeededRng } from '../../src/wasm/seededThrowParams.js';
+} from 'dice-core/wasm/seededHopperDrop';
+import { createSeededRng } from 'dice-core/wasm/seededThrowParams';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 

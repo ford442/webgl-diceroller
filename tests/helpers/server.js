@@ -20,8 +20,11 @@
  * CommonJS on purpose: `tests/*.js` are CJS (like `tests/helpers/browser.js`)
  * and the ESM `scripts/*.mjs` can still `import { startDev } from '...js'`.
  */
-const { spawn } = require('node:child_process');
-const path = require('node:path');
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** Literal every harness must bind to and probe. See note 1 above. */
 const HOST = '127.0.0.1';
@@ -147,4 +150,4 @@ function startPreview(options = {}) {
     return startServer({ ...options, mode: 'preview' });
 }
 
-module.exports = { HOST, PREVIEW_PORT, BASE, url, startServer, startDev, startPreview };
+export { HOST, PREVIEW_PORT, BASE, url, startServer, startDev, startPreview };

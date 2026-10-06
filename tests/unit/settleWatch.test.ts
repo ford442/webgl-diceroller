@@ -4,7 +4,7 @@
  * dice will not sleep, the engine stops ticking, or bodies never register.
  */
 import { describe, expect, it } from 'vitest';
-import { createSettleWatch, type SettleProbe } from '../../src/core-engine/roll/SettleWatch.js';
+import { createSettleWatch, type SettleProbe } from 'dice-core/roll/SettleWatch';
 
 function makeWorld(overrides: Partial<{ expected: number; engine: number; asleep: boolean }> = {}) {
     const world = {

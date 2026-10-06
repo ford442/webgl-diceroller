@@ -6,7 +6,7 @@ import {
     PHYSICS_FLAG_NO_DRAG,
     parseMassBiasRatio,
     parsePhysicsFlags,
-} from '../../src/wasm/physicsFlags.js';
+} from 'dice-core/wasm/physicsFlags';
 
 const params = (search: string) => new URLSearchParams(search);
 

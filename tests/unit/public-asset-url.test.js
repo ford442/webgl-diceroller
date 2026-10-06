@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolvePublicAssetUrl } from '../../src/core/publicAssetUrl.js';
+import { resolvePublicAssetUrl } from 'dice-core/publicAssetUrl';
 
 const WOOD = 'images/wood_diffuse.jpg';
 

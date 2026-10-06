@@ -1223,7 +1223,7 @@ TEST_CASE("Resting contact: a dynamic box on a thin static box sleeps at the rig
 
 // ---------------------------------------------------------------------------
 // Tavern world (#341): the collider set the app actually registers, exported
-// by `npm run fixture:world` to tests/fixtures/tavern-world.json, with the
+// by `npm run fixture:world` to packages/dice-core/fixtures/tavern-world.json, with the
 // shipped dice hulls and the app's own throw parameters. The bare solver
 // settling on a plane says nothing about this world; this test does.
 // ---------------------------------------------------------------------------
@@ -1237,7 +1237,7 @@ struct TavernWorld {
 
 const TavernWorld& tavernWorld() {
     static const TavernWorld w{
-        mini_json::parseFile("tests/fixtures/tavern-world.json"),
+        mini_json::parseFile("packages/dice-core/fixtures/tavern-world.json"),
         mini_json::parseFile("public/wasm/hulls.json"),
     };
     return w;

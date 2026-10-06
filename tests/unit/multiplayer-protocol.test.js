@@ -2,7 +2,7 @@
  * Protocol encode/decode round-trips for multiplayer DataChannel messages.
  */
 import { describe, expect, it } from 'vitest';
-import { createCommit, generateNonce, verifyReveal } from '../../src/net/CommitReveal.js';
+import { createCommit, generateNonce, verifyReveal } from 'dice-core/net/CommitReveal';
 import {
     MsgType,
     PROTOCOL_VERSION,

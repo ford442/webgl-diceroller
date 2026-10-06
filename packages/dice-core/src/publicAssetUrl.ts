@@ -5,8 +5,11 @@
  * @param relativePath Path relative to public/, e.g. "wasm/dice_physics.js"
  * @returns Absolute URL suitable for fetch/import/loaders
  */
+/** `import.meta.env` exists only under Vite; Node and plain workers have no `env`. */
+type ViteImportMeta = ImportMeta & { env?: { BASE_URL?: string } };
+
 export function publicAssetUrl(relativePath: string): string {
-    const base = import.meta.env?.BASE_URL ?? './';
+    const base = (import.meta as ViteImportMeta).env?.BASE_URL ?? './';
     const locationHref =
         typeof self !== 'undefined' && self.location?.href ? self.location.href : undefined;
     return resolvePublicAssetUrl(relativePath, base, locationHref);

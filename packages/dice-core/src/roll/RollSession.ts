@@ -3,7 +3,7 @@
  * evaluate keep/drop/modifiers, and handle exploding / one-shot rerolls.
  */
 
-import type { EvaluatedRoll, RollSessionDeps as BaseRollSessionDeps } from '../../types/roll.js';
+import type { EvaluatedRoll, RollSessionDeps as BaseRollSessionDeps } from '../types/roll.js';
 import {
     parseNotation,
     buildSpawnSpecsForGroups,

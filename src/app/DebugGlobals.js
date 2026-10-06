@@ -10,10 +10,7 @@ import {
     getWorldRecorder,
     readSleepDiagnostics,
 } from '../wasm/PhysicsBridge.js';
-import {
-    decodeSleepDiagnostics,
-    summarizeSleepDiagnostics,
-} from '../core-engine/wasm/sleepDiagnostics.js';
+import { decodeSleepDiagnostics, summarizeSleepDiagnostics } from 'dice-core/wasm/sleepDiagnostics';
 import { spawnedDice, setForceNoSettle } from '../dice.js';
 import { AppEvent } from '../core/AppEvents.js';
 
@@ -85,7 +82,7 @@ export function installDebugGlobals(app, deps) {
     // idle → rolling → settled | timedOut, with counters (RollWiring).
     app.getRollState = () => rollWiring.getRollState();
     app.physics.forceNoSettle = (value = true) => setForceNoSettle(value);
-    // ?test only: the collider world the page built (tests/fixtures/tavern-world.json)
+    // ?test only: the collider world the page built (packages/dice-core/fixtures/tavern-world.json)
     // and the recent die add/remove log for "engine has 0 dice" failures.
     app.physics.exportWorld = () => getWorldRecorder()?.exportWorld() ?? null;
     app.physics.getDieLog = () => getWorldRecorder()?.dieLog() ?? [];

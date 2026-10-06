@@ -1,6 +1,6 @@
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { publicAssetUrl } from './publicAssetUrl.js';
+import { publicAssetUrl } from 'dice-core/publicAssetUrl';
 
 let gltfLoader = null;
 let dracoLoader = null;

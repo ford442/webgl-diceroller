@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Export the tavern's collider world to tests/fixtures/tavern-world.json.
+ * Export the tavern's collider world to packages/dice-core/fixtures/tavern-world.json.
  *
  * Boots the built app (vite preview) with a pinned table layout, waits for
  * every tier to load, and dumps what the page registered in the physics engine
@@ -20,17 +20,15 @@
  *
  * Env: DICE_BASE_URL to use an already-running preview instead of starting one.
  */
-import { createRequire } from 'node:module';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const require = createRequire(import.meta.url);
-const { launchPage } = require('../tests/helpers/browser.js');
-const { startPreview } = require('../tests/helpers/server.js');
+import { launchPage } from '../tests/helpers/browser.js';
+import { startPreview } from '../tests/helpers/server.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const FIXTURE = path.join(REPO_ROOT, 'tests/fixtures/tavern-world.json');
+const FIXTURE = path.join(REPO_ROOT, 'packages/dice-core/fixtures/tavern-world.json');
 // In-process engine (no worker): every add* returns the engine's real answer,
 // so a rejected collider never reaches the fixture. The layout is pinned the
 // way a share link pins it.

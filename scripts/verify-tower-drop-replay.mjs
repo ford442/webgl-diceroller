@@ -35,20 +35,17 @@ import {
     createDiceTowerHopperFrame,
     worldDiceTowerColliders,
 } from '../src/environment/diceTowerLayout.js';
-import {
-    applyDropParams,
-    computeSeededHopperDropParams,
-} from '../src/core-engine/wasm/seededHopperDrop.js';
-import { createSeededRng } from '../src/core-engine/wasm/seededThrowParams.js';
+import { applyDropParams, computeSeededHopperDropParams } from 'dice-core/wasm/seededHopperDrop';
+import { createSeededRng } from 'dice-core/wasm/seededThrowParams';
 import {
     PHYSICS_GRAVITY,
     PHYSICS_TABLE_HALF,
     PHYSICS_TABLE_Y,
     getDieSides,
     presetForShape,
-} from '../src/core-engine/wasm/physicsPresets.js';
-import { createInProcessPhysicsSession } from '../src/core-engine/wasm/WasmPhysicsBridge.js';
-import { createNodeAssetUrl, wasmArtifactsPresent } from '../src/core-engine/rollHeadless.js';
+} from 'dice-core/wasm/physicsPresets';
+import { createInProcessPhysicsSession } from 'dice-core/wasm/WasmPhysicsBridge';
+import { createNodeAssetUrl, wasmArtifactsPresent } from 'dice-core/node';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC_DIR = path.join(REPO_ROOT, 'public');

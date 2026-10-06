@@ -11,7 +11,7 @@ import {
     countRecords,
     dispatchLinear,
     drainRing,
-} from '../../src/wasm/workerCommands.js';
+} from 'dice-core/wasm/workerCommands';
 
 function makeMockEngine() {
     return {

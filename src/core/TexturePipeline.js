@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
-import { publicAssetUrl } from './publicAssetUrl.js';
+import { publicAssetUrl } from 'dice-core/publicAssetUrl';
 
 let pipeline = null;
 const sets = {

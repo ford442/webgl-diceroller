@@ -17,6 +17,32 @@ const importRules = {
     ],
 };
 
+// The engine lives in the `dice-core` workspace package. Import it by name
+// (`dice-core/roll/Notation`), never by a relative path into its tree, and
+// never through the old src/ re-export barrels (deleted, #349).
+const DICE_CORE_IMPORT_MESSAGE = "Import the headless engine as 'dice-core/<subpath>'.";
+const diceCoreImportRule = {
+    'no-restricted-imports': [
+        'error',
+        {
+            patterns: [
+                {
+                    group: ['**/core-engine', '**/core-engine/**'],
+                    message: DICE_CORE_IMPORT_MESSAGE,
+                },
+                {
+                    group: ['**/packages/dice-core', '**/packages/dice-core/**'],
+                    message: DICE_CORE_IMPORT_MESSAGE,
+                },
+                {
+                    group: ['dice-core/src/**', 'dice-core/dist/**'],
+                    message: DICE_CORE_IMPORT_MESSAGE,
+                },
+            ],
+        },
+    ],
+};
+
 const coreRules = {
     ...js.configs.recommended.rules,
     eqeqeq: ['error', 'always', { null: 'ignore' }],
@@ -24,6 +50,7 @@ const coreRules = {
     'no-empty': ['error', { allowEmptyCatch: true }],
     'no-unused-vars': 'off',
     'unused-imports/no-unused-imports': 'error',
+    ...diceCoreImportRule,
     'unused-imports/no-unused-vars': [
         'error',
         {
@@ -41,6 +68,7 @@ export default [
         ignores: [
             'dist/**',
             'node_modules/**',
+            'packages/*/dist/**',
             'legacy/**',
             'public/**',
             'src/wasm/third_party/**',
@@ -76,7 +104,12 @@ export default [
         },
     },
     ...tseslint.config({
-        files: ['src/**/*.ts', 'tests/unit/**/*.ts'],
+        files: [
+            'src/**/*.ts',
+            'tests/unit/**/*.ts',
+            'packages/dice-core/src/**/*.ts',
+            'packages/dice-core/test/**/*.ts',
+        ],
         extends: [tseslint.configs.recommended],
         languageOptions: {
             ecmaVersion: 2022,
@@ -110,7 +143,7 @@ export default [
         },
     }),
     ...tseslint.config({
-        files: ['src/core-engine/wasm/dice_physics.worker.ts'],
+        files: ['packages/dice-core/src/wasm/dice_physics.worker.ts'],
         extends: [tseslint.configs.recommended],
         languageOptions: {
             ecmaVersion: 2022,
@@ -175,17 +208,6 @@ export default [
         rules: {
             ...coreRules,
             ...importRules,
-        },
-    },
-    {
-        files: ['tests/**/*.js', 'tests/helpers/**/*.js'],
-        languageOptions: {
-            sourceType: 'commonjs',
-            globals: {
-                ...globals.node,
-                ...globals.commonjs,
-                ...globals.browser,
-            },
         },
     },
     {

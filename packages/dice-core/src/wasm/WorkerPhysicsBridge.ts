@@ -52,7 +52,7 @@ import type { CollisionEvent, PhysicsEngine } from './physicsTypes.js';
 import type { SeededDieRef } from './seededThrowParams.js';
 import type { SeededHopperFrame } from './seededHopperDrop.js';
 
-interface StepStats {
+export interface StepStats {
     pairCandidates: number;
     sphereTests: number;
     satTests: number;

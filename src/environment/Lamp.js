@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadPropMesh } from '../core/PropAssetLoader.js';
-import { publicAssetUrl } from '../core/publicAssetUrl.js';
+import { publicAssetUrl } from 'dice-core/publicAssetUrl';
 import { getLampTextures } from '../core/TexturePipeline.js';
 import { playPropImpact } from '../audio/DiceCollisionAudio.js';
 

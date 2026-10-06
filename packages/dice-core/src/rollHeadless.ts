@@ -29,7 +29,7 @@ import {
     type ParsedSide,
     type SpawnDieSpec,
 } from './roll/Notation.js';
-import type { EvaluatedRoll } from '../types/roll.js';
+import type { EvaluatedRoll } from './types/roll.js';
 import {
     PHYSICS_GRAVITY,
     PHYSICS_TABLE_HALF,
@@ -96,7 +96,7 @@ export interface RollHeadlessOptions {
     /** Pipping bias ratio (the app's `?bias-ratio=`); defaults to 0.0075. */
     massBiasRatio?: number;
     /**
-     * A recorded collider world (tests/fixtures/tavern-world.json, see
+     * A recorded collider world (packages/dice-core/fixtures/tavern-world.json, see
      * WorldRecorder) to roll into instead of the bare analytic table — its
      * own `init` replaces the default one.
      */
@@ -114,7 +114,7 @@ function physicsSearchParams(options: RollHeadlessOptions): URLSearchParams {
 }
 
 export function defaultPublicDir(fromUrl: string = import.meta.url): string {
-    return path.resolve(path.dirname(fileURLToPath(fromUrl)), '../..', 'public');
+    return path.resolve(path.dirname(fileURLToPath(fromUrl)), '../../..', 'public');
 }
 
 export function wasmArtifactsPresent(

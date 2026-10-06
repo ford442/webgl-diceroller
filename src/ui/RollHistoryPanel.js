@@ -1,4 +1,4 @@
-import { formatDiceSet, formatResultsSummary } from '../roll/RollHistory.js';
+import { formatDiceSet, formatResultsSummary } from 'dice-core/roll/RollHistory';
 import { createHudPanel, hudButton, guardPointerEvents } from './hudPanel.js';
 
 const GOLD = '#ffd700';
@@ -9,12 +9,12 @@ const FAIL = '#ff8f7a';
 const OBSERVED = '#ffd66b';
 const EXPECTED = '#6486ff';
 
-/** @typedef {import('../types/roll').RollHistoryEntry} RollHistoryEntry */
+/** @typedef {import('dice-core/types/roll').RollHistoryEntry} RollHistoryEntry */
 
 /**
  * @param {object} config
  * @param {{ getEntries: () => RollHistoryEntry[]; exportAsText: () => string; exportAsCsv: () => string; clear: () => void }} config.rollHistory
- * @param {{ getStats: () => import('../types/roll').RollDieStats[]; minSampleSize?: number; reset: () => void }} config.rollStats
+ * @param {{ getStats: () => import('dice-core/types/roll').RollDieStats[]; minSampleSize?: number; reset: () => void }} config.rollStats
  * @param {(seed: number) => void} [config.onReplay]
  * @param {HTMLElement} [config.container]
  */

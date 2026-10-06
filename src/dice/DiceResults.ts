@@ -6,7 +6,7 @@ import { isUsingWasmPhysics } from './DicePhysicsPresets.js';
 import { getDieQuaternion } from './DiceTransformRead.js';
 import { getWasmFaceValueForDie } from './DiceFaceValueRead.js';
 import { resolveDieFaceValue } from './DiceSetRuntime.js';
-import type { SettleProbe } from '../core-engine/roll/SettleWatch.js';
+import type { SettleProbe } from 'dice-core/roll/SettleWatch';
 
 const _invQ = new THREE.Quaternion();
 const _localUp = new THREE.Vector3();

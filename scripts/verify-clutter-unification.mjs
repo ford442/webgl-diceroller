@@ -15,11 +15,9 @@
  *
  * Usage: npm run preview & node scripts/verify-clutter-unification.mjs
  */
-import { createRequire } from 'node:module';
 
-const require = createRequire(import.meta.url);
-const { runTest, waitForSettle } = require('../tests/helpers/browser.js');
-const { BASE } = require('../tests/helpers/server.js');
+import { runTest, waitForSettle } from '../tests/helpers/browser.js';
+import { BASE } from '../tests/helpers/server.js';
 
 const SHARED_PROP_NAMES = [
     'EnhancedMug',

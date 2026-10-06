@@ -1,4 +1,4 @@
-import type { RollDieStats } from '../../types/roll.js';
+import type { RollDieStats } from '../types/roll.js';
 
 const DIE_SIDES: Record<string, number> = {
     d4: 4,

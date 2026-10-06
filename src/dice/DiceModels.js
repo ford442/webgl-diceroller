@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { publicAssetUrl } from '../core/publicAssetUrl.js';
+import { publicAssetUrl } from 'dice-core/publicAssetUrl';
 import { ensureBodyPipGroups } from './DiceGeometryGroups.js';
 import {
     backendForRenderer,

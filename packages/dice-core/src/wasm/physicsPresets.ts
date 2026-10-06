@@ -1,4 +1,4 @@
-import type { PhysicsPreset } from '../../types/physicsPresets.js';
+import type { PhysicsPreset } from '../types/physicsPresets.js';
 import type { DieShapeId } from '../dice/DiceSetFormat.js';
 
 /** Gravity used by `DicePhysicsEngine::init` and the visual tavern. */

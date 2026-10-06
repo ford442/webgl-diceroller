@@ -1,4 +1,8 @@
 {
+    "type": "module",
+    "workspaces": [
+        "packages/*"
+    ],
     "dependencies": {
         "three": "^0.181.2"
     },
@@ -11,7 +15,8 @@
         "check:bundle-size": "node scripts/check-bundle-size.mjs",
         "check:deploy-size": "node scripts/check-deploy-size.mjs",
         "check:cycles": "madge --circular --extensions js,ts src/",
-        "check:core-engine": "node scripts/check-core-engine-isolation.mjs",
+        "check:core-engine": "node scripts/check-core-engine-isolation.mjs && tsc -p packages/dice-core --noEmit",
+        "build:dice-core": "tsc -p packages/dice-core",
         "verify:bundle-loading": "node scripts/verify-bundle-loading.mjs",
         "audit:prop-colliders": "node scripts/prop-collider-audit.mjs",
         "verify:pwa-isolation": "node scripts/verify-pwa-isolation.mjs",
@@ -27,15 +32,15 @@
         "convert:props": "node scripts/convert-props.mjs",
         "optimize:fallback-jpgs": "node scripts/reencode-fallback-jpgs.mjs",
         "verify:worker-physics": "node scripts/verify-worker-physics.mjs",
-        "verify:worker-replay": "tsx scripts/verify-worker-replay.mjs",
-        "verify:tower-drop-replay": "tsx scripts/verify-tower-drop-replay.mjs",
+        "verify:worker-replay": "tsx --conditions=source scripts/verify-worker-replay.mjs",
+        "verify:tower-drop-replay": "tsx --conditions=source scripts/verify-tower-drop-replay.mjs",
         "verify:godrays": "node scripts/verify-godrays.mjs",
         "verify:clutter-unification": "node scripts/verify-clutter-unification.mjs",
         "verify:wasm-primitives": "node scripts/verify-wasm-primitives.mjs",
         "verify:wasm-interaction": "node scripts/verify-wasm-interaction.mjs",
         "verify:render-regression": "node scripts/render-regression.mjs && node scripts/compare-render-baseline.mjs",
         "verify:cmake-wasm": "bash scripts/verify-cmake-wasm-parity.sh",
-        "verify:renderer-factory": "tsx scripts/verify-renderer-factory.mjs",
+        "verify:renderer-factory": "tsx --conditions=source scripts/verify-renderer-factory.mjs",
         "typecheck": "tsc --noEmit",
         "typecheck:strict": "tsc -p tsconfig.strict.json --noEmit",
         "lint": "eslint .",

@@ -2,8 +2,8 @@
  * Unit tests for shareable roll URL helpers.
  */
 import { describe, expect, it } from 'vitest';
-import { createDefaultDiceSet, withComputedId } from '../../src/dice/DiceSetFormat.js';
-import { serializeLegacyDiceLook } from '../../src/dice/LegacyDiceLook.js';
+import { createDefaultDiceSet, withComputedId } from 'dice-core/dice/DiceSetFormat';
+import { serializeLegacyDiceLook } from 'dice-core/dice/LegacyDiceLook';
 import {
     REPLAY_VERSION,
     ROLL_SOURCE_PARAM,
@@ -13,8 +13,8 @@ import {
     parseShareableRollDiceSet,
     parseShareableRollParams,
     serializeDiceCounts,
-} from '../../src/roll/ShareableRoll.js';
-import { computeSeededThrowParams, createSeededRng } from '../../src/wasm/seededThrowParams.js';
+} from 'dice-core/roll/ShareableRoll';
+import { computeSeededThrowParams, createSeededRng } from 'dice-core/wasm/seededThrowParams';
 
 describe('ShareableRoll', () => {
     it('serializes non-zero dice counts', () => {

@@ -10,7 +10,7 @@
  * deeper.
  */
 import { describe, expect, it } from 'vitest';
-import { resolveDicePhysicsFactory } from '../../src/core-engine/wasm/wasmArtifact.js';
+import { resolveDicePhysicsFactory } from 'dice-core/wasm/wasmArtifact';
 
 const factory = () => Promise.resolve({});
 

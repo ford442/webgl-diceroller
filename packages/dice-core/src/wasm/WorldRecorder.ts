@@ -6,7 +6,7 @@
  * structural methods in place — `init`, `addStatic*` / `removeStatic` /
  * `clearStatics`, `addDynamic*` / `removeDynamic` / `clearDynamics` — and keeps
  * the net live set, which `scripts/export-collider-fixture.mjs` dumps to
- * `tests/fixtures/tavern-world.json`. `solver_tests.cpp` and
+ * `packages/dice-core/fixtures/tavern-world.json`. `solver_tests.cpp` and
  * `applyWorld()` replay that file onto a bare engine.
  *
  * It also keeps a short timestamped log of die adds/removes, which is what a

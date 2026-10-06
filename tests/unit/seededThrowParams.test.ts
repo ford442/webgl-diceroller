@@ -9,7 +9,7 @@ import {
     applyThrowParams,
     computeSeededThrowParams,
     createSeededRng,
-} from '../../src/wasm/seededThrowParams.js';
+} from 'dice-core/wasm/seededThrowParams';
 
 describe('createSeededRng', () => {
     it('matches the engine PRNG golden sequence bit for bit', () => {

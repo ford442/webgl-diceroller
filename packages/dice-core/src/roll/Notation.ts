@@ -25,7 +25,7 @@ import type {
     RollFlags,
     RollGroupSubtotal,
     RollOutcomeEntry,
-} from '../../types/roll.js';
+} from '../types/roll.js';
 
 export type {
     DiceGroup,

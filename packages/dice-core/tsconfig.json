@@ -1,0 +1,23 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        // No DOM: `window` / `document` are compile errors here, which is the
+        // isolation `npm run check:core-engine` used to enforce with regexes.
+        // WebWorker supplies `self`, `Worker`, `postMessage` and `fetch` for
+        // the physics worker and its bridge.
+        "lib": ["ES2022", "WebWorker"],
+        "types": ["node"],
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "skipLibCheck": true,
+        "isolatedModules": true,
+        "verbatimModuleSyntax": false,
+        "declaration": true,
+        "sourceMap": true,
+        "rootDir": "src",
+        "outDir": "dist"
+    },
+    "include": ["src/**/*.ts"]
+}

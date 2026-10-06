@@ -1,6 +1,6 @@
 /**
  * Headless dice core: WASM loader, worker/in-process bridges, notation,
- * shareable dice sets, and `rollHeadless()`. This graph must stay free of
+ * shareable dice sets. `rollHeadless()` lives in `./node.ts` (`dice-core/node`). This graph must stay free of
  * Three.js and of `document` / `window` module imports.
  */
 
@@ -88,16 +88,5 @@ export {
     PHYSICS_TABLE_Y,
     THROW_TABLE_SURFACE_Y,
 } from './wasm/physicsPresets.js';
-
-export {
-    rollHeadless,
-    wasmArtifactsPresent,
-    defaultPublicDir,
-    createNodeAssetUrl,
-    type HeadlessRollResult,
-    type HeadlessRollTrace,
-    type HeadlessDieResult,
-    type RollHeadlessOptions,
-} from './rollHeadless.js';
 
 export { createCommit, generateNonce, verifyReveal, commitHash } from './net/CommitReveal.js';

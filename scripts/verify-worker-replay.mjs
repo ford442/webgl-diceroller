@@ -30,14 +30,14 @@ import {
     loadWasmEngine, isWasmAvailable, getWasmEngine, loadHullForDie,
     isUsingWorkerPhysics, seededPhysicsThrow, serializePhysicsState,
 } from './wasm/PhysicsBridge.js';
-import { createInProcessPhysicsSession } from './core-engine/wasm/WasmPhysicsBridge.js';
+import { createInProcessPhysicsSession } from 'dice-core/wasm/WasmPhysicsBridge';
 import {
     applyThrowParams, computeSeededThrowParams, createSeededRng,
-} from './core-engine/wasm/seededThrowParams.js';
+} from 'dice-core/wasm/seededThrowParams';
 import {
     PHYSICS_GRAVITY, PHYSICS_TABLE_HALF, PHYSICS_TABLE_Y, THROW_TABLE_SURFACE_Y,
     getDieSides, presetForShape,
-} from './core-engine/wasm/physicsPresets.js';
+} from 'dice-core/wasm/physicsPresets';
 
 const SHAPES = ${JSON.stringify(SHAPES)};
 
@@ -226,7 +226,7 @@ else {
     console.log('[verify] 60 Hz face histogram (== 30 Hz):', JSON.stringify(tally));
 }
 
-const { rollHeadless, wasmArtifactsPresent } = await import('../src/core-engine/rollHeadless.ts');
+const { rollHeadless, wasmArtifactsPresent } = await import('dice-core/node');
 if (result?.ok && wasmArtifactsPresent()) {
     console.log(`[verify] comparing with rollHeadless('${EXPRESSION}', ${SEED})…`);
     const headless = await rollHeadless(EXPRESSION, SEED);

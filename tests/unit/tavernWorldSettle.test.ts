@@ -13,12 +13,12 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { rollHeadless, wasmArtifactsPresent } from '../../src/core-engine/index.js';
-import type { WorldFixture } from '../../src/core-engine/wasm/WorldRecorder.js';
+import { rollHeadless, wasmArtifactsPresent } from 'dice-core/node';
+import type { WorldFixture } from 'dice-core/wasm/WorldRecorder';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const world = JSON.parse(
-    readFileSync(path.join(REPO_ROOT, 'tests/fixtures/tavern-world.json'), 'utf8')
+    readFileSync(path.join(REPO_ROOT, 'packages/dice-core/fixtures/tavern-world.json'), 'utf8')
 ) as WorldFixture;
 
 const SEEDS = Number(process.env.TAVERN_SEEDS) || 24;

@@ -5,8 +5,8 @@ import {
     parseNotation,
     rollHeadless,
     wasmArtifactsPresent,
-} from '../../src/core-engine/index.js';
-import { presetForShape } from '../../src/core-engine/wasm/physicsPresets.js';
+} from 'dice-core/node';
+import { presetForShape } from 'dice-core/wasm/physicsPresets';
 
 describe('core-engine public API', () => {
     it('exposes physics presets without Three.js', () => {

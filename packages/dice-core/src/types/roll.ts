@@ -143,7 +143,7 @@ export interface RollSessionDeps {
      * A fresh settle watch per throw (core-engine/roll/SettleWatch). Without
      * one the session falls back to polling `areDiceSettled` with a frame cap.
      */
-    createSettleWatch?: () => import('../core-engine/roll/SettleWatch').SettleWatch;
+    createSettleWatch?: () => import('../roll/SettleWatch.js').SettleWatch;
     /** Resolves once every spawned die has an engine body (worker round trip). */
     whenDiceRegistered?: () => Promise<void>;
     waitFrame?: () => Promise<void>;

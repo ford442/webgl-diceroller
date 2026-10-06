@@ -1,6 +1,19 @@
+import { defaultClientConditions, defaultServerConditions } from 'vite';
 import { defineConfig } from 'vitest/config';
 
+// Resolve `dice-core` to its TypeScript source (see vite.config.js).
+const SOURCE_CONDITIONS = ['source'];
+
 export default defineConfig({
+    resolve: {
+        conditions: [...SOURCE_CONDITIONS, ...defaultClientConditions],
+    },
+    ssr: {
+        resolve: {
+            conditions: [...SOURCE_CONDITIONS, ...defaultServerConditions],
+            externalConditions: SOURCE_CONDITIONS,
+        },
+    },
     test: {
         include: ['tests/unit/**/*.test.{js,ts,mjs}'],
         environment: 'happy-dom',
