@@ -299,6 +299,9 @@ jobs:
                     - verify:worker-physics
                     - verify:worker-replay
                     - verify:tower-drop-replay
+                    # dice-core's golden roll vectors in a real browser, both
+                    # builds, cross-checked against the app's physics worker.
+                    - verify:headless-parity
                     # 200 seeded rolls into the recorded tavern world through
                     # the WASM build, each settling inside 12 s sim (#341).
                     - test:tavern-world

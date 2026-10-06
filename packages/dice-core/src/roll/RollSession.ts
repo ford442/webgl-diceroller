@@ -111,9 +111,13 @@ async function resolveSide(
     let explosionRound = 0;
     const maxExplosionRounds = 20;
     let didRerollPass = false;
+    // The reroll round also runs with explosionRound 0 and didRerollPass
+    // false, so those two cannot tell it from the first throw: testing them
+    // made the rerolled dice *replace* the pool (4d6r1 kept one die).
+    let firstRound = true;
 
     while (true) {
-        deps.onStateChange?.(explosionRound === 0 && !didRerollPass ? 'spawning' : 'respawning');
+        deps.onStateChange?.(firstRound ? 'spawning' : 'respawning');
         deps.replaceDiceSet(deps.scene, deps.world, specs);
         // Spawn → body registered → throw is an awaited chain: a throw sent
         // to dice the engine does not have yet can never settle (#341).
@@ -143,8 +147,9 @@ async function resolveSide(
             ...(timedOut && r.cocked ? { cocked: true } : {}),
         }));
 
-        if (explosionRound === 0 && !didRerollPass) {
+        if (firstRound) {
             accumulatedDice = roundDice;
+            firstRound = false;
         } else if (specs.some((s) => s.isReroll)) {
             // One-shot reroll: mark prior slot values as replaced, append new readings.
             roundDice.forEach((d, i) => {

@@ -77,6 +77,14 @@ export {
 } from './wasm/wasmArtifact.js';
 
 export { supportsWasmSimd, WASM_SIMD_PROBE_BYTES } from './wasm/simdSupport.js';
+export { fnv1a64Hex } from './wasm/stateHash.js';
+export {
+    createSimDriver,
+    FIXED_DT,
+    MAX_CATCH_UP_TICKS,
+    type SimClock,
+    type SimDriver,
+} from './wasm/SimDriver.js';
 
 export {
     formatSolverBuildId,

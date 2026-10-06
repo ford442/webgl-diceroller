@@ -1,0 +1,335 @@
+{
+    "schema": 1,
+    "description": "dice-core roll goldens: rollHeadless(expr, seed, null, { world: fixtures/tavern-world.json }) settles to these faces. Generated in a browser by scripts/verify-headless-parity.mjs --write; asserted in Node by packages/dice-core/test/goldens.wasm.test.ts.",
+    "solverRevision": 10,
+    "solverBuildId": "10:c918bb5e236a",
+    "emccVersion": "3.1.51",
+    "world": "fixtures/tavern-world.json",
+    "vectors": [
+        {
+            "expr": "1d4",
+            "seed": 1,
+            "faces": [3],
+            "fixedTicks": 307,
+            "stateHash": "0x980774ab328c8dd3"
+        },
+        {
+            "expr": "1d4",
+            "seed": 2654435769,
+            "faces": [3],
+            "fixedTicks": 311,
+            "stateHash": "0xbffd87b786acc49b"
+        },
+        {
+            "expr": "1d6",
+            "seed": 1,
+            "faces": [3],
+            "fixedTicks": 271,
+            "stateHash": "0x99197486765da1b1"
+        },
+        {
+            "expr": "1d6",
+            "seed": 2654435769,
+            "faces": [2],
+            "fixedTicks": 245,
+            "stateHash": "0x00fdf3ce4f635504"
+        },
+        {
+            "expr": "1d8",
+            "seed": 1,
+            "faces": [4],
+            "fixedTicks": 308,
+            "stateHash": "0xcefdbbc5f4b6b614"
+        },
+        {
+            "expr": "1d8",
+            "seed": 2654435769,
+            "faces": [3],
+            "fixedTicks": 404,
+            "stateHash": "0x87e04cc89f350e62"
+        },
+        {
+            "expr": "1d10",
+            "seed": 1,
+            "faces": [5],
+            "fixedTicks": 364,
+            "stateHash": "0x6e53c4425b8926f7"
+        },
+        {
+            "expr": "1d10",
+            "seed": 2654435769,
+            "faces": [8],
+            "fixedTicks": 349,
+            "stateHash": "0xcb95426ce9ccfd14"
+        },
+        {
+            "expr": "1d12",
+            "seed": 1,
+            "faces": [4],
+            "fixedTicks": 399,
+            "stateHash": "0xe6de8cff6c90d4da"
+        },
+        {
+            "expr": "1d12",
+            "seed": 2654435769,
+            "faces": [12],
+            "fixedTicks": 544,
+            "stateHash": "0x7e1557258787d38e"
+        },
+        {
+            "expr": "1d20",
+            "seed": 1,
+            "faces": [6],
+            "fixedTicks": 363,
+            "stateHash": "0xd5a35518519124db"
+        },
+        {
+            "expr": "1d20",
+            "seed": 2654435769,
+            "faces": [6],
+            "fixedTicks": 390,
+            "stateHash": "0xdd8fc6ace5e50f83"
+        },
+        {
+            "expr": "1d100",
+            "seed": 7,
+            "faces": [8, 8],
+            "fixedTicks": 431,
+            "stateHash": "0x90256ec4e012e123"
+        },
+        {
+            "expr": "d%",
+            "seed": 3735928559,
+            "faces": [8, 10],
+            "fixedTicks": 452,
+            "stateHash": "0xf134b65155010538"
+        },
+        {
+            "expr": "1d4+1d6+1d8+1d10+1d12+1d20",
+            "seed": 42,
+            "faces": [3, 5, 5, 8, 12, 15],
+            "fixedTicks": 670,
+            "stateHash": "0x24d39d3486ace4ee"
+        },
+        {
+            "expr": "1d4+1d6+1d8+1d10+1d12+1d20",
+            "seed": 777,
+            "faces": [3, 5, 8, 4, 10, 13],
+            "fixedTicks": 434,
+            "stateHash": "0x2560bb2565d50b44"
+        },
+        {
+            "expr": "1d4+1d6+1d8+1d10+1d12+1d20",
+            "seed": 1592590337,
+            "faces": [3, 5, 5, 3, 2, 11],
+            "fixedTicks": 555,
+            "stateHash": "0x536cc789c7bba2e7"
+        },
+        {
+            "expr": "4d6",
+            "seed": 777,
+            "faces": [3, 3, 5, 2],
+            "fixedTicks": 396,
+            "stateHash": "0x17bb0ab85b427235"
+        },
+        {
+            "expr": "4d6",
+            "seed": 31337,
+            "faces": [6, 3, 5, 4],
+            "fixedTicks": 359,
+            "stateHash": "0xbef21afd4e667743"
+        },
+        {
+            "expr": "2d20",
+            "seed": 5,
+            "faces": [7, 17],
+            "fixedTicks": 413,
+            "stateHash": "0x66b85f0bd63cc390"
+        },
+        {
+            "expr": "2d20",
+            "seed": 3405705229,
+            "faces": [14, 7],
+            "fixedTicks": 405,
+            "stateHash": "0x0ecbd9f182c3947d"
+        },
+        {
+            "expr": "3d8+2d10",
+            "seed": 99,
+            "faces": [5, 7, 4, 5, 1],
+            "fixedTicks": 373,
+            "stateHash": "0x9cd3e53082a6e05d"
+        },
+        {
+            "expr": "3d8+2d10",
+            "seed": 2024,
+            "faces": [5, 4, 2, 4, 3],
+            "fixedTicks": 417,
+            "stateHash": "0xd583a95a49b730ef"
+        },
+        {
+            "expr": "2d6+1d10",
+            "seed": 11,
+            "faces": [6, 3, 8],
+            "fixedTicks": 502,
+            "stateHash": "0x990ca44acbce919b"
+        },
+        {
+            "expr": "1d20+1d12+1d10+1d8",
+            "seed": 123456,
+            "faces": [2, 4, 3, 2],
+            "fixedTicks": 644,
+            "stateHash": "0x6925c9c81f7673a5"
+        },
+        {
+            "expr": "3d6+2d20",
+            "seed": 8,
+            "faces": [6, 2, 4, 7, 13],
+            "fixedTicks": 385,
+            "stateHash": "0x27d58c891b7a0fa2"
+        },
+        {
+            "expr": "1d20+1d6",
+            "seed": 1,
+            "faces": [6, 5],
+            "fixedTicks": 363,
+            "stateHash": "0x1a7b0081d1bfbe9d"
+        },
+        {
+            "expr": "10d6",
+            "seed": 4,
+            "faces": [2, 5, 1, 5, 6, 5, 6, 6, 6, 5],
+            "fixedTicks": 423,
+            "stateHash": "0xf36853d1eb69a645"
+        },
+        {
+            "expr": "10d6",
+            "seed": 305419896,
+            "faces": [6, 5, 5, 3, 4, 3, 2, 1, 6, 6],
+            "fixedTicks": 536,
+            "stateHash": "0x67288403de8a6377"
+        },
+        {
+            "expr": "8d8",
+            "seed": 64,
+            "faces": [8, 2, 3, 3, 4, 4, 4, 4],
+            "fixedTicks": 444,
+            "stateHash": "0x8ed9e8376753f608"
+        },
+        {
+            "expr": "6d12",
+            "seed": 612,
+            "faces": [12, 10, 12, 5, 10, 9],
+            "fixedTicks": 675,
+            "stateHash": "0xc10a4f68b59b0bb1"
+        },
+        {
+            "expr": "4d6kh3",
+            "seed": 3,
+            "faces": [6, 3, 1, 2],
+            "fixedTicks": 354,
+            "stateHash": "0xd9b818a46c9f022b"
+        },
+        {
+            "expr": "4d6kh3",
+            "seed": 11259375,
+            "faces": [4, 1, 1, 3],
+            "fixedTicks": 492,
+            "stateHash": "0xd6f7df96aa411d59"
+        },
+        {
+            "expr": "2d20kl1",
+            "seed": 20,
+            "faces": [12, 12],
+            "fixedTicks": 373,
+            "stateHash": "0x4c4d28374ce3d89c"
+        },
+        {
+            "expr": "2d20kh1",
+            "seed": 21,
+            "faces": [3, 16],
+            "fixedTicks": 529,
+            "stateHash": "0xcde393c6cba733d0"
+        },
+        {
+            "expr": "4d6r1",
+            "seed": 3,
+            "faces": [6, 3, 1, 2, 3],
+            "fixedTicks": 669,
+            "stateHash": "0x5920fad5bf54dce7"
+        },
+        {
+            "expr": "4d6r1",
+            "seed": 1911,
+            "faces": [3, 4, 6, 6],
+            "fixedTicks": 362,
+            "stateHash": "0xde81cb0efb10786b"
+        },
+        {
+            "expr": "6d6!",
+            "seed": 11,
+            "faces": [6, 2, 6, 5, 1, 3, 2, 1],
+            "fixedTicks": 756,
+            "stateHash": "0x9892cf47cce72887"
+        },
+        {
+            "expr": "6d6!",
+            "seed": 24589,
+            "faces": [5, 3, 1, 2, 5, 6, 1],
+            "fixedTicks": 645,
+            "stateHash": "0x4871744e69e05adc"
+        },
+        {
+            "expr": "4d10!",
+            "seed": 10,
+            "faces": [8, 2, 1, 4],
+            "fixedTicks": 567,
+            "stateHash": "0xfea656c00b8e601d"
+        },
+        {
+            "expr": "4dF",
+            "seed": 44,
+            "faces": [3, 3, 6, 3],
+            "fixedTicks": 320,
+            "stateHash": "0xd32a4af23d5e27ea"
+        },
+        {
+            "expr": "1d20+5",
+            "seed": 15,
+            "faces": [3],
+            "fixedTicks": 424,
+            "stateHash": "0x2e88f77773d23c60"
+        },
+        {
+            "expr": "3d6-2",
+            "seed": 36,
+            "faces": [1, 1, 2],
+            "fixedTicks": 383,
+            "stateHash": "0x5d741d4eb90d1925"
+        },
+        {
+            "expr": "1d20 vs 1d20",
+            "seed": 9,
+            "faces": [13],
+            "opposedFaces": [6],
+            "fixedTicks": 924,
+            "stateHash": "0x51d5b479f926585d"
+        },
+        {
+            "expr": "1d20 vs 1d20",
+            "seed": 4277009102,
+            "faces": [17],
+            "opposedFaces": [9],
+            "fixedTicks": 739,
+            "stateHash": "0x7c4b5f8dda220818"
+        },
+        {
+            "expr": "2d6 vs 2d6",
+            "seed": 26,
+            "faces": [6, 3],
+            "opposedFaces": [3, 6],
+            "fixedTicks": 751,
+            "stateHash": "0x8ab4567bf145c46a"
+        }
+    ]
+}

@@ -45,6 +45,7 @@ import { createInProcessPhysicsSession } from './wasm/WasmPhysicsBridge.js';
 import type { PhysicsEngine } from './wasm/physicsTypes.js';
 import { applyWorld, type WorldFixture } from './wasm/WorldRecorder.js';
 import { createSimDriver, FIXED_DT, type SimDriver } from './wasm/SimDriver.js';
+import { fnv1a64Hex } from './wasm/stateHash.js';
 import { WASM_SIMD_DIR, type WasmArtifactDir } from './wasm/wasmArtifact.js';
 
 const DEFAULT_MAX_STEPS = 120 * 20; // 20s of sim
@@ -70,6 +71,8 @@ export interface HeadlessRollTrace {
     dt: number;
     /** Fixed 1/120 s engine ticks the whole roll took (both sides, every round). */
     fixedTicks: number;
+    /** FNV-1a 64 of the engine's serialized state once the last die settled. */
+    stateHash: string;
     solverBuildId: string | null;
     /** Solver faces of `results`, in the same order. */
     faceValues: number[];
@@ -212,6 +215,9 @@ async function resolveSide(
     let explosionRound = 0;
     const maxExplosionRounds = 20;
     let didRerollPass = false;
+    // Not `explosionRound === 0 && !didRerollPass`: the reroll round matches
+    // that too (see RollSession), which replaced the pool with the rerolls.
+    let firstRound = true;
     let steps = 0;
     let rounds = 0;
     // Parallel to accumulatedDice: which body each outcome came from and the
@@ -249,9 +255,10 @@ async function resolveSide(
             };
         });
 
-        if (explosionRound === 0 && !didRerollPass) {
+        if (firstRound) {
             accumulatedDice = roundDice;
             solved = roundSolved;
+            firstRound = false;
         } else if (specs.some((s) => s.isReroll)) {
             roundDice.forEach((d, i) => {
                 const slot = specs[i]?.dieIndex ?? d.dieIndex;
@@ -393,6 +400,8 @@ export async function rollHeadless(
         opposedRounds = right.rounds;
     }
 
+    const stateHash = fnv1a64Hex(engine.serializeState());
+
     // build-info.json of the artifact this session actually loaded.
     const solverBuildId = await readSolverBuildId(assets, session.dir ?? WASM_SIMD_DIR);
 
@@ -422,6 +431,7 @@ export async function rollHeadless(
             steps: left.steps + opposedSteps,
             dt,
             fixedTicks: driver.stepIndex,
+            stateHash,
             solverBuildId,
             faceValues: left.solved.map((d) => d.natural),
             ...(opposedSolved ? { opposedFaceValues: opposedSolved.map((d) => d.natural) } : {}),

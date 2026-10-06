@@ -34,6 +34,8 @@
         "verify:worker-physics": "node scripts/verify-worker-physics.mjs",
         "verify:worker-replay": "tsx --conditions=source scripts/verify-worker-replay.mjs",
         "verify:tower-drop-replay": "tsx --conditions=source scripts/verify-tower-drop-replay.mjs",
+        "verify:headless-parity": "node scripts/verify-headless-parity.mjs",
+        "goldens:update": "node scripts/verify-headless-parity.mjs --write",
         "verify:godrays": "node scripts/verify-godrays.mjs",
         "verify:clutter-unification": "node scripts/verify-clutter-unification.mjs",
         "verify:wasm-primitives": "node scripts/verify-wasm-primitives.mjs",

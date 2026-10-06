@@ -248,11 +248,14 @@ describe('double-buffer tear-free reads under real concurrency', () => {
             // Snapshot immediately — it's a zero-copy view into shared
             // memory and the worker keeps writing after this read.
             const snapshot = view.slice(0, 8);
-            // Two flips during the read mean the writer lapped us and refilled
-            // the buffer we were reading — the case the double buffer does not
-            // claim to cover (frame pacing rules it out in the app; a reader
-            // descheduled for >1 ms here, e.g. under coverage, does not).
-            if (Atomics.load(header, H_SEQNO) - seqBefore >= 2) {
+            // A flip during the read can hand our buffer back to the writer:
+            // it flips, then refills the buffer that was front a moment ago.
+            // Like a seqlock, a read only counts if no flip happened around
+            // it — the double buffer is tear-free for those, which is what
+            // this test pins. (A reader descheduled for >1 ms — e.g. under
+            // coverage — hits the other case; frame pacing rules it out in
+            // the app.)
+            if (Atomics.load(header, H_SEQNO) !== seqBefore) {
                 laps++;
                 continue;
             }
