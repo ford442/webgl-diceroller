@@ -75,16 +75,17 @@ inline Mat3 inertiaWorldMat3(const Quat& rot, const Vec3& invInertiaLocal) {
 inline void transformHullVerts(const Vec3* local, int count, const Quat& rot, const Vec3& pos,
                                Vec3* out) {
 #if defined(__wasm_simd128__) && !defined(DICE_FORCE_SCALAR_SAT)
-    const Mat3 R = mat3FromQuat(rot);
-    const v128_t row0x = wasm_f32x4_splat(R.m[0]);
-    const v128_t row0y = wasm_f32x4_splat(R.m[1]);
-    const v128_t row0z = wasm_f32x4_splat(R.m[2]);
-    const v128_t row1x = wasm_f32x4_splat(R.m[3]);
-    const v128_t row1y = wasm_f32x4_splat(R.m[4]);
-    const v128_t row1z = wasm_f32x4_splat(R.m[5]);
-    const v128_t row2x = wasm_f32x4_splat(R.m[6]);
-    const v128_t row2y = wasm_f32x4_splat(R.m[7]);
-    const v128_t row2z = wasm_f32x4_splat(R.m[8]);
+    // Four vertices per iteration, each lane running *exactly* the scalar
+    // `rot.rotate(v) + pos` sequence (Quat::rotate in dice_math.hpp): two
+    // cross products, then v + uv*(2w) + uuv*2, then + pos, in that order.
+    // WASM has no FMA contraction and these are lane-wise IEEE f32 ops, so
+    // the SIMD and scalar builds stay bit-identical — a rotation-matrix
+    // shortcut here once made them settle to different faces.
+    const v128_t qx = wasm_f32x4_splat(rot.x);
+    const v128_t qy = wasm_f32x4_splat(rot.y);
+    const v128_t qz = wasm_f32x4_splat(rot.z);
+    const v128_t s2w = wasm_f32x4_splat(2.0f * rot.w);
+    const v128_t two = wasm_f32x4_splat(2.0f);
     const v128_t px = wasm_f32x4_splat(pos.x);
     const v128_t py = wasm_f32x4_splat(pos.y);
     const v128_t pz = wasm_f32x4_splat(pos.z);
@@ -93,17 +94,23 @@ inline void transformHullVerts(const Vec3* local, int count, const Quat& rot, co
         const v128_t vx = wasm_f32x4_make(local[i].x, local[i + 1].x, local[i + 2].x, local[i + 3].x);
         const v128_t vy = wasm_f32x4_make(local[i].y, local[i + 1].y, local[i + 2].y, local[i + 3].y);
         const v128_t vz = wasm_f32x4_make(local[i].z, local[i + 1].z, local[i + 2].z, local[i + 3].z);
+        // uv = cross(q, v)
+        const v128_t uvx = wasm_f32x4_sub(wasm_f32x4_mul(qy, vz), wasm_f32x4_mul(qz, vy));
+        const v128_t uvy = wasm_f32x4_sub(wasm_f32x4_mul(qz, vx), wasm_f32x4_mul(qx, vz));
+        const v128_t uvz = wasm_f32x4_sub(wasm_f32x4_mul(qx, vy), wasm_f32x4_mul(qy, vx));
+        // uuv = cross(q, uv)
+        const v128_t uuvx = wasm_f32x4_sub(wasm_f32x4_mul(qy, uvz), wasm_f32x4_mul(qz, uvy));
+        const v128_t uuvy = wasm_f32x4_sub(wasm_f32x4_mul(qz, uvx), wasm_f32x4_mul(qx, uvz));
+        const v128_t uuvz = wasm_f32x4_sub(wasm_f32x4_mul(qx, uvy), wasm_f32x4_mul(qy, uvx));
+        // ((v + uv*2w) + uuv*2) + pos
         const v128_t ox = wasm_f32x4_add(
-            wasm_f32x4_add(wasm_f32x4_add(wasm_f32x4_mul(vx, row0x), wasm_f32x4_mul(vy, row0y)),
-                           wasm_f32x4_mul(vz, row0z)),
+            wasm_f32x4_add(wasm_f32x4_add(vx, wasm_f32x4_mul(uvx, s2w)), wasm_f32x4_mul(uuvx, two)),
             px);
         const v128_t oy = wasm_f32x4_add(
-            wasm_f32x4_add(wasm_f32x4_add(wasm_f32x4_mul(vx, row1x), wasm_f32x4_mul(vy, row1y)),
-                           wasm_f32x4_mul(vz, row1z)),
+            wasm_f32x4_add(wasm_f32x4_add(vy, wasm_f32x4_mul(uvy, s2w)), wasm_f32x4_mul(uuvy, two)),
             py);
         const v128_t oz = wasm_f32x4_add(
-            wasm_f32x4_add(wasm_f32x4_add(wasm_f32x4_mul(vx, row2x), wasm_f32x4_mul(vy, row2y)),
-                           wasm_f32x4_mul(vz, row2z)),
+            wasm_f32x4_add(wasm_f32x4_add(vz, wasm_f32x4_mul(uvz, s2w)), wasm_f32x4_mul(uuvz, two)),
             pz);
         out[i].x = wasm_f32x4_extract_lane(ox, 0);
         out[i].y = wasm_f32x4_extract_lane(oy, 0);

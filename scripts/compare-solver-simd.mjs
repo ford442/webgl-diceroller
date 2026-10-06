@@ -1,5 +1,12 @@
 /**
- * compare-solver-simd.mjs — Scalar vs SIMD WASM serialize parity (fixed-literal scenario).
+ * compare-solver-simd.mjs — Scalar vs SIMD WASM serialize parity.
+ *
+ * Two scenarios:
+ *   - fixed-literal: two hull-less dice (also compared against native)
+ *   - hull pile: six dice with their real hulls (public/wasm/hulls.json)
+ *     dropped onto each other, so die-die SAT runs every substep. The SIMD
+ *     code lives entirely in the SAT path, so this is the scenario that can
+ *     actually tell the builds apart; the fixed-literal one never reaches it.
  *
  * Requires:
  *   public/wasm/dice_physics.{js,wasm}       (release, -msimd128)
@@ -25,7 +32,29 @@ function runParityScenario(engine) {
     for (let i = 0; i < 30; i++) engine.step(1 / 60);
 }
 
-async function wasmSerializeHex(wasmDir) {
+const HULLS = JSON.parse(await readFile(path.join(REPO_ROOT, 'public/wasm/hulls.json'), 'utf8'));
+
+/** Six real-hull dice stacked over one spot: lots of die-die SAT contacts. */
+function runHullPileScenario(engine, factory) {
+    engine.init(-15.0, -2.75, 18.0, 18.0);
+    [4, 6, 8, 10, 12, 20].forEach((sides, i) => {
+        const id = engine.addDie(sides, 0.15 * i, 1.0 + 1.1 * i, -0.1 * i);
+        const data = HULLS['d' + sides];
+        const verts = new factory.VectorFloat();
+        for (const v of data.vertices) for (const c of v) verts.push_back(c);
+        engine.setDieHull(id, verts);
+        verts.delete();
+        const faces = new factory.VectorFloat();
+        for (const f of data.faces) for (const c of [...f.normal, f.value]) faces.push_back(c);
+        engine.setDieFaceTable(id, faces);
+        faces.delete();
+        engine.applyImpulse(id, 3 - i, 0, i - 2);
+        engine.applyTorqueImpulse(id, i, 5 - i, 2);
+    });
+    for (let i = 0; i < 600; i++) engine.step(1 / 120);
+}
+
+async function wasmSerializeHex(wasmDir, scenario = runParityScenario) {
     const jsPath = path.join(wasmDir, 'dice_physics.js');
     const wasmPath = path.join(wasmDir, 'dice_physics.wasm');
     await readFile(jsPath);
@@ -33,7 +62,7 @@ async function wasmSerializeHex(wasmDir) {
     const createModule = (await import(pathToFileURL(jsPath).href)).default;
     const factory = await createModule({ wasmBinary });
     const engine = new factory.DicePhysicsEngine();
-    runParityScenario(engine);
+    scenario(engine, factory);
     const vec = engine.serializeState();
     const bytes = new Uint8Array(vec.size());
     for (let i = 0; i < vec.size(); i++) bytes[i] = vec.get(i);
@@ -73,6 +102,18 @@ try {
 
 const simdHex = await wasmSerializeHex(simdDir);
 const nativeHex = await nativeSerializeHex();
+
+const scalarPileHex = await wasmSerializeHex(scalarDir, runHullPileScenario);
+const simdPileHex = await wasmSerializeHex(simdDir, runHullPileScenario);
+if (scalarPileHex !== simdPileHex) {
+    console.error('[compare-solver-simd] Scalar vs SIMD WASM mismatch on the hull pile (SAT path)');
+    process.exit(1);
+}
+console.log(
+    '[compare-solver-simd] Scalar and SIMD WASM hull-pile parity OK (' +
+        simdPileHex.length / 2 +
+        ' bytes)'
+);
 
 if (scalarHex !== simdHex) {
     console.error('[compare-solver-simd] Scalar vs SIMD WASM mismatch');
