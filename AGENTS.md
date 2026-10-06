@@ -36,6 +36,12 @@ webgl-diceroller/
 │   │   ├── GodRayShader.js     # WebGL scene-space moonlight beams (TavernWalls)
 │   │   └── GodRayNodeMaterial.js # WebGPU god-ray twin
 │   └── environment/            # Scene environment (~95 prop modules)
+├── packages/
+│   └── dice-core/              # Headless engine workspace package (no Three.js, no DOM)
+│       ├── src/                # WASM bridges + worker, AssetSource, SimDriver, notation, rollHeadless
+│       ├── test/               # vitest projects dice-core / dice-core-wasm
+│       ├── fixtures/           # tavern-world.json (recorded collider world)
+│       └── golden/             # rolls.json — golden roll vectors (the #315 contract)
 │       ├── PropRegistry.js     # Auto-discovers prop factories + tier definitions
 │       ├── propKit.js          # createProp / materials / mesh helpers (required for new props)
 │       ├── Table.js            # Main dice table (36×36 surface with velvet dice zone)
@@ -127,7 +133,7 @@ Initiative / turn tracking and durable multiplayer rooms are wired through **`Ap
 - [`src/session/SessionState.ts`](src/session/SessionState.ts) — seat list, current actor, last expression; `localStorage` per room code.
 - [`src/app/SessionWiring.js`](src/app/SessionWiring.js) + [`src/ui/SessionStrip.js`](src/ui/SessionStrip.js) — desktop strip (`session:initiative`, `session:turn`).
 - [`signaling/src/RoomDurableObject.js`](signaling/src/RoomDurableObject.js) — persisted room state + hibernating WebSockets; `solverBuildId` mismatch rejected at join.
-- [`src/net/CommitReveal.ts`](src/net/CommitReveal.ts) — SHA-256 commit-reveal when `?fair-commit` is set.
+- [`packages/dice-core/src/net/CommitReveal.ts`](packages/dice-core/src/net/CommitReveal.ts) — SHA-256 commit-reveal when `?fair-commit` is set.
 - [`src/xr/XrResultsHud.js`](src/xr/XrResultsHud.js) — world-space totals on `xrWorld`; DOM HUD hidden while presenting.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md).
@@ -167,7 +173,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MU
 - Manages the **dice focus state machine** after a roll:
   `IDLE` → `WAITING_FOR_STOP` → `FOCUSING` → `HOLDING` (2s) → `RETURNING` → `IDLE`
   When focusing, the camera dynamically calculates distance based on dice spread.
-  `WAITING_FOR_STOP` always ends: a `SettleWatch` ([`src/core-engine/roll/SettleWatch.ts`](src/core-engine/roll/SettleWatch.ts), shared with notation rolls in `RollSession`) reports `settled`, or `timedOut` after 12 s of simulated time, when the engine stops ticking with dice awake, or when the table has dice the engine never registered. A timed-out roll reads faces from the mesh orientation, marks dice that never lay flat as **cocked** in the results HUD, and offers a re-roll; `ROLL_SETTLED` carries `{ results, timedOut, reason }`.
+  `WAITING_FOR_STOP` always ends: a `SettleWatch` ([`packages/dice-core/src/roll/SettleWatch.ts`](packages/dice-core/src/roll/SettleWatch.ts), shared with notation rolls in `RollSession`) reports `settled`, or `timedOut` after 12 s of simulated time, when the engine stops ticking with dice awake, or when the table has dice the engine never registered. A timed-out roll reads faces from the mesh orientation, marks dice that never lay flat as **cocked** in the results HUD, and offers a re-roll; `ROLL_SETTLED` carries `{ results, timedOut, reason }`.
 - Exposes `app.stats` (shim `window.__renderStats` under test/debug flags) for scheduler timings / renderer info when `?debug-perf` is enabled.
 - Under `?test` / `?debug` / `?debug-perf`, installs `window.__app` (stable API) plus deprecated flat shims. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -270,7 +276,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 - **ESLint + Prettier** enforce a minimal ruleset (`eslint:recommended`, unused imports/vars, `eqeqeq`, import resolution). Config: [`eslint.config.js`](eslint.config.js), [`.prettierrc`](.prettierrc).
 - Run `npm run lint` before committing; CI blocks merge on lint/format failures.
-- **TypeScript policy:** `npm run typecheck` (`tsc --noEmit`, `checkJs` over remaining JS). `npm run typecheck:strict` is `strict: true` + `noUncheckedIndexedAccess` on `src/**/*.ts`. Headless seams live in [`src/core-engine/`](src/core-engine/) (WASM façade, notation, dice-set format, `rollHeadless()`); `npm run check:core-engine` fails the build if that tree imports `three` or uses `window.` / `document.`. **Environment props stay JavaScript** with JSDoc until individually migrated through `propKit`; do not bulk-convert the ~99 prop modules. `src/main.js` / `src/ui.js` / `src/results.js` stay JS until a panel kit exists. No `tsc` emit — Vite bundles `.ts` directly.
+- **TypeScript policy:** `npm run typecheck` (`tsc --noEmit`, `checkJs` over remaining JS). `npm run typecheck:strict` is `strict: true` + `noUncheckedIndexedAccess` on `src/**/*.ts`. The headless engine is the `dice-core` workspace package, [`packages/dice-core/`](packages/dice-core/) (WASM façade, notation, dice-set format, sim clock, `rollHeadless()`): import it as `dice-core/<subpath>` (ESLint rejects relative paths into it), `dice-core/node` for `rollHeadless`. Its own tsconfig is strict with no `DOM` lib, and `npm run check:core-engine` runs that tsc plus a `three`-import check. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Headless core). **Environment props stay JavaScript** with JSDoc until individually migrated through `propKit`; do not bulk-convert the ~99 prop modules. `src/main.js` / `src/ui.js` / `src/results.js` stay JS until a panel kit exists. No `tsc` emit — Vite bundles `.ts` directly.
 - Native solver tests always write `src/wasm/build-native/compile_commands.json` (`npm run test:solver`; no `bear`/`compiledb` needed), and `src/wasm/.clangd` points clangd at the _merged_ native + emcc database that `npm run wasm:clangd-db` produces. Without a local EMSDK, download the `clangd-compile-commands` artifact from CI's `wasm-toolchain` job into `src/wasm/compile_commands.json` — otherwise `__EMSCRIPTEN__` / `__wasm_simd128__` branches read as dead code in the editor. CMake also exports `compile_commands.json` (`CMAKE_EXPORT_COMPILE_COMMANDS`) and Debug builds use `emcc_flags.sh` debug profile (`-O0 -g`), not release `-O3 -flto`.
 - **C++ gates:** `npm run test:solver` compiles with `-Werror` (`SOLVER_NO_WERROR=1` to opt out locally), and `npm run lint:cpp` runs clang-tidy over `src/wasm/dice_physics/**` with `WarningsAsErrors: '*'`. The engine is clean under both, so a new diagnostic is a regression. Disabling a clang-tidy check means editing `src/wasm/.clang-tidy` with a reason next to the existing ones — not a `NOLINT` comment.
 - **Do not hand-edit CMake's source list or flags.** `engine_sources.txt` is the only place a new `dice_physics/*.cpp` gets registered, and `emcc_flags.inc.sh` is the only place flags live. CI's `wasm-toolchain` job byte-diffs CMake's `dice_physics.wasm` against `build.sh`'s, so a flag added in one place and not the other fails the build.
@@ -296,7 +302,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 - Real dice lose material to recessed numbers, so the low-number face ("1") is heaviest and the high-number face is lightest.
 - The WASM engine owns the bias: each die's centre-of-mass offset is its value-1 face normal (from the face table every caller already uploads) times its hull height times `0.75%` (`DEFAULT_MASS_BIAS_RATIO`), and `integrate()` applies the resulting `r × mg` torque every substep from the solver's own orientation. Nothing in the render loop touches it — the old per-frame `applyDiceMassBiases` (frame-rate dependent, and it woke every die every frame) is gone. See "Pipping bias" in [`docs/WASM_ENGINE.md`](docs/WASM_ENGINE.md).
-- Toggle (parsed in `src/core-engine/wasm/physicsFlags.ts`, forwarded like `?no-drag`):
+- Toggle (parsed in `packages/dice-core/src/wasm/physicsFlags.ts`, forwarded like `?no-drag`):
     - `?fair-dice` disables the bias entirely (perfect Platonic-solid COM) — engine flag `FLAG_FAIR_DICE`.
     - `?bias-ratio=0.01` overrides the default magnitude (clamped to `[0, 0.05]`) — `setMassBiasRatio`.
     - `rollHeadless()` takes `fairDice` / `massBiasRatio` options and defaults to bias on, like the app.
@@ -431,7 +437,19 @@ export function createHorseshoe(
 
 ## Testing Instructions
 
-There is **no formal unit or integration test suite** (no Jest/Vitest runner), but several ad-hoc scripts exist under [`tests/`](tests/) and [`scripts/`](scripts/). Browser smoke tests target the **preview server** (`http://127.0.0.1:4173/?no-post`), not the dev server.
+Unit tests run under **vitest** in three projects ([`vitest.config.js`](vitest.config.js)):
+
+- `dice-core` — `packages/dice-core/test/**`, Node environment (no DOM), no WASM needed.
+- `dice-core-wasm` — `packages/dice-core/test/**/*.wasm.test.ts`: `rollHeadless`, the golden rolls on both builds, the tavern-world settle. Its setup file **throws** without `public/wasm/` + `public/wasm-scalar/` — these never skip; run `npm run build:wasm` first.
+- `ui` — `tests/unit/**`, happy-dom.
+
+```bash
+npm run test:unit                  # dice-core + ui (no WASM needed)
+npm run test:unit:wasm             # dice-core-wasm (needs npm run build:wasm)
+npm run test:unit:wasm:coverage    # dice-core + dice-core-wasm, package coverage floor (CI unit-wasm)
+```
+
+Browser smoke tests are ad-hoc scripts under [`tests/`](tests/) and [`scripts/`](scripts/) (ESM, like the rest of the repo — the root `package.json` is `"type": "module"`). They target the **preview server** (`http://127.0.0.1:4173/?no-post`), not the dev server.
 
 > **Always bind and probe `127.0.0.1`, never `localhost`.** `vite` / `vite preview` with no `--host` binds to whatever `localhost` resolves to; on GitHub-hosted runners that is `[::1]`, so a probe against `127.0.0.1` can never connect. Do not hand-roll a server boot — use [`tests/helpers/server.js`](tests/helpers/server.js), which passes `--host 127.0.0.1`, polls readiness, and (importantly) kills vite's whole process group on teardown. Leaking that group is what left two CI jobs hanging for the full six-hour default per run.
 
@@ -452,9 +470,6 @@ npm run test:wasm-gameplay-loop  # Full-app: visual sync, drag interaction, coll
 npm run test:share-roll-replay   # Two page loads of the same share URL settle to identical readAllDiceValues()
 npm run test:roll-timeout     # forceNoSettle: a roll that never settles still ends (timedOut, HUD result, re-roll)
 npm run test:a11y             # axe accessibility scan
-npm run test:notation         # Roll notation parser (Node, no browser)
-npm run test:share-roll       # Shareable roll encoding (Node)
-npm run test:simd-support     # WASM SIMD probe + artifact-dir picker (Node)
 npm run test:breadloaf        # BreadLoaf prop in scene graph
 npm run test:dicecup          # DiceCup interactable (needs WASM for available:true)
 
@@ -466,7 +481,9 @@ node scripts/verify-wasm-primitives.mjs
 npm run verify:wasm-interaction     # drag + levitation on the WASM-only path (needs a build)
 npm run verify:worker-replay        # Worker-module replay determinism (seededPhysicsThrow) — isolated from the app UI
 npm run verify:tower-drop-replay    # Dice-tower drops replay from a seed and settle in the tray (--no-require-settle to relax)
-npm run test:tavern-world           # 200 WASM rolls into tests/fixtures/tavern-world.json settle within 12 s sim (#341)
+npm run test:tavern-world           # 200 WASM rolls into packages/dice-core/fixtures/tavern-world.json settle within 12 s sim (#341)
+npm run verify:headless-parity      # dice-core golden rolls in a real browser (both builds) + the app worker
+npm run goldens:update              # regenerate packages/dice-core/golden/rolls.json (browser) after a solver change
 npm run fixture:world               # Re-export the tavern collider fixture from the built app (needs build:wasm + build:js)
 npm run check:world-fixture         # Fails if the checked-in fixture no longer matches what the app registers
 npm run verify:bundle-loading       # ?webgl never fetches three.webgpu; ?no-wasm spawns no dice
@@ -490,7 +507,8 @@ npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when b
 
 - **Every job has a `timeout-minutes`.** GitHub's default is six hours. Keep new jobs at 15 minutes so a hang fails fast instead of burning the account's CI budget. Current exceptions: 20 for `test-solver` (the fuzz run plus a clang-tidy pass), and 30 for `build-wasm`, `render-regression`, and `wasm-toolchain` (the last links both wasm profiles twice for the CMake parity diff).
 
-- `test:wasm-gameplay-loop`, `test:wasm-authoritative`, `test:share-roll-replay`, `test:roll-timeout` and `check:world-fixture` run in CI (`verify-tests` matrix); `verify:worker-replay`, `verify:tower-drop-replay` and `test:tavern-world` run in the `verify` matrix. All of them need the `wasm-artifacts` build (`npm run build:wasm`) to exercise the WASM-authoritative path rather than skipping.
+- `test:wasm-gameplay-loop`, `test:wasm-authoritative`, `test:share-roll-replay`, `test:roll-timeout` and `check:world-fixture` run in CI (`verify-tests` matrix); `verify:worker-replay`, `verify:tower-drop-replay`, `verify:headless-parity` and `test:tavern-world` run in the `verify` matrix; the `unit-wasm` job runs `test:unit:wasm:coverage` and imports `dice-core/node` from plain Node. All of them need the `wasm-artifacts` build (`npm run build:wasm`). Under `$CI` a missing artifact is a failure, never a skip.
+- **Solver changes move the goldens.** A behavioural solver change bumps `SOLVER_REVISION`; then regenerate and review `npm run goldens:update` (packages/dice-core/golden/rolls.json) alongside the native `tests/fixtures/solver-golden.json`.
 - **Settle waits.** Use `waitForRollFinished()` (a roll's own `settled | timedOut`, via `__app.getRollState()`) or `waitForSettle()` from [`tests/helpers/browser.js`](tests/helpers/browser.js) — never a hand-rolled `waitForFunction(areDiceSettled)`. `ready` fires before a share-URL replay spawns its dice, so `areDiceSettled()` alone can pass on an empty table, and both helpers append the engine's sleep diagnostics to a timeout.
 
 **Automation hooks** (require `?test`, `?debug`, or `?debug-perf`):

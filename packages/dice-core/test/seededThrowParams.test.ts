@@ -1,5 +1,5 @@
 /**
- * Additional edge-case coverage for src/wasm/seededThrowParams.ts.
+ * Additional edge-case coverage for packages/dice-core/src/wasm/seededThrowParams.ts.
  * tests/unit/share-roll.test.js already covers determinism for a fixed seed
  * via computeSeededThrowParams; these tests cover createSeededRng behavior,
  * per-die output shape, and applyThrowParams engine wiring.

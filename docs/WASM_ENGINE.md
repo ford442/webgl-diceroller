@@ -115,7 +115,7 @@ second, differently-behaving simulation.
    impulse) ┌────────────────── physics worker ──┴───────────────────────┐
             │  dice_physics.worker.ts                                      │
             │   • owns DicePhysicsEngine (WASM)                            │
-            │   • setInterval wakeup @ 120 Hz → step(1/120) = one tick     │
+            │   • setInterval wakeup @ 120 Hz → SimDriver: elapsed wall time │
             │   • parks the timer when the world is asleep / tab hidden    │
             │   • copies heap transforms → SAB back buffer, flips `front`  │
             └──────────────────────────────────────────────────────────── ┘
@@ -209,9 +209,13 @@ cd src/wasm && ./build.sh --simd-only  # SIMD only
 
 A default release build writes **both** artifacts. Debug overwrites `public/wasm/` only. The Embind API surface is identical.
 
-[`WasmPhysicsBridge.js`](src/wasm/WasmPhysicsBridge.js) / the physics worker probe SIMD128 with a hand-rolled `WebAssembly.validate` of a `v128.const` module ([`simdSupport.js`](src/wasm/simdSupport.js)). Non-SIMD browsers (Safari < 16.4) load `public/wasm-scalar/`. `?wasm-scalar` / `?wasm-simd` override the probe. Hulls stay in `public/wasm/hulls.json`.
+[`WasmPhysicsBridge.ts`](packages/dice-core/src/wasm/WasmPhysicsBridge.ts) / the physics worker probe SIMD128 with a hand-rolled `WebAssembly.validate` of a minimal `(func (result v128) i32.const 0 i8x16.splat)` module ([`simdSupport.ts`](packages/dice-core/src/wasm/simdSupport.ts)). Non-SIMD browsers (Safari < 16.4) load `public/wasm-scalar/`. `?wasm-scalar` / `?wasm-simd` override the probe. Hulls stay in `public/wasm/hulls.json`.
 
-After each build, [`build.sh`](src/wasm/build.sh) emits `build-info.json` (gitignored) with `emcc_version`, `simd`, `initial_memory`, full flag list, `git_sha`, and artifact byte sizes. CI uploads the SIMD tree inside the `wasm-artifacts` artifact.
+Until #349 the probe bytes were malformed (a `v128` result that was then dropped, section sizes one byte too long), so `validate()` was false everywhere and **every** runtime loaded `wasm-scalar/`. `simd-support.test` now validates the real bytes. Flipping clients to SIMD was only safe once the two builds were bit-identical: the SIMD `transformHullVerts` used to build a rotation matrix where the scalar path calls `Quat::rotate`, which settled the same seeded roll to different faces. Each lane now runs the scalar operation sequence exactly (WASM has no FMA contraction, so lane-wise f32 ops round identically). `compare-solver-simd.mjs` checks a six-die **hull pile** (the old fixed-literal scenario never reached the SAT code), and the dice-core goldens run on both builds.
+
+#### Build identity (`solverBuildId`)
+
+After each build, [`build.sh`](src/wasm/build.sh) emits `build-info.json` (gitignored) with `emcc_version`, `simd`, `initial_memory`, full flag list, `git_sha`, and artifact byte sizes, plus the content-addressed **`solver_build_id`**: `<solver_revision>:<first 12 hex of sha256(wasm/dice_physics.wasm)>`. The SIMD build is canonical and its id is written into the scalar `build-info.json` as well (`solver_build_id_canonical: true`); a single-target build hashes what it built and records `false`. Same solver + same codegen gives the same id whatever the commit; a different emsdk or flag set gives a new one (3.1.51 and 3.1.61 builds of the same source differ, and both pass the goldens). CI asserts both files carry the same id and uploads both trees in the `wasm-artifacts` artifact.
 
 #### Release flag set (EMSDK 3.1.61 / CI pin)
 
@@ -318,7 +322,7 @@ npm run test:solver
 # Tune fuzz volume (default 2000 seeds, ~6 s on CI):
 FUZZ_SEEDS=500 npm run test:solver
 
-# The "Tavern world" case rolls into tests/fixtures/tavern-world.json — the
+# The "Tavern world" case rolls into packages/dice-core/fixtures/tavern-world.json — the
 # colliders the app actually registers — with the shipped hulls and the app's
 # own throw parameters. Every seed must sleep within 12 s of simulated time.
 TAVERN_SEEDS=500 npm run test:solver
@@ -616,7 +620,7 @@ import {
     randomPhysicsFloat,
     serializePhysicsState,
     deserializePhysicsState,
-} from './src/wasm/WasmPhysicsBridge.js';
+} from 'dice-core/wasm/WasmPhysicsBridge';
 
 // Initialize once during app startup (await is optional — non-blocking)
 await loadWasmEngine();
@@ -742,13 +746,13 @@ reset the sleep timer and kept dice resting against props awake for ever.
 then per dynamic prop: id, sleeping, kinematic, speed, spin, sleep timer, own
 and island energy, island size, manifold/point counts, deepest separation,
 and the four deepest touching manifolds (kind, other id, material). Decode it
-with `src/core-engine/wasm/sleepDiagnostics.ts`; the app exposes it as
+with `packages/dice-core/src/wasm/sleepDiagnostics.ts`; the app exposes it as
 `window.__app.physics.getSleepDiagnostics()` under `?test` / `?debug`, the
 `?debug-perf` overlay names the most energetic awake body, and every settle
 wait in `tests/helpers/browser.js` prints it on timeout.
 
 A roll still ends if something never sleeps: `SettleWatch`
-(`src/core-engine/roll/SettleWatch.ts`) times out after 12 s of simulated
+(`packages/dice-core/src/roll/SettleWatch.ts`) times out after 12 s of simulated
 time, when the engine stops ticking with dice awake, or when the table has
 dice the engine never registered, and the faces are then read from the mesh
 orientation and flagged `cocked` (see AGENTS.md).
@@ -773,17 +777,24 @@ void step(float dt) {
 }
 ```
 
-| Caller                    | What it passes                           | Ticks                                |
-| ------------------------- | ---------------------------------------- | ------------------------------------ |
-| Physics worker            | `step(1/120)` per timer wakeup           | exactly 1 per wakeup                 |
-| `?no-worker` (in-process) | FrameScheduler's 1/60 chunks (≤ 5/frame) | 2 per chunk                          |
-| `rollHeadless()`          | `step(1/120)` (its `dt` option is time)  | 1 per call                           |
-| Native tests / benchmarks | anything                                 | `floor(banked / FIXED_DT)`, ≤ 8/call |
+| Caller                    | What it passes                            | Ticks                                |
+| ------------------------- | ----------------------------------------- | ------------------------------------ |
+| Physics worker            | wall time since the previous wakeup       | ~1 per wakeup; catches up ≤ 30       |
+| `?no-worker` (in-process) | FrameScheduler's 1/60 chunks (≤ 5/frame)  | 2 per chunk                          |
+| `rollHeadless()`          | `SimDriver.stepN(1)` (its `dt` is a knob) | exactly 1 per call                   |
+| Native tests / benchmarks | anything                                  | `floor(banked / FIXED_DT)`, ≤ 8/call |
 
-So one `step(1/60)` is byte-identical to two `step(1/120)` calls, a 30 Hz and
-a 60 Hz caller reach the same state after the same number of ticks, and a
-dropped or late worker timer callback slows the simulation down without
-changing the tick sequence a throw sees. Sub-tick remainders are banked, never
+Every caller goes through [`SimDriver`](packages/dice-core/src/wasm/SimDriver.ts)
+(`tick(wallNowMs)`, `advance(seconds)`, `stepN(n)`, `pause`/`resume`,
+`stepIndex`/`simTime`). It feeds long gaps in 7-tick chunks so the engine's
+8-per-call backlog drop never fires, up to `MAX_CATCH_UP_TICKS` (30 = 0.25 s);
+longer gaps are dropped. So one `step(1/60)` is byte-identical to two
+`step(1/120)` calls, a 30 Hz and a 60 Hz caller reach the same state after the
+same number of ticks, and a late or throttled worker timer _catches up_ rather
+than playing the dice in slow motion — `verify:worker-physics` settles the same
+seeded throw at 1x and 4x timer intervals (`__app.physics.setTimerScale`, `?test`
+only) on the same faces within 10% wall time. Before the chunked catch-up,
+100–250 ms worker stalls on a loaded machine cost ~17%. Sub-tick remainders are banked, never
 integrated on their own. `getFixedTickCount()` exposes the tick counter.
 `init`, `reset` and `deserializeState` clear the accumulator (snapshots are
 taken between ticks).
@@ -794,9 +805,11 @@ The worker parks its interval once `isWorldAsleep()` has held for 30 ticks
 Parking raises `H_IDLE` in the SAB header before it re-checks the ring; the
 proxy reads `H_IDLE` after publishing ring commands and posts `wake` when it
 is set, so a park can never swallow a command. Any structural message also
-restarts the loop. Resuming hands the engine one tick per wakeup again, so the
-time spent parked or hidden is simply not simulated — there is no backlog to
-replay. `getWorkerPhysicsStats()` reports `loopRunning` and `fixedTicks`.
+restarts the loop. Restarting the timer re-anchors the driver's wall clock, so
+the time spent parked or hidden is simply not simulated — there is no backlog
+to replay. `getWorkerPhysicsStats()` reports `loopRunning` and `fixedTicks`;
+the SAB header carries the tick count as `H_TICKS` + `H_TICKS_HI`, and
+`getSimClock()` reports `{ stepIndex, simTime }`.
 
 Covered by the `Fixed clock: …` and `World asleep: …` cases in
 `solver_tests.cpp`, `npm run verify:worker-replay` (worker = in-process at

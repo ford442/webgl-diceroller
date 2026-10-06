@@ -26,10 +26,9 @@ import {
     loadWasmEngine, isWasmAvailable, getWasmEngine,
     isUsingWorkerPhysics, isUsingSharedArrayBuffer,
     flushWorkerCommandBatch, getWorkerPhysicsStats, setPhysicsHidden,
-    seededPhysicsThrow, setPhysicsTimerScale, getSimClock,
+    seededPhysicsThrow, setPhysicsTimerScale, getSimClock, loadHullForDie,
 } from './wasm/PhysicsBridge.js';
 import { THROW_TABLE_SURFACE_Y, presetForShape } from 'dice-core/wasm/physicsPresets';
-import { loadHullForDie } from './wasm/PhysicsBridge.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
