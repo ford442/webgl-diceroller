@@ -167,7 +167,7 @@ try {
     // Any same-origin URL that is *not* the app: the module is served as a
     // plain script. (A missing path falls back to index.html and boots the
     // whole tavern in this page, which re-inits the shared physics bridge.)
-    await page.goto(`${BASE}/src/wasm/physicsFlags.ts`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${BASE}/src/wasm/staticColliders.ts?test`, { waitUntil: 'domcontentloaded' });
     result = await page.evaluate(
         async ({ seed, runTicks, histogramSeeds }) => {
             try {

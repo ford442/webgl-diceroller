@@ -1,10 +1,10 @@
 /**
- * Regression guard: vitest.config.js's `test.include` glob must match every
- * `*.test.*` file actually present under tests/unit/. The include used to be
- * hardcoded to `**\/*.test.js`, so a `tests/unit/foo.test.ts` file silently
- * ran zero tests (vitest reports success having executed nothing) instead of
- * failing loudly. This test fails the moment a new test-file extension shows
- * up that the glob doesn't cover.
+ * Regression guard: every `*.test.*` file under tests/unit/ and
+ * packages/dice-core/test/ must be picked up by exactly one vitest project.
+ * The include used to be hardcoded to `**\/*.test.js`, so a `foo.test.ts`
+ * silently ran zero tests (vitest reports success having executed nothing)
+ * instead of failing loudly. With projects, a file can also fall between
+ * them (e.g. a `.wasm.test.ts` outside dice-core) — this catches both.
  */
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -12,42 +12,48 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import vitestConfig from '../../vitest.config.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const unitDir = path.resolve(__dirname);
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const TEST_ROOTS = ['tests/unit', 'packages/dice-core/test'];
 
 function listTestFiles(dir) {
     const files = [];
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (entry.isDirectory()) {
-            files.push(...listTestFiles(path.join(dir, entry.name)));
-        } else if (/\.test\.[^.]+$/.test(entry.name)) {
-            files.push(entry.name);
-        }
+    for (const entry of readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) files.push(...listTestFiles(rel));
+        else if (/\.test\.[^.]+$/.test(entry.name)) files.push(rel);
     }
     return files;
 }
 
-function extensionsFromIncludeGlob(include) {
-    // e.g. 'tests/unit/**/*.test.{js,ts,mjs}' -> ['js', 'ts', 'mjs']
-    const m = /\.test\.\{([^}]+)\}$/.exec(include) ?? /\.test\.([^.{}*]+)$/.exec(include);
-    if (!m) throw new Error(`Could not parse extensions from include glob "${include}"`);
-    return m[1].split(',');
-}
+const matchesAny = (file, globs = []) => globs.some((glob) => path.matchesGlob(file, glob));
 
-describe('vitest include glob', () => {
-    it('covers the extension of every *.test.* file under tests/unit/', () => {
-        const includePatterns = vitestConfig.test.include;
-        expect(Array.isArray(includePatterns)).toBe(true);
+describe('vitest projects', () => {
+    it('run every *.test.* file exactly once', () => {
+        const projects =
+            /** @type {{ test: { name: string, include?: string[], exclude?: string[] } }[]} */ (
+                vitestConfig.test?.projects
+            );
+        expect(projects.map((p) => p.test.name)).toEqual(['dice-core', 'dice-core-wasm', 'ui']);
 
-        const coveredExtensions = new Set(includePatterns.flatMap(extensionsFromIncludeGlob));
-        const testFiles = listTestFiles(unitDir);
+        const testFiles = TEST_ROOTS.flatMap(listTestFiles);
         expect(testFiles.length).toBeGreaterThan(0);
 
-        const uncovered = testFiles.filter((name) => {
-            const ext = name.split('.').pop();
-            return !coveredExtensions.has(ext);
-        });
+        const owners = testFiles.map((file) => ({
+            file,
+            projects: projects
+                .filter(
+                    (p) => matchesAny(file, p.test.include) && !matchesAny(file, p.test.exclude)
+                )
+                .map((p) => p.test.name),
+        }));
+        expect(owners.filter((o) => o.projects.length !== 1)).toEqual([]);
+    });
 
-        expect(uncovered).toEqual([]);
+    it('keep compiled-engine tests in the project that cannot skip them', () => {
+        const wasmTests = TEST_ROOTS.flatMap(listTestFiles).filter((f) =>
+            f.includes('.wasm.test.')
+        );
+        expect(wasmTests.length).toBeGreaterThan(0);
+        expect(wasmTests.every((f) => f.startsWith('packages/dice-core/test/'))).toBe(true);
     });
 });

@@ -13,6 +13,7 @@ import { getPhysicsSearchParams } from './wasmArtifact.js';
 import * as mainBridge from './WasmPhysicsBridge.js';
 import * as workerBridge from './WorkerPhysicsBridge.js';
 import { installWorldRecorder, type WorldRecorder } from './WorldRecorder.js';
+import { createSimDriver, FIXED_DT, type SimClock, type SimDriver } from './SimDriver.js';
 
 const _params = getPhysicsSearchParams();
 
@@ -97,3 +98,27 @@ export const getWorkerPhysicsStats = () =>
     active === workerBridge ? workerBridge.getWorkerPhysicsStats() : null;
 
 export const getPhysicsStepStats = () => active.getPhysicsStepStats?.() ?? null;
+
+let _inProcessDriver: SimDriver | null = null;
+
+/**
+ * Main-thread (`?no-worker`) clock: hand the engine a frame's wall delta; it
+ * runs the fixed ticks that is worth (capped like the worker's catch-up).
+ * A no-op on the worker bridge, which paces itself.
+ */
+export const advancePhysics = (wallSeconds: number): void => {
+    if (active === workerBridge || !active.isWasmAvailable()) return;
+    _inProcessDriver ??= createSimDriver(active.getWasmEngine());
+    _inProcessDriver.advance(wallSeconds);
+};
+
+/** Where the simulation is: fixed ticks since init, and that many 1/120 s. */
+export const getSimClock = (): SimClock => {
+    const stepIndex = active.isWasmAvailable() ? active.getWasmEngine().getFixedTickCount() : 0;
+    return { stepIndex, simTime: stepIndex * FIXED_DT };
+};
+
+/** Test hook (`?test` only): stretch the worker's wakeup interval by `scale`. */
+export const setPhysicsTimerScale = (scale: number): void => {
+    if (active === workerBridge) workerBridge.setPhysicsTimerScale(scale);
+};

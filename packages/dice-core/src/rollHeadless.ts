@@ -44,9 +44,9 @@ import { readSolverBuildId } from './wasm/SolverBuildId.js';
 import { createInProcessPhysicsSession } from './wasm/WasmPhysicsBridge.js';
 import type { PhysicsEngine } from './wasm/physicsTypes.js';
 import { applyWorld, type WorldFixture } from './wasm/WorldRecorder.js';
+import { createSimDriver, FIXED_DT, type SimDriver } from './wasm/SimDriver.js';
 import { WASM_SIMD_DIR, type WasmArtifactDir } from './wasm/wasmArtifact.js';
 
-const FIXED_DT = 1 / 120;
 const DEFAULT_MAX_STEPS = 120 * 20; // 20s of sim
 const IDLE_STEPS_REQUIRED = 8;
 
@@ -68,6 +68,8 @@ export interface HeadlessRollTrace {
     expression: string;
     steps: number;
     dt: number;
+    /** Fixed 1/120 s engine ticks the whole roll took (both sides, every round). */
+    fixedTicks: number;
     solverBuildId: string | null;
     /** Solver faces of `results`, in the same order. */
     faceValues: number[];
@@ -170,6 +172,7 @@ function readNatural(engine: PhysicsEngine, wasmId: number): number {
 }
 
 function stepUntilSettled(
+    driver: SimDriver,
     engine: PhysicsEngine,
     dt: number,
     maxSteps: number
@@ -177,7 +180,10 @@ function stepUntilSettled(
     let idle = 0;
     let steps = 0;
     while (steps < maxSteps) {
-        engine.step(dt);
+        // One exact fixed tick per step; `dt` other than FIXED_DT is a test
+        // knob that hands the engine that much wall time instead.
+        if (dt === FIXED_DT) driver.stepN(1);
+        else driver.advance(dt);
         steps += 1;
         if (engine.areAllSettled()) {
             idle += 1;
@@ -190,6 +196,7 @@ function stepUntilSettled(
 }
 
 async function resolveSide(
+    driver: SimDriver,
     engine: PhysicsEngine,
     session: { loadHullForDie: (id: number, sides: number) => void },
     side: ParsedSide,
@@ -218,7 +225,7 @@ async function resolveSide(
         applyThrowParams(engine, params);
         subSeed = (subSeed + 1) >>> 0;
 
-        const stepped = stepUntilSettled(engine, dt, maxSteps);
+        const stepped = stepUntilSettled(driver, engine, dt, maxSteps);
         steps += stepped.steps;
         rounds += 1;
         if (!stepped.settled) {
@@ -350,7 +357,9 @@ export async function rollHeadless(
     const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
     const system = options.system ?? DEFAULT_ROLL_SYSTEM;
 
+    const driver = createSimDriver(engine);
     const left = await resolveSide(
+        driver,
         engine,
         session,
         { groups: parsed.groups, modifier: parsed.modifier, raw: parsed.raw },
@@ -368,6 +377,7 @@ export async function rollHeadless(
     if (parsed.opposed) {
         const rightSeed = (seed + 0x9e3779b9) >>> 0;
         const right = await resolveSide(
+            driver,
             engine,
             session,
             parsed.opposed,
@@ -411,6 +421,7 @@ export async function rollHeadless(
             expression: parsed.raw,
             steps: left.steps + opposedSteps,
             dt,
+            fixedTicks: driver.stepIndex,
             solverBuildId,
             faceValues: left.solved.map((d) => d.natural),
             ...(opposedSolved ? { opposedFaceValues: opposedSolved.map((d) => d.natural) } : {}),

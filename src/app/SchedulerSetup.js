@@ -5,7 +5,7 @@
  * camera controller, ...) are only assigned after registration happens.
  */
 
-import { getWasmEngine, isWasmAvailable, flushWorkerCommandBatch } from '../wasm/PhysicsBridge.js';
+import { advancePhysics, flushWorkerCommandBatch } from '../wasm/PhysicsBridge.js';
 import {
     updateDiceVisuals,
     pollPhysicsCollisionEvents,
@@ -73,12 +73,10 @@ export function registerFrameCallbacks(scheduler, deps) {
     scheduler.register('physicsStep', 'dicePhysics', ({ deltaTime }) => {
         if (!isSimulationReady()) return;
 
-        // Hands elapsed time to the engine, which banks it and runs fixed
-        // 1/120 s ticks — the same clock as the worker and rollHeadless().
-        // A no-op on the worker bridge (the worker self-paces).
-        if (isWasmAvailable()) {
-            getWasmEngine().step(deltaTime);
-        }
+        // Hands elapsed time to the engine (SimDriver), which banks it and
+        // runs fixed 1/120 s ticks — the same clock as the worker and
+        // rollHeadless(). A no-op on the worker bridge (it self-paces).
+        advancePhysics(deltaTime);
     });
 
     scheduler.register('postPhysicsSync', 'diceVisualSync', () => {

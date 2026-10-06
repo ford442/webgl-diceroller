@@ -6,9 +6,11 @@
 
 import {
     isWasmAvailable,
+    getSimClock,
     getWasmEngine,
     getWorldRecorder,
     readSleepDiagnostics,
+    setPhysicsTimerScale,
 } from '../wasm/PhysicsBridge.js';
 import { decodeSleepDiagnostics, summarizeSleepDiagnostics } from 'dice-core/wasm/sleepDiagnostics';
 import { spawnedDice, setForceNoSettle } from '../dice.js';
@@ -82,6 +84,12 @@ export function installDebugGlobals(app, deps) {
     // idle → rolling → settled | timedOut, with counters (RollWiring).
     app.getRollState = () => rollWiring.getRollState();
     app.physics.forceNoSettle = (value = true) => setForceNoSettle(value);
+    // { stepIndex, simTime }: the engine's fixed tick count, the shared clock
+    // multiplayer and render interpolation can name ("step 412").
+    app.physics.getSimClock = getSimClock;
+    // Stretch the worker's wakeup interval (verify-worker-physics proves the
+    // accumulator catches up). Only honoured on `?test` pages.
+    app.physics.setTimerScale = setPhysicsTimerScale;
     // ?test only: the collider world the page built (packages/dice-core/fixtures/tavern-world.json)
     // and the recent die add/remove log for "engine has 0 dice" failures.
     app.physics.exportWorld = () => getWorldRecorder()?.exportWorld() ?? null;

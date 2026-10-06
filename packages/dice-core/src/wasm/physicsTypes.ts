@@ -17,7 +17,7 @@ export interface PhysicsEngine {
      */
     step(dt?: number): void;
     /** Fixed 1/120 s ticks the engine has run (monotonic). */
-    getFixedTickCount?(): number;
+    getFixedTickCount(): number;
     addDie(sides: number, x: number, y: number, z: number): number;
     removeDie(id: number): void;
     clearAllDice(): void;

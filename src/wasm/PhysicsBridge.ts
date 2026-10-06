@@ -4,9 +4,11 @@
  */
 
 export {
+    advancePhysics,
     deserializePhysicsState,
     flushWorkerCommandBatch,
     getPhysicsStepStats,
+    getSimClock,
     getWasmEngine,
     getWorkerPhysicsStats,
     getWorldRecorder,
@@ -26,6 +28,7 @@ export {
     setContainerActive,
     setContainerPlanes,
     setPhysicsHidden,
+    setPhysicsTimerScale,
 } from 'dice-core/wasm/PhysicsBridge';
 
 import type { Object3D } from 'three';

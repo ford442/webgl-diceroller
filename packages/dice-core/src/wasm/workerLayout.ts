@@ -20,6 +20,9 @@
  *   │   [7] sphereTests    — pairs passing sphere cull last step     │
  *   │   [8] satTests       — SAT hull tests last step               │
  *   │   [9] contacts       — die–die contacts resolved last step    │
+ *   │  [10] idle     — 1 while the worker's step timer is parked    │
+ *   │  [11] ticksLo  — low 32 bits of the engine's fixed tick count  │
+ *   │  [12] ticksHi  — high bits (stepIndex = hi * 2^32 + lo)        │
  *   ├────────────────────────────────────────────────────────────┤
  *   │ Buffer 0:  ids[MAX_DICE] (f32)   transforms[MAX_DICE*7] (f32)│
  *   │            faceValues[MAX_DICE] (i32)                          │
@@ -43,7 +46,7 @@ export const MAX_DICE = 500; // must match dice_physics.cpp MAX_DICE
 export const STRIDE = 7; // [px,py,pz, qx,qy,qz,qw] per die
 
 // Header (Int32).
-export const HEADER_INTS = 12;
+export const HEADER_INTS = 13;
 export const HEADER_BYTES = HEADER_INTS * 4;
 
 export const H_SEQNO = 0;
@@ -60,8 +63,10 @@ export const H_CONTACTS = 9;
 // writer that enqueues into the command ring and then reads 1 here must post
 // a `wake` message; see WorkerEngineProxy.flushCommandBatch.
 export const H_IDLE = 10;
-// Low 32 bits of DicePhysicsEngine::getFixedTickCount() at the last publish.
+// DicePhysicsEngine::getFixedTickCount() at the last publish, split into low
+// and high 32-bit halves so the step index stays exact past 2^32 ticks.
 export const H_TICKS = 11;
+export const H_TICKS_HI = 12;
 
 // Per-buffer byte sizes.
 export const IDS_BYTES = MAX_DICE * 4; // f32 ids

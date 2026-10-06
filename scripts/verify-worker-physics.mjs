@@ -9,6 +9,9 @@
 // • kinematic hold + release impulse path works through the worker command queue
 // • the step timer parks with nothing to simulate, restarts on addDie, stops
 //   ticking while the page is hidden, and resumes without replaying a backlog
+// • a 4x slower wakeup timer (test hook) still settles a seeded throw in the
+//   same wall time (< 10% apart) on the same faces: the worker steps by
+//   elapsed time, so a late timer catches up instead of playing slow motion
 //
 // Mirrors scripts/verify-wasm-primitives.mjs.
 import { chromium } from 'playwright';
@@ -23,7 +26,10 @@ import {
     loadWasmEngine, isWasmAvailable, getWasmEngine,
     isUsingWorkerPhysics, isUsingSharedArrayBuffer,
     flushWorkerCommandBatch, getWorkerPhysicsStats, setPhysicsHidden,
+    seededPhysicsThrow, setPhysicsTimerScale, getSimClock,
 } from './wasm/PhysicsBridge.js';
+import { THROW_TABLE_SURFACE_Y, presetForShape } from 'dice-core/wasm/physicsPresets';
+import { loadHullForDie } from './wasm/PhysicsBridge.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -152,8 +158,50 @@ export async function run() {
         resumedStats.loopRunning === true && resumedTicks > 0 && resumedTicks < 90;
     e.removeDie(idleId);
 
+    // --- Throttled timer: same settle wall time, same faces ----------------
+    const settleRun = async (scale) => {
+        setPhysicsTimerScale(scale);
+        // Hidden while spawning: every spawn/throw command lands before the
+        // first tick, so both runs start from the same tick boundary.
+        setPhysicsHidden(true);
+        e.clearAllDice();
+        const ids = ['d6', 'd20', 'd8'].map((shape, index) => {
+            const sides = Number(shape.slice(1));
+            const preset = presetForShape(shape);
+            const id = e.addDie(sides, 0, THROW_TABLE_SURFACE_Y + 5.75 + index * 0.5, 0);
+            e.setDieMaterial(id, preset.friction, preset.rollingFriction);
+            e.setDieDrag(id, preset.dragFactor ?? 0);
+            loadHullForDie(id, sides);
+            return { id, index };
+        });
+        seededPhysicsThrow(4242, ids, THROW_TABLE_SURFACE_Y);
+        flushWorkerCommandBatch();
+        await sleep(100);
+        const tick0 = getSimClock().stepIndex;
+        const t0 = performance.now();
+        setPhysicsHidden(false);
+        await sleep(200); // let the throw leave the settled state
+        while (!e.areAllSettled() && performance.now() - t0 < 30000) await sleep(5);
+        const wallMs = performance.now() - t0;
+        const faceIds = Array.from(e.getDieIds(), (v) => Math.round(v));
+        const faceValues = Array.from(e.getFaceValues());
+        const faces = ids.map(({ id }) => faceValues[faceIds.indexOf(id)] ?? 0);
+        return { wallMs, faces, ticks: getSimClock().stepIndex - tick0 };
+    };
+    const normal = await settleRun(1);
+    const throttled = await settleRun(4);
+    setPhysicsTimerScale(1);
+    e.clearAllDice();
+    flushWorkerCommandBatch();
+    const throttleWallRatio = throttled.wallMs / normal.wallMs;
+    const throttleCatchesUp =
+        normal.faces.every((f) => f > 0) &&
+        JSON.stringify(normal.faces) === JSON.stringify(throttled.faces) &&
+        Math.abs(throttleWallRatio - 1) < 0.1;
+
     return {
         ok: true,
+        normalSettle: normal, throttledSettle: throttled, throttleWallRatio, throttleCatchesUp,
         idleWhenEmpty, runningAfterAdd, pausedWhenHidden, noTicksWhileHidden,
         resumedTicks, resumedWithoutBacklog,
         usingWorker, usingSAB, crossOriginIsolated,
@@ -189,7 +237,7 @@ try {
     // Any same-origin URL that is *not* the app: the module is served as a
     // plain script. (A missing path falls back to index.html and boots the
     // whole tavern in this page, which re-inits the shared physics bridge.)
-    await page.goto(`${BASE}/src/wasm/physicsFlags.ts`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${BASE}/src/wasm/staticColliders.ts?test`, { waitUntil: 'domcontentloaded' });
     result = await page.evaluate(async () => {
         try {
             // @ts-ignore — runtime-generated test module written just before this browser-side import runs.
@@ -224,6 +272,7 @@ const checks = result
           pausedWhenHidden: result.pausedWhenHidden,
           noTicksWhileHidden: result.noTicksWhileHidden,
           resumedWithoutBacklog: result.resumedWithoutBacklog,
+          throttleCatchesUp: result.throttleCatchesUp,
       }
     : { result: false };
 const failed = Object.entries(checks)

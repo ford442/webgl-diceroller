@@ -31,6 +31,7 @@ import {
     H_SETTLED,
     H_SPHERE_TESTS,
     H_TICKS,
+    H_TICKS_HI,
     IDS_BYTES,
     MAX_DICE,
     MAX_DYNAMICS,
@@ -48,7 +49,7 @@ import {
 import { MAX_RECORD_LEN } from 'dice-core/wasm/workerCommands';
 
 describe('header layout', () => {
-    it('has twelve distinct Int32 header slots', () => {
+    it('has thirteen distinct Int32 header slots', () => {
         const indices = [
             H_SEQNO,
             H_FRONT,
@@ -62,6 +63,7 @@ describe('header layout', () => {
             H_CONTACTS,
             H_IDLE,
             H_TICKS,
+            H_TICKS_HI,
         ];
         expect(new Set(indices).size).toBe(indices.length);
         expect(Math.max(...indices)).toBe(HEADER_INTS - 1);

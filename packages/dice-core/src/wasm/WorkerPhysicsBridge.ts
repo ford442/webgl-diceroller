@@ -28,6 +28,7 @@ import {
     H_CONTACTS,
     H_IDLE,
     H_TICKS,
+    H_TICKS_HI,
     idsOffset,
     xfOffset,
     faceValuesOffset,
@@ -388,6 +389,7 @@ class WorkerEngineProxy implements PhysicsEngine {
             tableHalfD,
             flags: parsePhysicsFlags(_searchParams),
             biasRatio: parseMassBiasRatio(_searchParams),
+            testHooks: _searchParams.has('test'),
             sab: this.sab || null,
             sabDynamics: this.sabDynamics || null,
         });
@@ -743,8 +745,17 @@ class WorkerEngineProxy implements PhysicsEngine {
     }
 
     getFixedTickCount(): number {
-        if (this.header) return Atomics.load(this.header, H_TICKS) >>> 0;
+        if (this.header) {
+            const lo = Atomics.load(this.header, H_TICKS) >>> 0;
+            const hi = Atomics.load(this.header, H_TICKS_HI) >>> 0;
+            return hi * 0x1_0000_0000 + lo;
+        }
         return this._snapTicks;
+    }
+
+    /** Test hook (`?test` pages only): stretch the worker's wakeup interval by `scale`. */
+    setTimerScale(scale: number): void {
+        this._send('setTimerScale', { scale });
     }
 
     /** No-op: the bias ratio is bundled into init() alongside the flags. */
@@ -892,11 +903,16 @@ export const flushWorkerCommandBatch = (): void => {
 
 /**
  * Tell the worker the page is hidden (pause its step timer) or visible again.
- * Resuming does not fast-forward: the engine only ever receives one fixed
- * tick per wakeup, so the time spent hidden is not simulated.
+ * Resuming does not fast-forward: the worker's SimDriver re-anchors when the
+ * timer restarts, so the time spent hidden is not simulated.
  */
 export const setPhysicsHidden = (hidden: boolean): void => {
     _engine?.setHidden(hidden);
+};
+
+/** Test hook (`?test` only): stretch the worker's wakeup interval; see verify-worker-physics. */
+export const setPhysicsTimerScale = (scale: number): void => {
+    _engine?.setTimerScale(scale);
 };
 
 export const loadWasmEngine = async (): Promise<boolean> => {

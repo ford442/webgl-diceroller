@@ -210,6 +210,8 @@ export interface AppContextPhysics {
     }>;
     /** Test hook: report every roll as still moving, to exercise the settle timeout. */
     forceNoSettle?: (value?: boolean) => void;
+    getSimClock?: () => import('dice-core/wasm/SimDriver').SimClock;
+    setTimerScale?: (scale: number) => void;
     /** `?test` only: the collider world the page registered (WorldRecorder). */
     exportWorld?: () => import('dice-core/wasm/WorldRecorder').WorldFixture | null;
     getDieLog?: () => import('dice-core/wasm/WorldRecorder').DieLogEntry[];

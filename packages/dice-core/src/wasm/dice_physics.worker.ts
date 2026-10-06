@@ -39,6 +39,7 @@ import {
     H_CONTACTS,
     H_IDLE,
     H_TICKS,
+    H_TICKS_HI,
     idsOffset,
     xfOffset,
     faceValuesOffset,
@@ -58,6 +59,7 @@ import { dispatchLinear, drainRing } from './workerCommands.js';
 import { toRngSeedBigInt } from './seedUtil.js';
 import { loadHullTable, uploadHullForDie } from './faceTableLoader.js';
 import type { HullTable } from './hullTypes.js';
+import { createSimDriver, FIXED_DT, type SimDriver } from './SimDriver.js';
 import type { DicePhysicsModule, EmbindPhysicsEngine } from './physicsTypes.js';
 
 /** Payload of every message the main-thread proxy sends us. */
@@ -65,9 +67,9 @@ type CommandPayload = Record<string, any>;
 
 // The engine owns the clock (FIXED_DT in dice_contacts.hpp): step(dt) banks dt
 // and runs fixed 1/120 s ticks. The interval below is only a wakeup — each
-// wakeup hands the engine exactly one tick's worth, so a dropped or late timer
-// callback slows the simulation down but never changes the tick sequence.
-const FIXED_DT = 1 / 120;
+// wakeup hands the engine the wall time since the previous one (SimDriver),
+// so a late or throttled timer catches up (up to MAX_CATCH_UP_TICKS) instead
+// of slowing the dice down. The tick sequence is the same either way.
 const STEP_MS = 1000 * FIXED_DT;
 // Park the timer once the world has been asleep (and the command ring empty)
 // this many ticks in a row — 0.25 s, long enough not to thrash on a die that
@@ -92,6 +94,11 @@ const dynXfView: (Float32Array | null)[] = [null, null];
 
 let running = false; // true once init() has configured the world
 let stepTimer: ReturnType<typeof setInterval> | null = null;
+let driver: SimDriver | null = null;
+// Test hook (init payload `testHooks`, i.e. a `?test` page): stretch the
+// wakeup interval to prove the driver catches up. Never set in production.
+let testHooks = false;
+let timerScale = 1;
 let hidden = false; // main thread reported document.hidden
 let asleepTicks = 0;
 
@@ -133,6 +140,7 @@ async function boot() {
 function ensureEngine(): void {
     if (engine) return;
     engine = new (requireModule().DicePhysicsEngine)();
+    driver = createSimDriver(engine);
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +182,9 @@ function publishSAB(): void {
     Atomics.store(h, H_SPHERE_TESTS, stepStats.sphereTests | 0);
     Atomics.store(h, H_SAT_TESTS, stepStats.satTests | 0);
     Atomics.store(h, H_CONTACTS, stepStats.contacts | 0);
-    Atomics.store(h, H_TICKS, eng.getFixedTickCount() | 0);
+    const ticks = eng.getFixedTickCount();
+    Atomics.store(h, H_TICKS, ticks | 0);
+    Atomics.store(h, H_TICKS_HI, Math.floor(ticks / 0x1_0000_0000) | 0);
     Atomics.store(h, H_FRONT, back);
     Atomics.add(h, H_SEQNO, 1);
 }
@@ -288,8 +298,13 @@ function tick(): void {
     if (!running || !eng) return;
     try {
         drainCommandQueue();
+        const now = performance.now();
         if (eng.getDieCount() > 0 || eng.getDynamicCount() > 0) {
-            eng.step(FIXED_DT);
+            driver?.tick(now);
+        } else {
+            // Nothing to simulate: keep the anchor current so the first die
+            // spawned later is not handed the empty stretch as backlog.
+            driver?.resume(now);
         }
         drainEvents();
         publish();
@@ -317,7 +332,9 @@ function commandRingEmpty(): boolean {
 function startLoop(): void {
     if (stepTimer !== null) return;
     setIdleFlag(false);
-    stepTimer = setInterval(tick, STEP_MS);
+    // Time spent parked or hidden is dropped, never replayed.
+    driver?.resume(performance.now());
+    stepTimer = setInterval(tick, STEP_MS * timerScale);
     reportLoopState();
 }
 
@@ -353,8 +370,8 @@ function maybeParkLoop(eng: EmbindPhysicsEngine): void {
 }
 
 /**
- * Restart the timer after any command. Resuming never fast-forwards: each
- * wakeup hands the engine one FIXED_DT, so time spent parked is simply gone.
+ * Restart the timer after any command. Resuming never fast-forwards: the
+ * driver re-anchors in startLoop, so time spent parked is simply gone.
  */
 function wakeLoop(): void {
     asleepTicks = 0;
@@ -372,6 +389,7 @@ function handleInit(payload: CommandPayload): void {
     eng.setFlags(payload.flags >>> 0);
     if (typeof payload.biasRatio === 'number') eng.setMassBiasRatio(payload.biasRatio);
     eng.init(payload.gravity, payload.tableY, payload.tableHalfW, payload.tableHalfD);
+    testHooks = payload.testHooks === true;
     if (payload.sab) {
         header = new Int32Array(payload.sab, 0, HEADER_INTS);
         for (const b of [0, 1] as const) {
@@ -404,6 +422,15 @@ function handle(type: string, payload: CommandPayload): void {
     // init. Ignore stray pre-init commands rather than throwing.
     if (type === 'init') {
         handleInit(payload);
+        return;
+    }
+    if (type === 'setTimerScale') {
+        if (!testHooks) return;
+        timerScale = Math.max(0.25, Math.min(16, Number(payload?.scale) || 1));
+        if (stepTimer !== null) {
+            stopLoop();
+            wakeLoop();
+        }
         return;
     }
     if (type === 'setHidden') {
