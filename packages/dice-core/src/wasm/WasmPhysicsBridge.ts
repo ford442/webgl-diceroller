@@ -5,9 +5,8 @@
  * When artifacts are missing the bridge substitutes a no-op stub.
  */
 
-import { publicAssetUrl } from '../publicAssetUrl.js';
 import { parseCollisionEventBuffer } from './collisionEvents.js';
-import { applyFaceTableForDie } from './faceTableLoader.js';
+import { loadHullTable, uploadHullForDie } from './faceTableLoader.js';
 import type { HullTable } from './hullTypes.js';
 import { parseMassBiasRatio, parsePhysicsFlags } from './physicsFlags.js';
 import { toRngSeedBigInt } from './seedUtil.js';
@@ -150,20 +149,7 @@ function wrapEngine(raw: EmbindPhysicsEngine, Module: DicePhysicsModule): Physic
     return engine;
 }
 
-export interface LoadHullsOptions {
-    assetUrl?: (relativePath: string) => string;
-}
-
-export async function loadHullTable(options: LoadHullsOptions = {}): Promise<HullTable | null> {
-    const assetUrl = options.assetUrl ?? publicAssetUrl;
-    try {
-        const res = await fetch(assetUrl('wasm/hulls.json'));
-        if (res.ok) return (await res.json()) as HullTable;
-    } catch (e) {
-        console.warn('[WasmPhysics] Could not load hulls.json:', e);
-    }
-    return null;
-}
+export { loadHullTable, type LoadHullsOptions } from './faceTableLoader.js';
 
 export function applyHullToDie(
     engine: PhysicsEngine,
@@ -172,20 +158,8 @@ export function applyHullToDie(
     wasmId: number,
     sides: number
 ): void {
-    if (!hulls || !moduleClass) return;
-    const type = 'd' + sides;
-    const data = hulls[type];
-    if (!data?.vertices) return;
-    const flat = new moduleClass.VectorFloat();
-    for (let i = 0; i < data.vertices.length; i++) {
-        const v = data.vertices[i];
-        if (!v) continue;
-        flat.push_back(v[0] ?? 0);
-        flat.push_back(v[1] ?? 0);
-        flat.push_back(v[2] ?? 0);
-    }
-    engine.setDieHull(wasmId, flat);
-    applyFaceTableForDie(engine, moduleClass, wasmId, data);
+    if (!moduleClass) return;
+    uploadHullForDie(engine, moduleClass, hulls, wasmId, sides);
 }
 
 export interface InProcessPhysicsSession {
@@ -202,7 +176,13 @@ export interface InProcessPhysicsSession {
 export interface CreateInProcessPhysicsSessionOptions extends InstantiateDicePhysicsOptions {
     /** Force the no-op stub (same as `?no-wasm`). */
     noWasm?: boolean;
-    loadHulls?: () => Promise<HullTable | null>;
+    /**
+     * Headless callers: rethrow a missing artifact or hull table instead of
+     * degrading to the JS stub / bounding spheres.
+     */
+    strict?: boolean;
+    /** Skip the "engine loaded" console line (headless callers). */
+    quiet?: boolean;
 }
 
 export async function createInProcessPhysicsSession(
@@ -230,11 +210,11 @@ export async function createInProcessPhysicsSession(
         const engine = wrapEngine(raw, Module);
         engine.setFlags(parsePhysicsFlags(searchParams));
         engine.setMassBiasRatio(parseMassBiasRatio(searchParams));
-        const hulls = options.loadHulls
-            ? await options.loadHulls()
-            : await loadHullTable({ assetUrl: options.assetUrl });
+        const hulls = await loadHullTable({ assets: options.assets, required: options.strict });
         const simdLabel = dir === WASM_SCALAR_DIR ? 'scalar' : 'SIMD';
-        console.log(`[WasmPhysics] WASM dice physics engine loaded (${simdLabel} artifact).`);
+        if (!options.quiet) {
+            console.log(`[WasmPhysics] WASM dice physics engine loaded (${simdLabel} artifact).`);
+        }
         return {
             engine,
             moduleClass: Module,
@@ -245,6 +225,7 @@ export async function createInProcessPhysicsSession(
             dispose,
         };
     } catch (err) {
+        if (options.strict) throw err;
         const message = err instanceof Error ? err.message : String(err);
         const hint = message.includes('fetch')
             ? 'WASM binary not found. Run `npm run build:wasm` to compile the C++ module.'

@@ -376,6 +376,11 @@ class WorkerEngineProxy implements PhysicsEngine {
 
     // --- lifecycle ---------------------------------------------------------
     init(gravity: number, tableY: number, tableHalfW: number, tableHalfD: number): void {
+        // DicePhysicsEngine::init clears every body and restarts ids at 0;
+        // mirror that or the next addDie hands out an id the engine never
+        // assigned (its face reads 0 and every per-die command misses).
+        this._nextId = 0;
+        this._count = 0;
         this._send('init', {
             gravity,
             tableY,

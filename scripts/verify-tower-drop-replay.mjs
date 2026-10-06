@@ -27,7 +27,6 @@
  * now leave CHUTE_MIN_CLEARANCE (diceTowerLayout.ts). `--no-require-settle`
  * reduces it to a warning, for bisecting a determinism failure on its own.
  */
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -45,7 +44,7 @@ import {
     presetForShape,
 } from 'dice-core/wasm/physicsPresets';
 import { createInProcessPhysicsSession } from 'dice-core/wasm/WasmPhysicsBridge';
-import { createNodeAssetUrl, wasmArtifactsPresent } from 'dice-core/node';
+import { fsAssetSource, wasmArtifactsPresent } from 'dice-core/node';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC_DIR = path.join(REPO_ROOT, 'public');
@@ -92,20 +91,6 @@ function addTowerStatics(engine) {
         );
     }
     return colliders.length;
-}
-
-/**
- * Read hulls.json off disk rather than letting the bridge fetch it.
- *
- * `loadHullTable` uses `fetch`, which cannot read a `file:` URL in Node — it
- * throws, the bridge swallows it, and every die silently becomes a sphere with
- * no face table, so `getFaceValues()` comes back all zeros. That would make
- * this harness's whole point ("same seed, same faces") vacuously true while
- * testing marbles instead of dice down the chute.
- */
-async function loadHullsFromDisk() {
-    const raw = await readFile(path.join(PUBLIC_DIR, 'wasm', 'hulls.json'), 'utf8');
-    return JSON.parse(raw);
 }
 
 function stepUntilSettled(engine) {
@@ -192,9 +177,12 @@ async function main() {
         return;
     }
 
+    // strict: a missing hull table throws instead of turning every die into
+    // a sphere with no face table — "same seed, same faces" would then hold
+    // vacuously for marbles.
     const session = await createInProcessPhysicsSession({
-        assetUrl: createNodeAssetUrl(PUBLIC_DIR),
-        loadHulls: loadHullsFromDisk,
+        assets: fsAssetSource(PUBLIC_DIR),
+        strict: true,
     });
     if (!session.available) {
         console.error('[verify-tower-drop-replay] WASM engine failed to load.');

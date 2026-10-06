@@ -1,17 +1,21 @@
 /**
  * Hand-rolled WASM SIMD128 probe via `WebAssembly.validate`.
  *
- * The payload is a minimal module whose only instruction is `v128.const`
- * (opcode `0xfd 0x0f`). Browsers without SIMD128 reject it at validate time
- * (Safari < 16.4, older WebViews) without instantiating a real engine.
+ * The payload is a minimal module with one `(func (result v128))` whose body
+ * is `i32.const 0; i8x16.splat` (opcode `0xfd 0x0f`). Engines without SIMD128
+ * reject it at validate time (Safari < 16.4, older WebViews) without
+ * instantiating a real engine.
  *
- * Bytes match the `simd` probe in GoogleChromeLabs/wasm-feature-detect.
+ * The previous bytes declared a v128 result and then `drop`ped it, with code
+ * section sizes one byte too long, so they failed validation everywhere and
+ * every runtime silently loaded the scalar build. `simd-support.test` now
+ * validates these bytes with the real `WebAssembly.validate`.
  */
 
-/** Minimal `(func () -> v128)` module containing `v128.const`. */
+/** Minimal `(func (result v128) i32.const 0 i8x16.splat)` module. */
 export const WASM_SIMD_PROBE_BYTES = new Uint8Array([
-    0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253,
-    15, 26, 11,
+    0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 8, 1, 6, 0, 65, 0, 253, 15,
+    11,
 ]);
 
 type ValidateFn = (bytes: BufferSource) => boolean;

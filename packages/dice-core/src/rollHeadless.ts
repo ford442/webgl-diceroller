@@ -1,14 +1,11 @@
 /**
- * Headless WASM roll: parse notation, instantiate the in-process engine in
- * Node (or any environment with `fetch` + WASM), step to settle, return
- * solver face values. No Three.js, no canvas, no DOM.
+ * Headless WASM roll: parse notation, instantiate the in-process engine, step
+ * to settle, return solver face values. No Three.js, no canvas, no DOM, and no
+ * static `node:` import — in Node the assets default to `fsAssetSource`
+ * (loaded lazily); a page passes `fetchAssetSource()`.
  */
 
-import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-
+import type { AssetSource } from './assets/AssetSource.js';
 import {
     DIE_TYPE_CATALOG,
     createDefaultDiceSet,
@@ -43,11 +40,11 @@ import {
     computeSeededThrowParams,
     createSeededRng,
 } from './wasm/seededThrowParams.js';
-import { formatSolverBuildId } from './wasm/SolverBuildId.js';
+import { readSolverBuildId } from './wasm/SolverBuildId.js';
 import { createInProcessPhysicsSession } from './wasm/WasmPhysicsBridge.js';
 import type { PhysicsEngine } from './wasm/physicsTypes.js';
 import { applyWorld, type WorldFixture } from './wasm/WorldRecorder.js';
-import { WASM_SCALAR_DIR, WASM_SIMD_DIR, type WasmArtifactDir } from './wasm/wasmArtifact.js';
+import { WASM_SIMD_DIR, type WasmArtifactDir } from './wasm/wasmArtifact.js';
 
 const FIXED_DT = 1 / 120;
 const DEFAULT_MAX_STEPS = 120 * 20; // 20s of sim
@@ -55,8 +52,11 @@ const IDLE_STEPS_REQUIRED = 8;
 
 export interface HeadlessDieResult {
     type: string;
+    /** The face the solver read (1..sides), before the dice set's face map. */
     naturalValue: number;
+    /** `naturalValue` mapped through the dice set (custom faces, d10 0-9, …). */
     value: number;
+    /** Engine body id the die settled as (ids keep growing across rounds). */
     wasmId: number;
     role: 'tens' | 'ones' | null;
     groupIndex: number;
@@ -69,7 +69,11 @@ export interface HeadlessRollTrace {
     steps: number;
     dt: number;
     solverBuildId: string | null;
+    /** Solver faces of `results`, in the same order. */
     faceValues: number[];
+    /** Solver faces of the opposed side, when the expression has one. */
+    opposedFaceValues?: number[];
+    /** Physics rounds thrown: initial throw plus reroll / explosion passes, both sides. */
     rounds: number;
 }
 
@@ -81,7 +85,9 @@ export interface HeadlessRollResult {
 }
 
 export interface RollHeadlessOptions {
-    /** Absolute path to the repo `public/` directory. */
+    /** Where the engine, hulls and build-info come from (default: `fsAssetSource(publicDir)`). */
+    assets?: AssetSource;
+    /** Node only, ignored when `assets` is given: the `public/` directory to read. */
     publicDir?: string;
     maxSteps?: number;
     dt?: number;
@@ -113,23 +119,9 @@ function physicsSearchParams(options: RollHeadlessOptions): URLSearchParams {
     return params;
 }
 
-export function defaultPublicDir(fromUrl: string = import.meta.url): string {
-    return path.resolve(path.dirname(fileURLToPath(fromUrl)), '../../..', 'public');
-}
-
-export function wasmArtifactsPresent(
-    publicDir: string = defaultPublicDir(),
-    preferred: WasmArtifactDir = WASM_SIMD_DIR
-): boolean {
-    const dirs: WasmArtifactDir[] =
-        preferred === WASM_SCALAR_DIR
-            ? [WASM_SCALAR_DIR, WASM_SIMD_DIR]
-            : [WASM_SIMD_DIR, WASM_SCALAR_DIR];
-    return dirs.some((dir) => existsSync(path.join(publicDir, dir, 'dice_physics.wasm')));
-}
-
-export function createNodeAssetUrl(publicDir: string): (relativePath: string) => string {
-    return (relativePath: string) => pathToFileURL(path.join(publicDir, relativePath)).href;
+interface SolvedDie {
+    wasmId: number;
+    natural: number;
 }
 
 function catalogShape(type: string): DieShapeId {
@@ -206,7 +198,7 @@ async function resolveSide(
     tableSurfaceY: number,
     dt: number,
     maxSteps: number
-): Promise<{ dice: DieOutcome[]; steps: number; faceValues: number[] }> {
+): Promise<{ dice: DieOutcome[]; solved: SolvedDie[]; steps: number; rounds: number }> {
     let specs: SpawnDieSpec[] = buildSpawnSpecsForGroups(side.groups);
     let subSeed = seed;
     let accumulatedDice: DieOutcome[] = [];
@@ -214,7 +206,10 @@ async function resolveSide(
     const maxExplosionRounds = 20;
     let didRerollPass = false;
     let steps = 0;
-    let lastFaceValues: number[] = [];
+    let rounds = 0;
+    // Parallel to accumulatedDice: which body each outcome came from and the
+    // face the solver read, before the dice set's face map.
+    let solved: SolvedDie[] = [];
 
     while (true) {
         const spawned = spawnSpecs(engine, session, specs, tableSurfaceY);
@@ -225,13 +220,17 @@ async function resolveSide(
 
         const stepped = stepUntilSettled(engine, dt, maxSteps);
         steps += stepped.steps;
+        rounds += 1;
         if (!stepped.settled) {
             throw new NotationError(`Physics did not settle within ${maxSteps} steps (dt=${dt}).`);
         }
 
-        const roundDice: DieOutcome[] = spawned.map(({ wasmId, spec }, i) => {
-            const natural = readNatural(engine, wasmId);
-            lastFaceValues = Array.from(engine.getFaceValues?.() ?? []);
+        const roundSolved: SolvedDie[] = spawned.map(({ wasmId }) => ({
+            wasmId,
+            natural: readNatural(engine, wasmId),
+        }));
+        const roundDice: DieOutcome[] = spawned.map(({ spec }, i) => {
+            const natural = roundSolved[i]!.natural;
             return {
                 groupIndex: spec.groupIndex ?? 0,
                 dieIndex: spec.dieIndex ?? i,
@@ -245,6 +244,7 @@ async function resolveSide(
 
         if (explosionRound === 0 && !didRerollPass) {
             accumulatedDice = roundDice;
+            solved = roundSolved;
         } else if (specs.some((s) => s.isReroll)) {
             roundDice.forEach((d, i) => {
                 const slot = specs[i]?.dieIndex ?? d.dieIndex;
@@ -260,6 +260,7 @@ async function resolveSide(
                         prev.originalValue = prev.value;
                     }
                 });
+                solved.push(roundSolved[i]!);
                 accumulatedDice.push({
                     ...d,
                     dieIndex: slot,
@@ -277,6 +278,7 @@ async function resolveSide(
         } else {
             roundDice.forEach((d, i) => {
                 const slot = specs[i]?.dieIndex ?? d.dieIndex;
+                solved.push(roundSolved[i]!);
                 accumulatedDice.push({ ...d, dieIndex: slot, exploded: true });
             });
         }
@@ -296,7 +298,7 @@ async function resolveSide(
         explosionRound += 1;
     }
 
-    return { dice: accumulatedDice, steps, faceValues: lastFaceValues };
+    return { dice: accumulatedDice, solved, steps, rounds };
 }
 
 export async function rollHeadless(
@@ -305,26 +307,26 @@ export async function rollHeadless(
     diceSet: DiceSet | null = null,
     options: RollHeadlessOptions = {}
 ): Promise<HeadlessRollResult> {
-    const publicDir = options.publicDir ?? defaultPublicDir();
-    if (!wasmArtifactsPresent(publicDir, options.preferredDir ?? WASM_SIMD_DIR)) {
+    const assets =
+        options.assets ??
+        (await import('./assets/fsAssetSource.js')).fsAssetSource(options.publicDir);
+    let session: Awaited<ReturnType<typeof createInProcessPhysicsSession>>;
+    try {
+        session = await createInProcessPhysicsSession({
+            assets,
+            preferredDir: options.preferredDir,
+            searchParams: physicsSearchParams(options),
+            // A missing engine or hull table is an error here, never the JS
+            // stub or a bounding sphere: a sphere is not an acceptable d20.
+            strict: true,
+            quiet: true,
+        });
+    } catch (err) {
         throw new NotationError(
-            `WASM artifacts missing under ${publicDir}. Run npm run build:wasm.`
+            `WASM dice physics unavailable from ${assets.label} (run npm run build:wasm): ${
+                (err as Error).message
+            }`
         );
-    }
-
-    const assetUrl = createNodeAssetUrl(publicDir);
-    const session = await createInProcessPhysicsSession({
-        assetUrl,
-        preferredDir: options.preferredDir,
-        searchParams: physicsSearchParams(options),
-        // Node's fetch cannot read the file: URL the bridge would build, and
-        // the bridge swallows that failure — every die would silently become a
-        // sphere with no face table (faces read 0). Read hulls.json directly.
-        loadHulls: async () =>
-            JSON.parse(await readFile(path.join(publicDir, 'wasm', 'hulls.json'), 'utf8')),
-    });
-    if (!session.available) {
-        throw new NotationError('Failed to instantiate the WASM dice physics engine.');
     }
 
     const engine = session.engine;
@@ -360,7 +362,9 @@ export async function rollHeadless(
     );
 
     let opposedDice: DieOutcome[] | undefined;
+    let opposedSolved: SolvedDie[] | undefined;
     let opposedSteps = 0;
+    let opposedRounds = 0;
     if (parsed.opposed) {
         const rightSeed = (seed + 0x9e3779b9) >>> 0;
         const right = await resolveSide(
@@ -374,18 +378,13 @@ export async function rollHeadless(
             maxSteps
         );
         opposedDice = right.dice;
+        opposedSolved = right.solved;
         opposedSteps = right.steps;
+        opposedRounds = right.rounds;
     }
 
-    // Read build-info.json for the artifact this session actually loaded; the
-    // fetch-based loadSolverBuildId() cannot read a file: URL under Node.
-    let solverBuildId = 'unknown';
-    try {
-        const buildInfo = path.join(publicDir, session.dir ?? WASM_SIMD_DIR, 'build-info.json');
-        solverBuildId = formatSolverBuildId(JSON.parse(await readFile(buildInfo, 'utf8')));
-    } catch {
-        // No build-info.json next to the artifact: leave it 'unknown'.
-    }
+    // build-info.json of the artifact this session actually loaded.
+    const solverBuildId = await readSolverBuildId(assets, session.dir ?? WASM_SIMD_DIR);
 
     const evaluated = evaluateRoll(parsed, left.dice, {
         opposedDice,
@@ -395,9 +394,9 @@ export async function rollHeadless(
 
     const results: HeadlessDieResult[] = left.dice.map((d, i) => ({
         type: d.type,
-        naturalValue: d.value ?? 0,
+        naturalValue: left.solved[i]?.natural ?? 0,
         value: d.value ?? 0,
-        wasmId: i,
+        wasmId: left.solved[i]?.wasmId ?? -1,
         role: d.role ?? null,
         groupIndex: d.groupIndex,
         dieIndex: d.dieIndex,
@@ -413,8 +412,9 @@ export async function rollHeadless(
             steps: left.steps + opposedSteps,
             dt,
             solverBuildId,
-            faceValues: left.faceValues,
-            rounds: 1,
+            faceValues: left.solved.map((d) => d.natural),
+            ...(opposedSolved ? { opposedFaceValues: opposedSolved.map((d) => d.natural) } : {}),
+            rounds: left.rounds + opposedRounds,
         },
     };
 }

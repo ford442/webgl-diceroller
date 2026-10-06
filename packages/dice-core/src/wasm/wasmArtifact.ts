@@ -1,4 +1,4 @@
-import { publicAssetUrl } from '../publicAssetUrl.js';
+import { fetchAssetSource, type AssetSource } from '../assets/AssetSource.js';
 import type { DicePhysicsModule } from './physicsTypes.js';
 import { supportsWasmSimd } from './simdSupport.js';
 
@@ -45,9 +45,8 @@ export function wasmArtifactFallbackDirs(preferred: WasmArtifactDir): WasmArtifa
 
 export interface InstantiateDicePhysicsOptions extends ResolveWasmArtifactDirOptions {
     preferredDir?: string;
-    /** Override URL resolution (Node file: URLs, custom hosts). */
-    assetUrl?: (relativePath: string) => string;
-    locateFile?: (path: string, prefix?: string) => string;
+    /** Where the glue and `.wasm` come from (default: fetched next to the page). */
+    assets?: AssetSource;
     moduleArgs?: Record<string, unknown>;
 }
 
@@ -79,7 +78,7 @@ export function resolveDicePhysicsFactory(namespace: unknown): DicePhysicsFactor
 
 export async function importDicePhysicsLoader(
     dir: string,
-    assetUrl: (relativePath: string) => string = publicAssetUrl
+    assets: AssetSource = fetchAssetSource()
 ): Promise<DicePhysicsFactory> {
     // `new Function` hides the import from bundlers and from tsx's CJS
     // rewrite (see resolveDicePhysicsFactory). vitest runs modules in a VM
@@ -91,7 +90,7 @@ export async function importDicePhysicsLoader(
     const dynamicImport = underVitest
         ? (u: string) => import(/* @vite-ignore */ u)
         : (new Function('u', 'return import(u)') as (u: string) => Promise<unknown>);
-    const namespace = await dynamicImport(assetUrl(`${dir}/dice_physics.js`));
+    const namespace = await dynamicImport(assets.moduleUrl(`${dir}/dice_physics.js`));
     const factory = resolveDicePhysicsFactory(namespace);
     if (!factory) {
         throw new Error(`dice_physics.js in ${dir} did not export a module factory`);
@@ -110,18 +109,24 @@ export async function instantiateDicePhysicsModule(
         requested === WASM_SCALAR_DIR || requested === WASM_SIMD_DIR
             ? requested
             : resolveWasmArtifactDir(options);
-    const assetUrl = options.assetUrl ?? publicAssetUrl;
+    const assets = options.assets ?? fetchAssetSource();
     let lastError: unknown = null;
     for (const dir of wasmArtifactFallbackDirs(preferred)) {
         try {
-            const Factory = await importDicePhysicsLoader(dir, assetUrl);
+            const Factory = await importDicePhysicsLoader(dir, assets);
             const moduleArgs: Record<string, unknown> = { ...options.moduleArgs };
-            moduleArgs.locateFile =
-                options.locateFile ??
-                ((file: string) => {
+            const wasmPath = `${dir}/dice_physics.wasm`;
+            if (assets.streamingUrl) {
+                // Over HTTP let Emscripten fetch it (instantiateStreaming).
+                const streamingUrl = assets.streamingUrl.bind(assets);
+                moduleArgs.locateFile = (file: string) => {
                     const name = file.split(/[/\\]/).pop() ?? file;
-                    return assetUrl(`${dir}/${name}`);
-                });
+                    return streamingUrl(`${dir}/${name}`);
+                };
+            } else {
+                // Elsewhere (Node) hand over the bytes: no file: URL fetches.
+                moduleArgs.wasmBinary = await assets.bytes(wasmPath);
+            }
             const Module = await Factory(moduleArgs);
             return { Module, dir };
         } catch (err) {

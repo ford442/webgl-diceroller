@@ -5,6 +5,12 @@
  */
 
 export { publicAssetUrl, resolvePublicAssetUrl } from './publicAssetUrl.js';
+export {
+    AssetMissingError,
+    fetchAssetSource,
+    type AssetSource,
+    type FetchAssetSourceOptions,
+} from './assets/AssetSource.js';
 
 export {
     DICE_SET_VERSION,
@@ -72,7 +78,12 @@ export {
 
 export { supportsWasmSimd, WASM_SIMD_PROBE_BYTES } from './wasm/simdSupport.js';
 
-export { loadSolverBuildId, getSolverBuildId } from './wasm/SolverBuildId.js';
+export {
+    formatSolverBuildId,
+    getSolverBuildId,
+    loadSolverBuildId,
+    readSolverBuildId,
+} from './wasm/SolverBuildId.js';
 
 export {
     createInProcessPhysicsSession,

@@ -2,7 +2,7 @@
  * Runtime solver build identity from WASM artifact build-info.json.
  */
 
-import { publicAssetUrl } from '../publicAssetUrl.js';
+import { fetchAssetSource, type AssetSource } from '../assets/AssetSource.js';
 import { resolveWasmArtifactDir } from './wasmArtifact.js';
 
 let cachedSolverBuildId: string | null = null;
@@ -13,18 +13,22 @@ export function formatSolverBuildId(data: { git_sha?: string; solver_revision?: 
     return `${data?.solver_revision ?? 0}:${sha || 'unknown'}`;
 }
 
-export async function loadSolverBuildId(searchParams?: URLSearchParams): Promise<string> {
-    if (cachedSolverBuildId) return cachedSolverBuildId;
-    const dir = resolveWasmArtifactDir({ searchParams });
+/** Uncached: the id recorded next to the artifact in `dir`, or 'unknown'. */
+export async function readSolverBuildId(assets: AssetSource, dir: string): Promise<string> {
     try {
-        const res = await fetch(publicAssetUrl(`${dir}/build-info.json`), { cache: 'no-store' });
-        if (!res.ok) return 'unknown';
-        cachedSolverBuildId = formatSolverBuildId(await res.json());
-        return cachedSolverBuildId;
+        return formatSolverBuildId(await assets.json(`${dir}/build-info.json`));
     } catch {
-        cachedSolverBuildId = 'unknown';
-        return cachedSolverBuildId;
+        return 'unknown';
     }
+}
+
+export async function loadSolverBuildId(
+    searchParams?: URLSearchParams,
+    assets: AssetSource = fetchAssetSource(undefined, { cache: 'no-store' })
+): Promise<string> {
+    if (cachedSolverBuildId) return cachedSolverBuildId;
+    cachedSolverBuildId = await readSolverBuildId(assets, resolveWasmArtifactDir({ searchParams }));
+    return cachedSolverBuildId;
 }
 
 export function getSolverBuildId(): string | null {

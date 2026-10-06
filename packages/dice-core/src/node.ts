@@ -3,11 +3,9 @@
  * plus the headless roller and its filesystem helpers.
  */
 export * from './index.js';
+export { defaultPublicDir, fsAssetSource, wasmArtifactsPresent } from './assets/fsAssetSource.js';
 export {
     rollHeadless,
-    wasmArtifactsPresent,
-    defaultPublicDir,
-    createNodeAssetUrl,
     type HeadlessRollResult,
     type HeadlessRollTrace,
     type HeadlessDieResult,

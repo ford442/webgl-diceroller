@@ -22,7 +22,6 @@
  * import.meta.url), { type: 'module' })`.
  */
 
-import { publicAssetUrl } from '../publicAssetUrl.js';
 import { instantiateDicePhysicsModule, WASM_SCALAR_DIR, WASM_SIMD_DIR } from './wasmArtifact.js';
 import {
     MAX_DICE,
@@ -57,18 +56,9 @@ import { computeSeededThrowParams, applyThrowParams } from './seededThrowParams.
 import { computeSeededHopperDropParams, applyDropParams } from './seededHopperDrop.js';
 import { dispatchLinear, drainRing } from './workerCommands.js';
 import { toRngSeedBigInt } from './seedUtil.js';
+import { loadHullTable, uploadHullForDie } from './faceTableLoader.js';
+import type { HullTable } from './hullTypes.js';
 import type { DicePhysicsModule, EmbindPhysicsEngine } from './physicsTypes.js';
-
-/** Convex-hull + face-table data shipped in `public/wasm/hulls.json`. */
-interface HullFace {
-    normal: [number, number, number];
-    value: number;
-}
-interface HullData {
-    vertices: [number, number, number][];
-    faces?: HullFace[];
-}
-type HullTable = Record<string, HullData | undefined>;
 
 /** Payload of every message the main-thread proxy sends us. */
 type CommandPayload = Record<string, any>;
@@ -136,12 +126,8 @@ async function boot() {
     const loaded = await instantiateDicePhysicsModule({ preferredDir });
     Module = loaded.Module as DicePhysicsModule;
 
-    try {
-        const res = await fetch(publicAssetUrl('wasm/hulls.json'));
-        if (res.ok) hulls = (await res.json()) as HullTable;
-    } catch (_e) {
-        // Hulls are optional; collision quality degrades but sim still runs.
-    }
+    // Missing hulls degrade to bounding spheres (warned), as on the main thread.
+    hulls = await loadHullTable();
 }
 
 function ensureEngine(): void {
@@ -154,36 +140,7 @@ function ensureEngine(): void {
 // ---------------------------------------------------------------------------
 
 function attachHull(id: number, sides: number): void {
-    if (id < 0 || !hulls) return;
-    const data = hulls['d' + sides];
-    if (!data || !data.vertices) return;
-    const vec = new (requireModule().VectorFloat)();
-    for (let i = 0; i < data.vertices.length; i++) {
-        const v = data.vertices[i];
-        if (!v) continue;
-        vec.push_back(v[0] ?? 0);
-        vec.push_back(v[1] ?? 0);
-        vec.push_back(v[2] ?? 0);
-    }
-    requireEngine().setDieHull(id, vec);
-    vec.delete?.();
-    attachFaceTable(id, sides);
-}
-
-function attachFaceTable(id: number, sides: number): void {
-    const eng = requireEngine();
-    if (id < 0 || !hulls || typeof eng.setDieFaceTable !== 'function') return;
-    const data = hulls['d' + sides];
-    if (!data?.faces?.length) return;
-    const vec = new (requireModule().VectorFloat)();
-    for (const face of data.faces) {
-        vec.push_back(face.normal[0]);
-        vec.push_back(face.normal[1]);
-        vec.push_back(face.normal[2]);
-        vec.push_back(face.value);
-    }
-    eng.setDieFaceTable(id, vec);
-    vec.delete?.();
+    uploadHullForDie(requireEngine(), requireModule(), hulls, id, sides);
 }
 
 function publishSAB(): void {

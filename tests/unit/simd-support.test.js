@@ -18,6 +18,19 @@ describe('WASM SIMD probe', () => {
         expect(WASM_SIMD_PROBE_BYTES[3]).toBe(109);
     });
 
+    it('is a module the real engine validates (Node 16.4+ / V8 ship SIMD128)', () => {
+        // The previous probe was malformed and failed validation everywhere,
+        // so every runtime silently fell back to wasm-scalar/.
+        expect(WebAssembly.validate(WASM_SIMD_PROBE_BYTES)).toBe(true);
+        expect(supportsWasmSimd()).toBe(true);
+    });
+
+    it('is rejected without the SIMD opcode (the probe actually exercises v128)', () => {
+        const noSimd = WASM_SIMD_PROBE_BYTES.slice();
+        noSimd[noSimd.length - 3] = 0x01; // 0xfd prefix -> nop
+        expect(WebAssembly.validate(noSimd)).toBe(false);
+    });
+
     it('reports no SIMD when validate always returns false', () => {
         expect(supportsWasmSimd(() => false)).toBe(false);
     });
