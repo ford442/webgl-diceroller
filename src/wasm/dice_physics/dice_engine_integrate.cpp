@@ -125,19 +125,4 @@ void DicePhysicsEngine::sweepClipAgainstStatics(RigidBody& b, const Vec3& from) 
     b.position = from + motion * std::max(0.0f, earliest - backoff);
 }
 
-void DicePhysicsEngine::checkSleep(RigidBody& b, float dt) const {
-    if (b.kinematic) return;
-    float speed = b.velocity.length() + b.angularVelocity.length() * b.radius;
-    if (speed < SLEEP_SPEED_THRESHOLD) {
-        b.sleepTimer += dt;
-        if (b.sleepTimer >= SLEEP_DELAY) {
-            b.sleeping = true;
-            b.velocity = {};
-            b.angularVelocity = {};
-        }
-    } else {
-        b.sleepTimer = 0.0f;
-    }
-}
-
 } // namespace dice_physics

@@ -96,4 +96,84 @@ async function capturePng(page, file) {
     }
 }
 
-module.exports = { launchPage, runTest, capturePng, DEFAULT_ARGS };
+// "Why is it awake?" — engine/table die counts plus one line per awake body
+// (window.__app.physics.getSleepDiagnostics, ?test/?debug only). Every settle
+// wait below appends this to its failure, so a timeout names the body that
+// would not sleep and what it was touching instead of just the timeout.
+async function settleDiagnostics(page) {
+    try {
+        return await page.evaluate(async () => {
+            const app = window.__app;
+            const diag = await app?.physics?.getSleepDiagnostics?.();
+            const roll = app?.getRollState?.();
+            if (!diag) return 'no sleep diagnostics (is ?test set and WASM loaded?)';
+            const rollLine = roll
+                ? `roll phase=${roll.phase} started=${roll.startedCount} finished=${roll.settledCount}` +
+                  (roll.lastTimeoutReason ? ` timeout=${roll.lastTimeoutReason}` : '')
+                : 'roll state unavailable';
+            return (
+                `engine has ${diag.engineDieCount} die bodies for ${diag.spawnedDice} spawned dice; ` +
+                `areDiceSettled=${diag.settled}; ${rollLine}\n${diag.summary}`
+            );
+        });
+    } catch (e) {
+        return `sleep diagnostics unavailable: ${e.message}`;
+    }
+}
+
+// Wait until at least `minFinished` rolls have finished (settled or timed out),
+// via window.__app.getRollState(). Unlike polling areDiceSettled(), this cannot
+// pass on a table nobody has thrown yet (`ready` fires before a share-URL
+// replay spawns its dice). A roll that ended in the settle timeout fails the
+// wait unless `allowTimedOut` is set.
+async function waitForRollFinished(
+    page,
+    { minFinished = 1, timeout = 180000, allowTimedOut = false } = {}
+) {
+    try {
+        await page.waitForFunction(
+            (n) => {
+                const s = window.__app?.getRollState?.();
+                return !!s && s.settledCount >= n && s.phase !== 'rolling';
+            },
+            minFinished,
+            { timeout, polling: 250 }
+        );
+    } catch (e) {
+        throw new Error(`${e.message}\n${await settleDiagnostics(page)}`);
+    }
+    const state = await page.evaluate(() => window.__app.getRollState());
+    if (state.phase === 'timedOut' && !allowTimedOut) {
+        throw new Error(
+            `roll ended in the settle timeout (${state.lastTimeoutReason})\n${await settleDiagnostics(page)}`
+        );
+    }
+    return state;
+}
+
+// Poll areDiceSettled() for scripts that move dice without a roll (drag,
+// levitation). Fails with the same diagnostics as waitForRollFinished.
+async function waitForSettle(page, { timeout = 60000, polling = 100 } = {}) {
+    try {
+        await page.waitForFunction(
+            () => {
+                const settled = window.__app?.areDiceSettled ?? window.__app?.dice?.areDiceSettled;
+                return typeof settled === 'function' && settled() === true;
+            },
+            null,
+            { timeout, polling }
+        );
+    } catch (e) {
+        throw new Error(`${e.message}\n${await settleDiagnostics(page)}`);
+    }
+}
+
+module.exports = {
+    launchPage,
+    runTest,
+    capturePng,
+    settleDiagnostics,
+    waitForRollFinished,
+    waitForSettle,
+    DEFAULT_ARGS,
+};

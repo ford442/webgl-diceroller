@@ -39,6 +39,9 @@ export {
     getDiceValueDebugSnapshot,
     areDiceSettled,
     getSpawnedDiceCounts,
+    diceSettleProbe,
+    readDiceValueAllowingCocked,
+    setForceNoSettle,
 } from './dice/DiceResults.js';
 
 export {
@@ -47,6 +50,7 @@ export {
     clearDice,
     updateDiceSet,
     syncAllDiceToWasm,
+    whenDiceRegistered,
 } from './dice/DiceSpawn.js';
 
 export {

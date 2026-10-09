@@ -4,7 +4,17 @@
  * after the roll session and table layout are ready.
  */
 
-import { isWasmAvailable, getWasmEngine } from '../wasm/PhysicsBridge.js';
+import {
+    isWasmAvailable,
+    getWasmEngine,
+    getWorldRecorder,
+    readSleepDiagnostics,
+} from '../wasm/PhysicsBridge.js';
+import {
+    decodeSleepDiagnostics,
+    summarizeSleepDiagnostics,
+} from '../core-engine/wasm/sleepDiagnostics.js';
+import { spawnedDice, setForceNoSettle } from '../dice.js';
 import { AppEvent } from '../core/AppEvents.js';
 
 /**
@@ -43,6 +53,20 @@ export function installDebugGlobals(app, deps) {
     app.areDiceSettled = areDiceSettled;
     app.isWasmAvailable = isWasmAvailable;
     app.getWasmEngine = getWasmEngine;
+    // "Why is it awake?" — what every settle-timeout harness prints before
+    // failing (tests/helpers/browser.js waitForSettle).
+    app.physics.getSleepDiagnostics = async () => {
+        const engine = isWasmAvailable() ? getWasmEngine() : null;
+        const bodies = decodeSleepDiagnostics(await readSleepDiagnostics());
+        return {
+            dieLog: getWorldRecorder()?.dieLog().slice(-20) ?? [],
+            engineDieCount: engine?.getDieCount() ?? 0,
+            spawnedDice: spawnedDice.length,
+            settled: areDiceSettled(),
+            bodies,
+            summary: summarizeSleepDiagnostics(bodies),
+        };
+    };
     app.forceShadowRefresh = () => getShadowController()?.forceRefresh('debug');
     app.resetFairnessMonitor = () => {
         rollStats?.reset();
@@ -58,6 +82,13 @@ export function installDebugGlobals(app, deps) {
     };
     app.getTableLayoutConfig = () => getLayoutManager()?.getConfig();
     app.getLastRollShareUrl = () => rollWiring.getLastRollShareUrl();
+    // idle → rolling → settled | timedOut, with counters (RollWiring).
+    app.getRollState = () => rollWiring.getRollState();
+    app.physics.forceNoSettle = (value = true) => setForceNoSettle(value);
+    // ?test only: the collider world the page built (tests/fixtures/tavern-world.json)
+    // and the recent die add/remove log for "engine has 0 dice" failures.
+    app.physics.exportWorld = () => getWorldRecorder()?.exportWorld() ?? null;
+    app.physics.getDieLog = () => getWorldRecorder()?.dieLog() ?? [];
     app.getActiveDiceSet = getActiveDiceSet;
     // Documented for Playwright: patch one die's descriptor entry and the table
     // re-dresses without reloading an asset.

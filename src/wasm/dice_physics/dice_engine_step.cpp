@@ -121,12 +121,7 @@ std::vector<std::pair<size_t, size_t>> DicePhysicsEngine::collectDynamicPairsFor
 
 bool DicePhysicsEngine::areAllSettled() const {
     // Explicit: an empty engine has no roll to finish.
-    if (!hasDice()) return false;
-    for (const auto& b : bodies_) {
-        if (b.kinematic) continue;
-        if (!b.sleeping) return false;
-    }
-    return true;
+    return hasDice() && allAsleep();
 }
 
 bool DicePhysicsEngine::isWorldAsleep() const {

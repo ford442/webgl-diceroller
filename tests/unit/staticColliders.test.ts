@@ -275,17 +275,39 @@ describe('createWasmTableBoundsForEngine', () => {
         resetStaticColliderIds();
     });
 
-    it('returns 0 immediately when engine lacks addStaticBox or clearStatics', () => {
+    it('returns 0 immediately when engine lacks addStaticBox', () => {
         expect(createWasmTableBoundsForEngine({} as any, { physicsBodies: [] })).toBe(0);
-        expect(
-            createWasmTableBoundsForEngine({ addStaticBox: vi.fn() } as any, { physicsBodies: [] })
-        ).toBe(0);
         expect(
             createWasmTableBoundsForEngine({ clearStatics: vi.fn() } as any, { physicsBodies: [] })
         ).toBe(0);
     });
 
-    it('calls clearStatics, adds only box bodies, computes material tags, and counts successes', () => {
+    it('leaves other statics alone and allocates ids from the shared allocator', () => {
+        // #341: clearStatics() wiped the walls, and restarting ids at 1 made the
+        // next props collide with the table's ids (the engine rejects duplicates).
+        resetStaticColliderIds(10000);
+        const engine = makeMockEngine();
+        engine.addStaticBox.mockImplementation((id: number) => id);
+        const tableConfig = {
+            physicsBodies: [
+                { type: 'box', position: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } },
+                { type: 'box', position: { x: 0, y: 1, z: 0 }, size: { x: 2, y: 2, z: 2 } },
+            ],
+        };
+        expect(createWasmTableBoundsForEngine(engine as any, tableConfig)).toBe(2);
+        expect(engine.clearStatics).not.toHaveBeenCalled();
+        const ids = engine.addStaticBox.mock.calls.map((args) => args[0]);
+        expect(ids).toEqual([10000, 10001]);
+        // The next prop collider gets a fresh id, not one of the table's.
+        expect(allocStaticColliderId()).toBe(10002);
+
+        // Re-registering replaces only the table's own boxes.
+        engine.removeStatic = vi.fn();
+        createWasmTableBoundsForEngine(engine as any, tableConfig);
+        expect(engine.removeStatic.mock.calls.map((args) => args[0])).toEqual([10000, 10001]);
+    });
+
+    it('adds only box bodies, computes material tags, and counts successes', () => {
         const engine = makeMockEngine();
         engine.addStaticBox
             .mockReturnValueOnce(1) // velvet body (low restitution)
@@ -322,7 +344,7 @@ describe('createWasmTableBoundsForEngine', () => {
 
         const count = createWasmTableBoundsForEngine(engine as any, tableConfig);
 
-        expect(engine.clearStatics).toHaveBeenCalledTimes(1);
+        expect(engine.clearStatics).not.toHaveBeenCalled();
         expect(engine.addStaticBox).toHaveBeenCalledTimes(3);
         expect(count).toBe(2); // one rejected (-1), not counted
 

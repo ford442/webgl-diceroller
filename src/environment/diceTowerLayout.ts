@@ -34,9 +34,25 @@ export const DICE_TOWER_DIMENSIONS = Object.freeze({
     trayHeight: 2,
 });
 
+/**
+ * The narrowest gap a die must fall through on its way down the chute: the
+ * d20's circumscribed diameter (2 × 1.11, public/wasm/hulls.json) plus margin.
+ * Every ramp but the exit stops this far short of the opposite wall. The old
+ * ramps left 0.36–0.77, so a d20 wedged on the first one and a tower drop —
+ * a seeded, shareable roll — never finished (#341).
+ */
+export const CHUTE_MIN_CLEARANCE = 2.4;
+/** Ramp pitch about the tower's X axis, radians. */
+const RAMP_ANGLE = 0.6;
+/** How far each ramp's high end runs into its wall, so nothing slips behind it. */
+const RAMP_WALL_EMBED = 0.3;
+
 function derived() {
     const { width, depth, height, thickness, rampThickness, trayDepth, trayHeight } =
         DICE_TOWER_DIMENSIONS;
+    // Inner faces of the back and front walls (tower-local z).
+    const zBack = -depth / 2 + thickness;
+    const zFront = depth / 2 - thickness;
     return {
         width,
         depth,
@@ -45,10 +61,32 @@ function derived() {
         rampThick: rampThickness,
         trayDepth,
         trayHeight,
+        zBack,
+        zFront,
         frontH: height / 3,
         rampW: width - thickness * 2 - 0.1,
-        rampLen: depth * 0.9,
         trayZ: depth / 2 + trayDepth / 2 - thickness,
+    };
+}
+
+/**
+ * A ramp spanning tower-local z from `zHigh` down to `zLow` at RAMP_ANGLE,
+ * centred at height `y`. Rotation +x lowers the ramp's +z end.
+ */
+function ramp(
+    y: number,
+    zHigh: number,
+    zLow: number,
+    rampW: number,
+    rampThick: number
+): DiceTowerColliderSpec {
+    const span = Math.abs(zLow - zHigh);
+    const halfLen = span / Math.cos(RAMP_ANGLE) / 2;
+    return {
+        type: 'box',
+        halfExtents: [rampW / 2, rampThick / 2, halfLen],
+        offset: { y, z: (zHigh + zLow) / 2 },
+        rotation: { x: zLow > zHigh ? RAMP_ANGLE : -RAMP_ANGLE },
     };
 }
 
@@ -78,7 +116,8 @@ export function createDiceTowerColliders(): DiceTowerColliderSpec[] {
         thickness,
         rampThick,
         rampW,
-        rampLen,
+        zBack,
+        zFront,
         frontH,
         trayDepth,
         trayHeight,
@@ -106,24 +145,11 @@ export function createDiceTowerColliders(): DiceTowerColliderSpec[] {
             halfExtents: [width / 2, frontH / 2, thickness / 2],
             offset: { y: height - frontH / 2, z: depth / 2 - thickness / 2 },
         },
-        {
-            type: 'box',
-            halfExtents: [rampW / 2, rampThick / 2, rampLen / 2],
-            offset: { y: 11, z: -0.5 },
-            rotation: { x: 0.6 },
-        },
-        {
-            type: 'box',
-            halfExtents: [rampW / 2, rampThick / 2, rampLen / 2],
-            offset: { y: 7, z: 0.5 },
-            rotation: { x: -0.6 },
-        },
-        {
-            type: 'box',
-            halfExtents: [rampW / 2, rampThick / 2, (rampLen + 1) / 2],
-            offset: { y: 3, z: -0.5 },
-            rotation: { x: 0.6 },
-        },
+        // Zig-zag: back wall → front gap, front wall → back gap, then the
+        // exit ramp out through the open lower front into the tray.
+        ramp(11, zBack - RAMP_WALL_EMBED, zFront - CHUTE_MIN_CLEARANCE, rampW, rampThick),
+        ramp(7, zFront + RAMP_WALL_EMBED, zBack + CHUTE_MIN_CLEARANCE, rampW, rampThick),
+        ramp(3, zBack - RAMP_WALL_EMBED, zFront - 0.3, rampW, rampThick),
         {
             type: 'box',
             halfExtents: [width / 2, thickness / 2, trayDepth / 2],
@@ -146,6 +172,37 @@ export function createDiceTowerColliders(): DiceTowerColliderSpec[] {
         },
     ];
     return colliders;
+}
+
+export interface ChuteClearance {
+    /** Index into createDiceTowerColliders(). */
+    collider: number;
+    /** Tower-local z of the ramp's low edge. */
+    lowEdgeZ: number;
+    /** Horizontal gap from that edge to the opposite wall's inner face. */
+    gap: number;
+}
+
+/**
+ * The gap a die falls through off each ramp but the last (the exit ramp
+ * empties into the open front, not against a wall). A gap narrower than the
+ * die wedges it, and the drop never settles.
+ */
+export function computeChuteClearances(): ChuteClearance[] {
+    const { zBack, zFront } = derived();
+    const colliders = createDiceTowerColliders();
+    const ramps = colliders
+        .map((collider, index) => ({ collider, index }))
+        .filter(({ collider }) => (collider.rotation?.x ?? 0) !== 0);
+    return ramps.slice(0, -1).map(({ collider, index }) => {
+        const tilt = collider.rotation?.x ?? 0;
+        const halfLen = collider.halfExtents[2];
+        const z = collider.offset?.z ?? 0;
+        // +tilt lowers the +z end; -tilt lowers the -z end.
+        const lowEdgeZ = tilt > 0 ? z + halfLen * Math.cos(tilt) : z - halfLen * Math.cos(-tilt);
+        const gap = tilt > 0 ? zFront - lowEdgeZ : lowEdgeZ - zBack;
+        return { collider: index, lowEdgeZ, gap };
+    });
 }
 
 /** Visual box parts, one per collider: `[w, h, d, x, y, z, rotX]`. */

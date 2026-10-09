@@ -14,6 +14,7 @@
  */
 import { chromium } from 'playwright';
 import { startPreview } from '../tests/helpers/server.js';
+import { waitForSettle } from '../tests/helpers/browser.js';
 
 const PORT = 4179;
 const PATH = '/?webgl&no-post&fair-dice&test';
@@ -79,10 +80,7 @@ try {
                 input.dispatchEvent(new Event('change'));
             }
         });
-        await page.waitForFunction(() => window.__app.dice?.areDiceSettled?.() === true, null, {
-            timeout: 60000,
-            polling: 100,
-        });
+        await waitForSettle(page, { timeout: 120000 });
 
         const bodies = await page.evaluate(() => {
             const dice = [];
@@ -165,10 +163,7 @@ try {
         }
 
         // --- levitation ------------------------------------------------------
-        await page.waitForFunction(() => window.__app.dice?.areDiceSettled?.() === true, null, {
-            timeout: 60000,
-            polling: 100,
-        });
+        await waitForSettle(page, { timeout: 120000 });
 
         const levitation = await page.evaluate(async () => {
             const app = window.__app;

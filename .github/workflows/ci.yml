@@ -250,6 +250,9 @@ jobs:
                     - verify:worker-physics
                     - verify:worker-replay
                     - verify:tower-drop-replay
+                    # 200 seeded rolls into the recorded tavern world through
+                    # the WASM build, each settling inside 12 s sim (#341).
+                    - test:tavern-world
                     - verify:godrays
                     - verify:wasm-primitives
         steps:
@@ -296,6 +299,11 @@ jobs:
                     - test:wasm-authoritative
                     - test:wasm-gameplay-loop
                     - test:share-roll-replay
+                    - test:roll-timeout
+                    # The checked-in tavern-world fixture must match what the
+                    # app registers; a moved or new prop collider fails here
+                    # until `npm run fixture:world` is re-run and committed.
+                    - check:world-fixture
                     - test:a11y
                     - test:mobile-touch
                     - verify:clutter-unification

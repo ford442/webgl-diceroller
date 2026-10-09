@@ -223,8 +223,30 @@ public:
     /** Test hook: enumerate dynamic–dynamic pair indices without running the solver. */
     std::vector<std::pair<size_t, size_t>> collectDynamicPairsForTesting(bool useBroadphase);
 
+    /** hasDice() && allAsleep(): a roll is finished. False for an empty engine. */
     bool areAllSettled() const;
     bool hasDice() const { return !bodies_.empty(); }
+    /** Every non-kinematic die is asleep. True for an empty engine. */
+    bool allAsleep() const;
+
+    /**
+     * Why is it awake? One record of SLEEP_DIAG_STRIDE floats per die, then
+     * per dynamic prop:
+     *   [0] kind (0 die, 1 dynamic)   [1] id             [2] sleeping
+     *   [3] kinematic                 [4] |v|            [5] |w| * radius
+     *   [6] sleepTimer                [7] own kinetic energy
+     *   [8] island kinetic energy (what updateIslandSleep compares against
+     *       SLEEP_ENERGY_THRESHOLD)   [9] island size
+     *   [10] manifold count           [11] contact point count
+     *   [12] deepest separation (0 when no contacts)
+     *   [13..] SLEEP_DIAG_MANIFOLDS x (manifold kind, other id, material tag,
+     *       deepest separation); unused slots are -1.
+     * Other id: a die/dynamic/static user id, or -1 for the analytic table,
+     * walls and container planes. Material tag is a static's tag, else -1.
+     */
+    static constexpr int SLEEP_DIAG_MANIFOLDS = 4;
+    static constexpr int SLEEP_DIAG_STRIDE = 13 + SLEEP_DIAG_MANIFOLDS * 4;
+    const std::vector<float>& buildSleepDiagnostics();
 
     /**
      * True when stepping would change nothing: every die and dynamic prop is
@@ -306,6 +328,7 @@ private:
     mutable std::vector<int32_t> faceValueBuffer_;
     mutable std::vector<float> dynamicTransformBuffer_;
     mutable std::vector<float> dynamicIdBuffer_;
+    std::vector<float> sleepDiagBuffer_;
     DeterministicRNG rng_;
     bool noDrag_ = false;
     bool fairDice_ = false;
@@ -366,7 +389,6 @@ private:
     void fixedTick();
     void integrate(RigidBody& b, float dt);
     void sweepClipAgainstStatics(RigidBody& b, const Vec3& from);
-    void checkSleep(RigidBody& b, float dt) const;
     void refreshDieDerived(RigidBody& b) const;
     void refreshDynamicDerived(DynamicBody& b) const;
 
@@ -409,6 +431,13 @@ private:
     void solvePositionConstraints();
     void solveContacts(float dt);
     void updateIslandSleep(float dt);
+    /**
+     * Union-find over body-body manifolds (dice + dynamic props; statics and
+     * the table never join an island). root[i] is the island of node i (dice
+     * first, then dynamics); islandKe[root] is its most energetic member's
+     * kinetic energy.
+     */
+    void computeIslands(std::vector<int>& root, std::vector<float>& islandKe) const;
     float speculativeFor(const Vec3& velocity, float dt) const;
     bool bindViews(ContactManifold& m, BodyView& a, BodyView& b, WorldAnchor& world);
 
@@ -425,7 +454,6 @@ private:
     );
     static void wake(DynamicBody& b);
     void integrateDynamic(DynamicBody& b, float dt);
-    void checkSleepDynamic(DynamicBody& b, float dt) const;
 
     void resolveDynamicStaticPlane(DynamicBody& b, const Vec3& n, float d, const StaticBody& s, float spec);
     void resolveDynamicStaticHull(DynamicBody& b, const StaticBody& s, float spec);

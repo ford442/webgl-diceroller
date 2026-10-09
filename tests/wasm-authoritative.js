@@ -5,7 +5,7 @@
  *
  * Prereq: npm run build:js && npm run preview
  */
-const { runTest } = require('./helpers/browser');
+const { runTest, waitForRollFinished } = require('./helpers/browser');
 const { BASE } = require('./helpers/server');
 
 const URL = `${BASE}/?webgl&no-post&test`;
@@ -50,22 +50,16 @@ runTest(async (page, _errors) => {
         const testWindow = /** @type {any} */ (window);
         testWindow.__wasmAuthoritative = {
             collisions: 0,
-            torqueSubmissions: 0,
             trackedDie: null,
         };
         window.__app.events.on('dice:collision', () => {
             testWindow.__wasmAuthoritative.collisions += 1;
         });
 
-        const engine = window.__app.getWasmEngine();
-        const applyTorqueImpulse = engine.applyTorqueImpulse.bind(engine);
-        engine.applyTorqueImpulse = (...args) => {
-            testWindow.__wasmAuthoritative.torqueSubmissions += 1;
-            return applyTorqueImpulse(...args);
-        };
-
         // Two dice keep settlement quick under SwiftShader while guaranteeing
-        // contact events and still exercising transform sync, bias, and dragging.
+        // contact events and still exercising transform sync and dragging.
+        // (The pipping bias lives inside the WASM step since #346 — no torque
+        // crosses the bridge any more; the native mass-bias tests cover it.)
         for (const type of ['d4', 'd6', 'd8', 'd10', 'd12', 'd20']) {
             const input = /** @type {HTMLInputElement} */ (
                 document.getElementById(`dice-count-${type}`)
@@ -99,52 +93,19 @@ runTest(async (page, _errors) => {
     console.log('✓ a dice mesh followed changing WASM transforms across frames');
 
     await page.waitForFunction(
-        () =>
-            /** @type {any} */ (window).__wasmAuthoritative.collisions > 0 &&
-            /** @type {any} */ (window).__wasmAuthoritative.torqueSubmissions > 0,
+        () => /** @type {any} */ (window).__wasmAuthoritative.collisions > 0,
         null,
         { timeout: SETTLE_TIMEOUT_MS, polling: 100 }
     );
     const frameSignals = await page.evaluate(() => ({
         collisions: /** @type {any} */ (window).__wasmAuthoritative.collisions,
-        torqueSubmissions: /** @type {any} */ (window).__wasmAuthoritative.torqueSubmissions,
     }));
     console.log(`✓ collision polling emitted ${frameSignals.collisions} app event(s)`);
-    console.log(`✓ mass bias submitted ${frameSignals.torqueSubmissions} torque impulse(s)`);
 
-    // Bias torque can keep the solver's strict sleeping flag false even after the
-    // dice are visually at rest, so use a bounded multi-frame movement threshold.
-    await page.waitForFunction(
-        () => {
-            const state = /** @type {any} */ (window).__wasmAuthoritative;
-            const positions = [];
-            window.__app.scene.traverse((object) => {
-                if (object.userData?.isDie) positions.push(object.position.toArray());
-            });
-            if (!state.settlePositions || state.settlePositions.length !== positions.length) {
-                state.settlePositions = positions;
-                state.stableSamples = 0;
-                return false;
-            }
-            const maxMovement = positions.reduce((max, position, index) => {
-                const previous = state.settlePositions[index];
-                return Math.max(
-                    max,
-                    Math.hypot(
-                        position[0] - previous[0],
-                        position[1] - previous[1],
-                        position[2] - previous[2]
-                    )
-                );
-            }, 0);
-            state.settlePositions = positions;
-            state.stableSamples = maxMovement < 0.01 ? state.stableSamples + 1 : 0;
-            return state.stableSamples >= 20;
-        },
-        null,
-        { timeout: SETTLE_TIMEOUT_MS, polling: 100 }
-    );
-    console.log('✓ dice reached the bounded multi-frame settlement threshold');
+    // The roll itself must finish (settled, not the settle timeout): since
+    // #341 the dice genuinely sleep, so the engine's flag is the real answer.
+    await waitForRollFinished(page, { timeout: SETTLE_TIMEOUT_MS });
+    console.log('✓ the roll settled (engine sleep, not a movement heuristic)');
 
     const grab = await page.evaluate(() => {
         const app = window.__app;
@@ -187,7 +148,7 @@ runTest(async (page, _errors) => {
                 );
             },
             null,
-            { timeout: 10000, polling: 50 }
+            { timeout: 60000, polling: 50 } // seconds-long software frames
         );
     } finally {
         await page.evaluate(() => window.__app.interaction.handleUp());

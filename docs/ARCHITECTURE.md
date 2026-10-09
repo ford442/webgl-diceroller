@@ -26,17 +26,17 @@ main.js
 
 [`AppEvents.js`](../src/core/AppEvents.js) is a tiny synchronous pub/sub. Documented event names (`AppEvent`):
 
-| Event                | Payload (typical)                        | Producers                                | Consumers                                                       |
-| -------------------- | ---------------------------------------- | ---------------------------------------- | --------------------------------------------------------------- |
-| `roll:started`       | `{ seed, expression, diceSet, source? }` | `beginRoll`, UI roll, cup pour, notation | RoomSession host broadcast                                      |
-| `roll:settled`       | `{ results }`                            | Camera focus settle                      | Results HUD, history / fairness / game-feel / session strip     |
-| `roll:evaluated`     | `{ result }`                             | Notation `RollSession` onComplete        | XR world HUD, session strip                                     |
-| `session:initiative` | `{ order, currentIndex }`                | SessionWiring                            | Session strip                                                   |
-| `session:turn`       | `{ actorId, actorName, direction }`      | Session strip pass turn                  | Session strip                                                   |
-| `dice:collision`     | Enriched collision event                 | `postPhysicsSync` poll                   | Collision audio, game-feel; optional `__onDiceCollision` bridge |
-| `renderer:lost`      | `{ reason, … }`                          | GPU context/device loss                  | (open)                                                          |
-| `layout:rerolled`    | Layout manager result                    | Layout reroll                            | (open)                                                          |
-| `app:ready`          | `{ ready: true }`                        | Loading tiers finalize                   | (open)                                                          |
+| Event                | Payload (typical)                           | Producers                                                         | Consumers                                                       |
+| -------------------- | ------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------- |
+| `roll:started`       | `{ seed, expression, diceSet, source? }`    | `beginRoll`, UI roll, cup pour, notation                          | RoomSession host broadcast                                      |
+| `roll:settled`       | `{ results, timedOut, reason, simSeconds }` | Camera focus settle (or the settle timeout; see `SettleWatch.ts`) | Results HUD, history / fairness / game-feel / session strip     |
+| `roll:evaluated`     | `{ result }`                                | Notation `RollSession` onComplete                                 | XR world HUD, session strip                                     |
+| `session:initiative` | `{ order, currentIndex }`                   | SessionWiring                                                     | Session strip                                                   |
+| `session:turn`       | `{ actorId, actorName, direction }`         | Session strip pass turn                                           | Session strip                                                   |
+| `dice:collision`     | Enriched collision event                    | `postPhysicsSync` poll                                            | Collision audio, game-feel; optional `__onDiceCollision` bridge |
+| `renderer:lost`      | `{ reason, … }`                             | GPU context/device loss                                           | (open)                                                          |
+| `layout:rerolled`    | Layout manager result                       | Layout reroll                                                     | (open)                                                          |
+| `app:ready`          | `{ ready: true }`                           | Loading tiers finalize                                            | (open)                                                          |
 
 Collision audio and the settled results overlay subscribe via events; the live per-frame dice HUD still updates on the scheduler (60 Hz reads are a poor fit for pub/sub).
 
@@ -65,17 +65,19 @@ Under `?test`, `?debug`, or `?debug-perf`, [`AppTestHooks.js`](../src/core/AppTe
 
 Minimum `__app` surface:
 
-| Field / method                                                                      | Notes                                   |
-| ----------------------------------------------------------------------------------- | --------------------------------------- |
-| `ready`                                                                             | Scene fully loaded                      |
-| `scene`, `camera`, `renderer`, `THREE`                                              | Three.js handles                        |
-| `physicsWorld`, `physics.getWasmEngine`, `physics.isWasmAvailable`                  | Physics                                 |
-| `rendererType`, `usingWebGPU`, `usingWebGL`, `rendererFallbackReason`, `postConfig` | Renderer                                |
-| `qualityProfile`, `touchInputEnabled`, `isTouchPrimaryDevice`                       | Device / quality                        |
-| `stats`                                                                             | Scheduler timings (was `__renderStats`) |
-| `interactables`                                                                     | Named prop hooks                        |
-| `replayRoll`, `areDiceSettled`, `readAllDiceValues`                                 | Dice / replay                           |
-| `events`                                                                            | Subscribe to `AppEvent` names           |
+| Field / method                                                                      | Notes                                        |
+| ----------------------------------------------------------------------------------- | -------------------------------------------- |
+| `ready`                                                                             | Scene fully loaded                           |
+| `scene`, `camera`, `renderer`, `THREE`                                              | Three.js handles                             |
+| `physicsWorld`, `physics.getWasmEngine`, `physics.isWasmAvailable`                  | Physics                                      |
+| `rendererType`, `usingWebGPU`, `usingWebGL`, `rendererFallbackReason`, `postConfig` | Renderer                                     |
+| `qualityProfile`, `touchInputEnabled`, `isTouchPrimaryDevice`                       | Device / quality                             |
+| `stats`                                                                             | Scheduler timings (was `__renderStats`)      |
+| `interactables`                                                                     | Named prop hooks                             |
+| `replayRoll`, `areDiceSettled`, `readAllDiceValues`                                 | Dice / replay                                |
+| `getRollState`, `physics.getSleepDiagnostics`, `physics.forceNoSettle`              | Roll lifecycle / "why is it awake?" (#341)   |
+| `physics.exportWorld`, `physics.getDieLog` (`?test` only)                           | Recorded collider world / die add-remove log |
+| `events`                                                                            | Subscribe to `AppEvent` names                |
 
 Playwright URLs should include `&test`, e.g. `?webgl&no-post&fair-dice&test`.
 

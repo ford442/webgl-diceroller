@@ -214,6 +214,8 @@ int DicePhysicsEngine::addStaticBox(int userId,
     body.center = {cx, cy, cz};
     body.rotation = Quat{qx, qy, qz, qw}.normalized();
     body.halfExtents = {hx, hy, hz};
+    body.boundCenter = body.center;
+    body.boundRadius = body.halfExtents.length();
     applyStaticMaterial(body, materialTag);
     body.hull.build({
         {-hx, -hy, -hz}, { hx, -hy, -hz}, { hx,  hy, -hz}, {-hx,  hy, -hz},
@@ -273,6 +275,8 @@ int DicePhysicsEngine::addStaticConvexHull(int userId,
     }
     body.hull.build(verts);
     if (body.hull.verts.empty()) return -1;
+    body.boundCenter = body.center + body.rotation.rotate((body.hull.aabbMin + body.hull.aabbMax) * 0.5f);
+    body.boundRadius = ((body.hull.aabbMax - body.hull.aabbMin) * 0.5f).length();
     statics_.push_back(body);
     return userId;
 }

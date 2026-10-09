@@ -169,6 +169,11 @@ struct StaticBody {
     float cylinderHalfHeight = 0.0f;
     int cylinderSegments = 8;
     bool cylinderClosedBottom = false;
+    // World-space bounding sphere for the contact broadphase (Box and
+    // ConvexHull). A hull's vertices need not be centred on its origin, so
+    // the sphere is centred on its posed AABB midpoint rather than `center`.
+    Vec3 boundCenter{};
+    float boundRadius = 0.0f;
 };
 
 // ---------------------------------------------------------------------------

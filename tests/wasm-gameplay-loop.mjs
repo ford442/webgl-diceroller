@@ -12,7 +12,7 @@
  *
  * Prereq: npm run build:js && npm run preview
  */
-import { runTest } from './helpers/browser.js';
+import { runTest, waitForRollFinished } from './helpers/browser.js';
 import { BASE } from './helpers/server.js';
 const URL = `${BASE}/?webgl&no-post&fair-dice&test`;
 const LOAD_TIMEOUT_MS = 180000;
@@ -80,7 +80,9 @@ runTest(async (page, _errors) => {
             return state.maxY - state.minY > 0.05;
         },
         null,
-        { timeout: 15000, polling: 50 }
+        // Software-rendered CI frames can take seconds each; a few frames
+        // must pass before the mesh can show the body's motion.
+        { timeout: 60000, polling: 50 }
     );
     console.log('✓ die mesh position.y changed across animation frames after roll()');
 
@@ -92,14 +94,9 @@ runTest(async (page, _errors) => {
     const audioStats = await page.evaluate(() => window.__app.audio.getStats());
     console.log(`✓ collision audio played ${audioStats.played} impact(s)`);
 
-    await page.waitForFunction(
-        () => {
-            const settled = window.__app?.areDiceSettled;
-            return typeof settled === 'function' && settled() === true;
-        },
-        null,
-        { timeout: SETTLE_TIMEOUT_MS }
-    );
+    // The roll itself must finish — settled, not the settle timeout — and a
+    // failure prints the engine's sleep diagnostics (tests/helpers/browser.js).
+    await waitForRollFinished(page, { timeout: SETTLE_TIMEOUT_MS });
     const values = await page.evaluate(() => window.__app.readAllDiceValues());
     if (!values.length) {
         console.error('FAILURE: expected dice values on the table after settlement');
@@ -149,7 +146,7 @@ runTest(async (page, _errors) => {
                 );
             },
             null,
-            { timeout: 10000, polling: 50 }
+            { timeout: 60000, polling: 50 } // seconds-long software frames
         );
     } finally {
         await page.evaluate(() => window.__app.interaction.handleUp());

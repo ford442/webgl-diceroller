@@ -555,6 +555,14 @@
 .hud-result-card--kept-glow {
     box-shadow: 0 0 8px rgba(255, 224, 102, 0.25);
 }
+/* A die read after the settle timeout without ever lying flat. */
+.hud-result-card--cocked {
+    border-style: dashed;
+}
+.hud-result-reroll {
+    margin-top: 10px;
+    pointer-events: auto;
+}
 
 .hud-result-card__type {
     font-size: 10px;

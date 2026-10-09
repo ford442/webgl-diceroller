@@ -72,6 +72,9 @@ const STUB_ENGINE = {
     getDieIds: () => new Float32Array(0),
     getDieCount: () => 0,
     areAllSettled: () => true,
+    hasDice: () => false,
+    allAsleep: () => true,
+    getSleepDiagnostics: () => new Float32Array(0),
     getLastStepStats: () => ({
         pairCandidates: 0,
         sphereTests: 0,
@@ -302,6 +305,11 @@ export const randomPhysicsFloat = (): number => {
 export const serializePhysicsState = async (): Promise<Uint8Array> => {
     if (!_session?.available) return new Uint8Array(0);
     return _session.engine.serializeState();
+};
+
+export const readSleepDiagnostics = async (): Promise<Float32Array> => {
+    if (!_session?.available) return new Float32Array(0);
+    return _session.engine.getSleepDiagnostics?.() ?? new Float32Array(0);
 };
 
 /** No-op in the in-process bridge — throws are applied directly via the engine. */

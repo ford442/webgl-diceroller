@@ -694,7 +694,25 @@ function handleCommand(type: string, payload: CommandPayload): void {
             );
             break;
         }
+        case 'getSleepDiagnostics': {
+            const diag = eng.getSleepDiagnostics();
+            self.postMessage(
+                {
+                    type: 'response',
+                    payload: {
+                        reqId: payload.reqId,
+                        byteLength: diag.byteLength,
+                        data: diag.buffer,
+                    },
+                },
+                [diag.buffer]
+            );
+            break;
+        }
         case 'seededThrow': {
+            // Queued die transforms/velocities from the command ring would
+            // otherwise land on the next tick, after (and over) the throw pose.
+            drainCommandQueue();
             eng.seedRNG(toRngSeedBigInt(payload.seed));
             const params = computeSeededThrowParams(
                 () => eng.randomFloat(),

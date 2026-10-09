@@ -6,9 +6,14 @@
  * that the replay harness cannot be testing a hand-copied chute that has since
  * drifted from the one players see.
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+    CHUTE_MIN_CLEARANCE,
     DICE_TOWER_DIMENSIONS,
+    computeChuteClearances,
     createDiceTowerColliders,
     createDiceTowerHopper,
     createDiceTowerHopperFrame,
@@ -18,8 +23,30 @@ import {
 import { runDrop } from '../../scripts/verify-tower-drop-replay.mjs';
 
 const PLACEMENT = { origin: { x: 0, y: -3, z: -14 }, yaw: 0 };
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+
+/** Circumscribed diameter of a shipped hull, about its vertex centroid. */
+function circumDiameter(sides: number): number {
+    const hulls = JSON.parse(readFileSync(path.join(REPO_ROOT, 'public/wasm/hulls.json'), 'utf8'));
+    const verts: number[][] = hulls[`d${sides}`].vertices;
+    const c = [0, 1, 2].map((k) => verts.reduce((sum, v) => sum + (v[k] ?? 0), 0) / verts.length);
+    return (
+        2 * Math.max(...verts.map((v) => Math.hypot(v[0]! - c[0]!, v[1]! - c[1]!, v[2]! - c[2]!)))
+    );
+}
 
 describe('diceTowerLayout', () => {
+    it('leaves every ramp a gap a d20 can fall through (#341)', () => {
+        const d20 = circumDiameter(20);
+        expect(CHUTE_MIN_CLEARANCE).toBeGreaterThanOrEqual(d20);
+        const clearances = computeChuteClearances();
+        // Two intermediate ramps; the exit ramp empties into the open front.
+        expect(clearances).toHaveLength(2);
+        for (const { gap } of clearances) {
+            expect(gap).toBeGreaterThanOrEqual(CHUTE_MIN_CLEARANCE - 1e-9);
+        }
+    });
+
     it('gives every collider a matching visual part', () => {
         const colliders = createDiceTowerColliders();
         const parts = createDiceTowerParts();

@@ -11,7 +11,11 @@ import {
     getSpawnedDiceCounts,
     getActiveDiceSet,
     spawnedDice,
+    whenDiceRegistered,
+    diceSettleProbe,
+    readDiceValueAllowingCocked,
 } from '../dice.js';
+import { createSettleWatch } from '../core-engine/roll/SettleWatch.js';
 import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
 import { DiceFocusState } from '../core/CameraController.js';
 import { showResults, hideResults, showNotationResults } from '../results.js';
@@ -111,6 +115,12 @@ export interface RollWiringDeps {
      * may legitimately return null (tower not loaded → nothing to replay).
      */
     getDiceTowerController?: () => DiceTowerControllerLike | null | undefined;
+    /**
+     * The table layout the roll landed on. Its seed rides the share URL: the
+     * clutter scattered around the dice zone is part of the collider world, so
+     * a replay on a different layout is a different simulation.
+     */
+    getTableLayoutConfig?: () => { seed: number; density?: string; theme?: string } | null;
 }
 
 interface LastRollRef {
@@ -320,11 +330,38 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         pendingRollMeta = { seed: null, expression: null, diceSet: {} };
     }
 
+    /**
+     * Observable roll lifecycle for automation (`__app.getRollState()`):
+     * `phase` is `idle → rolling → settled | timedOut`, and `settledCount`
+     * counts finished throws, so a harness can wait for *this* roll rather
+     * than reading `areDiceSettled()` off a table that has not been thrown.
+     */
+    const rollState = {
+        phase: 'idle' as 'idle' | 'rolling' | 'settled' | 'timedOut',
+        startedCount: 0,
+        settledCount: 0,
+        lastTimeoutReason: null as string | null,
+        lastResults: null as unknown,
+    };
+
     function bindRollSettledSubscribers(): void {
+        appEvents.on(AppEvent.ROLL_STARTED, () => {
+            rollState.phase = 'rolling';
+            rollState.startedCount += 1;
+        });
         appEvents.on(AppEvent.ROLL_SETTLED, (payload) => {
-            const results = (payload as { results?: unknown } | undefined)?.results ?? payload;
+            const settled = payload as
+                { results?: unknown; timedOut?: boolean; reason?: string | null } | undefined;
+            const results = settled?.results ?? payload;
+            rollState.phase = settled?.timedOut ? 'timedOut' : 'settled';
+            rollState.settledCount += 1;
+            rollState.lastTimeoutReason = settled?.timedOut ? (settled.reason ?? null) : null;
+            rollState.lastResults = results;
             if (!shouldDeferAutoResults()) {
-                showResults(results as DiceReadValue[]);
+                showResults(results as DiceReadValue[], {
+                    timedOut: settled?.timedOut === true,
+                    onReroll: () => void rollHandlerRef.roll?.(null),
+                });
             }
             handleResultsReady(results as DiceReadValue[]);
         });
@@ -372,8 +409,29 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
                 const lampData = getLampData();
                 if (lampData) lampData.setRolling(true);
             },
-            readAllDiceValues,
+            readAllDiceValues: (options) => {
+                if (!options?.allowCocked) return readAllDiceValues();
+                return spawnedDice.map(
+                    (die: {
+                        type: string;
+                        role?: 'tens' | 'ones' | null;
+                        groupIndex?: number;
+                    }) => ({
+                        type: die.type,
+                        role: die.role ?? null,
+                        groupIndex: die.groupIndex ?? 0,
+                        ...readDiceValueAllowingCocked(die),
+                    })
+                );
+            },
             areDiceSettled,
+            createSettleWatch: () =>
+                createSettleWatch(diceSettleProbe, {
+                    isPaused: () => typeof document !== 'undefined' && document.hidden,
+                }),
+            whenDiceRegistered: async () => {
+                await whenDiceRegistered();
+            },
             getSystem: () => activeRollSystem,
             onComplete: (result) => {
                 if (result?.seed != null) {
@@ -500,6 +558,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             expression: last.expression ?? null,
             system: last.system ?? null,
             source: last.source === 'tower' ? 'tower' : null,
+            layout: deps.getTableLayoutConfig?.() ?? null,
         });
     }
 
@@ -598,6 +657,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             if (last.source === 'tower') {
                 if (last.diceCounts) {
                     updateDiceSet(getScene(), getPhysicsWorld(), last.diceCounts);
+                    await whenDiceRegistered();
                 }
                 await replayTowerDrop(last.seed, 'RoomSession');
             } else if (last.notation && rollSessionRef.current) {
@@ -610,6 +670,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
                 await rollSessionRef.current.roll(last.notation, last.seed);
             } else if (last.diceCounts) {
                 updateDiceSet(getScene(), getPhysicsWorld(), last.diceCounts);
+                await whenDiceRegistered();
                 beginRoll(last.seed, null, { source: 'remote-sync', diceSet: last.diceCounts });
             } else {
                 beginRoll(last.seed ?? null, null, { source: 'remote-sync' });
@@ -617,10 +678,10 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         }
     }
 
-    function replayShareableRoll(
+    async function replayShareableRoll(
         searchParams: URLSearchParams,
         options: { skip?: boolean } = {}
-    ): void {
+    ): Promise<void> {
         const replayRequest = options.skip ? null : parseShareableRollParams(searchParams);
         if (replayRequest) {
             if ('error' in replayRequest) {
@@ -639,6 +700,9 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
                 if ('diceCounts' in replayRequest && replayRequest.diceCounts) {
                     updateDiceSet(getScene(), getPhysicsWorld(), replayRequest.diceCounts);
                     getUi()?.updateCounts?.(replayRequest.diceCounts);
+                    // The replay throws these exact bodies: wait until the
+                    // engine has them, or the throw lands on last frame's table.
+                    await whenDiceRegistered();
                 }
                 if (replayRequest.system && ROLL_SYSTEMS[replayRequest.system]) {
                     activeRollSystem = replayRequest.system;
@@ -685,6 +749,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         handleRemoteCommit,
         handleRemoteReveal,
         replayShareableRoll,
+        getRollState: () => ({ ...rollState }),
         REPLAY_VERSION,
         getPendingRollMeta: () => ({ ...pendingRollMeta }),
     };

@@ -227,6 +227,8 @@ async function init() {
     app.rollHistory = rollHistory;
     app.rollStats = rollStats;
 
+    /** Filled once tier loading builds the table layout (share URLs carry its seed). */
+    const layoutManagerRef = { current: null };
     const rollWiring = createRollWiring(app, {
         appEvents,
         getScene: () => app.scene,
@@ -244,6 +246,7 @@ async function init() {
         getCollisionAudio: () => collisionAudio,
         useFairCommit: isFairCommitEnabled(searchParams),
         getDiceTowerController: () => diceTowerController,
+        getTableLayoutConfig: () => layoutManagerRef.current?.getConfig?.() ?? null,
     });
 
     const rendererRecoveryDeps = {
@@ -410,6 +413,7 @@ async function init() {
     startPostLoadAdaptiveProbe(adaptiveQualityState, scheduler);
     if (tierResult.fireplaceLight) fireplaceLight = tierResult.fireplaceLight;
     const layoutManager = tierResult.layoutManager;
+    layoutManagerRef.current = layoutManager;
 
     if (tierResult.interaction) {
         interaction = tierResult.interaction;
@@ -552,7 +556,7 @@ async function init() {
     });
 
     // Room deep-link wins over one-shot shareable seed replay.
-    rollWiring.replayShareableRoll(searchParams, { skip: Boolean(roomParam) });
+    void rollWiring.replayShareableRoll(searchParams, { skip: Boolean(roomParam) });
 }
 
 function onWindowResize() {

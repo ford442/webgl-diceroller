@@ -72,6 +72,34 @@ describe('ShareableRoll', () => {
         expect(parsed.searchParams.get(ROLL_SOURCE_PARAM)).toBeNull();
     });
 
+    it('carries the table layout so a replay rebuilds the same collider world', () => {
+        const url = buildShareableRollUrl(
+            42,
+            { d20: 1 },
+            'http://example.test/roller?clutter-seed=9',
+            null,
+            {
+                layout: { seed: 0xdeadbeef, density: 'high', theme: 'default' },
+            }
+        );
+        const parsed = new URL(url);
+        expect(parsed.searchParams.get('layout-seed')).toBe(String(0xdeadbeef));
+        expect(parsed.searchParams.get('clutter-seed')).toBeNull();
+        // Written even at the defaults: an absent param falls back to the
+        // receiver's own stored layout preference, not the sharer's.
+        expect(parsed.searchParams.get('density')).toBe('high');
+        expect(parsed.searchParams.get('theme')).toBe('default');
+        expect(parsed.searchParams.get('v')).toBe('1');
+
+        const atDefaults = new URL(
+            buildShareableRollUrl(42, { d20: 1 }, 'http://example.test/roller', null, {
+                layout: { seed: 7 },
+            })
+        );
+        expect(atDefaults.searchParams.get('density')).toBe('med');
+        expect(atDefaults.searchParams.get('theme')).toBe('default');
+    });
+
     it('marks a tower drop on the URL and reads it back', () => {
         const url = buildShareableRollUrl(1234, { d6: 3 }, 'http://example.test/roller', null, {
             source: 'tower',

@@ -185,7 +185,8 @@ inline bool satTestFromWorld(
     const PolyHull& hb, const Vec3& posB, const Quat& rotB, const Vec3* wb,
     Vec3& outNormal, float& outPenetration, Vec3& outContact,
     uint32_t* outFeatureId = nullptr, bool* outNormalFromA = nullptr,
-    float speculativeMargin = 1e-3f
+    float speculativeMargin = 1e-3f,
+    const Vec3* preferredNormal = nullptr, int preferredAxis = -1
 ) {
     const int MAX_AXES = 256;
     Vec3 axes[MAX_AXES];
@@ -215,12 +216,30 @@ inline bool satTestFromWorld(
     int na = static_cast<int>(ha.verts.size());
     int nb = static_cast<int>(hb.verts.size());
 
-    outPenetration = 1e20f;
     bool normalFromA = true;
-    const Vec3 deltaCenters = posB - posA;
+    // Orient by the hulls' vertex centroids, not their origins: a static
+    // hull's vertices need not surround its origin (an off-centre prop
+    // part), and an origin-based direction then flips the normal.
+    Vec3 centroidA{}, centroidB{};
+    for (int i = 0; i < na; ++i) centroidA += wa[i];
+    for (int i = 0; i < nb; ++i) centroidB += wb[i];
+    centroidA = na > 0 ? centroidA * (1.0f / static_cast<float>(na)) : posA;
+    centroidB = nb > 0 ? centroidB * (1.0f / static_cast<float>(nb)) : posB;
+    const Vec3 deltaCenters = centroidB - centroidA;
     const float deltaLen = deltaCenters.length();
     const Vec3 deltaDir = deltaLen > 1e-6f ? deltaCenters * (1.0f / deltaLen) : Vec3{0, 1, 0};
-    float bestAlign = -1.0f;
+
+    // Best face axis and best edge-edge axis, tracked separately so a face
+    // can win near-ties (below).
+    struct Best {
+        float pen = 1e20f;
+        float align = -1.0f;
+        int axis = -1;
+        bool fromA = true;
+    };
+    Best face, edge;
+    const int faceAxisCount =
+        static_cast<int>(ha.faceNormals.size() + hb.faceNormals.size());
 
     for (int ai = 0; ai < axisCount; ++ai) {
         const Vec3& axis = axes[ai];
@@ -231,29 +250,65 @@ inline bool satTestFromWorld(
         float overlap = std::min(maxA, maxB) - std::max(minA, minB);
         if (overlap < -speculativeMargin) return false;
         const float align = std::abs(Vec3::dot(axis, deltaDir));
-        const bool strictlyBetter = overlap < outPenetration - 1e-4f;
-        const bool tieBreak = std::abs(overlap - outPenetration) <= 1e-4f && align > bestAlign;
+        Best& best = ai < faceAxisCount ? face : edge;
+        const bool strictlyBetter = overlap < best.pen - 1e-4f;
+        const bool tieBreak = std::abs(overlap - best.pen) <= 1e-4f && align > best.align;
         if (strictlyBetter || tieBreak) {
-            outPenetration = overlap;
-            outNormal = axis;
-            normalFromA = (maxA - minA) < (maxB - minB);
-            bestAxis = ai;
-            bestAlign = align;
+            best.pen = overlap;
+            best.axis = ai;
+            best.align = align;
+            best.fromA = (maxA - minA) < (maxB - minB);
         }
     }
 
-    if (Vec3::dot(outNormal, posB - posA) < 0) outNormal = outNormal * -1.0f;
+    // Prefer a face axis unless an edge axis is clearly shallower (Box2D's
+    // relative/absolute tolerance). A die resting over a box edge — the 0.1
+    // step where the velvet zone meets the wood — otherwise flips between the
+    // top face, the side face and an edge axis from one substep to the next,
+    // and each flip shoves it sideways (#341).
+    const bool useEdge = edge.axis >= 0 && (face.axis < 0 || edge.pen < 0.95f * face.pen - 0.01f);
+    const Best& chosen = useEdge ? edge : face;
+    if (chosen.axis < 0) return false;
+    outPenetration = chosen.pen;
+    outNormal = axes[chosen.axis];
+    normalFromA = chosen.fromA;
+    bestAxis = chosen.axis;
 
+    // Temporal coherence: keep last substep's normal while it is still nearly
+    // as shallow as the best axis. A die face resting on a box *edge* (the
+    // velvet zone's rim) has two near-equal face axes, the box's top and
+    // side; re-picking each substep flips the normal between them and the
+    // die jitters in place without ever going to sleep (#341).
+    if (preferredNormal && preferredAxis >= 0) {
+        float minA = 0.0f, maxA = 0.0f, minB = 0.0f, maxB = 0.0f;
+        projectHullOntoAxis(wa, na, *preferredNormal, minA, maxA);
+        projectHullOntoAxis(wb, nb, *preferredNormal, minB, maxB);
+        const float overlap = std::min(maxA, maxB) - std::max(minA, minB);
+        if (overlap >= -speculativeMargin && overlap <= outPenetration + 0.005f) {
+            outPenetration = overlap;
+            outNormal = *preferredNormal;
+            normalFromA = (maxA - minA) < (maxB - minB);
+            bestAxis = preferredAxis;
+        }
+    }
+
+    if (Vec3::dot(outNormal, deltaCenters) < 0) outNormal = outNormal * -1.0f;
+
+    // outNormal points from A to B. The deepest incident vertex is the one
+    // furthest *into* the reference body: B's lowest projection when A holds
+    // the reference face, A's highest when B does. (Picking the furthest
+    // vertex the other way put the contact on the far side of the incident
+    // hull, overstating penetration by its whole thickness — #341.)
     float deepest = -1e20f;
     int supportIndex = 0;
     if (normalFromA) {
         for (int i = 0; i < nb; ++i) {
-            float d = Vec3::dot(wb[i] - posA, outNormal);
+            const float d = -Vec3::dot(wb[i], outNormal);
             if (d > deepest) { deepest = d; outContact = wb[i]; supportIndex = i; }
         }
     } else {
         for (int i = 0; i < na; ++i) {
-            float d = Vec3::dot(wa[i] - posB, outNormal * -1.0f);
+            const float d = Vec3::dot(wa[i], outNormal);
             if (d > deepest) { deepest = d; outContact = wa[i]; supportIndex = i; }
         }
     }

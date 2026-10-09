@@ -18,7 +18,7 @@
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { runTest } = require('../tests/helpers/browser.js');
+const { runTest, waitForSettle } = require('../tests/helpers/browser.js');
 const { BASE } = require('../tests/helpers/server.js');
 
 const SHARED_PROP_NAMES = [
@@ -193,10 +193,8 @@ runTest(async (page, errors) => {
             input.dispatchEvent(new Event('change'));
         }
     });
-    await page.waitForFunction(() => window.__app.dice?.areDiceSettled?.() === true, null, {
-        timeout: 60000,
-        polling: 100,
-    });
+    // Fails with the engine's sleep diagnostics rather than a bare timeout.
+    await waitForSettle(page, { timeout: 120000 });
 
     const knock = await page.evaluate(async () => {
         const app = window.__app;
