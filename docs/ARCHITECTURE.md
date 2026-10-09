@@ -167,9 +167,24 @@ poster, gemstone, potion, d20 holder) has no named twin — give it one under
 | `?webgpu` / `?wgpu`                   | Force WebGPU explicitly (redundant with default)                 |
 | `?xr` / `?xr-emulator`                | Force `WebGLRenderer` + no-post for WebXR (see [`XR.md`](XR.md)) |
 
-WebGL context attributes are `{ alpha: false, stencil: false, powerPreference: 'high-performance', xrCompatible: isXr }` (Three r181 does not forward `xrCompatible`, so the factory calls `canvas.getContext('webgl2', …)` itself). Both renderers set `outputColorSpace = SRGBColorSpace`. WebGPU `requestDevice` uses a documented `requiredLimits` floor; a reject falls back to WebGL and logs the short limit under `?renderer-info`.
+### Device session (context attributes)
 
-The Dice Case preview uses a **lazy low-power** WebGL context (not high-performance) and disposes it on collapse so Quest / Intel / SwiftShader do not burn a second high-performance slot.
+[`DeviceSession.ts`](../src/core/DeviceSession.ts) is resolved once at boot, before any canvas or `AudioContext` exists, because `powerPreference` and `sampleRate` cannot change after creation:
+
+| Field               | Rule                                                                                                                                          |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `glPowerPreference` | `low-power` for `?xr`, touch/coarse pointer, or `hardwareConcurrency <= 4`; a software rasterizer lowers it too; otherwise `high-performance` |
+| `wantWebGlProbe`    | `false` when `navigator.gpu` exists and WebGPU is preferred — the WebGPU path reads software-ness from `adapter.info` instead                 |
+| `audio`             | `{ latencyHint: 'interactive', sampleRate: 48000 }` (always, so `?test` is stable across 44.1/48 kHz machines)                                |
+
+- **Software probe** (`probeSoftwareWebGL`) only runs on the WebGL path (`?webgl`, `?xr`, no `navigator.gpu`, or a WebGPU fallback). It asks for a `low-power` WebGL2 context with `failIfMajorPerformanceCaveat` on a never-attached canvas, always calls `loseContext()`, and the tavern context is created only after its `webglcontextlost` (or a 250 ms timeout). Renderer recovery passes the known `isSoftwareRenderer` and never re-probes.
+- **Curated WebGPU device**: `requestCuratedWebGpuDevice` makes one `requestAdapter` call. If it returns no device (no adapter, `requestDevice` rejected), `createRenderer` falls back to WebGL and records the reason plus the limit note from that same adapter — it never constructs a device-less `WebGPURenderer` (which would request every adapter feature).
+- **One attribute bag**: `getWebGlContextAttributes` / `getWebGlRendererParameters` / `getWebGpuRendererParameters` take `alpha` and `powerPreference`. The tavern stays `{ alpha: false, stencil: false, xrCompatible: isXr }` (Three r181 does not forward `xrCompatible`, so the factory calls `canvas.getContext('webgl2', …)` itself). Secondary canvases use a profile (`PREVIEW_WEBGL_CONTEXT`) on the same helper rather than their own object; the #315 overlay should be another profile there. No `desynchronized: true` without a screenshot test (it fights `capturePng()`).
+- `rendererState` reports `glPowerPreference`, `powerReasons`, and `softwareProbe` (`null` when the probe did not run); `?renderer-info` logs them.
+
+Both renderers set `outputColorSpace = SRGBColorSpace`. WebGPU `requestDevice` uses a documented `requiredLimits` floor.
+
+The Dice Case preview uses a **lazy low-power** WebGL context (`PREVIEW_WEBGL_CONTEXT`, not high-performance) and disposes it on collapse so Quest / Intel / SwiftShader do not burn a second high-performance slot. It is WebGL on purpose and never shares the tavern's `GPUDevice`.
 
 Post flags (`?no-post`, `?low-post`, `?no-bloom`, `?no-godrays`) apply to both paths where supported.
 

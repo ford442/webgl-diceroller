@@ -156,8 +156,9 @@ export async function setupScene(container) {
     camera.lookAt(0, CAMERA_LOOK_AT_Y, 0);
     applyViewportToCamera(camera, containerWidth, containerHeight);
 
-    // Renderer setup — pixel ratio, MSAA vs post FXAA, and power preference
-    // are resolved inside RendererFactory from device DPR and URL flags.
+    // Renderer setup — pixel ratio and MSAA vs post FXAA come from device DPR and
+    // URL flags; power preference and whether the WebGL software probe runs come
+    // from the boot DeviceSession (resolved once, before any canvas exists).
     const rendererState = await createRenderer(container);
     const renderer = rendererState.renderer;
     container.appendChild(renderer.domElement);

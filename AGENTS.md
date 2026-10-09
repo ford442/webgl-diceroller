@@ -111,6 +111,7 @@ npm run format:check        # Prettier check (CI)
     - `?pr=N` sets render pixel ratio (clamped to `[0.5, 3]`); default is `min(devicePixelRatio, 2)`. At `pr=1` MSAA is enabled; above 1.0 FXAA is used in the post chain instead.
     - Pixel ratio auto step-down: when sustained frame times exceed ~32 ms, ratio steps down toward 1.0 (skipped when `?pr=` forces a ratio).
     - Software WebGL rasterizers (SwiftShader, llvmpipe, etc.) auto-enable the `low-post` profile.
+    - Context attributes come from the boot `DeviceSession` (`src/core/DeviceSession.ts`): `?xr`, touch, low core count, or a software rasterizer request `low-power`; desktop stays `high-performance`. The WebGL software probe (`low-power` WebGL2, awaited `webglcontextlost`) never runs on the WebGPU path, and a failed curated WebGPU device falls back to WebGL instead of a device-less `WebGPURenderer`. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Device session).
     - GPU context/device loss surfaces the renderer badge and attempts WebGL fallback recovery.
     - `?no-post` disables the composer entirely (both renderers).
     - `?low-post` keeps post enabled but lowers bloom quality (both renderers).
@@ -118,6 +119,7 @@ npm run format:check        # Prettier check (CI)
     - `?no-godrays` disables the tavern window volumetric beam meshes (both renderers).
     - `?renderer-info` shows a small badge with the active renderer type.
     - `?debug` / `?debug-perf` shows render stats (incl. renderer type + fallback); `debug-perf` also logs slow frame systems.
+    - `?audio-pan=stereo|hrtf` forces the audio pan mode; `?audio-fallback` forces the ScriptProcessor synth path; `?no-reverb` disables the generated room reverb.
     - `?fair-commit` enables multiplayer protocol v2 (commit-reveal seeds before throw). Default v1 still broadcasts cleartext seeds.
 
 ### Session layer
@@ -136,14 +138,21 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MU
 
 ### Audio system
 
-- `src/audio/DiceCollisionAudio.js` synthesises all tavern audio with the Web Audio API (no external sound assets): dice collisions, prop accents, ambient bed, and a flute melody hook.
+- All tavern audio is procedural (no sound assets): dice collisions, prop accents, ambient bed, flute melody hook, and a generated room reverb. Keep it that way — no sample packs, and no `tone` / `howler` / `pixi-sound`.
+- **Façade:** `src/audio/DiceCollisionAudio.ts` owns the `AudioContext`, mute/volume (`localStorage`), the camera listener, per-pair cooldowns and the `minAudibleEnergy` floor. It subscribes to `dice:collision` via `RollWiring` and only **posts messages**; props call `playPropImpact` / `playFluteMelody` and never import the worklet.
+- **Synthesis runs in an AudioWorklet:** `src/audio/worklet/TavernProcessor.ts` (bundled via `?worker&url`, loaded with `audioWorklet.addModule`) hosts the pure engine in `src/audio/worklet/tavernDsp.ts` — voice allocator, envelopes, Web-Audio-spec biquads, material recipes, ambient bed, flute. The main thread creates no `OscillatorNode`s / buffer sources; the graph is built once (worklet → panner slots → mix → dry + convolver send → master), so a 20-die dump cannot grow it. `maxVoices` is enforced in the processor (the façade keeps a cheap estimate to avoid posting doomed messages).
+- **Spatialisation:** `hrtf` pan mode (desktop) feeds each worklet slot output into one of `maxVoices` pre-allocated HRTF `PannerNode`s tracking the camera `AudioListener`. `stereo` pan mode (quality profiles `mobile` / `xr`, `?audio-pan=stereo`, or the fallback) pans inside the engine with the same equal-power + inverse-distance law from listener messages — no panners run. Pan mode is fixed when the context is first unlocked.
+- **Fallback:** without `AudioWorklet` (insecure context, old Safari) or on load failure, the same engine runs in a `ScriptProcessorNode` on the main thread (`?audio-fallback` forces it; chunk `tavernDsp-*.js` is demand-loaded). `resume()` never throws.
+- **Room reverb:** `src/audio/roomImpulse.ts` generates a ~0.6 s velvet-room IR (decaying darkened noise + early reflections) per session for a `ConvolverNode` send. Disabled by the `mobile` / `xr` profiles and `?no-reverb`; those profiles also drop `maxVoices` to 4 (`setQualityProfile`, called from the adaptive-quality hooks).
 - Collision events from WASM (`pollPhysicsCollisionEvents`) are enriched in `dice.js` (`enrichCollisionEventForAudio`) with world position, die sides, and surface hints before playback.
-- Kinetic energy `E_k = 1/2*m*v^2 + 1/2*I*omega^2` drives volume and brightness; material voices distinguish die-on-die clack, velvet table thump, leather cup rattle, metal/glass props.
-- Impacts route through HRTF `PannerNode`s at the die position; the listener follows the camera each frame. Per-pair cooldowns and a `maxVoices` cap prevent machine-gun stacking.
-- Die sides map to playback pitch (d20 lower than d4). Prop one-shots (gong, bell, cauldron bubble, skull bone knock, lamp click) share the same master gain.
+- Kinetic energy `E_k = 1/2*m*v^2 + 1/2*I*omega^2` drives volume and brightness (`impactLevels` in `tavernDsp.ts`); material voices distinguish die-on-die clack, velvet table thump, leather cup rattle, wood, metal/glass props. Die sides map to pitch (d20 lower than d4).
+- Prop one-shots (gong, bell, cauldron bubble, skull bone knock, lamp click) and flute notes go through the same worklet, so voice caps apply to them too.
 - Ambient bed: looping room rumble, irregular fire crackle, rare wood creak; louder in pointer-lock FPS mode via `setAmbientIntensity`.
 - Master volume slider + mute toggle in `ui.js` (persisted in `localStorage`). Hard impacts near the billiard lamp trigger a shade jiggle + faint chain click.
-- Audio starts suspended and resumes on the first pointer or key event.
+- Audio starts suspended and resumes on the first pointer or key event. Under `?test` the engine's noise/jitter PRNG is seeded deterministically.
+- The `AudioContext` is created with the `DeviceSession` audio options (`latencyHint: 'interactive'`, `sampleRate: 48000`), falling back to the device rate if the browser rejects it; the worklet and room IR always use the context's actual rate. `getStats()` reports `sampleRate`, `requestedSampleRate`, `latencyHint`, and `baseLatency`.
+- `getStats()` reports `played` (collisions accepted), `synth` (`worklet` / `script-processor` / `pending` / `none`), `panMode`, `reverb`, and `engine` (processor-side `started` / `dropped` / `stolen` / `active` / `peakActive`).
+- Tests: `tests/unit/tavernDsp.test.ts` (energy→gain, voice cap, pan law, IR, processor with mocked worklet globals) and `npm run test:audio-worklet` (browser: fixed graph, no main-thread oscillators, audible output on each synth path; no WASM needed).
 
 ### `src/main.js`
 
@@ -452,6 +461,7 @@ npm run test:wasm-gameplay-loop  # Full-app: visual sync, drag interaction, coll
 npm run test:share-roll-replay   # Two page loads of the same share URL settle to identical readAllDiceValues()
 npm run test:roll-timeout     # forceNoSettle: a roll that never settles still ends (timedOut, HUD result, re-roll)
 npm run test:a11y             # axe accessibility scan
+npm run test:audio-worklet    # AudioWorklet graph: fixed size, no main-thread oscillators, audible (no WASM needed)
 npm run test:notation         # Roll notation parser (Node, no browser)
 npm run test:share-roll       # Shareable roll encoding (Node)
 npm run test:simd-support     # WASM SIMD probe + artifact-dir picker (Node)

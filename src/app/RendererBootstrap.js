@@ -195,6 +195,7 @@ export function bootstrapRendererExtras(app, deps) {
     };
     app.qualityProfile = postConfig.adaptiveProfile;
     setDiceAppearanceQualityProfile(postConfig.adaptiveProfile);
+    getCollisionAudio()?.setQualityProfile?.(postConfig.adaptiveProfile);
 
     window.addEventListener('pointerdown', () => getCollisionAudio()?.resume(), { passive: true });
     window.addEventListener('keydown', () => getCollisionAudio()?.resume(), { passive: true });

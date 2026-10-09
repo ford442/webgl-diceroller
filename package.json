@@ -61,6 +61,7 @@
         "fixture:world": "node scripts/export-collider-fixture.mjs",
         "check:world-fixture": "node scripts/export-collider-fixture.mjs --check",
         "test:tavern-world": "TAVERN_SEEDS=200 vitest run tests/unit/tavernWorldSettle.test.ts",
+        "test:audio-worklet": "node tests/audio-worklet.js",
         "test:solver": "bash src/wasm/build_solver_test.sh",
         "signal:dev": "npm --prefix signaling run dev",
         "signal:deploy": "npm --prefix signaling run deploy"

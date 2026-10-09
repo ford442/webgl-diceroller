@@ -36,6 +36,7 @@ import { setupCharacterSheetWiring } from './app/CharacterSheetWiring.js';
 import { setInteractablesMirror } from './interactables/InteractableRegistry.js';
 import { createDiceCollisionAudio } from './audio/DiceCollisionAudio.js';
 import { setupScene } from './core/SceneSetup.js';
+import { getDeviceSession } from './core/DeviceSession.js';
 import { createAppContext } from './core/AppContext.js';
 import { createAppEvents, AppEvent } from './core/AppEvents.js';
 import { installAppTestHooks } from './core/AppTestHooks.js';
@@ -218,7 +219,7 @@ async function init() {
     app.rendererFallbackReason = rendererState?.fallbackReason ?? null;
     app.stats = scheduler.stats;
 
-    collisionAudio = createDiceCollisionAudio();
+    collisionAudio = createDiceCollisionAudio({ contextOptions: getDeviceSession().audio });
     app.audio = collisionAudio;
     diceGameFeel = createDiceGameFeelSystem(app.scene, { postConfig, rendererState });
     rollHistory = createRollHistory();
