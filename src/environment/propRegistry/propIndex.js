@@ -35,7 +35,7 @@ const SEMANTIC_TAGS = {
         'Spellbook',
         'Rulebook',
     ],
-    light: ['Lantern', 'Candelabra', 'FloatingCandles'],
+    light: ['Lantern', 'Candelabra', 'FloatingCandles', 'MeltingCandle'],
     magic: [
         'CrystalBall',
         'MysticOrb',
