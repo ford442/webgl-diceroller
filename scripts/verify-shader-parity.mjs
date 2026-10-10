@@ -36,7 +36,7 @@ const TEST_PAGE = new URL('../__shader_parity_probe.html', import.meta.url);
 const PROBE_SRC = `
 import * as THREE from 'three';
 import { loadDiceModels, ensureDieTemplate } from './dice/DiceModels.js';
-import { createDefaultEntry } from './dice/DiceSetFormat.js';
+import { createDefaultEntry } from './core-engine/dice/DiceSetFormat.js';
 import { createDiceFaceMarkingMaterial } from './dice/DiceFaceMarkingMaterial.js';
 import { loadDiceFaceMarkingNodeMaterialFactory } from './dice/DiceFaceMarkingNodeMaterial.js';
 import { GodRayShader } from './shaders/GodRayShader.js';

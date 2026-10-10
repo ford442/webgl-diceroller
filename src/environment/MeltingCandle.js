@@ -21,7 +21,7 @@ export function createMeltingCandle(
                 halfHeight: 0.6,
                 offset: { y: 0.6 },
                 materialTag: STATIC_MATERIAL.WOOD,
-            }
+            },
         ],
         dispose() {
             if (lightRef) {
@@ -74,6 +74,6 @@ export function createMeltingCandle(
                 lightRef.position.x = Math.sin(time * 10) * 0.02;
                 lightRef.position.z = Math.cos(time * 12) * 0.02;
             }
-        }
+        },
     });
 }
