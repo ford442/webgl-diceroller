@@ -22,7 +22,7 @@ const { runTest, waitForSettle } = require('../tests/helpers/browser.js');
 const { BASE } = require('../tests/helpers/server.js');
 
 const SHARED_PROP_NAMES = [
-    'EnhancedMug',
+    'Mug',
     'Pencil',
     'Key',
     'Spyglass',
@@ -203,7 +203,7 @@ runTest(async (page, errors) => {
         const engine = app.getWasmEngine();
         let mugGroup = null;
         app.scene.traverse((obj) => {
-            if (!mugGroup && obj.name === 'EnhancedMug' && obj.userData?.isDynamicProp) {
+            if (!mugGroup && obj.name === 'Mug' && obj.userData?.isDynamicProp) {
                 mugGroup = obj;
             }
         });

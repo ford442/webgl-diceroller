@@ -249,6 +249,13 @@ export const TIER_PROP_DEFINITIONS = {
             afterCreate: (result, ctx) =>
                 result?.update && ctx.registerUpdate('mug', result.update),
         }),
+        factoryEntry('MeltingCandle', {
+            randomPool: true,
+            position: { x: 5, y: -2.75, z: 8 },
+            rotation: 0,
+            afterCreate: (result, ctx) =>
+                result?.update && ctx.registerUpdate('meltingCandle', result.update),
+        }),
         factoryEntry('Tankard', {
             randomPool: true,
             position: { x: 12, y: -2.75, z: 9 },
