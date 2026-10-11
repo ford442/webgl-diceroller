@@ -92,9 +92,15 @@ export function updateDiceHud(diceResults, options = {}) {
 
 /**
  * Show animated result cards for a completed roll.
- * @param {DiceReadValue[]} diceResults
+ *
+ * A roll that hit the settle timeout (`timedOut`) still shows a result: dice
+ * read as they lie, cocked ones marked, plus a re-roll button when `onReroll`
+ * is given — a player should never stare at a table that won't produce a
+ * number.
+ * @param {(DiceReadValue & { cocked?: boolean })[]} diceResults
+ * @param {{ timedOut?: boolean, onReroll?: (() => void) | null }} [options]
  */
-export function showResults(diceResults) {
+export function showResults(diceResults, { timedOut = false, onReroll = null } = {}) {
     if (domResultsSuppressed) return;
     if (!resultsOverlay) return;
 
@@ -102,13 +108,19 @@ export function showResults(diceResults) {
     if (valid.length === 0) return;
 
     const total = valid.reduce((s, r) => s + r.value, 0);
+    const cockedCount = valid.filter((r) => r.cocked).length;
     const reducedMotion = prefersReducedMotion();
     const staggerMs = resultCardStaggerMs();
     const transitionSec = resultCardTransitionSec();
 
-    _announceIfChanged(`Rolled ${valid.length} dice: ${_formatDiceList(valid)}. Total ${total}.`, {
-        force: true,
-    });
+    const cockedNote =
+        cockedCount > 0
+            ? ` ${cockedCount} ${cockedCount === 1 ? 'die is' : 'dice are'} cocked.`
+            : '';
+    _announceIfChanged(
+        `Rolled ${valid.length} dice: ${_formatDiceList(valid)}. Total ${total}.${cockedNote}`,
+        { force: true }
+    );
 
     // Build card row
     resultsOverlay.innerHTML = '';
@@ -121,6 +133,10 @@ export function showResults(diceResults) {
 
     valid.forEach((result, i) => {
         const card = _makeResultCard(result);
+        if (result.cocked) {
+            card.classList.add('hud-result-card--cocked');
+            card.title = 'Cocked: this die never came to rest flat';
+        }
         if (!reducedMotion) {
             card.style.opacity = '0';
             card.style.transform = 'translateY(18px) scale(0.8)';
@@ -159,6 +175,19 @@ export function showResults(diceResults) {
                 totalEl.style.transform = 'scale(1)';
             }, delay + 30);
         }
+    }
+
+    if (timedOut && typeof onReroll === 'function') {
+        const reroll = document.createElement('button');
+        reroll.type = 'button';
+        reroll.className = 'hud-btn hud-result-reroll';
+        reroll.dataset.testid = 'result-reroll';
+        reroll.textContent = cockedCount > 0 ? 'Cocked dice: re-roll' : 'Re-roll';
+        reroll.addEventListener('click', () => {
+            hideResults();
+            onReroll();
+        });
+        scrim.appendChild(reroll);
     }
 
     resultsOverlay.style.opacity = '1';

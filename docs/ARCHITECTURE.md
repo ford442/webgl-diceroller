@@ -26,17 +26,17 @@ main.js
 
 [`AppEvents.ts`](../src/core/AppEvents.ts) is a tiny synchronous pub/sub. Documented event names (`AppEvent`):
 
-| Event                | Payload (typical)                        | Producers                                | Consumers                                                       |
-| -------------------- | ---------------------------------------- | ---------------------------------------- | --------------------------------------------------------------- |
-| `roll:started`       | `{ seed, expression, diceSet, source? }` | `beginRoll`, UI roll, cup pour, notation | RoomSession host broadcast                                      |
-| `roll:settled`       | `{ results }`                            | Camera focus settle                      | Results HUD, history / fairness / game-feel / session strip     |
-| `roll:evaluated`     | `{ result }`                             | Notation `RollSession` onComplete        | XR world HUD, session strip                                     |
-| `session:initiative` | `{ order, currentIndex }`                | SessionWiring                            | Session strip                                                   |
-| `session:turn`       | `{ actorId, actorName, direction }`      | Session strip pass turn                  | Session strip                                                   |
-| `dice:collision`     | Enriched collision event                 | `postPhysicsSync` poll                   | Collision audio, game-feel; optional `__onDiceCollision` bridge |
-| `renderer:lost`      | `{ reason, … }`                          | GPU context/device loss                  | (open)                                                          |
-| `layout:rerolled`    | Layout manager result                    | Layout reroll                            | (open)                                                          |
-| `app:ready`          | `{ ready: true }`                        | Loading tiers finalize                   | (open)                                                          |
+| Event                | Payload (typical)                           | Producers                                                         | Consumers                                                       |
+| -------------------- | ------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------- |
+| `roll:started`       | `{ seed, expression, diceSet, source? }`    | `beginRoll`, UI roll, cup pour, notation                          | RoomSession host broadcast                                      |
+| `roll:settled`       | `{ results, timedOut, reason, simSeconds }` | Camera focus settle (or the settle timeout; see `SettleWatch.ts`) | Results HUD, history / fairness / game-feel / session strip     |
+| `roll:evaluated`     | `{ result }`                                | Notation `RollSession` onComplete                                 | XR world HUD, session strip                                     |
+| `session:initiative` | `{ order, currentIndex }`                   | SessionWiring                                                     | Session strip                                                   |
+| `session:turn`       | `{ actorId, actorName, direction }`         | Session strip pass turn                                           | Session strip                                                   |
+| `dice:collision`     | Enriched collision event                    | `postPhysicsSync` poll                                            | Collision audio, game-feel; optional `__onDiceCollision` bridge |
+| `renderer:lost`      | `{ reason, … }`                             | GPU context/device loss                                           | (open)                                                          |
+| `layout:rerolled`    | Layout manager result                       | Layout reroll                                                     | (open)                                                          |
+| `app:ready`          | `{ ready: true }`                           | Loading tiers finalize                                            | (open)                                                          |
 
 Collision audio and the settled results overlay subscribe via events; the live per-frame dice HUD still updates on the scheduler (60 Hz reads are a poor fit for pub/sub).
 
@@ -65,17 +65,19 @@ Under `?test`, `?debug`, or `?debug-perf`, [`AppTestHooks.js`](../src/core/AppTe
 
 Minimum `__app` surface:
 
-| Field / method                                                                      | Notes                                   |
-| ----------------------------------------------------------------------------------- | --------------------------------------- |
-| `ready`                                                                             | Scene fully loaded                      |
-| `scene`, `camera`, `renderer`, `THREE`                                              | Three.js handles                        |
-| `physicsWorld`, `physics.getWasmEngine`, `physics.isWasmAvailable`                  | Physics                                 |
-| `rendererType`, `usingWebGPU`, `usingWebGL`, `rendererFallbackReason`, `postConfig` | Renderer                                |
-| `qualityProfile`, `touchInputEnabled`, `isTouchPrimaryDevice`                       | Device / quality                        |
-| `stats`                                                                             | Scheduler timings (was `__renderStats`) |
-| `interactables`                                                                     | Named prop hooks                        |
-| `replayRoll`, `areDiceSettled`, `readAllDiceValues`                                 | Dice / replay                           |
-| `events`                                                                            | Subscribe to `AppEvent` names           |
+| Field / method                                                                      | Notes                                        |
+| ----------------------------------------------------------------------------------- | -------------------------------------------- |
+| `ready`                                                                             | Scene fully loaded                           |
+| `scene`, `camera`, `renderer`, `THREE`                                              | Three.js handles                             |
+| `physicsWorld`, `physics.getWasmEngine`, `physics.isWasmAvailable`                  | Physics                                      |
+| `rendererType`, `usingWebGPU`, `usingWebGL`, `rendererFallbackReason`, `postConfig` | Renderer                                     |
+| `qualityProfile`, `touchInputEnabled`, `isTouchPrimaryDevice`                       | Device / quality                             |
+| `stats`                                                                             | Scheduler timings (was `__renderStats`)      |
+| `interactables`                                                                     | Named prop hooks                             |
+| `replayRoll`, `areDiceSettled`, `readAllDiceValues`                                 | Dice / replay                                |
+| `getRollState`, `physics.getSleepDiagnostics`, `physics.forceNoSettle`              | Roll lifecycle / "why is it awake?" (#341)   |
+| `physics.exportWorld`, `physics.getDieLog` (`?test` only)                           | Recorded collider world / die add-remove log |
+| `events`                                                                            | Subscribe to `AppEvent` names                |
 
 Playwright URLs should include `&test`, e.g. `?webgl&no-post&fair-dice&test`.
 
@@ -86,12 +88,14 @@ Playwright URLs should include `&test`, e.g. `?webgl&no-post&fair-dice&test`.
 | Phase             | Typical work                                                |
 | ----------------- | ----------------------------------------------------------- |
 | `preStep`         | Input, camera prep                                          |
-| `physicsStep`     | Fixed 1/60 s WASM step (may run multiple substeps)          |
+| `physicsStep`     | Hands elapsed time to the WASM engine (see below)           |
 | `postPhysicsSync` | `updateDiceVisuals()`, collision event polling              |
 | `updates`         | Prop animations, interaction, dice-case preview, atmosphere |
 | `preRender`       | Culling, shadow-map refresh hooks                           |
 | `render`          | Composer / TSL post stack                                   |
 | `postRender`      | Debug overlays, adaptive quality                            |
+
+The engine owns the physics clock: `step(dt)` banks `dt` and runs fixed 1/120 s ticks (4 substeps each, at most 8 ticks per call), so the worker (`step(1/120)` per 120 Hz timer wakeup), `?no-worker` (FrameScheduler's 1/60 chunks → 2 ticks each) and `rollHeadless()` all integrate identically. The worker parks its timer when the world is asleep or the page is hidden and resumes without replaying a backlog. The pipping centre-of-mass bias is applied inside each substep, not from the render loop. See "Fixed clock" and "Pipping bias" in [`WASM_ENGINE.md`](WASM_ENGINE.md).
 
 Systems register via `scheduler.register(phase, name, fn, { priority })`. Prop `update` callbacks and interactables hook into `updates` through [`LoadingTiers.js`](../src/core/LoadingTiers.js) and [`PropRegistry.js`](../src/environment/PropRegistry.js) `afterCreate` handlers — avoid ad-hoc per-frame calls in `main.js`.
 
@@ -163,9 +167,24 @@ poster, gemstone, potion, d20 holder) has no named twin — give it one under
 | `?webgpu` / `?wgpu`                   | Force WebGPU explicitly (redundant with default)                 |
 | `?xr` / `?xr-emulator`                | Force `WebGLRenderer` + no-post for WebXR (see [`XR.md`](XR.md)) |
 
-WebGL context attributes are `{ alpha: false, stencil: false, powerPreference: 'high-performance', xrCompatible: isXr }` (Three r181 does not forward `xrCompatible`, so the factory calls `canvas.getContext('webgl2', …)` itself). Both renderers set `outputColorSpace = SRGBColorSpace`. WebGPU `requestDevice` uses a documented `requiredLimits` floor; a reject falls back to WebGL and logs the short limit under `?renderer-info`.
+### Device session (context attributes)
 
-The Dice Case preview uses a **lazy low-power** WebGL context (not high-performance) and disposes it on collapse so Quest / Intel / SwiftShader do not burn a second high-performance slot.
+[`DeviceSession.ts`](../src/core/DeviceSession.ts) is resolved once at boot, before any canvas or `AudioContext` exists, because `powerPreference` and `sampleRate` cannot change after creation:
+
+| Field               | Rule                                                                                                                                          |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `glPowerPreference` | `low-power` for `?xr`, touch/coarse pointer, or `hardwareConcurrency <= 4`; a software rasterizer lowers it too; otherwise `high-performance` |
+| `wantWebGlProbe`    | `false` when `navigator.gpu` exists and WebGPU is preferred — the WebGPU path reads software-ness from `adapter.info` instead                 |
+| `audio`             | `{ latencyHint: 'interactive', sampleRate: 48000 }` (always, so `?test` is stable across 44.1/48 kHz machines)                                |
+
+- **Software probe** (`probeSoftwareWebGL`) only runs on the WebGL path (`?webgl`, `?xr`, no `navigator.gpu`, or a WebGPU fallback). It asks for a `low-power` WebGL2 context with `failIfMajorPerformanceCaveat` on a never-attached canvas, always calls `loseContext()`, and the tavern context is created only after its `webglcontextlost` (or a 250 ms timeout). Renderer recovery passes the known `isSoftwareRenderer` and never re-probes.
+- **Curated WebGPU device**: `requestCuratedWebGpuDevice` makes one `requestAdapter` call. If it returns no device (no adapter, `requestDevice` rejected), `createRenderer` falls back to WebGL and records the reason plus the limit note from that same adapter — it never constructs a device-less `WebGPURenderer` (which would request every adapter feature).
+- **One attribute bag**: `getWebGlContextAttributes` / `getWebGlRendererParameters` / `getWebGpuRendererParameters` take `alpha` and `powerPreference`. The tavern stays `{ alpha: false, stencil: false, xrCompatible: isXr }` (Three r181 does not forward `xrCompatible`, so the factory calls `canvas.getContext('webgl2', …)` itself). Secondary canvases use a profile (`PREVIEW_WEBGL_CONTEXT`) on the same helper rather than their own object; the #315 overlay should be another profile there. No `desynchronized: true` without a screenshot test (it fights `capturePng()`).
+- `rendererState` reports `glPowerPreference`, `powerReasons`, and `softwareProbe` (`null` when the probe did not run); `?renderer-info` logs them.
+
+Both renderers set `outputColorSpace = SRGBColorSpace`. WebGPU `requestDevice` uses a documented `requiredLimits` floor.
+
+The Dice Case preview uses a **lazy low-power** WebGL context (`PREVIEW_WEBGL_CONTEXT`, not high-performance) and disposes it on collapse so Quest / Intel / SwiftShader do not burn a second high-performance slot. It is WebGL on purpose and never shares the tavern's `GPUDevice`.
 
 Post flags (`?no-post`, `?low-post`, `?no-bloom`, `?no-godrays`) apply to both paths where supported.
 

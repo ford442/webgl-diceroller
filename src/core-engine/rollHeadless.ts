@@ -5,6 +5,7 @@
  */
 
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -42,9 +43,10 @@ import {
     computeSeededThrowParams,
     createSeededRng,
 } from './wasm/seededThrowParams.js';
-import { getSolverBuildId, loadSolverBuildId } from './wasm/SolverBuildId.js';
+import { formatSolverBuildId } from './wasm/SolverBuildId.js';
 import { createInProcessPhysicsSession } from './wasm/WasmPhysicsBridge.js';
 import type { PhysicsEngine } from './wasm/physicsTypes.js';
+import { applyWorld, type WorldFixture } from './wasm/WorldRecorder.js';
 import { WASM_SCALAR_DIR, WASM_SIMD_DIR, type WasmArtifactDir } from './wasm/wasmArtifact.js';
 
 const FIXED_DT = 1 / 120;
@@ -86,6 +88,29 @@ export interface RollHeadlessOptions {
     system?: string;
     tableSurfaceY?: number;
     preferredDir?: WasmArtifactDir;
+    /**
+     * Disable the pipping centre-of-mass bias (the app's `?fair-dice`). Off by
+     * default, so a headless roll matches the app's default table.
+     */
+    fairDice?: boolean;
+    /** Pipping bias ratio (the app's `?bias-ratio=`); defaults to 0.0075. */
+    massBiasRatio?: number;
+    /**
+     * A recorded collider world (tests/fixtures/tavern-world.json, see
+     * WorldRecorder) to roll into instead of the bare analytic table — its
+     * own `init` replaces the default one.
+     */
+    world?: WorldFixture;
+}
+
+/** The URL flags an app page would carry for these options. */
+function physicsSearchParams(options: RollHeadlessOptions): URLSearchParams {
+    const params = new URLSearchParams();
+    if (options.fairDice) params.set('fair-dice', '');
+    if (options.massBiasRatio !== undefined) {
+        params.set('bias-ratio', String(options.massBiasRatio));
+    }
+    return params;
 }
 
 export function defaultPublicDir(fromUrl: string = import.meta.url): string {
@@ -291,14 +316,30 @@ export async function rollHeadless(
     const session = await createInProcessPhysicsSession({
         assetUrl,
         preferredDir: options.preferredDir,
-        searchParams: new URLSearchParams(),
+        searchParams: physicsSearchParams(options),
+        // Node's fetch cannot read the file: URL the bridge would build, and
+        // the bridge swallows that failure — every die would silently become a
+        // sphere with no face table (faces read 0). Read hulls.json directly.
+        loadHulls: async () =>
+            JSON.parse(await readFile(path.join(publicDir, 'wasm', 'hulls.json'), 'utf8')),
     });
     if (!session.available) {
         throw new NotationError('Failed to instantiate the WASM dice physics engine.');
     }
 
     const engine = session.engine;
-    engine.init(PHYSICS_GRAVITY, PHYSICS_TABLE_Y, PHYSICS_TABLE_HALF, PHYSICS_TABLE_HALF);
+    const worldInit = options.world?.init;
+    if (worldInit) {
+        engine.init(
+            worldInit.gravity,
+            worldInit.tableY,
+            worldInit.tableHalfW,
+            worldInit.tableHalfD
+        );
+    } else {
+        engine.init(PHYSICS_GRAVITY, PHYSICS_TABLE_Y, PHYSICS_TABLE_HALF, PHYSICS_TABLE_HALF);
+    }
+    if (options.world) applyWorld(engine, options.world);
 
     const parsed = parseNotation(expression);
     const set = diceSet ?? createDefaultDiceSet();
@@ -336,11 +377,14 @@ export async function rollHeadless(
         opposedSteps = right.steps;
     }
 
-    let solverBuildId: string | null = getSolverBuildId();
+    // Read build-info.json for the artifact this session actually loaded; the
+    // fetch-based loadSolverBuildId() cannot read a file: URL under Node.
+    let solverBuildId = 'unknown';
     try {
-        solverBuildId = await loadSolverBuildId();
+        const buildInfo = path.join(publicDir, session.dir ?? WASM_SIMD_DIR, 'build-info.json');
+        solverBuildId = formatSolverBuildId(JSON.parse(await readFile(buildInfo, 'utf8')));
     } catch {
-        solverBuildId = solverBuildId ?? 'unknown';
+        // No build-info.json next to the artifact: leave it 'unknown'.
     }
 
     const evaluated = evaluateRoll(parsed, left.dice, {

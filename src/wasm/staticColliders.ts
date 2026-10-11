@@ -134,23 +134,33 @@ export function addStaticColliderToEngine(
     }
 }
 
+/** Ids the last createWasmTableBoundsForEngine call registered, per engine. */
+const tableStaticIds = new WeakMap<object, number[]>();
+
 /**
  * Register table physics bodies from Table.js config into the WASM static registry.
+ *
+ * Ids come from the shared allocator like every other static. This used to
+ * `clearStatics()` and restart the allocator at 1, which wiped the walls
+ * registered before the table and made the next ten prop colliders collide
+ * with the table's ids — the engine silently rejects a duplicate id (#341).
+ * Calling it again replaces only the table's own boxes.
  */
 export function createWasmTableBoundsForEngine(
     engine: PhysicsEngine | null | undefined,
     tableConfig: TableConfig | null | undefined
 ): number {
-    if (!engine?.addStaticBox || !engine.clearStatics) return 0;
+    if (!engine?.addStaticBox) return 0;
 
-    engine.clearStatics();
-    resetStaticColliderIds(1);
+    for (const id of tableStaticIds.get(engine) ?? []) engine.removeStatic?.(id);
+    const registered: number[] = [];
+    tableStaticIds.set(engine, registered);
 
     const bodies = tableConfig?.physicsBodies ?? [];
     let added = 0;
     for (const bodyDef of bodies) {
         if (bodyDef.type !== 'box') continue;
-        const id = added + 1;
+        const id = allocStaticColliderId();
         const materialTag = materialTagForBodyDef(bodyDef);
         const result = engine.addStaticBox(
             id,
@@ -166,7 +176,10 @@ export function createWasmTableBoundsForEngine(
             1,
             materialTag
         );
-        if (result >= 0) added++;
+        if (result >= 0) {
+            added++;
+            registered.push(id);
+        }
     }
 
     const dropped = engine.getStaticCapacityDroppedCount?.();

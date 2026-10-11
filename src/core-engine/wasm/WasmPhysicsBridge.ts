@@ -9,7 +9,7 @@ import { publicAssetUrl } from '../publicAssetUrl.js';
 import { parseCollisionEventBuffer } from './collisionEvents.js';
 import { applyFaceTableForDie } from './faceTableLoader.js';
 import type { HullTable } from './hullTypes.js';
-import { parsePhysicsFlags } from './physicsFlags.js';
+import { parseMassBiasRatio, parsePhysicsFlags } from './physicsFlags.js';
 import { toRngSeedBigInt } from './seedUtil.js';
 import type {
     CollisionEvent,
@@ -28,9 +28,11 @@ import {
 
 const STUB_ENGINE = {
     setFlags: () => {},
+    setMassBiasRatio: () => {},
     init: () => {},
     reset: () => {},
     step: () => {},
+    getFixedTickCount: () => 0,
     addDie: () => -1,
     removeDie: () => {},
     clearAllDice: () => {},
@@ -70,6 +72,9 @@ const STUB_ENGINE = {
     getDieIds: () => new Float32Array(0),
     getDieCount: () => 0,
     areAllSettled: () => true,
+    hasDice: () => false,
+    allAsleep: () => true,
+    getSleepDiagnostics: () => new Float32Array(0),
     getLastStepStats: () => ({
         pairCandidates: 0,
         sphereTests: 0,
@@ -188,6 +193,8 @@ export interface InProcessPhysicsSession {
     moduleClass: DicePhysicsModule | null;
     hulls: HullTable | null;
     available: boolean;
+    /** Artifact directory the module was instantiated from (null for the stub). */
+    dir?: string | null;
     loadHullForDie(wasmId: number, sides: number): void;
     dispose(): void;
 }
@@ -222,6 +229,7 @@ export async function createInProcessPhysicsSession(
         const raw = new Module.DicePhysicsEngine();
         const engine = wrapEngine(raw, Module);
         engine.setFlags(parsePhysicsFlags(searchParams));
+        engine.setMassBiasRatio(parseMassBiasRatio(searchParams));
         const hulls = options.loadHulls
             ? await options.loadHulls()
             : await loadHullTable({ assetUrl: options.assetUrl });
@@ -232,6 +240,7 @@ export async function createInProcessPhysicsSession(
             moduleClass: Module,
             hulls,
             available: true,
+            dir,
             loadHullForDie: (wasmId, sides) => applyHullToDie(engine, Module, hulls, wasmId, sides),
             dispose,
         };
@@ -296,6 +305,11 @@ export const randomPhysicsFloat = (): number => {
 export const serializePhysicsState = async (): Promise<Uint8Array> => {
     if (!_session?.available) return new Uint8Array(0);
     return _session.engine.serializeState();
+};
+
+export const readSleepDiagnostics = async (): Promise<Float32Array> => {
+    if (!_session?.available) return new Float32Array(0);
+    return _session.engine.getSleepDiagnostics?.() ?? new Float32Array(0);
 };
 
 /** No-op in the in-process bridge — throws are applied directly via the engine. */

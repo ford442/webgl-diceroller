@@ -30,7 +30,7 @@ export {
     updateDieEntry,
 } from './dice/DiceSetRuntime.js';
 
-export { PHYSICS_PRESETS, applyDiceMassBiases } from './dice/DicePhysicsPresets.js';
+export { PHYSICS_PRESETS } from './dice/DicePhysicsPresets.js';
 
 export {
     readDiceValue,
@@ -39,6 +39,9 @@ export {
     getDiceValueDebugSnapshot,
     areDiceSettled,
     getSpawnedDiceCounts,
+    diceSettleProbe,
+    readDiceValueAllowingCocked,
+    setForceNoSettle,
 } from './dice/DiceResults.js';
 
 export {
@@ -47,6 +50,7 @@ export {
     clearDice,
     updateDiceSet,
     syncAllDiceToWasm,
+    whenDiceRegistered,
 } from './dice/DiceSpawn.js';
 
 export {

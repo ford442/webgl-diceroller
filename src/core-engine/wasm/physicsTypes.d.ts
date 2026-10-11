@@ -6,9 +6,18 @@
 
 export interface PhysicsEngine {
     setFlags(flags: number): void;
+    /** Pipping bias as a fraction of die height (clamped to [0, 0.05] in the engine). */
+    setMassBiasRatio(ratio: number): void;
     init(gravity: number, tableY: number, tableHalfW: number, tableHalfD: number): void;
     reset(): void;
+    /**
+     * Advance by `dt` seconds of wall time. The engine banks it and runs fixed
+     * 1/120 s ticks (see FIXED_DT in dice_contacts.hpp) — dt is never the
+     * integration quantum. A no-op on the worker proxy (the worker self-paces).
+     */
     step(dt?: number): void;
+    /** Fixed 1/120 s ticks the engine has run (monotonic). */
+    getFixedTickCount?(): number;
     addDie(sides: number, x: number, y: number, z: number): number;
     removeDie(id: number): void;
     clearAllDice(): void;
@@ -162,7 +171,14 @@ export interface PhysicsEngine {
      * forget commands can't report engine state back) — undefined there.
      */
     getStaticCapacityDroppedCount?(): number;
+    /** hasDice() && allAsleep(). False for an empty engine. */
     areAllSettled(): boolean;
+    /** At least one die body is registered. */
+    hasDice?(): boolean;
+    /** Every non-kinematic die is asleep (true for an empty engine). */
+    allAsleep?(): boolean;
+    /** Packed per-body sleep records (see sleepDiagnostics.ts); in-process engines only. */
+    getSleepDiagnostics?(): Float32Array;
     seedRNG(seed: number): void;
     randomFloat(): number;
     getCollisionEvents(): Float32Array;
@@ -193,9 +209,12 @@ export interface EmbindVector<T> {
  */
 export interface EmbindPhysicsEngine {
     setFlags(flags: number): void;
+    setMassBiasRatio(ratio: number): void;
     init(gravity: number, tableY: number, tableHalfW: number, tableHalfD: number): void;
     reset(): void;
     step(dt?: number): void;
+    getFixedTickCount(): number;
+    isWorldAsleep(): boolean;
     addDie(sides: number, x: number, y: number, z: number): number;
     removeDie(id: number): void;
     clearAllDice(): void;
@@ -344,6 +363,9 @@ export interface EmbindPhysicsEngine {
     };
     getStaticCapacityDroppedCount?(): number;
     areAllSettled(): boolean;
+    hasDice(): boolean;
+    allAsleep(): boolean;
+    getSleepDiagnostics(): Float32Array;
     /** uint64_t on the C++/WASM side (-s WASM_BIGINT=1) — pass a bigint, not a number; see seedUtil.ts. */
     seedRNG(seed: bigint): void;
     randomFloat(): number;
@@ -381,6 +403,8 @@ export interface PhysicsBridgeModule {
     seedPhysicsRNG(seed: number): void;
     randomPhysicsFloat(): number;
     serializePhysicsState(): Promise<Uint8Array>;
+    /** Packed sleep diagnostics (see sleepDiagnostics.ts); empty when unavailable. */
+    readSleepDiagnostics(): Promise<Float32Array>;
     seededPhysicsThrow(
         seed: number,
         dice: { id: number; index: number }[],
@@ -405,6 +429,7 @@ export interface PhysicsBridgeModule {
         usingCommandBatch: boolean;
         usingSAB: boolean;
         msgsPerSecond: number;
+        batchMsgs?: number;
         batchRecords: number;
         stepStats?: {
             pairCandidates: number;
@@ -412,5 +437,7 @@ export interface PhysicsBridgeModule {
             satTests: number;
             contacts: number;
         } | null;
+        loopRunning?: boolean;
+        fixedTicks?: number;
     } | null;
 }

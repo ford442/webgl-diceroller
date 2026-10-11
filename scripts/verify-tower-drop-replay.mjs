@@ -14,21 +14,18 @@
  * Usage:
  *   npm run verify:tower-drop-replay
  *   node scripts/verify-tower-drop-replay.mjs --seed 12345 --dice d20,d20,d6
- *   node scripts/verify-tower-drop-replay.mjs --require-settle
+ *   node scripts/verify-tower-drop-replay.mjs --no-require-settle
  *
  * Without public/wasm artifacts it skips locally (run `npm run build:wasm`),
  * but **fails under CI** (`$CI`), where the workflow downloads them on
  * purpose: a silent skip there is a job that tests nothing while reporting
  * green, which is exactly how the repo's WASM coverage went unnoticed.
  *
- * `--require-settle` additionally demands that the drop finish: every die
- * asleep and reading a face. It is OFF by default because the chute does not
- * currently let a die through — every ramp's low edge clears the opposing wall
- * by 0.36-0.77 units where a d20 needs ~2.0, so dice wedge on the first ramp
- * and never reach the tray. That is a prop-geometry defect, not a determinism
- * one (the wedged state is bit-identical from the same seed, which is what
- * this harness exists to prove), and it predates seeded drops. Turn the flag
- * on by default once the chute is opened up.
+ * The drop must also *finish*: every die asleep in the tray and reading a
+ * face. Until #341 the chute's ramps left 0.36-0.77 units for a die that needs
+ * ~2.2, so dice wedged on the first ramp and this check was opt-in; the ramps
+ * now leave CHUTE_MIN_CLEARANCE (diceTowerLayout.ts). `--no-require-settle`
+ * reduces it to a warning, for bisecting a determinism failure on its own.
  */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -66,11 +63,12 @@ const IDLE_STEPS_REQUIRED = 8;
 const WOOD_MATERIAL_TAG = 2;
 
 function parseArgs(argv) {
-    const args = { seed: 0x7a1e5, dice: ['d20', 'd20', 'd6'], requireSettle: false };
+    const args = { seed: 0x7a1e5, dice: ['d20', 'd20', 'd6'], requireSettle: true };
     for (let i = 0; i < argv.length; i++) {
         if (argv[i] === '--seed') args.seed = Number.parseInt(argv[++i], 10) >>> 0;
         else if (argv[i] === '--dice') args.dice = argv[++i].split(',').map((s) => s.trim());
         else if (argv[i] === '--require-settle') args.requireSettle = true;
+        else if (argv[i] === '--no-require-settle') args.requireSettle = false;
     }
     return args;
 }
@@ -236,16 +234,16 @@ async function main() {
         );
     }
 
-    // Settling is a property of the chute, not of the seed. Reported always;
-    // fatal only under --require-settle (see the header).
+    // Settling is a property of the chute, not of the seed. Fatal unless
+    // --no-require-settle (see the header).
     const unsettled = !a.settled || !b.settled;
     const facesUnread =
         a.faceValues.length !== args.dice.length || a.faceValues.some((v) => v === 0);
     if (unsettled || facesUnread) {
         const note =
             `drop did not finish within ${MAX_STEPS} steps (dt=${FIXED_DT}): ` +
-            `settled=${a.settled}, faces=${JSON.stringify(a.faceValues)}. Dice wedge on a ramp — ` +
-            'the chute leaves no gap wide enough for a die to pass (see the header).';
+            `settled=${a.settled}, faces=${JSON.stringify(a.faceValues)}. A die wedged on a ramp ` +
+            '(check computeChuteClearances in diceTowerLayout.ts) or never went to sleep.';
         if (args.requireSettle) failures.push(note);
         else console.warn(`[verify-tower-drop-replay] WARN: ${note}`);
     }

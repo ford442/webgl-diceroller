@@ -7,6 +7,8 @@
 // • high-frequency commands batch into one flush per frame (SAB ring or a
 //   single postMessage) and torque impulses still affect the simulation
 // • kinematic hold + release impulse path works through the worker command queue
+// • the step timer parks with nothing to simulate, restarts on addDie, stops
+//   ticking while the page is hidden, and resumes without replaying a backlog
 //
 // Mirrors scripts/verify-wasm-primitives.mjs.
 import { chromium } from 'playwright';
@@ -20,8 +22,10 @@ const TEST_SRC = `
 import {
     loadWasmEngine, isWasmAvailable, getWasmEngine,
     isUsingWorkerPhysics, isUsingSharedArrayBuffer,
-    flushWorkerCommandBatch, getWorkerPhysicsStats,
+    flushWorkerCommandBatch, getWorkerPhysicsStats, setPhysicsHidden,
 } from './wasm/PhysicsBridge.js';
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const yForId = (e, wantId) => {
     const ids = e.getDieIds();
@@ -91,10 +95,11 @@ export async function run() {
     const qAfter = quatForId(e, id1);
     const torqueApplied = quatDelta(qBefore, qAfter) > 0.02;
     const stats = getWorkerPhysicsStats();
-    // SAB path: zero batch postMessages in steady state; fallback: one batch/frame.
+    // SAB path: zero batch postMessages in steady state; fallback: at most one
+    // batch per flush (24 frames of 8 torques each), never one per command.
     const batchedTransport = usingSAB
         ? stats.batchMsgs === 0
-        : stats.batchMsgs <= 2;
+        : stats.batchMsgs > 0 && stats.batchMsgs <= 24;
 
     // --- Drag scenario: kinematic hold + release impulse --------------------
     const dragId = e.addDie(6, 0, 6, 0);
@@ -105,6 +110,9 @@ export async function run() {
         e.setDieKinematic(dragId, true);
         for (let i = 0; i < 20; i++) {
             e.setDieTransform(dragId, 2, 4, 1, 0, 0, 0, 1);
+            // The app flushes once per frame (postRender); without it the
+            // transforms sit in the batch until the next structural command.
+            flushWorkerCommandBatch();
             await new Promise(r => setTimeout(r, 25));
         }
         const holdY = yForId(e, dragId);
@@ -116,8 +124,38 @@ export async function run() {
         dragMovedOnRelease = holdY != null && afterY != null && afterY < holdY - 0.15;
     }
 
+    // --- Idle: the step timer parks with nothing to simulate ---------------
+    // An empty world is asleep; the worker parks after IDLE_TICKS (0.25 s).
+    e.clearAllDice();
+    flushWorkerCommandBatch();
+    await sleep(600);
+    const idleWhenEmpty = getWorkerPhysicsStats().loopRunning === false;
+
+    const idleId = e.addDie(6, 0, 8, 0);
+    flushWorkerCommandBatch();
+    await sleep(150);
+    const runningAfterAdd = getWorkerPhysicsStats().loopRunning === true;
+
+    // --- Hidden tab: no ticks while hidden, no backlog on resume -----------
+    setPhysicsHidden(true);
+    await sleep(150);
+    const hiddenStats = getWorkerPhysicsStats();
+    const pausedWhenHidden = hiddenStats.loopRunning === false;
+    const ticksAtHide = hiddenStats.fixedTicks;
+    await sleep(1000); // a backlog would be ~120 ticks
+    const noTicksWhileHidden = getWorkerPhysicsStats().fixedTicks === ticksAtHide;
+    setPhysicsHidden(false);
+    await sleep(250); // ~30 ticks of real time
+    const resumedStats = getWorkerPhysicsStats();
+    const resumedTicks = resumedStats.fixedTicks - ticksAtHide;
+    const resumedWithoutBacklog =
+        resumedStats.loopRunning === true && resumedTicks > 0 && resumedTicks < 90;
+    e.removeDie(idleId);
+
     return {
         ok: true,
+        idleWhenEmpty, runningAfterAdd, pausedWhenHidden, noTicksWhileHidden,
+        resumedTicks, resumedWithoutBacklog,
         usingWorker, usingSAB, crossOriginIsolated,
         idsSync, id0, id1,
         countVisible,
@@ -148,6 +186,9 @@ try {
     page.on('worker', (w) => {
         w.on('console', (m) => errors.push('worker ' + m.type() + ': ' + m.text()));
     });
+    // Any same-origin URL that is *not* the app: the module is served as a
+    // plain script. (A missing path falls back to index.html and boots the
+    // whole tavern in this page, which re-inits the shared physics bridge.)
     await page.goto(`${BASE}/src/core-engine/wasm/physicsFlags.ts`, {
         waitUntil: 'domcontentloaded',
     });
@@ -168,19 +209,31 @@ try {
     await rm(TEST_MODULE, { force: true });
 }
 
-// Non-zero exit on logical failure so CI can gate on it.
-const pass =
-    result &&
-    result.ok &&
-    result.usingWorker &&
-    result.idsSync &&
-    result.fellUnderGravity &&
-    result.torqueApplied &&
-    result.batchedTransport &&
-    (!result.hasKinematic || (result.dragHeld && result.dragMovedOnRelease));
+// Non-zero exit on logical failure so CI can gate on it — naming each check
+// that failed, rather than one AND of all of them.
+const checks = result
+    ? {
+          ok: result.ok,
+          usingWorker: result.usingWorker,
+          idsSync: result.idsSync,
+          fellUnderGravity: result.fellUnderGravity,
+          torqueApplied: result.torqueApplied,
+          batchedTransport: result.batchedTransport,
+          dragHeldAndReleased:
+              !result.hasKinematic || (result.dragHeld && result.dragMovedOnRelease),
+          idleWhenEmpty: result.idleWhenEmpty,
+          runningAfterAdd: result.runningAfterAdd,
+          pausedWhenHidden: result.pausedWhenHidden,
+          noTicksWhileHidden: result.noTicksWhileHidden,
+          resumedWithoutBacklog: result.resumedWithoutBacklog,
+      }
+    : { result: false };
+const failed = Object.entries(checks)
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
 
-if (!pass) {
-    console.error('[verify] FAILED');
+if (failed.length) {
+    console.error(`[verify] FAILED: ${failed.join(', ')}`);
     process.exit(1);
 }
 console.log('[verify] PASSED');

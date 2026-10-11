@@ -6,6 +6,7 @@ import { isUsingWasmPhysics } from './DicePhysicsPresets.js';
 import { getDieQuaternion } from './DiceTransformRead.js';
 import { getWasmFaceValueForDie } from './DiceFaceValueRead.js';
 import { resolveDieFaceValue } from './DiceSetRuntime.js';
+import type { SettleProbe } from '../core-engine/roll/SettleWatch.js';
 
 const _invQ = new THREE.Quaternion();
 const _localUp = new THREE.Vector3();
@@ -145,9 +146,53 @@ export const getDiceValueDebugSnapshot = () =>
         };
     });
 
+/**
+ * Test hook (`__app.physics.forceNoSettle`): report every roll as still
+ * moving, so the settle timeout path can be exercised without a die that
+ * genuinely refuses to sleep.
+ */
+let forceNoSettle = false;
+export const setForceNoSettle = (value: boolean) => {
+    forceNoSettle = !!value;
+};
+
+/** The table, as the roll settle watch sees it (see core-engine/roll/SettleWatch). */
+export const diceSettleProbe: SettleProbe = {
+    expectedDice: () =>
+        isUsingWasmPhysics() ? spawnedDice.filter((die) => die.wasmId != null).length : 0,
+    engineDice: () => (isUsingWasmPhysics() ? getWasmEngine().getDieCount() : 0),
+    allAsleep: () => {
+        if (forceNoSettle) return false;
+        const engine = getWasmEngine();
+        return engine.allAsleep?.() ?? engine.areAllSettled();
+    },
+    ticks: () => {
+        if (!isUsingWasmPhysics()) return null;
+        const ticks = getWasmEngine().getFixedTickCount?.();
+        return typeof ticks === 'number' && Number.isFinite(ticks) ? ticks : null;
+    },
+};
+
+/**
+ * The face a die shows even if it never went to sleep (a settle timeout).
+ * The engine only reports a face for a sleeping die, so an awake one is read
+ * from its mesh orientation and flagged `cocked` — leaning on something, or
+ * still rocking — for the HUD to mark and offer a re-roll.
+ */
+export const readDiceValueAllowingCocked = (die: any) => {
+    const natural = readNaturalDiceValue(die);
+    if (natural) return { value: resolveDieFaceValue(die.type, natural), cocked: false };
+    const visual = readDiceValueVisual(die);
+    return {
+        value: visual ? resolveDieFaceValue(die.type, visual) : null,
+        cocked: true,
+    };
+};
+
 export const areDiceSettled = () => {
     if (spawnedDice.length === 0) return true;
     if (!isUsingWasmPhysics()) return true;
+    if (forceNoSettle) return false;
 
     const wasmDice = spawnedDice.filter((die) => die.wasmId != null);
     if (wasmDice.length > 0 && !getWasmEngine().areAllSettled()) return false;

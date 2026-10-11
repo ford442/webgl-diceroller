@@ -23,7 +23,7 @@ import {
     MARKING_STYLE_INDEX,
     diceShadingParams,
 } from '../../src/dice/DiceShadingParams.js';
-import { createDefaultEntry } from '../../src/dice/DiceSetFormat.js';
+import { createDefaultEntry } from '../../src/core-engine/dice/DiceSetFormat.js';
 
 const STYLES = Object.values(MARKING_STYLE_INDEX);
 const INCLUSIONS = Object.values(INCLUSION_TYPE_INDEX);

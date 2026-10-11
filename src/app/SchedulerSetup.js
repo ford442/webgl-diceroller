@@ -10,7 +10,6 @@ import {
     updateDiceVisuals,
     pollPhysicsCollisionEvents,
     enrichCollisionEventForAudio,
-    applyDiceMassBiases,
     spawnedDice,
     readAllDiceValues,
     areDiceSettled,
@@ -75,8 +74,9 @@ export function registerFrameCallbacks(scheduler, deps) {
     scheduler.register('physicsStep', 'dicePhysics', ({ deltaTime }) => {
         if (!isSimulationReady()) return;
 
-        applyDiceMassBiases({ deltaTime });
-
+        // Hands elapsed time to the engine, which banks it and runs fixed
+        // 1/120 s ticks — the same clock as the worker and rollHeadless().
+        // A no-op on the worker bridge (the worker self-paces).
         if (isWasmAvailable()) {
             getWasmEngine().step(deltaTime);
         }
@@ -150,8 +150,8 @@ export function registerFrameCallbacks(scheduler, deps) {
                 hideResults,
                 lampData: getLampData(),
                 LampMode,
-                onSettled: (results) => {
-                    appEvents.emit(AppEvent.ROLL_SETTLED, { results });
+                onSettled: (results, outcome) => {
+                    appEvents.emit(AppEvent.ROLL_SETTLED, { results, ...outcome });
                 },
                 touchPrimary: inputState?.touchPrimary === true,
                 xrPresenting: isXrPresentingRef.value,

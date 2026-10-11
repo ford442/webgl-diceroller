@@ -29,6 +29,7 @@ EMSCRIPTEN_BINDINGS(dice_physics) {
     class_<DicePhysicsEngine>("DicePhysicsEngine")
         .constructor()
         .function("setFlags",          &DicePhysicsEngine::setFlags)
+        .function("setMassBiasRatio",  &DicePhysicsEngine::setMassBiasRatio)
         .function("init",              &DicePhysicsEngine::init)
         .function("reset",             &DicePhysicsEngine::reset)
         .function("addDie",            &DicePhysicsEngine::addDie)
@@ -72,10 +73,27 @@ EMSCRIPTEN_BINDINGS(dice_physics) {
             return val(typed_memory_view(buf.size(), buf.data()));
         })
         .function("step",              &DicePhysicsEngine::step)
+        // double, not uint64_t: a tick counter never nears 2^53, and a plain
+        // number spares every caller a BigInt.
+        .function("getFixedTickCount", +[](const DicePhysicsEngine& e) {
+            return static_cast<double>(e.getFixedTickCount());
+        })
         .function("getDieCount",       &DicePhysicsEngine::getDieCount)
         .function("getLastStepStats",  &DicePhysicsEngine::getLastStepStats)
         .function("getStaticCapacityDroppedCount", &DicePhysicsEngine::getStaticCapacityDroppedCount)
         .function("areAllSettled",     &DicePhysicsEngine::areAllSettled)
+        .function("hasDice",           &DicePhysicsEngine::hasDice)
+        .function("allAsleep",         &DicePhysicsEngine::allAsleep)
+        .function("isWorldAsleep",     &DicePhysicsEngine::isWorldAsleep)
+        // A copy, not a heap view: diagnostics are read once and logged, often
+        // across an await, where a view would already show the next step.
+        .function("getSleepDiagnostics", +[](DicePhysicsEngine& e) {
+            const auto& buf = e.buildSleepDiagnostics();
+            return val::global("Float32Array").new_(typed_memory_view(buf.size(), buf.data()));
+        })
+        .class_function("getSleepDiagnosticsStride", +[]() {
+            return DicePhysicsEngine::SLEEP_DIAG_STRIDE;
+        })
         .function("getTransforms",     +[](DicePhysicsEngine& e) {
             const auto& buf = e.buildTransformBuffer();
             return val(typed_memory_view(buf.size(), buf.data()));

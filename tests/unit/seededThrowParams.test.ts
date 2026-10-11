@@ -12,6 +12,18 @@ import {
 } from '../../src/core-engine/wasm/seededThrowParams.js';
 
 describe('createSeededRng', () => {
+    it('matches the engine PRNG golden sequence bit for bit', () => {
+        // Same seed and outputs as "PRNG golden sequence" in solver_tests.cpp:
+        // next() = 0xB7FB0288C5EE4339, 0x42FEF730E71E2254, 0x835D6BA41BA14966,
+        // and nextFloat() takes the high 32 bits through a float32.
+        const rand = createSeededRng(0x123456789abcdef0n);
+        const expected = [0xb7fb0288, 0x42fef730, 0x835d6ba4].map(
+            (hi) => Math.fround(hi) / 4294967296
+        );
+        expect([rand(), rand(), rand()]).toEqual(expected);
+        expect(rand()).toBeCloseTo(0.087864459, 6);
+    });
+
     it('produces values in [0, 1) across many calls', () => {
         const rand = createSeededRng(12345);
         for (let i = 0; i < 1000; i++) {

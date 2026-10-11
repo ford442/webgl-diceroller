@@ -180,10 +180,19 @@ export function createRenderStats({
                   ? 'WASM(idle)'
                   : 'none'
             : 'none';
+        // Engine count next to the mesh count: "2 dice (engine 0)" is the
+        // boot race that leaves a roll waiting forever (#341).
+        const engineLabel =
+            dice && dice.engineCount != null && dice.engineCount !== dice.count
+                ? ` (engine ${dice.engineCount}!)`
+                : '';
         const diceLabel = dice
-            ? `${dice.count} dice${dice.count ? (dice.settled ? ' · settled' : ' · moving') : ''}`
+            ? `${dice.count} dice${engineLabel}${dice.count ? (dice.settled ? ' · settled' : ' · moving') : ''}`
             : '';
         lines.push(`physics ${physicsLabel}  ${diceLabel}`.trimEnd());
+        if (debugPerf && dice?.awake) {
+            lines.push(`awake ${dice.awake}`);
+        }
         if (debugPerf && wasm?.stepStats) {
             const s =
                 /** @type {{ pairCandidates: number; satTests: number; contacts: number }} */ (

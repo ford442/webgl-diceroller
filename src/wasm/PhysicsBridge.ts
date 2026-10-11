@@ -9,6 +9,7 @@ export {
     getPhysicsStepStats,
     getWasmEngine,
     getWorkerPhysicsStats,
+    getWorldRecorder,
     isUsingSharedArrayBuffer,
     isUsingWorkerPhysics,
     isWasmAvailable,
@@ -17,12 +18,14 @@ export {
     loadWasmEngine,
     pollCollisionEvents,
     randomPhysicsFloat,
+    readSleepDiagnostics,
     seedPhysicsRNG,
     seededPhysicsHopperDrop,
     seededPhysicsThrow,
     serializePhysicsState,
     setContainerActive,
     setContainerPlanes,
+    setPhysicsHidden,
 } from '../core-engine/wasm/PhysicsBridge.js';
 
 import type { Object3D } from 'three';

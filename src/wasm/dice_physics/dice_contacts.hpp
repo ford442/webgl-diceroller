@@ -18,7 +18,6 @@ static constexpr int MAX_MANIFOLD_POINTS = 4;
 static constexpr int VELOCITY_ITERATIONS = 16;
 static constexpr int POSITION_ITERATIONS = 2;
 static constexpr float CONTACT_SLOP = 0.008f;
-static constexpr float BAUMGARTE = 0.05f;
 static constexpr float RESTITUTION_THRESHOLD = 6.0f;
 // Carry forward this fraction of last substep's accumulated normal/friction
 // impulses into a manifold point that matches by featureId. 0.85 (rather
@@ -50,11 +49,29 @@ static constexpr float CCD_MOTION_FRACTION = 0.5f;
 // grazing pose; a hair of daylight keeps it in speculative territory, which
 // is the case that path is tuned for.
 static constexpr float CCD_CONTACT_OFFSET = 0.01f;
-static constexpr float SLEEP_SPEED_THRESHOLD = 0.15f;
+// Island sleep (updateIslandSleep): an island of dice/dynamic props joined by
+// body-body manifolds sleeps once its most energetic member stays below this
+// kinetic energy (joules) for SLEEP_DELAY seconds. 0.08 J is ~0.18 m/s for a
+// 5 kg die.
+static constexpr float SLEEP_ENERGY_THRESHOLD = 0.08f;
 static constexpr float SLEEP_DELAY = 0.5f;
 
+// --- Fixed clock ------------------------------------------------------------
+// The engine owns its integration quantum. step(dt) adds dt to an accumulator
+// and consumes it in FIXED_DT ticks of SUB_STEPS substeps each, so the worker
+// (step(1/120) per timer wakeup), the in-process ?no-worker path (frame time)
+// and rollHeadless() all run the identical substep sequence for a given amount
+// of simulated time. A single call runs at most MAX_TICKS_PER_STEP ticks and
+// drops the rest of the backlog rather than spiralling after a long stall.
+static constexpr float FIXED_DT = 1.0f / 120.0f;
+static constexpr int SUB_STEPS = 4;
+static constexpr int MAX_TICKS_PER_STEP = 8;
+// Absorbs float rounding when a caller's dt is a multiple of FIXED_DT
+// (step(1/60) must be exactly two ticks, not one tick and a 1e-9 s remainder).
+static constexpr double FIXED_DT_EPSILON = 1e-6;
+
 /** Snapshot + solver protocol. Bump when manifolds / impulses change behaviour. */
-static constexpr uint32_t SOLVER_REVISION = 8;
+static constexpr uint32_t SOLVER_REVISION = 10;
 
 enum class ManifoldKind : uint8_t {
     DieDie = 0,

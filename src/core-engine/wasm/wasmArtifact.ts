@@ -81,7 +81,16 @@ export async function importDicePhysicsLoader(
     dir: string,
     assetUrl: (relativePath: string) => string = publicAssetUrl
 ): Promise<DicePhysicsFactory> {
-    const dynamicImport = new Function('u', 'return import(u)') as (u: string) => Promise<unknown>;
+    // `new Function` hides the import from bundlers and from tsx's CJS
+    // rewrite (see resolveDicePhysicsFactory). vitest runs modules in a VM
+    // whose Function constructor has no dynamic-import callback ("A dynamic
+    // import callback was not specified"), so there a plain import() it can
+    // intercept is used instead.
+    const underVitest =
+        typeof process !== 'undefined' && typeof process.env === 'object' && !!process.env.VITEST;
+    const dynamicImport = underVitest
+        ? (u: string) => import(/* @vite-ignore */ u)
+        : (new Function('u', 'return import(u)') as (u: string) => Promise<unknown>);
     const namespace = await dynamicImport(assetUrl(`${dir}/dice_physics.js`));
     const factory = resolveDicePhysicsFactory(namespace);
     if (!factory) {

@@ -39,6 +39,15 @@ export interface RendererState {
     pixelRatioForced?: boolean;
     antialias?: boolean;
     isSoftwareRenderer?: boolean;
+    /** Power preference the live context was created with (see DeviceSession). */
+    glPowerPreference?: 'high-performance' | 'low-power';
+    powerReasons?: string[];
+    /** WebGL software probe result; `null` when it did not run (WebGPU, recovery). */
+    softwareProbe?: {
+        isSoftware: boolean;
+        renderer: string | null;
+        released: 'event' | 'timeout' | 'none';
+    } | null;
     usePostAA?: boolean;
     _recoveryCleanup?: (() => void) | null;
     [key: string]: unknown;
@@ -199,6 +208,20 @@ export interface AppContextPhysics {
     world: null;
     getWasmEngine: (() => import('./physics').PhysicsEngine) | null;
     isWasmAvailable: (() => boolean) | null;
+    /** Debug/test only (`DebugGlobals`): per-body sleep state, for settle timeouts. */
+    getSleepDiagnostics?: () => Promise<{
+        dieLog: import('../core-engine/wasm/WorldRecorder').DieLogEntry[];
+        engineDieCount: number;
+        spawnedDice: number;
+        settled: boolean;
+        bodies: import('../core-engine/wasm/sleepDiagnostics').SleepDiagnostic[];
+        summary: string;
+    }>;
+    /** Test hook: report every roll as still moving, to exercise the settle timeout. */
+    forceNoSettle?: (value?: boolean) => void;
+    /** `?test` only: the collider world the page registered (WorldRecorder). */
+    exportWorld?: () => import('../core-engine/wasm/WorldRecorder').WorldFixture | null;
+    getDieLog?: () => import('../core-engine/wasm/WorldRecorder').DieLogEntry[];
 }
 
 export interface AppContextDice {
@@ -262,6 +285,14 @@ export interface AppContext {
     rerollTableLayout: ((overrides?: unknown) => Promise<unknown>) | null;
     getTableLayoutConfig: (() => unknown) | null;
     getLastRollShareUrl: (() => string | null) | null;
+    /** Roll lifecycle for automation: idle → rolling → settled | timedOut. */
+    getRollState?: () => {
+        phase: 'idle' | 'rolling' | 'settled' | 'timedOut';
+        startedCount: number;
+        settledCount: number;
+        lastTimeoutReason: string | null;
+        lastResults: unknown;
+    };
     getActiveDiceSet: (() => unknown) | null;
     setDieAppearance: ((dieKey: string, patch: unknown) => unknown) | null;
     getDicePresencePayload: (() => unknown) | null;

@@ -36,6 +36,10 @@ public:
     static constexpr int MAX_VERTICES_PER_HULL = 64;
     static constexpr int MAX_EVENTS_PER_STEP = 1024;
     static constexpr uint32_t FLAG_NO_DRAG = 1u << 0;
+    // Disable the pipping centre-of-mass bias (?fair-dice).
+    static constexpr uint32_t FLAG_FAIR_DICE = 1u << 1;
+    static constexpr float DEFAULT_MASS_BIAS_RATIO = 0.0075f;
+    static constexpr float MAX_MASS_BIAS_RATIO = 0.05f;
     // Soft cap on dynamic (non-die) rigid-body props — knockable clutter.
     // die×dynamic and dynamic×dynamic pairs share the die uniform grid (see
     // forEachDieDynamicPair / forEachDynamicPair), so this is a memory/event
@@ -45,6 +49,13 @@ public:
     DicePhysicsEngine();
 
     void setFlags(uint32_t flags);
+
+    /**
+     * Pipping bias magnitude as a fraction of die height (?bias-ratio=),
+     * clamped to [0, MAX_MASS_BIAS_RATIO]. Each die's direction comes from its
+     * own face table (the value-1 normal), so nothing is uploaded per die.
+     */
+    void setMassBiasRatio(float ratio);
 
     void init(float gravity, float tableY, float tableHalfW, float tableHalfD);
 
@@ -173,7 +184,25 @@ public:
 
     const std::vector<float>& buildDynamicIdBuffer();
 
+    /**
+     * Advance the simulation by dt seconds of wall time. dt is fed to an
+     * internal accumulator and consumed in fixed FIXED_DT ticks (see
+     * dice_contacts.hpp); it is never used as the integration quantum.
+     */
     void step(float dt);
+
+    /** Fixed ticks run since construction (monotonic; survives reset). */
+    uint64_t getFixedTickCount() const { return fixedTicks_; }
+
+    /** Simulated time banked but not yet consumed by a tick (test hook). */
+    double getPendingTime() const { return accumulator_; }
+
+    /**
+     * Test hook: override the tick length. The swept-contact tests use it to
+     * reach substeps the fixed 1/120 clock never produces (a sub-10 fps
+     * caller before the clock existed). Not bound to JS.
+     */
+    void setFixedDtForTesting(float fixedDt) { fixedDt_ = fixedDt > 0.0f ? fixedDt : FIXED_DT; }
 
     int getDieCount() const;
 
@@ -194,8 +223,37 @@ public:
     /** Test hook: enumerate dynamic–dynamic pair indices without running the solver. */
     std::vector<std::pair<size_t, size_t>> collectDynamicPairsForTesting(bool useBroadphase);
 
+    /** hasDice() && allAsleep(): a roll is finished. False for an empty engine. */
     bool areAllSettled() const;
     bool hasDice() const { return !bodies_.empty(); }
+    /** Every non-kinematic die is asleep. True for an empty engine. */
+    bool allAsleep() const;
+
+    /**
+     * Why is it awake? One record of SLEEP_DIAG_STRIDE floats per die, then
+     * per dynamic prop:
+     *   [0] kind (0 die, 1 dynamic)   [1] id             [2] sleeping
+     *   [3] kinematic                 [4] |v|            [5] |w| * radius
+     *   [6] sleepTimer                [7] own kinetic energy
+     *   [8] island kinetic energy (what updateIslandSleep compares against
+     *       SLEEP_ENERGY_THRESHOLD)   [9] island size
+     *   [10] manifold count           [11] contact point count
+     *   [12] deepest separation (0 when no contacts)
+     *   [13..] SLEEP_DIAG_MANIFOLDS x (manifold kind, other id, material tag,
+     *       deepest separation); unused slots are -1.
+     * Other id: a die/dynamic/static user id, or -1 for the analytic table,
+     * walls and container planes. Material tag is a static's tag, else -1.
+     */
+    static constexpr int SLEEP_DIAG_MANIFOLDS = 4;
+    static constexpr int SLEEP_DIAG_STRIDE = 13 + SLEEP_DIAG_MANIFOLDS * 4;
+    const std::vector<float>& buildSleepDiagnostics();
+
+    /**
+     * True when stepping would change nothing: every die and dynamic prop is
+     * asleep and none is kinematic (a held die is moved from outside the
+     * step). An empty world is asleep. The worker parks its timer on this.
+     */
+    bool isWorldAsleep() const;
 
     const std::vector<float>& buildTransformBuffer();
 
@@ -230,6 +288,9 @@ public:
     float tableY() const { return tableY_; }
 
     bool getDiePosition(int id, float& x, float& y, float& z) const;
+
+    /** Test hook: the local centre-of-mass offset the bias torque uses (0 when fair). */
+    bool getDieComOffset(int id, float& x, float& y, float& z) const;
 
 private:
     static constexpr int MAX_CONTAINER_PLANES = 9;
@@ -267,10 +328,16 @@ private:
     mutable std::vector<int32_t> faceValueBuffer_;
     mutable std::vector<float> dynamicTransformBuffer_;
     mutable std::vector<float> dynamicIdBuffer_;
+    std::vector<float> sleepDiagBuffer_;
     DeterministicRNG rng_;
     bool noDrag_ = false;
+    bool fairDice_ = false;
+    float massBiasRatio_ = DEFAULT_MASS_BIAS_RATIO;
     bool containerActive_ = false;
     StepStats lastStepStats_;
+    double accumulator_ = 0.0;
+    uint64_t fixedTicks_ = 0;
+    float fixedDt_ = FIXED_DT;
     uint32_t staticCapacityDroppedCount_ = 0;
     uint32_t dynamicCapacityDroppedCount_ = 0;
     bool useBroadphase_ = true;
@@ -318,9 +385,10 @@ private:
     void generateWallContacts(RigidBody& b, size_t dieIndex, float spec);
 
     static void wake(RigidBody& b);
+    /** One FIXED_DT tick: SUB_STEPS substeps of integrate/contact/solve/sleep. */
+    void fixedTick();
     void integrate(RigidBody& b, float dt);
     void sweepClipAgainstStatics(RigidBody& b, const Vec3& from);
-    void checkSleep(RigidBody& b, float dt) const;
     void refreshDieDerived(RigidBody& b) const;
     void refreshDynamicDerived(DynamicBody& b) const;
 
@@ -363,6 +431,13 @@ private:
     void solvePositionConstraints();
     void solveContacts(float dt);
     void updateIslandSleep(float dt);
+    /**
+     * Union-find over body-body manifolds (dice + dynamic props; statics and
+     * the table never join an island). root[i] is the island of node i (dice
+     * first, then dynamics); islandKe[root] is its most energetic member's
+     * kinetic energy.
+     */
+    void computeIslands(std::vector<int>& root, std::vector<float>& islandKe) const;
     float speculativeFor(const Vec3& velocity, float dt) const;
     bool bindViews(ContactManifold& m, BodyView& a, BodyView& b, WorldAnchor& world);
 
@@ -379,7 +454,6 @@ private:
     );
     static void wake(DynamicBody& b);
     void integrateDynamic(DynamicBody& b, float dt);
-    void checkSleepDynamic(DynamicBody& b, float dt) const;
 
     void resolveDynamicStaticPlane(DynamicBody& b, const Vec3& n, float d, const StaticBody& s, float spec);
     void resolveDynamicStaticHull(DynamicBody& b, const StaticBody& s, float spec);

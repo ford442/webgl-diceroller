@@ -38,6 +38,8 @@ import {
     H_SPHERE_TESTS,
     H_SAT_TESTS,
     H_CONTACTS,
+    H_IDLE,
+    H_TICKS,
     idsOffset,
     xfOffset,
     faceValuesOffset,
@@ -71,8 +73,16 @@ type HullTable = Record<string, HullData | undefined>;
 /** Payload of every message the main-thread proxy sends us. */
 type CommandPayload = Record<string, any>;
 
-const FIXED_DT = 1 / 120; // worker simulates at 120 Hz
+// The engine owns the clock (FIXED_DT in dice_contacts.hpp): step(dt) banks dt
+// and runs fixed 1/120 s ticks. The interval below is only a wakeup — each
+// wakeup hands the engine exactly one tick's worth, so a dropped or late timer
+// callback slows the simulation down but never changes the tick sequence.
+const FIXED_DT = 1 / 120;
 const STEP_MS = 1000 * FIXED_DT;
+// Park the timer once the world has been asleep (and the command ring empty)
+// this many ticks in a row — 0.25 s, long enough not to thrash on a die that
+// sleeps for one substep and is knocked awake the next.
+const IDLE_TICKS = 30;
 
 let Module: DicePhysicsModule | null = null;
 let engine: EmbindPhysicsEngine | null = null;
@@ -92,6 +102,8 @@ const dynXfView: (Float32Array | null)[] = [null, null];
 
 let running = false; // true once init() has configured the world
 let stepTimer: ReturnType<typeof setInterval> | null = null;
+let hidden = false; // main thread reported document.hidden
+let asleepTicks = 0;
 
 /**
  * Narrow the module/engine globals for the command handlers, which only ever
@@ -205,6 +217,7 @@ function publishSAB(): void {
     Atomics.store(h, H_SPHERE_TESTS, stepStats.sphereTests | 0);
     Atomics.store(h, H_SAT_TESTS, stepStats.satTests | 0);
     Atomics.store(h, H_CONTACTS, stepStats.contacts | 0);
+    Atomics.store(h, H_TICKS, eng.getFixedTickCount() | 0);
     Atomics.store(h, H_FRONT, back);
     Atomics.add(h, H_SEQNO, 1);
 }
@@ -226,7 +239,14 @@ function publishSnapshot(): void {
     self.postMessage(
         {
             type: 'snapshot',
-            payload: { ids, transforms, faceValues, count, settled: eng.areAllSettled() },
+            payload: {
+                ids,
+                transforms,
+                faceValues,
+                count,
+                settled: eng.areAllSettled(),
+                ticks: eng.getFixedTickCount(),
+            },
         },
         [ids.buffer, transforms.buffer, faceValues.buffer]
     );
@@ -311,26 +331,78 @@ function tick(): void {
     if (!running || !eng) return;
     try {
         drainCommandQueue();
-        if (eng.getDieCount() > 0) {
+        if (eng.getDieCount() > 0 || eng.getDynamicCount() > 0) {
             eng.step(FIXED_DT);
         }
         drainEvents();
         publish();
+        maybeParkLoop(eng);
     } catch (err) {
         self.postMessage({ type: 'error', payload: { message: errorMessage(err) } });
     }
 }
 
-function startLoop(): void {
-    if (stepTimer !== null) return;
-    stepTimer = setInterval(tick, STEP_MS);
+function setIdleFlag(idle: boolean): void {
+    if (header) Atomics.store(header, H_IDLE, idle ? 1 : 0);
 }
 
-function _stopLoop(): void {
+/** postMessage-fallback twin of H_IDLE (the SAB path reads the header). */
+function reportLoopState(): void {
+    if (header) return;
+    self.postMessage({ type: 'loopState', payload: { running: stepTimer !== null } });
+}
+
+function commandRingEmpty(): boolean {
+    if (!header) return true;
+    return Atomics.load(header, H_CMD_HEAD) === Atomics.load(header, H_CMD_TAIL);
+}
+
+function startLoop(): void {
+    if (stepTimer !== null) return;
+    setIdleFlag(false);
+    stepTimer = setInterval(tick, STEP_MS);
+    reportLoopState();
+}
+
+function stopLoop(): void {
+    setIdleFlag(true);
     if (stepTimer !== null) {
         clearInterval(stepTimer);
         stepTimer = null;
+        reportLoopState();
     }
+}
+
+/**
+ * Stop the timer when there is nothing to simulate. Raise H_IDLE *before*
+ * re-checking the ring: a main thread that published commands and then read
+ * H_IDLE as 0 is guaranteed (Atomics are sequentially consistent) to have
+ * had its commands seen here, and one that reads 1 posts a `wake`.
+ */
+function maybeParkLoop(eng: EmbindPhysicsEngine): void {
+    if (hidden) {
+        stopLoop();
+        return;
+    }
+    asleepTicks = eng.isWorldAsleep() ? asleepTicks + 1 : 0;
+    if (asleepTicks < IDLE_TICKS) return;
+    setIdleFlag(true);
+    if (!commandRingEmpty()) {
+        setIdleFlag(false);
+        asleepTicks = 0;
+        return;
+    }
+    stopLoop();
+}
+
+/**
+ * Restart the timer after any command. Resuming never fast-forwards: each
+ * wakeup hands the engine one FIXED_DT, so time spent parked is simply gone.
+ */
+function wakeLoop(): void {
+    asleepTicks = 0;
+    if (!running || hidden) return;
+    startLoop();
 }
 
 // ---------------------------------------------------------------------------
@@ -341,6 +413,7 @@ function handleInit(payload: CommandPayload): void {
     ensureEngine();
     const eng = requireEngine();
     eng.setFlags(payload.flags >>> 0);
+    if (typeof payload.biasRatio === 'number') eng.setMassBiasRatio(payload.biasRatio);
     eng.init(payload.gravity, payload.tableY, payload.tableHalfW, payload.tableHalfD);
     if (payload.sab) {
         header = new Int32Array(payload.sab, 0, HEADER_INTS);
@@ -366,7 +439,7 @@ function handleInit(payload: CommandPayload): void {
     }
     running = true;
     publish();
-    startLoop();
+    wakeLoop();
 }
 
 function handle(type: string, payload: CommandPayload): void {
@@ -376,6 +449,20 @@ function handle(type: string, payload: CommandPayload): void {
         handleInit(payload);
         return;
     }
+    if (type === 'setHidden') {
+        hidden = payload?.hidden === true;
+        if (hidden) stopLoop();
+        else wakeLoop();
+        return;
+    }
+    handleCommand(type, payload);
+    // Any command may have changed the world (or queued ring commands behind
+    // it), so a parked loop restarts and re-earns its idle streak. `wake` is
+    // the explicit form the proxy posts after writing to the ring.
+    if (type !== 'serializeState') wakeLoop();
+}
+
+function handleCommand(type: string, payload: CommandPayload): void {
     const eng = engine;
     if (!eng) return;
     switch (type) {
@@ -607,7 +694,25 @@ function handle(type: string, payload: CommandPayload): void {
             );
             break;
         }
+        case 'getSleepDiagnostics': {
+            const diag = eng.getSleepDiagnostics();
+            self.postMessage(
+                {
+                    type: 'response',
+                    payload: {
+                        reqId: payload.reqId,
+                        byteLength: diag.byteLength,
+                        data: diag.buffer,
+                    },
+                },
+                [diag.buffer]
+            );
+            break;
+        }
         case 'seededThrow': {
+            // Queued die transforms/velocities from the command ring would
+            // otherwise land on the next tick, after (and over) the throw pose.
+            drainCommandQueue();
             eng.seedRNG(toRngSeedBigInt(payload.seed));
             const params = computeSeededThrowParams(
                 () => eng.randomFloat(),
@@ -642,6 +747,8 @@ function handle(type: string, payload: CommandPayload): void {
             publish();
             break;
         }
+        case 'wake':
+            break;
         default:
             self.postMessage({ type: 'error', payload: { message: 'Unknown command: ' + type } });
     }

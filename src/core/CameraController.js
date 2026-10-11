@@ -1,5 +1,11 @@
 import * as THREE from 'three';
-import { spawnedDice, readDiceValue, areDiceSettled, updateDiceVisuals } from '../dice.js';
+import {
+    spawnedDice,
+    readDiceValueAllowingCocked,
+    diceSettleProbe,
+    updateDiceVisuals,
+} from '../dice.js';
+import { createSettleWatch } from '../core-engine/roll/SettleWatch.js';
 import { prefersReducedMotion } from './AccessibilityPrefs.js';
 import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z } from './SceneMetrics.js';
 
@@ -92,29 +98,54 @@ export function createCameraController(camera) {
         return diceFocusState;
     }
 
+    // One watch per roll: WAITING_FOR_STOP always ends, settled or timed out.
+    const settleWatch = createSettleWatch(diceSettleProbe, {
+        isPaused: () => typeof document !== 'undefined' && document.hidden,
+    });
+    /** @type {import('../core-engine/roll/SettleWatch.js').SettleStatus | null} */
+    let settleOutcome = null;
+
     function setState(newState) {
+        if (newState === DiceFocusState.WAITING_FOR_STOP) {
+            settleWatch.begin();
+            settleOutcome = null;
+        }
         diceFocusState = newState;
     }
 
     function checkDiceStability(lampData, LampMode) {
-        if (spawnedDice.length === 0) return true;
-        const allStable = areDiceSettled();
+        const status = settleWatch.poll();
+        if (status.state === 'pending') return false;
+        settleOutcome = status;
+        if (status.state === 'timedOut') {
+            console.warn(
+                `[Roll] Dice did not settle (${status.reason}` +
+                    `${status.simSeconds != null ? `, ${status.simSeconds.toFixed(1)} s sim` : ''}); reading faces as they lie.`
+            );
+        }
 
         // Update lamp rolling state when dice stop
-        if (allStable && lampData && lampData.getMode() === LampMode.NORMAL) {
+        if (lampData && lampData.getMode() === LampMode.NORMAL) {
             lampData.setRolling(false);
         }
 
-        return allStable;
+        return true;
     }
 
     function finishRollResults(onSettled) {
         updateDiceVisuals();
-        const results = spawnedDice.map((d) => ({
-            type: d.type,
-            value: readDiceValue(d),
-        }));
-        onSettled?.(results);
+        const timedOut = settleOutcome?.state === 'timedOut';
+        const results = spawnedDice.map((d) => {
+            const read = readDiceValueAllowingCocked(d);
+            return timedOut && read.cocked
+                ? { type: d.type, value: read.value, cocked: true }
+                : { type: d.type, value: read.value };
+        });
+        onSettled?.(results, {
+            timedOut,
+            reason: settleOutcome?.reason ?? null,
+            simSeconds: settleOutcome?.simSeconds ?? null,
+        });
     }
 
     function update(

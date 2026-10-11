@@ -9,8 +9,6 @@ export interface SpawnedDie {
     physicsPreset?: PhysicsPreset;
     audioBodyId?: number;
     inertiaScalar?: number;
-    centerOfMassOffset?: import('three').Vector3 | null;
-    massBiasOffset?: import('three').Vector3 | null;
     role?: 'tens' | 'ones' | null;
     groupIndex?: number;
     dieIndex?: number;

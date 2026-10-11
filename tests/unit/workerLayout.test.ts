@@ -24,11 +24,13 @@ import {
     H_CONTACTS,
     H_COUNT,
     H_FRONT,
+    H_IDLE,
     H_PAIR_CANDIDATES,
     H_SAT_TESTS,
     H_SEQNO,
     H_SETTLED,
     H_SPHERE_TESTS,
+    H_TICKS,
     IDS_BYTES,
     MAX_DICE,
     MAX_DYNAMICS,
@@ -46,7 +48,7 @@ import {
 import { MAX_RECORD_LEN } from '../../src/core-engine/wasm/workerCommands.js';
 
 describe('header layout', () => {
-    it('has ten distinct Int32 header slots', () => {
+    it('has twelve distinct Int32 header slots', () => {
         const indices = [
             H_SEQNO,
             H_FRONT,
@@ -58,6 +60,8 @@ describe('header layout', () => {
             H_SPHERE_TESTS,
             H_SAT_TESTS,
             H_CONTACTS,
+            H_IDLE,
+            H_TICKS,
         ];
         expect(new Set(indices).size).toBe(indices.length);
         expect(Math.max(...indices)).toBe(HEADER_INTS - 1);
