@@ -20,26 +20,26 @@ import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
 import { DiceFocusState } from '../core/CameraController.js';
 import { showResults, hideResults, showNotationResults } from '../results.js';
 import { AppEvent } from '../core/AppEvents.js';
-import { createRollSession, shouldDeferAutoResults } from '../roll/RollSession.js';
+import { createRollSession, shouldDeferAutoResults } from '../core-engine/roll/RollSession.js';
 import {
     ROLL_SYSTEMS,
     DEFAULT_ROLL_SYSTEM,
     applyExpressionChip,
     defaultExpressionForSystem,
-} from '../roll/Notation.js';
+} from '../core-engine/roll/Notation.js';
 import {
     REPLAY_VERSION,
     SUPPORTED_REPLAY_VERSIONS,
     buildShareableRollUrl,
     generateRollSeed,
     parseShareableRollParams,
-} from '../roll/ShareableRoll.js';
-import { createCommit, generateNonce, verifyReveal } from '../net/CommitReveal.js';
+} from '../core-engine/roll/ShareableRoll.js';
+import { createCommit, generateNonce, verifyReveal } from '../core-engine/net/CommitReveal.js';
 import type { AppContext, AppEvents, PendingRollMeta } from '../types/app';
 import type { DiceReadValue } from '../types/dice.js';
 import type { EvaluatedRoll } from '../types/roll.js';
-import type { RollHistory } from '../roll/RollHistory.js';
-import type { RollStats } from '../roll/RollStats.js';
+import type { RollHistory } from '../core-engine/roll/RollHistory.js';
+import type { RollStats } from '../core-engine/roll/RollStats.js';
 import type {
     RemoteCommitMessage,
     RemoteRevealMessage,

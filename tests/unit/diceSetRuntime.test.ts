@@ -23,13 +23,13 @@ import {
     createDefaultEntry,
     withComputedId,
     type DiceSetEntry,
-} from '../../src/dice/DiceSetFormat.js';
+} from '../../src/core-engine/dice/DiceSetFormat.js';
 import {
     applyLegacyDiceLook,
     diceSetFromLegacyLook,
     parseLegacyDiceLook,
     serializeLegacyDiceLook,
-} from '../../src/dice/LegacyDiceLook.js';
+} from '../../src/core-engine/dice/LegacyDiceLook.js';
 import {
     getDieEntry,
     getDieShape,

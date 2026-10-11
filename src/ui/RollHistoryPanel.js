@@ -1,4 +1,4 @@
-import { formatDiceSet, formatResultsSummary } from '../roll/RollHistory.js';
+import { formatDiceSet, formatResultsSummary } from '../core-engine/roll/RollHistory.js';
 import { createHudPanel, hudButton, guardPointerEvents } from './hudPanel.js';
 
 const GOLD = '#ffd700';

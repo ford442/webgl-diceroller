@@ -41,7 +41,7 @@ to WebAssembly (WASM) into the WebGL Dice Roller application.
 - [x] Set up the C++/Emscripten/CMake build pipeline.
 - [x] Implement a self-contained lightweight impulse solver (`DicePhysicsEngine`).
 - [x] Expose the engine to JavaScript via Embind.
-- [x] Write a JavaScript bridge (`WasmPhysicsBridge.js`) with a graceful stub fallback.
+- [x] Write a JavaScript bridge (`WasmPhysicsBridge.ts`) with a graceful stub fallback.
 - [x] Integrate the bridge into `src/main.js` (loads in parallel, non-blocking).
 - [x] Replace the normal simulation step with `engine.step(dt)` when WASM is available.
 - [x] Drive `updateDiceVisuals()` from `engine.getTransforms()` in the authoritative path.
@@ -191,7 +191,7 @@ and face tables to `engine.setDieFaceTable(id, packed)`.
 
 ### Build WASM module
 
-Shared Emscripten flags live in [`src/wasm/emcc_flags.inc.sh`](src/wasm/emcc_flags.inc.sh) and are consumed by [`build.sh`](src/wasm/build.sh), [`build_colab.sh`](src/wasm/build_colab.sh), and CMake (via [`emcc_flags.sh --print-link-line`](src/wasm/emcc_flags.sh)).
+Shared Emscripten flags live in [`src/wasm/emcc_flags.inc.sh`](../src/wasm/emcc_flags.inc.sh) and are consumed by [`build.sh`](../src/wasm/build.sh), [`build_colab.sh`](../src/wasm/build_colab.sh), and CMake (via [`emcc_flags.sh --print-link-line`](../src/wasm/emcc_flags.sh)).
 
 ```bash
 # Release: SIMD → public/wasm/ and scalar → public/wasm-scalar/
@@ -209,9 +209,9 @@ cd src/wasm && ./build.sh --simd-only  # SIMD only
 
 A default release build writes **both** artifacts. Debug overwrites `public/wasm/` only. The Embind API surface is identical.
 
-[`WasmPhysicsBridge.js`](src/wasm/WasmPhysicsBridge.js) / the physics worker probe SIMD128 with a hand-rolled `WebAssembly.validate` of a `v128.const` module ([`simdSupport.js`](src/wasm/simdSupport.js)). Non-SIMD browsers (Safari < 16.4) load `public/wasm-scalar/`. `?wasm-scalar` / `?wasm-simd` override the probe. Hulls stay in `public/wasm/hulls.json`.
+[`WasmPhysicsBridge.ts`](../src/core-engine/wasm/WasmPhysicsBridge.ts) / the physics worker probe SIMD128 with a hand-rolled `WebAssembly.validate` of a `v128.const` module ([`simdSupport.ts`](../src/core-engine/wasm/simdSupport.ts)). Non-SIMD browsers (Safari < 16.4) load `public/wasm-scalar/`. `?wasm-scalar` / `?wasm-simd` override the probe. Hulls stay in `public/wasm/hulls.json`.
 
-After each build, [`build.sh`](src/wasm/build.sh) emits `build-info.json` (gitignored) with `emcc_version`, `simd`, `initial_memory`, full flag list, `git_sha`, and artifact byte sizes. CI uploads the SIMD tree inside the `wasm-artifacts` artifact.
+After each build, [`build.sh`](../src/wasm/build.sh) emits `build-info.json` (gitignored) with `emcc_version`, `simd`, `initial_memory`, full flag list, `git_sha`, and artifact byte sizes. CI uploads the SIMD tree inside the `wasm-artifacts` artifact.
 
 #### Release flag set (EMSDK 3.1.61 / CI pin)
 
@@ -434,7 +434,7 @@ in their editor instead of greyed-out branches.
   transport when the page is cross-origin isolated (COOP/COEP set).
 - `?no-worker` (or `?worker-physics=off`) runs the WASM engine **in-process** on
   the main thread (the legacy `WasmPhysicsBridge` path).
-- `?no-wasm` forces `WasmPhysicsBridge.js`'s no-op JS stub even if `public/wasm/`
+- `?no-wasm` forces `WasmPhysicsBridge.ts`'s no-op JS stub even if `public/wasm/`
   is present: no dice spawn, and `PhysicsBootstrap.showLoadFailure()` shows an
   honest error. There is no fallback engine any more — ammo.js was retired.
 - `?worker-physics` is the explicit opt-in alias for the now-default worker path.
@@ -602,7 +602,7 @@ npm run preview      # preview production build
 
 ## API Reference
 
-### `WasmPhysicsBridge.js` (JavaScript)
+### `WasmPhysicsBridge.ts` (`src/core-engine/wasm/`)
 
 ```js
 import {
@@ -616,7 +616,7 @@ import {
     randomPhysicsFloat,
     serializePhysicsState,
     deserializePhysicsState,
-} from './src/wasm/WasmPhysicsBridge.js';
+} from './src/core-engine/wasm/WasmPhysicsBridge.js';
 
 // Initialize once during app startup (await is optional — non-blocking)
 await loadWasmEngine();
@@ -894,6 +894,9 @@ scheduler.register('postPhysicsSync', 'diceVisualSync', () => {
 });
 ```
 
+The variable-`deltaTime` step above is what `main` runs today; the single fixed
+engine clock that replaces it is tracked in #337.
+
 `src/dice.js` mirrors dice lifecycle events into WASM and loads hulls. If WASM
 never became available, no dice are spawned in the first place
 (`LoadingTiers.js` only calls `spawnObjects()` when `isWasmAvailable()`):
@@ -1015,7 +1018,7 @@ const t2 = window.__app.getWasmEngine().getTransforms();
 - [x] Deterministic seed + state serialization for replay.
 - [x] Collision event callbacks for audio.
 - [x] Hardening: max dice (500), max hull verts (64), max static colliders (512, was silently 128 — `addStatic*` now reports drops via `getStaticCapacityDroppedCount()` instead of no-op failing), memory cap (64 MB), NaN checks.
-- [x] Experimental Worker bridge (`src/wasm/WorkerPhysicsBridge.ts`).
+- [x] Experimental Worker bridge (`src/core-engine/wasm/WorkerPhysicsBridge.ts`).
 
 ### Phase 4 (Complete)
 
@@ -1087,7 +1090,7 @@ const t2 = window.__app.getWasmEngine().getTransforms();
 - [x] `src/dice/AmmoDiceBackend.js` and `src/dice/diceAmmoFlags.js` deleted; every dice-side ammo branch (`DiceThrow.js`, `DiceSync.js`, `DiceTransformRead.js`, `DicePhysicsPresets.js`, `DiceSpawn.js`, `DiceResults.js`) collapsed to the WASM-only path.
 - [x] `src/environment/PropPhysics.js` deleted; `StaticColliderBridge.js` registers every collider type (box, plane, cylinder/openCylinder, convexHull, compound) on the WASM engine directly — there was no gap to port, since WASM already covered every shape the ammo branch did.
 - [x] `src/interaction.js`'s ammo `btPoint2PointConstraint` drag and ammo levitation branches deleted; WASM kinematic grab is the only interaction path.
-- [x] `?no-wasm` no longer loads a different simulation: it forces `WasmPhysicsBridge.js`'s existing no-op stub. `PhysicsBootstrap.bootstrapPhysics()` never aborts init() on failure — `LoadingTiers.js` still builds the full tavern (table, walls, props) and only skips `spawnObjects()`, so the scene still reaches `ready: true` with zero dice.
+- [x] `?no-wasm` no longer loads a different simulation: it forces `WasmPhysicsBridge.ts`'s existing no-op stub. `PhysicsBootstrap.bootstrapPhysics()` never aborts init() on failure — `LoadingTiers.js` still builds the full tavern (table, walls, props) and only skips `spawnObjects()`, so the scene still reaches `ready: true` with zero dice.
 - [x] `build:js` fails fast if `public/wasm/dice_physics.{js,wasm}` are missing (`scripts/check-wasm-artifacts.mjs`); `build:js:allow-missing-wasm` is the explicit escape hatch for frontend-only environments (Cursor Cloud, a Codespace without Emscripten).
 - [x] `vite.config.js`'s `physics` manualChunks rule, the `ammo.js` budget entries, and the `/physics-` / `/ammo-` `modulePreload.resolveDependencies` filters removed — there is no ammo chunk to filter any more.
 - [x] `npm run verify:bundle-loading` asserts `?no-wasm` fetches no physics fallback chunk and spawns zero dice (there is nothing left to fetch).

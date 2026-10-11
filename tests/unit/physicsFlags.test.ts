@@ -6,7 +6,7 @@ import {
     PHYSICS_FLAG_NO_DRAG,
     parseMassBiasRatio,
     parsePhysicsFlags,
-} from '../../src/wasm/physicsFlags.js';
+} from '../../src/core-engine/wasm/physicsFlags.js';
 
 const params = (search: string) => new URLSearchParams(search);
 

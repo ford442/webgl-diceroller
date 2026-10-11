@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { tween } from '../interactables/tween.js';
 import { isWasmAvailable, setContainerActive, setContainerPlanes } from '../wasm/PhysicsBridge.js';
 import { spawnedDice, driveDieWasmTransform, setDieWasmVelocity } from '../dice.js';
-import { isNotationRollActive } from '../roll/RollSession.js';
+import { isNotationRollActive } from '../core-engine/roll/RollSession.js';
 import { DICE_CUP_INTERIOR_HEIGHT, DICE_CUP_INTERIOR_RADIUS } from '../environment/DiceCup.js';
 import { TABLE_SURFACE_Y } from '../core/SceneMetrics.js';
 

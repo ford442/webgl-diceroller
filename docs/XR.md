@@ -62,7 +62,7 @@ Transforms apply **only while presenting**; exiting VR restores identity on the 
 | [`src/xr/XrControllers.js`](../src/xr/XrControllers.js)               | Rays, squeeze, snap-turn          |
 | [`src/xr/XrGrab.js`](../src/xr/XrGrab.js)                             | Controller → WASM grab            |
 | [`src/xr/XrUi.js`](../src/xr/XrUi.js)                                 | Enter VR button                   |
-| [`src/interaction/WasmDieGrab.js`](../src/interaction/WasmDieGrab.js) | Shared mouse + XR grab            |
+| [`src/interaction/WasmDieGrab.ts`](../src/interaction/WasmDieGrab.ts) | Shared mouse + XR grab            |
 
 ## Acceptance (manual)
 

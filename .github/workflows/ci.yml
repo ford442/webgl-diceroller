@@ -254,6 +254,7 @@ jobs:
                     # the WASM build, each settling inside 12 s sim (#341).
                     - test:tavern-world
                     - verify:godrays
+                    - verify:shader-parity
                     - verify:wasm-primitives
         steps:
             - uses: actions/checkout@v5

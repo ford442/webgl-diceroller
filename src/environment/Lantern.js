@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { registerInteractiveObject } from '../interaction.js';
 import { createProp, materials, mesh, STATIC_MATERIAL } from './propKit.js';
+import { flameTime } from '../core/LightingSystems.js';
 
 export function createLantern(
     scene,
@@ -138,12 +139,13 @@ export function createLantern(
         registerInteractiveObject(result.group, toggleLight);
     }
 
-    const update = (time) => {
+    // The registry calls update(deltaTime, elapsedTime). The light casts a
+    // shadow, so only its intensity flickers — see LightingSystems.
+    const update = (_deltaTime, time) => {
         if (!isOn) return;
-        const flicker = Math.sin(time * 10) * 0.1 + Math.sin(time * 25) * 0.05;
+        const t = flameTime(time);
+        const flicker = Math.sin(t * 10) * 0.1 + Math.sin(t * 25) * 0.05;
         light.intensity = 1.5 + flicker;
-        light.position.x = (Math.random() - 0.5) * 0.02;
-        light.position.z = (Math.random() - 0.5) * 0.02;
     };
 
     return { ...result, update };

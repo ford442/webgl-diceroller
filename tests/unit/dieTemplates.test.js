@@ -14,7 +14,7 @@ import {
     getDieTemplate,
     resetDieTemplatesForTests,
 } from '../../src/dice/DiceModels.js';
-import { createDefaultDiceSet, withComputedId } from '../../src/dice/DiceSetFormat.js';
+import { createDefaultDiceSet, withComputedId } from '../../src/core-engine/dice/DiceSetFormat.js';
 import { resetDiceSetRuntimeForTests, setActiveDiceSet } from '../../src/dice/DiceSetRuntime.js';
 
 /** A stand-in hull: the loader's output, minus the GLB. */

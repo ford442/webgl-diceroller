@@ -31,10 +31,13 @@ webgl-diceroller/
 │   ├── interaction/            # Dice cup / tower / tray / jail + shared WasmDieGrab helper
 │   ├── xr/                     # WebXR seated-table spike (?xr)
 │   ├── ui.js                   # DOM-based UI controls and crosshair
-│   ├── shaders/                # Custom GLSL + TSL node materials
-│   │   ├── VignetteShader.js   # WebGL post vignette pass
-│   │   ├── GodRayShader.js     # WebGL scene-space moonlight beams (TavernWalls)
-│   │   └── GodRayNodeMaterial.js # WebGPU god-ray twin
+│   ├── shaders/                # Shader graphs, built as GLSL (WebGL) and TSL (WebGPU)
+│   │   ├── graph/ShaderKit.js  # One op vocabulary, GLSL-string + TSL-node backends
+│   │   ├── GodRayGraph.js      # Moonlight beam graph + GOD_RAY_PARAMS
+│   │   ├── PostStackParams.js  # Vignette graph + bloom / vignette / chromatic params
+│   │   ├── VignetteShader.js   # WebGL post vignette pass (GLSL generated from the graph)
+│   │   ├── GodRayShader.js     # WebGL beam ShaderMaterial (GLSL generated from the graph)
+│   │   └── GodRayNodeMaterial.js # WebGPU beam (TSL built from the same graph)
 │   └── environment/            # Scene environment (~95 prop modules)
 │       ├── PropRegistry.js     # Auto-discovers prop factories + tier definitions
 │       ├── propKit.js          # createProp / materials / mesh helpers (required for new props)
@@ -97,7 +100,7 @@ npm run format              # Prettier write
 npm run format:check        # Prettier check (CI)
 ```
 
-- ammo.js was retired — WASM is the only physics backend, and there is no fallback rigid-body implementation left in `src/`. `?no-wasm` (or missing/broken `public/wasm/` artifacts) no longer loads a different simulation; it forces `WasmPhysicsBridge.js`'s existing no-op JS stub, `isWasmAvailable()` reports `false`, and `PhysicsBootstrap.showLoadFailure()` shows an honest error banner. The tavern (table, walls, props) still loads and `window.__app.ready` still becomes `true` — dice are simply never spawned.
+- ammo.js was retired — WASM is the only physics backend, and there is no fallback rigid-body implementation left in `src/`. `?no-wasm` (or missing/broken `public/wasm/` artifacts) no longer loads a different simulation; it forces `WasmPhysicsBridge.ts`'s existing no-op JS stub, `isWasmAvailable()` reports `false`, and `PhysicsBootstrap.showLoadFailure()` shows an honest error banner. The tavern (table, walls, props) still loads and `window.__app.ready` still becomes `true` — dice are simply never spawned.
 - `npm run dev` without compiled WASM artifacts (`public/wasm/`) hits that same failure path. Run `npm run build:wasm` (needs Emscripten) first to get real physics locally.
 - The `?dual-physics`, `?ammo-drag`, and `?wasm-drag` flags were removed earlier and remain gone; there is no dual-authority sync in `src/dice/`.
 - `?worker-physics` (no value) is an explicit opt-in for the (already-default) worker backend; `?no-worker` / `?worker-physics=off` forces the main-thread WASM bridge instead.
@@ -129,7 +132,7 @@ Initiative / turn tracking and durable multiplayer rooms are wired through **`Ap
 - [`src/session/SessionState.ts`](src/session/SessionState.ts) — seat list, current actor, last expression; `localStorage` per room code.
 - [`src/app/SessionWiring.js`](src/app/SessionWiring.js) + [`src/ui/SessionStrip.js`](src/ui/SessionStrip.js) — desktop strip (`session:initiative`, `session:turn`).
 - [`signaling/src/RoomDurableObject.js`](signaling/src/RoomDurableObject.js) — persisted room state + hibernating WebSockets; `solverBuildId` mismatch rejected at join.
-- [`src/net/CommitReveal.ts`](src/net/CommitReveal.ts) — SHA-256 commit-reveal when `?fair-commit` is set.
+- [`src/core-engine/net/CommitReveal.ts`](src/core-engine/net/CommitReveal.ts) — SHA-256 commit-reveal when `?fair-commit` is set.
 - [`src/xr/XrResultsHud.js`](src/xr/XrResultsHud.js) — world-space totals on `xrWorld`; DOM HUD hidden while presenting.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md).
@@ -223,15 +226,18 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 - Props that need per-frame animation provide an `update(deltaTime, elapsedTime)` function.
 - `LoadingTiers.js` wires these into `FrameScheduler` through the prop registry; do not add ad-hoc per-frame calls in `main.js`.
 - Interactive props return callbacks (e.g., `interact`, `toggleGlow`) that are registered in the prop entry’s `afterCreate` hook.
-- Registered props use `createProp` + declarative `colliders` via [`StaticColliderBridge.js`](src/core/StaticColliderBridge.js), which registers every collider type (box, plane, cylinder/openCylinder, convexHull, compound) directly on the WASM engine — there is no other collider backend.
+- Registered props use `createProp` + declarative `colliders` via [`StaticColliderBridge.ts`](src/core/StaticColliderBridge.ts), which registers every collider type (box, plane, cylinder/openCylinder, convexHull, compound) directly on the WASM engine — there is no other collider backend.
 - Shadows are aggressively optimized: small decorative props are listed in `SHADOW_DISABLED_PROP_NAMES` in `src/environment/PropRegistry.js`.
 
 ### Rendering Notes
 
 - WebGPU is the default on supported browsers; WebGL is the automatic fallback and the most compatible baseline (force it with `?webgl`).
 - WebGPU uses `WebGPURenderer` plus the TSL post pipeline (bloom, vignette, optional chromatic aberration in high quality).
-- The tavern window god rays render on both paths: WebGL uses the raw-GLSL `GodRayShader.js` `ShaderMaterial`; WebGPU uses the TSL `MeshBasicNodeMaterial` in `src/shaders/GodRayNodeMaterial.js`. Toggle with `?no-godrays` independent of renderer.
+- The tavern window god rays render on both paths: WebGL uses the GLSL `GodRayShader.js` `ShaderMaterial`; WebGPU uses the TSL `MeshBasicNodeMaterial` in `src/shaders/GodRayNodeMaterial.js`. Toggle with `?no-godrays` independent of renderer.
 - `GodRayShader.js` is used for the scene-space moonlight beam mesh in `TavernWalls.js`; it is not part of the fullscreen composer pipeline.
+- **Never hand-write a shader twice.** Dice surface, god rays and vignette are each one graph written against `src/shaders/graph/ShaderKit.js` and built by both backends (GLSL for `WebGLRenderer`, TSL for `WebGPURenderer`); the `*Shader.js` / `*NodeMaterial.js` modules only wire outputs into uniforms or material slots. A new marking term, inclusion or post effect goes in the graph (`DiceSurfaceGraph.js`, `GodRayGraph.js`, `PostStackParams.js`). Post-stack numbers (bloom, vignette, chromatic) live in `PostStackParams.js` for both pipelines. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (One shader graph, two backends).
+- `npm run verify:shader-parity` renders every die marking style / inclusion, a beam and a vignette card on WebGL and WebGPU and diffs them (WebGPU skipped under `DICE_CI_NO_WEBGPU=1`).
+- Flame lights never use `Math.random()`: use `flameFlicker` / `flameTime` from `src/core/LightingSystems.js` (deterministic, frozen under `?test`), and do not jitter the position of a shadow-casting light.
 
 ## Asset Pipeline
 
@@ -326,7 +332,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 1. Create `src/environment/PropName.js` using `createProp` from [`src/environment/propKit.js`](src/environment/propKit.js).
 2. Export a factory: `(scene, physicsWorld?, position?, rotation?, options?)`. Accept `{ scale = 1 } = {}` as the fifth argument and pass it to `createProp` if the prop should also be usable as tabletop clutter.
 3. Build geometry inside the `build({ group, materials, mesh })` callback; use `materials.*` from the kit (backed by [`MaterialPalette.js`](src/core/MaterialPalette.js)) instead of inline `MeshStandardMaterial`.
-4. Declare colliders as a spec array — routed through [`StaticColliderBridge.js`](src/core/StaticColliderBridge.js).
+4. Declare colliders as a spec array — routed through [`StaticColliderBridge.ts`](src/core/StaticColliderBridge.ts).
 5. Return `{ group }` plus optional `update`, `interact`, `body`, etc.
 6. Register in the appropriate tier in [`PropRegistry.js`](src/environment/PropRegistry.js).
 7. Wire `afterCreate` for per-frame updates or click handlers.
@@ -481,6 +487,7 @@ npm run fixture:world               # Re-export the tavern collider fixture from
 npm run check:world-fixture         # Fails if the checked-in fixture no longer matches what the app registers
 npm run verify:bundle-loading       # ?webgl never fetches three.webgpu; ?no-wasm spawns no dice
 node scripts/verify-renderer-factory.mjs
+npm run verify:shader-parity        # Dice / god-ray / vignette graphs: WebGL vs WebGPU pixel diff (no WASM needed)
 npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when baselines exist)
 ```
 
@@ -540,7 +547,7 @@ python deploy.py
 - **ColladaLoader migration is complete** — dice models now load as Draco-compressed `.glb` files from `public/images/dice/`.
 - **WASM die-to-die contacts are now SAT-based polyhedral** (Phase 3). Bounding spheres remain as a fallback when hulls are not loaded.
 - **No automated test coverage** beyond ad-hoc Playwright scripts in `tests/` and verify harnesses in `scripts/`.
-- **GodRayShader** drives the scene-space moonlight beam mesh in `TavernWalls.js` (not the fullscreen composer); WebGPU uses `GodRayNodeMaterial.js`. Toggle with `?no-godrays`.
+- **GodRayShader** drives the scene-space moonlight beam mesh in `TavernWalls.js` (not the fullscreen composer); WebGPU uses `GodRayNodeMaterial.js`, built from the same `GodRayGraph.js`. Toggle with `?no-godrays`.
 - **Roadmap** lives in [GitHub Issues](https://github.com/ford442/webgl-diceroller/issues); `plan.md` is a pointer only.
 
 ## Cursor Cloud specific instructions
