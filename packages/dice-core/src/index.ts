@@ -118,3 +118,40 @@ export {
 } from './rollHeadless.js';
 
 export { createCommit, generateNonce, verifyReveal, commitHash } from './net/CommitReveal.js';
+
+export {
+    IllegalActionError,
+    createRngRoller,
+    playGame,
+    replayGame,
+    type ActionLogEntry,
+    type GamePolicy,
+    type GameRoller,
+    type GameRules,
+    type Outcome,
+    type PlayGameOptions,
+    type PlayedGame,
+    type SeatId,
+    type SeededRng,
+    type SettledRoll,
+    type ThrowDie,
+    type ThrowRequest,
+} from './game/GameRules.js';
+
+export {
+    DEFAULT_FARKLE_CONFIG,
+    FARKLE_DICE,
+    bestFarkleScore,
+    createFarkleRules,
+    scoreFarkleKeep,
+    type FarkleAction,
+    type FarkleConfig,
+    type FarkleDie,
+    type FarklePhase,
+    type FarkleState,
+    type FarkleTurnResult,
+} from './game/Farkle.js';
+
+export { createFarkleBot, farkleRollStats, type FarkleRollStats } from './game/FarkleBot.js';
+
+export { createHeadlessRoller } from './game/headlessRoller.js';
