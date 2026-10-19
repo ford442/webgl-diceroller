@@ -9,6 +9,17 @@ import {
     type GlPowerPreference,
     type RendererPreference,
 } from './DeviceSession.js';
+import {
+    CONTEXT_PROFILES,
+    getForcedContextProfileId,
+    resolveProfileAntialias,
+    resolveProfilePostAA,
+    resolveProfilePowerPreference,
+    selectContextProfile,
+    type ContextProfile,
+    type ContextProfileSelection,
+    type ContextShadows,
+} from './ContextProfile.js';
 
 export { isXrRequested, getXrSnapDegrees } from '../xr/XrFlags.js';
 export { getRendererPreference } from './DeviceSession.js';
@@ -56,9 +67,9 @@ export function resolvePixelRatioConfig(
     };
 }
 
-/** MSAA is cheap at DPR 1; at higher DPR rely on post FXAA instead. */
+/** MSAA is cheap at DPR 1; at higher DPR rely on post FXAA instead (the desktop profile rule). */
 export function resolveAntialias(pixelRatio: number): boolean {
-    return pixelRatio <= 1.0;
+    return resolveProfileAntialias(CONTEXT_PROFILES.desktop, pixelRatio);
 }
 
 /** Renderer / adapter strings that identify a software rasterizer. */
@@ -314,16 +325,33 @@ export function getWebGlRendererParameters(options: WebGlContextAttributeOptions
 }
 
 /**
- * Lazy dice-case preview context: transparent, low-power, no MSAA. Browsers cap
- * GL contexts (8–16) and Intel / SwiftShader / Quest hit that first, so a
- * secondary canvas never asks for the high-performance slot. The #315 overlay
- * should become a sibling profile here, not another attribute object.
+ * The attribute-helper options a {@link ContextProfile} implies. `pixelRatio`
+ * resolves `msaa-at-pr1`; `sessionPowerPreference` is what the DeviceSession
+ * (plus the software probe) settled on — the profile can only lower it.
  */
-export const PREVIEW_WEBGL_CONTEXT = {
-    antialias: false,
-    alpha: true,
-    powerPreference: 'low-power',
-} as const satisfies WebGlContextAttributeOptions;
+export function getProfileContextOptions(
+    profile: ContextProfile,
+    {
+        pixelRatio = 1,
+        sessionPowerPreference = profile.powerPreference,
+    }: { pixelRatio?: number; sessionPowerPreference?: GlPowerPreference } = {}
+): Required<WebGlContextAttributeOptions> {
+    return {
+        antialias: resolveProfileAntialias(profile, pixelRatio),
+        alpha: profile.alpha,
+        powerPreference: resolveProfilePowerPreference(profile, sessionPowerPreference),
+        xrCompatible: profile.xrCompatible,
+    };
+}
+
+/**
+ * Lazy dice-case preview context: the `preview` row of CONTEXT_PROFILES
+ * (transparent, low-power, no MSAA). Browsers cap GL contexts (8–16) and
+ * Intel / SwiftShader / Quest hit that first, so a secondary canvas never asks
+ * for the high-performance slot.
+ */
+export const PREVIEW_WEBGL_CONTEXT: Readonly<Required<WebGlContextAttributeOptions>> =
+    Object.freeze(getProfileContextOptions(CONTEXT_PROFILES.preview));
 
 export function getWebGpuRendererParameters({
     antialias,
@@ -376,12 +404,17 @@ export interface CuratedWebGpuDevice {
     adapterLimits: Record<string, number> | null;
     /** From `adapter.info` — replaces the WebGL software probe on the WebGPU path. */
     isSoftware: boolean;
+    /** Human-readable adapter identity for `?renderer-info` (null when unreported). */
+    adapterDescription?: string | null;
 }
 
 export interface CuratedWebGpuFailure {
     device: null;
     reason: string;
     limitNote: string | null;
+    /** Set when the adapter was refused for being a software / fallback adapter. */
+    softwareAdapter?: boolean;
+    adapterDescription?: string | null;
 }
 
 interface AdapterInfoLike {
@@ -404,6 +437,29 @@ export function isSoftwareWebGpuAdapter(
     );
 }
 
+/** `vendor architecture device description`, deduplicated; null when the adapter reports nothing. */
+export function describeWebGpuAdapter(
+    info: AdapterInfoLike | null | undefined,
+    isFallbackAdapter = false
+): string | null {
+    const parts = [info?.vendor, info?.architecture, info?.device, info?.description]
+        .map((part) => (typeof part === 'string' ? part.trim() : ''))
+        .filter((part, index, all) => part.length > 0 && all.indexOf(part) === index);
+    const fallback = isFallbackAdapter || info?.isFallbackAdapter ? ' (fallback adapter)' : '';
+    return parts.length > 0 || fallback ? `${parts.join(' ') || 'unknown'}${fallback}` : null;
+}
+
+export interface RequestCuratedWebGpuDeviceOptions {
+    powerPreference?: GlPowerPreference;
+    /**
+     * Refuse a software / fallback adapter (SwiftShader-Vulkan, lavapipe, WARP)
+     * before any device exists, so the caller can take the classic WebGL path.
+     * WebGPU on those adapters either fails mid-init or lands on Three's WebGL2
+     * TSL backend, which never finishes loading under SwiftShader.
+     */
+    rejectSoftwareAdapter?: boolean;
+}
+
 /**
  * Request a WebGPU device with {@link getWebGpuRequiredFeatures}'s curated
  * feature list instead of letting `WebGPUBackend.init()` request every
@@ -420,7 +476,10 @@ export function isSoftwareWebGpuAdapter(
  */
 export async function requestCuratedWebGpuDevice(
     wantTimestampQuery: boolean,
-    { powerPreference = 'high-performance' }: { powerPreference?: GlPowerPreference } = {}
+    {
+        powerPreference = 'high-performance',
+        rejectSoftwareAdapter = false,
+    }: RequestCuratedWebGpuDeviceOptions = {}
 ): Promise<CuratedWebGpuDevice | CuratedWebGpuFailure | null> {
     // Cast locally rather than relying on the ambient `Navigator.gpu`
     // augmentation (src/global.d.ts) — under tsconfig.strict.json's
@@ -452,6 +511,19 @@ export async function requestCuratedWebGpuDevice(
     }
     if (!adapter) return { device: null, reason: 'no WebGPU adapter', limitNote: null };
 
+    const isFallbackAdapter = adapter.isFallbackAdapter === true;
+    const isSoftware = isSoftwareWebGpuAdapter(adapter.info, isFallbackAdapter);
+    const adapterDescription = describeWebGpuAdapter(adapter.info, isFallbackAdapter);
+    if (isSoftware && rejectSoftwareAdapter) {
+        return {
+            device: null,
+            reason: `software WebGPU adapter${adapterDescription ? ` (${adapterDescription})` : ''}`,
+            limitNote: null,
+            softwareAdapter: true,
+            adapterDescription,
+        };
+    }
+
     const adapterLimits = readAdapterLimits(adapter.limits);
     const requiredFeatures = getWebGpuRequiredFeatures(adapter.features, { wantTimestampQuery });
     let device: unknown;
@@ -465,6 +537,7 @@ export async function requestCuratedWebGpuDevice(
             device: null,
             reason: `requestDevice rejected: ${errorMessage(err)}`,
             limitNote: describeLimitMismatches(adapterLimits),
+            adapterDescription,
         };
     }
     if (!device) {
@@ -472,6 +545,7 @@ export async function requestCuratedWebGpuDevice(
             device: null,
             reason: 'requestDevice returned no device',
             limitNote: describeLimitMismatches(adapterLimits),
+            adapterDescription,
         };
     }
 
@@ -480,7 +554,8 @@ export async function requestCuratedWebGpuDevice(
         trackTimestamp: requiredFeatures.includes(WEBGPU_TIMESTAMP_QUERY_FEATURE),
         requiredFeatures,
         adapterLimits,
-        isSoftware: isSoftwareWebGpuAdapter(adapter.info, adapter.isFallbackAdapter === true),
+        isSoftware,
+        adapterDescription,
     };
 }
 
@@ -499,16 +574,26 @@ function errorMessage(err: unknown): string {
     return err instanceof Error ? err.message : String(err);
 }
 
+const SHADOW_MAP_TYPES: Record<Exclude<ContextShadows, 'off'>, THREE.ShadowMapType> = {
+    'pcf-soft': THREE.PCFSoftShadowMap,
+    pcf: THREE.PCFShadowMap,
+    basic: THREE.BasicShadowMap,
+};
+
 function applySharedRendererConfig(
     renderer: THREE.WebGLRenderer | WebGPURenderer,
     width: number,
     height: number,
-    pixelRatio: number
+    pixelRatio: number,
+    { shadows = 'pcf-soft', alpha = false }: { shadows?: ContextShadows; alpha?: boolean } = {}
 ): void {
     applyRendererSize(renderer, width, height, pixelRatio);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = shadows !== 'off';
+    renderer.shadowMap.type = SHADOW_MAP_TYPES[shadows === 'off' ? 'pcf-soft' : shadows];
+    // A transparent profile clears to alpha 0 so the page shows through;
+    // SceneSetup also drops the opaque scene.background for it.
+    if (alpha) renderer.setClearColor(0x000000, 0);
     const shadowMap = renderer.shadowMap as THREE.WebGLShadowMap;
     shadowMap.autoUpdate = false;
     shadowMap.needsUpdate = true;
@@ -534,6 +619,8 @@ export interface WebGlRendererArgs {
     fallbackReason: string | null;
     xrCompatible: boolean;
     powerPreference: GlPowerPreference;
+    alpha?: boolean;
+    shadows?: ContextShadows;
 }
 
 function createWebGlRenderer({
@@ -545,13 +632,16 @@ function createWebGlRenderer({
     fallbackReason,
     xrCompatible,
     powerPreference,
+    alpha = false,
+    shadows = 'pcf-soft',
 }: WebGlRendererArgs): WebGlRendererBundle {
     const contextAttributes = getWebGlContextAttributes({
         antialias,
         xrCompatible,
         powerPreference,
+        alpha,
     });
-    const params = getWebGlRendererParameters({ antialias, xrCompatible, powerPreference });
+    const params = getWebGlRendererParameters({ antialias, xrCompatible, powerPreference, alpha });
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('webgl2', contextAttributes);
     if (!context) {
@@ -567,7 +657,7 @@ function createWebGlRenderer({
         preserveDrawingBuffer: params.preserveDrawingBuffer,
         powerPreference: params.powerPreference,
     });
-    applySharedRendererConfig(renderer, width, height, pixelRatio);
+    applySharedRendererConfig(renderer, width, height, pixelRatio, { shadows, alpha });
 
     return {
         renderer,
@@ -586,6 +676,8 @@ export interface WebGpuRendererArgs {
     pixelRatio: number;
     powerPreference: GlPowerPreference;
     curated: CuratedWebGpuDevice;
+    alpha?: boolean;
+    shadows?: ContextShadows;
 }
 
 async function createWebGpuRenderer({
@@ -595,6 +687,8 @@ async function createWebGpuRenderer({
     pixelRatio,
     powerPreference,
     curated,
+    alpha = false,
+    shadows = 'pcf-soft',
 }: WebGpuRendererArgs): Promise<WebGPURenderer> {
     const THREE_WEBGPU = await import('three/webgpu');
     // Own the canvas here rather than letting WebGPURenderer create
@@ -602,12 +696,12 @@ async function createWebGpuRenderer({
     // XR, and a second view all need one stable element to hold on to.
     const canvas = document.createElement('canvas');
     const renderer = new THREE_WEBGPU.WebGPURenderer({
-        ...getWebGpuRendererParameters({ antialias, powerPreference }),
+        ...getWebGpuRendererParameters({ antialias, powerPreference, alpha }),
         canvas,
         device: curated.device as GPUDevice,
         trackTimestamp: curated.trackTimestamp,
     });
-    applySharedRendererConfig(renderer, width, height, pixelRatio);
+    applySharedRendererConfig(renderer, width, height, pixelRatio, { shadows, alpha });
     await renderer.init();
     return renderer;
 }
@@ -801,70 +895,117 @@ export async function createRenderer(
     const height = container.clientHeight;
     const searchParams = options.searchParams ?? new URLSearchParams(window.location.search);
     const session = options.session ?? getDeviceSession(searchParams);
-    const preferredRenderer: RendererPreference = options.forceWebGl
-        ? 'webgl'
-        : session.preferredRenderer;
     const webgpuExplicit = searchParams.has('webgpu') || searchParams.has('wgpu');
-    const xrCompatible = session.xrCompatible;
     const rendererInfo = searchParams.has('renderer-info') || searchParams.has('debug');
+
+    // A forced classic-WebGL profile (?context=software|preview|xr) never tries
+    // WebGPU; ?xr already resolves to 'webgl' in the session.
+    const forcedProfileId = getForcedContextProfileId(searchParams);
+    const forcedClassic = forcedProfileId
+        ? CONTEXT_PROFILES[forcedProfileId].classicWebGlOnly
+        : false;
+    const preferredRenderer: RendererPreference =
+        options.forceWebGl || forcedClassic ? 'webgl' : session.preferredRenderer;
 
     const pixelConfig = resolvePixelRatioConfig(searchParams);
     const pixelRatio = options.pixelRatio ?? pixelConfig.pixelRatio;
-    const antialias = options.antialias ?? resolveAntialias(pixelRatio);
 
-    const sharedMeta = {
-        pixelRatio,
-        pixelRatioForced: pixelConfig.forced,
-        pixelRatioCap: pixelConfig.cap,
-        deviceDpr: pixelConfig.deviceDpr,
-        antialias,
-        usePostAA: !antialias && pixelRatio > 1,
-        contextStatus: 'ok' as const,
-        contextMessage: null as string | null,
-        xrCompatible,
-        gpuLimitNote: null as string | null,
+    /** Profile-dependent fields every path reports the same way. */
+    const profileMeta = (
+        selection: ContextProfileSelection,
+        sessionPowerPreference: GlPowerPreference
+    ) => {
+        const { profile } = selection;
+        const contextOptions = getProfileContextOptions(profile, {
+            pixelRatio,
+            sessionPowerPreference,
+        });
+        // Recovery re-creates with the prior antialias so MSAA does not flip mid-session.
+        const antialias = options.antialias ?? contextOptions.antialias;
+        return {
+            contextOptions: {
+                ...contextOptions,
+                antialias,
+                xrCompatible: contextOptions.xrCompatible || session.xrCompatible,
+            },
+            meta: {
+                pixelRatio,
+                pixelRatioForced: pixelConfig.forced,
+                pixelRatioCap: pixelConfig.cap,
+                deviceDpr: pixelConfig.deviceDpr,
+                antialias,
+                usePostAA: resolveProfilePostAA(profile, antialias, pixelRatio),
+                contextStatus: 'ok' as const,
+                contextMessage: null as string | null,
+                xrCompatible: contextOptions.xrCompatible || session.xrCompatible,
+                gpuLimitNote: null as string | null,
+                contextProfile: profile.id,
+                contextProfileReason: selection.reason,
+                contextAlpha: profile.alpha,
+                contextPost: profile.post,
+                contextShadows: profile.shadows,
+            },
+        };
     };
 
     /**
-     * WebGL path: run the software probe (unless recovery already knows the
-     * answer) and wait for its context to be released *before* creating the
-     * tavern context, then let a software rasterizer lower the power preference.
+     * WebGL path: run the software probe (unless the answer is already known —
+     * renderer recovery, or a refused software WebGPU adapter) and wait for its
+     * context to be released *before* creating the tavern context, then let a
+     * software rasterizer pick the software profile and lower the power preference.
      */
     const buildWebGl = async (
         fallbackReason: string | null,
-        gpuLimitNote: string | null = null
+        {
+            gpuLimitNote = null,
+            knownSoftware,
+            adapterDescription = null,
+        }: {
+            gpuLimitNote?: string | null;
+            knownSoftware?: boolean;
+            adapterDescription?: string | null;
+        } = {}
     ): Promise<RendererState> => {
         let softwareProbe: SoftwareProbeResult | null = null;
-        let isSoftwareRenderer = options.isSoftwareRenderer;
+        let isSoftwareRenderer = options.isSoftwareRenderer ?? knownSoftware;
         if (isSoftwareRenderer === undefined) {
             softwareProbe = await deps.probeSoftwareWebGL();
             isSoftwareRenderer = softwareProbe.isSoftware;
         }
         const power = resolvePowerPreference(session, isSoftwareRenderer);
+        const selection = selectContextProfile({ searchParams, session, isSoftwareRenderer });
+        const { contextOptions, meta } = profileMeta(selection, power.powerPreference);
         if (rendererInfo) {
             console.info('[RendererFactory] WebGL context', {
-                powerPreference: power.powerPreference,
+                profile: selection.profile.id,
+                profileReason: selection.reason,
+                powerPreference: contextOptions.powerPreference,
                 reasons: power.reasons,
                 softwareProbe,
             });
         }
+        const bundle = deps.createWebGlRenderer({
+            antialias: contextOptions.antialias,
+            width,
+            height,
+            pixelRatio,
+            requestedRenderer: preferredRenderer,
+            fallbackReason,
+            xrCompatible: contextOptions.xrCompatible,
+            powerPreference: contextOptions.powerPreference,
+            alpha: contextOptions.alpha,
+            shadows: selection.profile.shadows,
+        });
         return {
-            ...deps.createWebGlRenderer({
-                antialias,
-                width,
-                height,
-                pixelRatio,
-                requestedRenderer: preferredRenderer,
-                fallbackReason,
-                xrCompatible,
-                powerPreference: power.powerPreference,
-            }),
-            ...sharedMeta,
+            ...bundle,
+            ...meta,
             isSoftwareRenderer,
-            glPowerPreference: power.powerPreference,
+            glPowerPreference: contextOptions.powerPreference,
             powerReasons: power.reasons,
             softwareProbe,
             gpuLimitNote,
+            sampleCount: readWebGlSampleCount(bundle.renderer),
+            adapterDescription: adapterDescription ?? softwareProbe?.renderer ?? null,
         };
     };
 
@@ -879,46 +1020,64 @@ export async function createRenderer(
     }
 
     // WebGPU path: no WebGL probe — the adapter reports software-ness itself.
+    // A software / fallback adapter goes straight to classic WebGL unless
+    // ?webgpu asked for WebGPU explicitly (that is how you test the adapter).
     const wantTimestampQuery = wantsWebGpuTimestampQuery(searchParams);
     const powerPreference = session.glPowerPreference;
     let curated: CuratedWebGpuDevice | CuratedWebGpuFailure | null = null;
     try {
-        curated = await deps.requestCuratedWebGpuDevice(wantTimestampQuery, { powerPreference });
+        curated = await deps.requestCuratedWebGpuDevice(wantTimestampQuery, {
+            powerPreference,
+            rejectSoftwareAdapter: !webgpuExplicit,
+        });
     } catch (error) {
         curated = { device: null, reason: errorMessage(error), limitNote: null };
     }
 
     if (!curated || !curated.device) {
         // Never fall through to a device-less WebGPURenderer: that is the
-        // kitchen-sink path that requests every adapter feature.
+        // kitchen-sink path that requests every adapter feature (and, with no
+        // adapter at all, Three's WebGL2 TSL backend).
         const failure = curated as CuratedWebGpuFailure | null;
         const detail = failure?.reason ?? 'navigator.gpu.requestAdapter missing';
         const limitNote = failure?.limitNote ?? null;
         const limitSuffix = limitNote ? `; ${limitNote}` : '';
         const reason = `WebGPU curated device unavailable (${detail}${limitSuffix}); using WebGLRenderer fallback.`;
-        console.warn(`[RendererFactory] ${reason}`);
-        return buildWebGl(reason, limitNote);
+        (failure?.softwareAdapter ? console.info : console.warn)(`[RendererFactory] ${reason}`);
+        return buildWebGl(reason, {
+            gpuLimitNote: limitNote,
+            knownSoftware: failure?.softwareAdapter ? true : undefined,
+            adapterDescription: failure?.adapterDescription ?? null,
+        });
     }
 
     // `device` is `unknown`, so the `!curated.device` guard above cannot narrow.
     const device = curated as CuratedWebGpuDevice;
+    const isSoftwareRenderer = options.isSoftwareRenderer ?? device.isSoftware;
+    const selection = selectContextProfile({ searchParams, session, isSoftwareRenderer });
+    const { contextOptions, meta } = profileMeta(selection, powerPreference);
     try {
         const renderer = await deps.createWebGpuRenderer({
-            antialias,
+            antialias: contextOptions.antialias,
             width,
             height,
             pixelRatio,
-            powerPreference,
+            powerPreference: contextOptions.powerPreference,
             curated: device,
+            alpha: contextOptions.alpha,
+            shadows: selection.profile.shadows,
         });
 
         if (rendererInfo) {
             console.info('[RendererFactory] WebGPU requiredLimits floor', WEBGPU_REQUIRED_LIMITS);
             console.info('[RendererFactory] WebGPU requiredFeatures', device.requiredFeatures);
             console.info('[RendererFactory] WebGPU adapter', {
-                powerPreference,
+                profile: selection.profile.id,
+                profileReason: selection.reason,
+                powerPreference: contextOptions.powerPreference,
                 reasons: session.powerReasons,
                 isSoftware: device.isSoftware,
+                adapter: device.adapterDescription ?? null,
             });
         }
 
@@ -929,11 +1088,13 @@ export async function createRenderer(
             usingWebGL: false,
             requestedRenderer: preferredRenderer,
             fallbackReason: null,
-            ...sharedMeta,
-            isSoftwareRenderer: options.isSoftwareRenderer ?? device.isSoftware,
-            glPowerPreference: powerPreference,
+            ...meta,
+            isSoftwareRenderer,
+            glPowerPreference: contextOptions.powerPreference,
             powerReasons: session.powerReasons,
             softwareProbe: null,
+            sampleCount: readWebGpuSampleCount(renderer, contextOptions.antialias),
+            adapterDescription: device.adapterDescription ?? null,
         };
     } catch (error) {
         // renderer.init() (or something before it) failed after we'd already
@@ -944,8 +1105,31 @@ export async function createRenderer(
         const limitSuffix = gpuLimitNote ? `; ${gpuLimitNote}` : '';
         const reason = `WebGPU init failed (${errorMessage(error)}${limitSuffix}); using WebGLRenderer fallback.`;
         console.warn(`[RendererFactory] ${reason}`, error);
-        return buildWebGl(reason, gpuLimitNote);
+        return buildWebGl(reason, {
+            gpuLimitNote,
+            adapterDescription: device.adapterDescription ?? null,
+        });
     }
+}
+
+/** MSAA samples of the default framebuffer (1 = none); null when unreadable (stubs, lost context). */
+function readWebGlSampleCount(
+    renderer: { getContext?: () => unknown } | null | undefined
+): number | null {
+    try {
+        const gl = renderer?.getContext?.() as WebGLRenderingContext | null | undefined;
+        if (!gl || typeof gl.getParameter !== 'function') return null;
+        const samples = Number(gl.getParameter(gl.SAMPLES));
+        return Number.isFinite(samples) ? Math.max(1, samples) : null;
+    } catch {
+        return null;
+    }
+}
+
+function readWebGpuSampleCount(renderer: unknown, antialias: boolean): number {
+    const samples = (renderer as { samples?: unknown } | null)?.samples;
+    if (typeof samples === 'number' && samples > 0) return samples;
+    return antialias ? 4 : 1;
 }
 
 /**

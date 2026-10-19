@@ -463,6 +463,117 @@ for (const [label, curatedResult] of [
     );
 }
 
+// 5. Adapter-aware fallback: a software / fallback WebGPU adapter routes to
+//    classic WebGL (no probe, software profile) unless ?webgpu asked for it.
+{
+    const dom = makeFakeDom({});
+    let seenOptions = null;
+    const { deps, calls } = makeDeps({
+        dom,
+        curatedResult: {
+            device: null,
+            reason: 'software WebGPU adapter (google swiftshader)',
+            limitNote: null,
+            softwareAdapter: true,
+            adapterDescription: 'google swiftshader',
+        },
+    });
+    const inner = deps.requestCuratedWebGpuDevice;
+    deps.requestCuratedWebGpuDevice = async (want, opts) => {
+        seenOptions = opts;
+        return inner(want, opts);
+    };
+    const state = await createRenderer(CONTAINER, {
+        session: sessionFor({}),
+        searchParams: new URLSearchParams('test'),
+        deps,
+    });
+    assert(seenOptions?.rejectSoftwareAdapter === true, 'default route refuses software adapters');
+    assert(state.rendererType === 'webgl', 'software WebGPU adapter → classic WebGL');
+    assert(calls.webgpu.length === 0, 'software WebGPU adapter → WebGPURenderer never built');
+    assert(calls.probe === 0, 'software WebGPU adapter → no extra WebGL probe');
+    assert(
+        state.isSoftwareRenderer === true && state.contextProfile === 'software',
+        'software WebGPU adapter → software profile'
+    );
+    assert(
+        state.adapterDescription === 'google swiftshader',
+        'refused adapter is surfaced in rendererState'
+    );
+}
+{
+    const dom = makeFakeDom({});
+    let seenOptions = null;
+    const { deps, calls } = makeDeps({ dom, curatedResult: { ...OK_DEVICE, isSoftware: true } });
+    const inner = deps.requestCuratedWebGpuDevice;
+    deps.requestCuratedWebGpuDevice = async (want, opts) => {
+        seenOptions = opts;
+        return inner(want, opts);
+    };
+    const state = await createRenderer(CONTAINER, {
+        session: sessionFor({}),
+        searchParams: new URLSearchParams('webgpu'),
+        deps,
+    });
+    assert(seenOptions?.rejectSoftwareAdapter === false, '?webgpu allows a software adapter');
+    assert(
+        state.rendererType === 'webgpu' && calls.webgpu.length === 1,
+        '?webgpu keeps WebGPU on a software adapter'
+    );
+}
+
+// 6. Context profiles reach the real context.
+{
+    const dom = makeFakeDom({});
+    const { deps, calls } = makeDeps({ dom, curatedResult: OK_DEVICE });
+    const state = await createRenderer(CONTAINER, {
+        session: sessionFor({}),
+        searchParams: new URLSearchParams('overlay'),
+        deps,
+    });
+    const args = calls.webgpu[0];
+    assert(
+        args?.alpha === true && args.shadows === 'off' && args.powerPreference === 'low-power',
+        '?overlay → transparent, shadowless, low-power context'
+    );
+    assert(
+        state.contextProfile === 'overlay' &&
+            state.contextAlpha === true &&
+            state.contextPost === 'none',
+        '?overlay state reports the overlay profile'
+    );
+}
+{
+    const dom = makeFakeDom({});
+    const { deps, calls } = makeDeps({ dom, curatedResult: OK_DEVICE });
+    const state = await createRenderer(CONTAINER, {
+        session: sessionFor({}),
+        searchParams: new URLSearchParams('context=software'),
+        deps,
+    });
+    assert(
+        calls.curated === 0 && state.rendererType === 'webgl',
+        '?context=software forces classic WebGL without touching WebGPU'
+    );
+    assert(
+        state.contextProfile === 'software' && /forced/.test(state.contextProfileReason ?? ''),
+        '?context=software reports a forced profile'
+    );
+}
+{
+    const dom = makeFakeDom({});
+    const { deps } = makeDeps({ dom, curatedResult: OK_DEVICE });
+    const state = await createRenderer(CONTAINER, {
+        session: sessionFor({}),
+        searchParams: new URLSearchParams('test'),
+        deps,
+    });
+    assert(
+        state.contextProfile === 'desktop' && state.contextAlpha === false,
+        'default desktop boot reports the desktop profile'
+    );
+}
+
 delete globalThis.document;
 
 if (failed > 0) {

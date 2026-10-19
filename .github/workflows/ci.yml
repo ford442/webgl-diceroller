@@ -376,6 +376,9 @@ jobs:
                     - test:wasm-gameplay-loop
                     - test:share-roll-replay
                     - test:roll-timeout
+                    # Default route (no ?webgl) on SwiftShader must reach
+                    # ready on the classic WebGLRenderer; ?overlay has alpha.
+                    - test:default-route
                     # The checked-in tavern-world fixture must match what the
                     # app registers; a moved or new prop collider fails here
                     # until `npm run fixture:world` is re-run and committed.

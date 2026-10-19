@@ -167,13 +167,14 @@ poster, gemstone, potion, d20 holder) has no named twin — give it one under
 
 [`RendererFactory.ts`](../src/core/RendererFactory.ts):
 
-| Condition                             | Renderer                                                         |
-| ------------------------------------- | ---------------------------------------------------------------- |
-| Default (browser has `navigator.gpu`) | `WebGPURenderer` + TSL post (`PostProcessing`)                   |
-| WebGPU init failure or no GPU         | Automatic fallback to `WebGLRenderer` + `EffectComposer`         |
-| `?webgl`                              | Force `WebGLRenderer` (stable baseline / CI / SwiftShader)       |
-| `?webgpu` / `?wgpu`                   | Force WebGPU explicitly (redundant with default)                 |
-| `?xr` / `?xr-emulator`                | Force `WebGLRenderer` + no-post for WebXR (see [`XR.md`](XR.md)) |
+| Condition                                                                  | Renderer                                                                                 |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Default (browser has `navigator.gpu`)                                      | `WebGPURenderer` + TSL post (`PostProcessing`)                                           |
+| WebGPU init failure or no GPU                                              | Automatic fallback to `WebGLRenderer` + `EffectComposer`                                 |
+| No adapter, or a software / fallback adapter (SwiftShader, lavapipe, WARP) | Classic `WebGLRenderer`, chosen by the factory itself — never Three's WebGL2 TSL backend |
+| `?webgl`                                                                   | Force `WebGLRenderer` (stable baseline / CI / SwiftShader)                               |
+| `?webgpu` / `?wgpu`                                                        | Force WebGPU explicitly (redundant with default)                                         |
+| `?xr` / `?xr-emulator`                                                     | Force `WebGLRenderer` + no-post for WebXR (see [`XR.md`](XR.md))                         |
 
 ### Device session (context attributes)
 
@@ -188,7 +189,25 @@ poster, gemstone, potion, d20 holder) has no named twin — give it one under
 - **Software probe** (`probeSoftwareWebGL`) only runs on the WebGL path (`?webgl`, `?xr`, no `navigator.gpu`, or a WebGPU fallback). It asks for a `low-power` WebGL2 context with `failIfMajorPerformanceCaveat` on a never-attached canvas, always calls `loseContext()`, and the tavern context is created only after its `webglcontextlost` (or a 250 ms timeout). Renderer recovery passes the known `isSoftwareRenderer` and never re-probes.
 - **Curated WebGPU device**: `requestCuratedWebGpuDevice` makes one `requestAdapter` call. If it returns no device (no adapter, `requestDevice` rejected), `createRenderer` falls back to WebGL and records the reason plus the limit note from that same adapter — it never constructs a device-less `WebGPURenderer` (which would request every adapter feature).
 - **One attribute bag**: `getWebGlContextAttributes` / `getWebGlRendererParameters` / `getWebGpuRendererParameters` take `alpha` and `powerPreference`. The tavern stays `{ alpha: false, stencil: false, xrCompatible: isXr }` (Three r181 does not forward `xrCompatible`, so the factory calls `canvas.getContext('webgl2', …)` itself). Secondary canvases use a profile (`PREVIEW_WEBGL_CONTEXT`) on the same helper rather than their own object; the #315 overlay should be another profile there. No `desynchronized: true` without a screenshot test (it fights `capturePng()`).
-- `rendererState` reports `glPowerPreference`, `powerReasons`, and `softwareProbe` (`null` when the probe did not run); `?renderer-info` logs them.
+- **Adapter-aware fallback**: on the default route, `requestCuratedWebGpuDevice` refuses a software or fallback adapter (`isFallbackAdapter`, or `adapter.info` naming SwiftShader / llvmpipe / lavapipe) _before_ any device exists, and `createRenderer` takes the classic WebGL path with `isSoftwareRenderer` already known (no second probe). `?webgpu` keeps such an adapter, which is how you test it. So a headless SwiftShader load of `/` reaches `ready` without `?webgl` (`npm run test:default-route`).
+- `rendererState` reports `glPowerPreference`, `powerReasons`, `softwareProbe` (`null` when the probe did not run), `contextProfile` / `contextProfileReason`, `adapterDescription` and `sampleCount`; `?renderer-info` logs them and the badge shows profile · pixel ratio · AA, with adapter, power reasons and fallback reason on hover.
+
+### Context profiles
+
+[`ContextProfile.ts`](../src/core/ContextProfile.ts) is the one table every context reads (`getProfileContextOptions` feeds the attribute helpers above; `PREVIEW_WEBGL_CONTEXT` is its `preview` row):
+
+| Profile    | alpha   | AA                       | powerPreference (ceiling) | shadows  | post | Notes                                                                                                                        |
+| ---------- | ------- | ------------------------ | ------------------------- | -------- | ---- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `desktop`  | no      | MSAA at pr=1, FXAA above | high-performance          | PCF soft | full | default                                                                                                                      |
+| `mobile`   | no      | FXAA                     | low-power                 | PCF      | low  | touch / coarse pointer                                                                                                       |
+| `xr`       | no      | MSAA                     | low-power                 | basic    | none | `?xr`; `xrCompatible`; classic WebGL only                                                                                    |
+| `software` | no      | MSAA at pr=1, FXAA above | low-power                 | PCF soft | low  | SwiftShader / llvmpipe; classic WebGL only. AA and shadows stay desktop until the SwiftShader render baselines are refreshed |
+| `overlay`  | **yes** | MSAA                     | low-power                 | off      | none | `?overlay` (#315): alpha-0 clear, no `scene.background`                                                                      |
+| `preview`  | yes     | none                     | low-power                 | off      | none | the dice-case canvas; never picked for the tavern                                                                            |
+
+- Selection: `?context=<profile>` forces a row (a classic-WebGL-only row skips WebGPU entirely); otherwise `xr` → `?overlay` → software rasterizer → touch → `desktop`.
+- `powerPreference` is a ceiling: the DeviceSession (touch, low cores, XR, software) may already have lowered it, and a profile can only lower it further.
+- `post` is a floor SceneSetup applies before the URL flags: `none` disables the composer, `low` forces low-quality bloom.
 
 Both renderers set `outputColorSpace = SRGBColorSpace`. WebGPU `requestDevice` uses a documented `requiredLimits` floor.
 

@@ -68,6 +68,7 @@
         "build:core": "npm run build -w dice-core",
         "test:share-roll-replay": "node tests/share-roll-replay.js",
         "test:roll-timeout": "node tests/roll-timeout.js",
+        "test:default-route": "node tests/default-route.js",
         "test:wasm-authoritative": "node tests/wasm-authoritative.js",
         "test:wasm-gameplay-loop": "node tests/wasm-gameplay-loop.mjs",
         "test:a11y": "node tests/a11y.js",
