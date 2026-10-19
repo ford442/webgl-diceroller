@@ -11,7 +11,13 @@
  */
 
 export type HudAnchor =
-    'top-right' | 'top-left' | 'bottom-left' | 'bottom-center' | 'center-left' | 'none';
+    | 'top-right'
+    | 'top-left'
+    | 'bottom-left'
+    | 'bottom-center'
+    | 'center-left'
+    | 'left-stack'
+    | 'none';
 
 export type HudPanelVariant = 'default' | 'display' | 'scrim' | 'bare';
 
@@ -22,8 +28,14 @@ export interface HudPanelOptions {
     ariaLabel: string;
     /** ARIA role for the outer element. Defaults to 'region'. */
     role?: string;
-    /** Where the panel docks. Defaults to 'none' (caller positions it). */
+    /**
+     * Where the panel docks. Defaults to 'none' (caller positions it).
+     * 'left-stack' panels share one left-edge column (see `leftStackFor`), so
+     * they stack instead of overlapping however short the window is.
+     */
     anchor?: HudAnchor;
+    /** Position within the 'left-stack' column; lower sits higher. Default 0. */
+    stackOrder?: number;
     /** Visual flavor: 'display' = serif tavern font, 'scrim' = opaque overlay, 'bare' = no chrome. */
     variant?: HudPanelVariant;
     /** Extra class names on the outer element. */
@@ -60,6 +72,23 @@ export interface HudPanel {
 
 function defaultParent(): HTMLElement {
     return document.getElementById('canvas-container') ?? document.body;
+}
+
+/**
+ * The shared left-edge column inside `parent`, created on first use. Panels
+ * anchored separately (centre-left and bottom-left) used to overlap on any
+ * window under ~900 px tall; in one flex column they stack, and the column
+ * scrolls rather than covering the help text when there is no room.
+ */
+function leftStackFor(parent: HTMLElement): HTMLElement {
+    const existing = Array.from(parent.children).find((child) =>
+        child.classList.contains('hud-left-stack')
+    );
+    if (existing) return existing as HTMLElement;
+    const stack = document.createElement('div');
+    stack.className = 'hud-left-stack';
+    parent.appendChild(stack);
+    return stack;
 }
 
 /** Stops a HUD control's mouse/touch interaction from also driving the 3D drag/orbit controls. */
@@ -119,6 +148,7 @@ export function createHudPanel(options: HudPanelOptions): HudPanel {
         onCollapseChange,
         touchUi = false,
         pointerEventsNone = false,
+        stackOrder = 0,
     } = options;
 
     const el = document.createElement('div');
@@ -170,7 +200,14 @@ export function createHudPanel(options: HudPanelOptions): HudPanel {
     }
 
     setCollapsed(isCollapsedState);
-    parent?.appendChild(el);
+    if (anchor === 'left-stack' && parent) {
+        const stack = leftStackFor(parent);
+        if (touchUi) stack.dataset.touch = 'true';
+        el.style.order = String(stackOrder);
+        stack.appendChild(el);
+    } else {
+        parent?.appendChild(el);
+    }
 
     return {
         el,

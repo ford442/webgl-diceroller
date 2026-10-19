@@ -482,7 +482,8 @@ export const initUI = (
     const helpPanel = createHudPanel({
         id: 'dice-help-panel',
         ariaLabel: touchUi ? 'Touch controls' : 'Keyboard and mouse controls',
-        anchor: 'bottom-left',
+        anchor: 'left-stack',
+        stackOrder: 1,
         touchUi,
         parent: canvasContainer,
     });

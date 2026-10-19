@@ -45,7 +45,9 @@ import {
     DYNAMICS_SAB_BYTES,
 } from './workerLayout.js';
 import { parseMassBiasRatio, parsePhysicsFlags } from './physicsFlags.js';
+import { publicAssetUrl } from '../publicAssetUrl.js';
 import { getPhysicsSearchParams, resolveWasmArtifactDir } from './wasmArtifact.js';
+import { encodeWorkerBootName } from './workerBoot.js';
 import { OP, copyIntoRing, countRecords } from './workerCommands.js';
 import { parseCollisionEventBuffer } from './collisionEvents.js';
 import type { CollisionEvent, PhysicsEngine } from './physicsTypes.js';
@@ -917,11 +919,16 @@ export const loadWasmEngine = async (): Promise<boolean> => {
         return false;
     }
 
+    let worker: Worker | null = null;
     try {
-        const worker = new Worker(new URL('./dice_physics.worker.ts', import.meta.url), {
+        worker = new Worker(new URL('./dice_physics.worker.ts', import.meta.url), {
             type: 'module',
-            name: resolveWasmArtifactDir({ searchParams: _searchParams }),
+            name: encodeWorkerBootName({
+                dir: resolveWasmArtifactDir({ searchParams: _searchParams }),
+                publicBase: publicAssetUrl(''),
+            }),
         });
+        const bootingWorker = worker;
 
         await new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error('worker boot timeout')), 15000);
@@ -940,11 +947,11 @@ export const loadWasmEngine = async (): Promise<boolean> => {
             };
             const cleanup = () => {
                 clearTimeout(timeout);
-                worker.removeEventListener('message', onReady);
-                worker.removeEventListener('error', onError);
+                bootingWorker.removeEventListener('message', onReady);
+                bootingWorker.removeEventListener('error', onError);
             };
-            worker.addEventListener('message', onReady);
-            worker.addEventListener('error', onError);
+            bootingWorker.addEventListener('message', onReady);
+            bootingWorker.addEventListener('error', onError);
         });
 
         let sab: SharedArrayBuffer | null = null;
@@ -966,6 +973,8 @@ export const loadWasmEngine = async (): Promise<boolean> => {
         );
     } catch (err) {
         console.warn('[WorkerPhysics] Worker init failed.', err);
+        // Don't leave a half-booted worker running beside the main-thread fallback.
+        worker?.terminate();
         _engine = null;
         _available = false;
     }

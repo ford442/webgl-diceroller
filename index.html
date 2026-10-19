@@ -37,7 +37,7 @@
                 max-width: 100vw;
                 max-height: 100vh;
             }
-            /* Optional centered square layout on large desktop pointers (?square forces this). */
+            /* Optional centered square layout, opt-in via ?square. */
             body.layout-square {
                 display: flex;
                 align-items: center;
@@ -92,14 +92,11 @@
         <div id="canvas-container"></div>
         <script>
             (function () {
-                var params = new URLSearchParams(location.search);
-                var square =
-                    params.has('square') ||
-                    (!params.has('fill') &&
-                        window.matchMedia(
-                            '(min-width: 1024px) and (hover: hover) and (pointer: fine)'
-                        ).matches);
-                if (square) document.body.classList.add('layout-square');
+                // Full-window by default; the boxed square view is opt-in only
+                // (?square) — as a desktop default it letterboxed the scene.
+                if (new URLSearchParams(location.search).has('square')) {
+                    document.body.classList.add('layout-square');
+                }
             })();
         </script>
         <script type="module" src="/src/main.js"></script>

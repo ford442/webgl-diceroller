@@ -16,13 +16,6 @@ export function isTouchPrimaryDevice() {
     );
 }
 
-export function prefersSquareDesktopLayout() {
-    if (searchParams.has('square')) return true;
-    if (searchParams.has('fill')) return false;
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(min-width: 1024px) and (hover: hover) and (pointer: fine)').matches;
-}
-
 export function collectDeviceQualityHints(rendererState: any = null) {
     const deviceDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
     const hardwareConcurrency =

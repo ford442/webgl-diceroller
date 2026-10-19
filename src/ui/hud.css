@@ -135,6 +135,44 @@
     transform: translateY(-50%);
 }
 
+/* One left-edge column for the Dice Case + controls help: below the roll
+   history toggle, bottom-aligned, scrolling when the window is too short. */
+.hud-left-stack {
+    position: absolute;
+    top: 56px;
+    bottom: 10px;
+    left: 10px;
+    z-index: var(--hud-z-panel);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: calc(100% - 20px);
+    overflow-y: auto;
+    pointer-events: none;
+}
+/* Bottom-align with a spacer, not justify-content: flex-end — that clips the
+   top of an overflowing column out of scroll reach. */
+.hud-left-stack::before {
+    content: '';
+    flex: 1 1 auto;
+    order: -1000;
+}
+.hud-left-stack[data-touch='true'] {
+    bottom: max(84px, calc(16px + env(safe-area-inset-bottom)));
+    left: 8px;
+}
+.hud-panel[data-hud-anchor='left-stack'] {
+    position: relative;
+    flex-shrink: 0;
+    pointer-events: auto;
+}
+/* The Dice Case gives up height first, so the controls help stays readable. */
+.hud-left-stack > .hud-panel--dice-case {
+    flex-shrink: 1;
+    min-height: 120px;
+    overflow-y: auto;
+}
+
 .hud-panel[data-hud-anchor='none'] {
     position: static;
 }
@@ -273,7 +311,6 @@
 }
 #dice-help-panel[data-touch='true'] {
     font-size: 11px;
-    bottom: max(84px, calc(16px + env(safe-area-inset-bottom)));
 }
 
 .hud-panel--dice-case {

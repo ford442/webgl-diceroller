@@ -25,7 +25,8 @@
 import { fetchAssetSource } from '../assets/AssetSource.js';
 import { loadHullTable } from './hullTable.js';
 import { SIM_FIXED_DT, SimClock } from './SimClock.js';
-import { instantiateDicePhysicsModule, WASM_SCALAR_DIR, WASM_SIMD_DIR } from './wasmArtifact.js';
+import { instantiateDicePhysicsModule } from './wasmArtifact.js';
+import { decodeWorkerBootName } from './workerBoot.js';
 import {
     MAX_DICE,
     STRIDE,
@@ -138,13 +139,15 @@ async function boot() {
     // Dynamically import the Emscripten output from public/wasm/ (or
     // public/wasm-scalar/) at runtime. The Vite-busting import lives in
     // wasmArtifact.js so SIMD vs scalar selection stays in one place.
-    const preferredDir =
-        self.name === WASM_SCALAR_DIR || self.name === WASM_SIMD_DIR ? self.name : undefined;
-    const loaded = await instantiateDicePhysicsModule({ preferredDir });
+    // The page passes its resolved public root: resolving BASE_URL from the
+    // worker's own script URL misses a subdirectory deploy (see workerBoot.ts).
+    const { dir: preferredDir, publicBase } = decodeWorkerBootName(self.name);
+    const assets = fetchAssetSource(publicBase);
+    const loaded = await instantiateDicePhysicsModule({ preferredDir, assets });
     Module = loaded.Module as DicePhysicsModule;
 
     try {
-        hulls = (await loadHullTable(fetchAssetSource())) as HullTable;
+        hulls = (await loadHullTable(assets)) as HullTable;
     } catch (err) {
         // Same degrade-and-warn policy as the in-process page bridge: the
         // table still runs, but dice collide as spheres and read face 0.
