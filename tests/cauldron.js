@@ -1,5 +1,5 @@
-const { runTest } = require('./helpers/browser');
-const { BASE } = require('./helpers/server');
+import { runTest } from './helpers/browser.js';
+import { BASE } from './helpers/server.js';
 
 // Using required params as noted in the agent docs: ?webgl&no-post&fair-dice&test
 const url = `${BASE}/?webgl&no-post&fair-dice&forceProps=Cauldron&test`;

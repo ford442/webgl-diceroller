@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defaultClientConditions, defaultServerConditions, defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -51,8 +51,24 @@ function injectCriticalPreloads() {
     };
 }
 
+/**
+ * Workspace packages (packages/dice-core) export their TypeScript sources under
+ * the `source` condition and compiled `dist/` for everyone else, so the app,
+ * its workers and vitest bundle the sources with no prebuild step.
+ */
+export const SOURCE_CONDITIONS = ['source'];
+
 export default defineConfig({
     base: './',
+    resolve: {
+        conditions: [...SOURCE_CONDITIONS, ...defaultClientConditions],
+    },
+    ssr: {
+        resolve: {
+            conditions: [...SOURCE_CONDITIONS, ...defaultServerConditions],
+            externalConditions: [...SOURCE_CONDITIONS],
+        },
+    },
     server: {
         open: process.env.BROWSER === 'none' ? false : true,
         allowedHosts: ['code.noahcohn.com', 'localhost', '127.0.0.1'],

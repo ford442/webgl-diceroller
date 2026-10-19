@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createProp, materials, mesh, STATIC_MATERIAL } from './propKit.js';
+import { createProp, mesh, STATIC_MATERIAL } from './propKit.js';
 
 export function createCandleStub(
     scene,

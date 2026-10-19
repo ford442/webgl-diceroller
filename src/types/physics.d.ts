@@ -3,7 +3,7 @@ export type {
     PhysicsEngine,
     PhysicsBridgeModule,
     CollisionEvent,
-} from '../core-engine/wasm/physicsTypes';
+} from 'dice-core/wasm/physicsTypes';
 
 /** Six floats per plane: nx, ny, nz, d (same layout as WASM setContainerPlanes). */
 export type ContainerPlanes = Float32Array | number[];

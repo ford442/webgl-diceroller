@@ -7,7 +7,7 @@ import {
     getSecureRandom,
     estimateInertiaScalar,
 } from './DicePhysicsPresets.js';
-import { presetForShape } from '../core-engine/wasm/physicsPresets.js';
+import { presetForShape } from 'dice-core/wasm/physicsPresets';
 import { acquireDiceMesh, ensureDressedTemplate, releaseDiceMesh } from './DiceModels.js';
 import { getDieShape } from './DiceSetRuntime.js';
 

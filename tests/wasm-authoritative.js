@@ -5,8 +5,8 @@
  *
  * Prereq: npm run build:js && npm run preview
  */
-const { runTest, waitForRollFinished } = require('./helpers/browser');
-const { BASE } = require('./helpers/server');
+import { runTest, waitForRollFinished } from './helpers/browser.js';
+import { BASE } from './helpers/server.js';
 
 const URL = `${BASE}/?webgl&no-post&test`;
 const LOAD_TIMEOUT_MS = 180000;

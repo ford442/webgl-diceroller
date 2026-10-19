@@ -79,6 +79,15 @@ write_build_info() {
     built_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     js_bytes="$(wc -c < "${out_dir}/dice_physics.js" | tr -d ' ')"
     wasm_bytes="$(wc -c < "${out_dir}/dice_physics.wasm" | tr -d ' ')"
+    # Content-addressed solver identity (SolverBuildId.ts): the same solver code
+    # from the same toolchain hashes the same on every deploy, and a different
+    # emcc or SIMD-vs-scalar codegen does not. The git sha stays for display.
+    local wasm_sha256
+    if command -v sha256sum >/dev/null 2>&1; then
+        wasm_sha256="$(sha256sum "${out_dir}/dice_physics.wasm" | cut -d' ' -f1)"
+    else
+        wasm_sha256="$(shasum -a 256 "${out_dir}/dice_physics.wasm" | cut -d' ' -f1)"
+    fi
 
     local simd_json="false"
     local saw_simd=0
@@ -122,6 +131,8 @@ write_build_info() {
   "flags": ${flags_json},
   "git_sha": "${git_sha}",
   "solver_revision": ${solver_revision},
+  "wasm_sha256": "${wasm_sha256}",
+  "solver_build_id": "${solver_revision}:${wasm_sha256:0:12}",
   "built_at": "${built_at}",
   "artifacts": {
     "js_bytes": ${js_bytes},

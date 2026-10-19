@@ -6,8 +6,8 @@
  *   npm run preview
  *   node tests/dicecup.js
  */
-const { chromium } = require('playwright');
-const { BASE } = require('./helpers/server');
+import { chromium } from 'playwright';
+import { BASE } from './helpers/server.js';
 
 const URL = process.env.DICE_URL || `${BASE}/?webgl&no-post&fair-dice&test`;
 

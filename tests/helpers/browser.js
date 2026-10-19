@@ -1,5 +1,5 @@
-const { chromium } = require('playwright');
-const fs = require('node:fs');
+import { chromium } from 'playwright';
+import fs from 'node:fs';
 
 const DEFAULT_ARGS = [
     '--no-sandbox',
@@ -168,7 +168,7 @@ async function waitForSettle(page, { timeout = 60000, polling = 100 } = {}) {
     }
 }
 
-module.exports = {
+export {
     launchPage,
     runTest,
     capturePng,

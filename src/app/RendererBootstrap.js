@@ -23,7 +23,7 @@ import {
     isWasmAvailable,
     readSleepDiagnostics,
 } from '../wasm/PhysicsBridge.js';
-import { awakeBodies, decodeSleepDiagnostics } from '../core-engine/wasm/sleepDiagnostics.js';
+import { awakeBodies, decodeSleepDiagnostics } from 'dice-core/wasm/sleepDiagnostics';
 import {
     createRendererBadge,
     applyLivePixelRatio,

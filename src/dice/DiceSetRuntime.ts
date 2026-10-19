@@ -20,8 +20,8 @@ import {
     withComputedId,
     type DiceSet,
     type DiceSetEntry,
-} from '../core-engine/dice/DiceSetFormat.js';
-import { LEGACY_LOOK_PARAM, LEGACY_LOOK_PARAM_ALIAS } from '../core-engine/dice/LegacyDiceLook.js';
+} from 'dice-core/dice/DiceSetFormat';
+import { LEGACY_LOOK_PARAM, LEGACY_LOOK_PARAM_ALIAS } from 'dice-core/dice/LegacyDiceLook';
 import {
     DICE_SET_PARAM,
     buildDiceSetPresencePayload,
@@ -30,7 +30,7 @@ import {
     persistDiceSet,
     resolveDiceSet,
     type DiceSetPresencePayload,
-} from '../core-engine/dice/ShareableDiceSet.js';
+} from 'dice-core/dice/ShareableDiceSet';
 
 export type DiceSetListener = (set: DiceSet, changedKeys: string[]) => void;
 

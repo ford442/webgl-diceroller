@@ -1,5 +1,5 @@
-const { runTest } = require('./helpers/browser');
-const { BASE } = require('./helpers/server');
+import { runTest } from './helpers/browser.js';
+import { BASE } from './helpers/server.js';
 
 // Mobile smoke: portrait viewport, forced touch path, responsive aspect + adaptive quality hooks.
 const url = `${BASE}/?webgl&no-post&fair-dice&touch&fill&test`;

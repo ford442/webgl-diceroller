@@ -5,7 +5,7 @@ import {
     diceSettleProbe,
     updateDiceVisuals,
 } from '../dice.js';
-import { createSettleWatch } from '../core-engine/roll/SettleWatch.js';
+import { createSettleWatch } from 'dice-core/roll/SettleWatch';
 import { prefersReducedMotion } from './AccessibilityPrefs.js';
 import { CAMERA_EYE_Y, CAMERA_LOOK_AT_Y, CAMERA_START_Z } from './SceneMetrics.js';
 
@@ -102,7 +102,7 @@ export function createCameraController(camera) {
     const settleWatch = createSettleWatch(diceSettleProbe, {
         isPaused: () => typeof document !== 'undefined' && document.hidden,
     });
-    /** @type {import('../core-engine/roll/SettleWatch.js').SettleStatus | null} */
+    /** @type {import('dice-core/roll/SettleWatch').SettleStatus | null} */
     let settleOutcome = null;
 
     function setState(newState) {

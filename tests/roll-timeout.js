@@ -9,8 +9,8 @@
  *
  * Prereq: npm run build:wasm && npm run build:js && npm run preview
  */
-const { launchPage, waitForRollFinished, settleDiagnostics } = require('./helpers/browser');
-const { BASE } = require('./helpers/server');
+import { launchPage, waitForRollFinished, settleDiagnostics } from './helpers/browser.js';
+import { BASE } from './helpers/server.js';
 
 const URL = `${BASE}/?webgl&no-post&fair-dice&test&layout-seed=1&density=med&theme=default`;
 const LOAD_TIMEOUT_MS = 180000;

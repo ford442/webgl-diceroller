@@ -9,6 +9,9 @@
 // • kinematic hold + release impulse path works through the worker command queue
 // • the step timer parks with nothing to simulate, restarts on addDie, stops
 //   ticking while the page is hidden, and resumes without replaying a backlog
+// • the worker's SimClock catches up: with its wakeup timer throttled 4×
+//   (setPhysicsTimerScale), the same throw settles in the same wall time
+//   (within 10%) — the old one-tick-per-wakeup loop took ~4× as long
 //
 // Mirrors scripts/verify-wasm-primitives.mjs.
 import { chromium } from 'playwright';
@@ -23,7 +26,9 @@ import {
     loadWasmEngine, isWasmAvailable, getWasmEngine,
     isUsingWorkerPhysics, isUsingSharedArrayBuffer,
     flushWorkerCommandBatch, getWorkerPhysicsStats, setPhysicsHidden,
+    setPhysicsTimerScale, seededPhysicsThrow,
 } from './wasm/PhysicsBridge.js';
+import { THROW_TABLE_SURFACE_Y } from 'dice-core/wasm/physicsPresets';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -152,6 +157,42 @@ export async function run() {
         resumedStats.loopRunning === true && resumedTicks > 0 && resumedTicks < 90;
     e.removeDie(idleId);
 
+    // --- Throttled wakeups: the SimClock catches up ------------------------
+    // Same world, same dice, same seeded throw (one worker command that sets
+    // every pose and velocity between two ticks) → the same tick count to
+    // settle. Wall time to settle must not scale with the timer interval.
+    const settled = () => e.getDieCount() > 0 && e.areAllSettled();
+    async function settleRun(scale) {
+        setPhysicsTimerScale(scale);
+        e.clearAllDice();
+        const ids = [e.addDie(6, -1, 2, 0), e.addDie(8, 1, 2.5, 0), e.addDie(20, 0, 3, 1)];
+        flushWorkerCommandBatch();
+        await sleep(150);
+        const tick0 = getWorkerPhysicsStats().fixedTicks;
+        const t0 = performance.now();
+        seededPhysicsThrow(0x5eed, ids.map((id, index) => ({ id, index })), THROW_TABLE_SURFACE_Y);
+        flushWorkerCommandBatch();
+        // Wait until the worker has stepped the throw (no stale "settled")…
+        while (performance.now() - t0 < 1000 && getWorkerPhysicsStats().fixedTicks - tick0 < 2) {
+            await sleep(2);
+        }
+        // …then until everything sleeps.
+        while (performance.now() - t0 < 15000 && !settled()) await sleep(2);
+        return {
+            wallMs: performance.now() - t0,
+            ticks: getWorkerPhysicsStats().fixedTicks - tick0,
+            settled: settled(),
+        };
+    }
+    const throttleNormal = await settleRun(1);
+    const throttle4x = await settleRun(4);
+    setPhysicsTimerScale(1);
+    e.clearAllDice();
+    flushWorkerCommandBatch();
+    const throttleRatio = throttle4x.wallMs / throttleNormal.wallMs;
+    const throttleCatchesUp =
+        throttleNormal.settled && throttle4x.settled && Math.abs(throttleRatio - 1) < 0.1;
+
     return {
         ok: true,
         idleWhenEmpty, runningAfterAdd, pausedWhenHidden, noTicksWhileHidden,
@@ -164,6 +205,7 @@ export async function run() {
         workerMsgsPerSecond: stats.msgsPerSecond,
         batchRecords: stats.batchRecords,
         hasKinematic, dragHeld, dragMovedOnRelease,
+        throttleNormal, throttle4x, throttleRatio, throttleCatchesUp,
     };
 }
 `;
@@ -189,7 +231,7 @@ try {
     // Any same-origin URL that is *not* the app: the module is served as a
     // plain script. (A missing path falls back to index.html and boots the
     // whole tavern in this page, which re-inits the shared physics bridge.)
-    await page.goto(`${BASE}/src/core-engine/wasm/physicsFlags.ts`, {
+    await page.goto(`${BASE}/packages/dice-core/src/wasm/physicsFlags.ts`, {
         waitUntil: 'domcontentloaded',
     });
     result = await page.evaluate(async () => {
@@ -226,6 +268,7 @@ const checks = result
           pausedWhenHidden: result.pausedWhenHidden,
           noTicksWhileHidden: result.noTicksWhileHidden,
           resumedWithoutBacklog: result.resumedWithoutBacklog,
+          throttleCatchesUp: result.throttleCatchesUp,
       }
     : { result: false };
 const failed = Object.entries(checks)

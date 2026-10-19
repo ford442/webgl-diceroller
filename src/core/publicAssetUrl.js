@@ -1,1 +1,1 @@
-export { publicAssetUrl, resolvePublicAssetUrl } from '../core-engine/publicAssetUrl.js';
+export { publicAssetUrl, resolvePublicAssetUrl } from 'dice-core/publicAssetUrl';

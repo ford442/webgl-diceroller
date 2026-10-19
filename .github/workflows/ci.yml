@@ -50,7 +50,9 @@ jobs:
             - run: npm run check:bundle-size
             - run: npm run check:deploy-size
             - run: npm run check:cycles
-            - run: npm run check:core-engine
+            - run: npm run check:dice-core
+            # App units only: this job has no WASM. packages/dice-core's tests
+            # run in unit-wasm below, with the artifacts, and never skip.
             - run: npm run test:unit:coverage
             - run: npm run audit:prop-colliders
             - run: npm run verify:renderer-factory
@@ -214,6 +216,43 @@ jobs:
             - name: CMake ↔ build.sh byte parity
               run: npm run verify:cmake-wasm
 
+    # packages/dice-core in Node with the compiled engine: rollHeadless, the
+    # golden rolls (tests/golden/rolls.json), SimClock on the real engine and
+    # the tavern-world settle check. Under $CI a missing artifact is a failing
+    # test (packages/dice-core/test/wasmGate.ts) and test:core:coverage
+    # rejects any skipped test outright, so this job cannot go green having
+    # checked nothing. It also gates the package's own coverage floor and
+    # proves the published shape: dist/ builds and imports from plain Node.
+    unit-wasm:
+        name: Unit (dice-core + WASM)
+        needs: build-wasm
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 24
+                  cache: npm
+            - run: npm ci
+            - name: Download WASM artifacts
+              uses: actions/download-artifact@v7
+              with:
+                  name: wasm-artifacts
+                  # Rooted at `public/`; see the note in the verify job.
+                  path: public
+            - run: npm run test:core:coverage
+            - run: npm run build:core
+            - name: rollHeadless from the built package, plain Node
+              run: |
+                  node --input-type=module -e "
+                    const { rollHeadless } = await import('dice-core');
+                    const r = await rollHeadless('4d6', 777);
+                    const faces = r.results.map((d) => d.naturalValue);
+                    console.log('4d6 @ 777 →', faces, r.trace.solverBuildId);
+                    if (faces.length !== 4 || faces.some((f) => f < 1 || f > 6)) process.exit(1);
+                  "
+
     test-solver-wasm-parity:
         name: Native ↔ WASM serialize parity
         needs: build-wasm
@@ -253,6 +292,9 @@ jobs:
                     # 200 seeded rolls into the recorded tavern world through
                     # the WASM build, each settling inside 12 s sim (#341).
                     - test:tavern-world
+                    # tests/golden/rolls.json reproduced in Chromium — the
+                    # browser half of the Node/browser roll contract.
+                    - verify:headless-parity
                     - verify:godrays
                     - verify:shader-parity
                     - verify:wasm-primitives

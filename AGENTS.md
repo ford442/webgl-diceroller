@@ -132,7 +132,7 @@ Initiative / turn tracking and durable multiplayer rooms are wired through **`Ap
 - [`src/session/SessionState.ts`](src/session/SessionState.ts) — seat list, current actor, last expression; `localStorage` per room code.
 - [`src/app/SessionWiring.js`](src/app/SessionWiring.js) + [`src/ui/SessionStrip.js`](src/ui/SessionStrip.js) — desktop strip (`session:initiative`, `session:turn`).
 - [`signaling/src/RoomDurableObject.js`](signaling/src/RoomDurableObject.js) — persisted room state + hibernating WebSockets; `solverBuildId` mismatch rejected at join.
-- [`src/core-engine/net/CommitReveal.ts`](src/core-engine/net/CommitReveal.ts) — SHA-256 commit-reveal when `?fair-commit` is set.
+- [`packages/dice-core/src/net/CommitReveal.ts`](packages/dice-core/src/net/CommitReveal.ts) — SHA-256 commit-reveal when `?fair-commit` is set.
 - [`src/xr/XrResultsHud.js`](src/xr/XrResultsHud.js) — world-space totals on `xrWorld`; DOM HUD hidden while presenting.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md).
@@ -179,7 +179,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MU
 - Manages the **dice focus state machine** after a roll:
   `IDLE` → `WAITING_FOR_STOP` → `FOCUSING` → `HOLDING` (2s) → `RETURNING` → `IDLE`
   When focusing, the camera dynamically calculates distance based on dice spread.
-  `WAITING_FOR_STOP` always ends: a `SettleWatch` ([`src/core-engine/roll/SettleWatch.ts`](src/core-engine/roll/SettleWatch.ts), shared with notation rolls in `RollSession`) reports `settled`, or `timedOut` after 12 s of simulated time, when the engine stops ticking with dice awake, or when the table has dice the engine never registered. A timed-out roll reads faces from the mesh orientation, marks dice that never lay flat as **cocked** in the results HUD, and offers a re-roll; `ROLL_SETTLED` carries `{ results, timedOut, reason }`.
+  `WAITING_FOR_STOP` always ends: a `SettleWatch` ([`packages/dice-core/src/roll/SettleWatch.ts`](packages/dice-core/src/roll/SettleWatch.ts), shared with notation rolls in `RollSession`) reports `settled`, or `timedOut` after 12 s of simulated time, when the engine stops ticking with dice awake, or when the table has dice the engine never registered. A timed-out roll reads faces from the mesh orientation, marks dice that never lay flat as **cocked** in the results HUD, and offers a re-roll; `ROLL_SETTLED` carries `{ results, timedOut, reason }`.
 - Exposes `app.stats` (shim `window.__renderStats` under test/debug flags) for scheduler timings / renderer info when `?debug-perf` is enabled.
 - Under `?test` / `?debug` / `?debug-perf`, installs `window.__app` (stable API) plus deprecated flat shims. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -285,14 +285,14 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 - **ESLint + Prettier** enforce a minimal ruleset (`eslint:recommended`, unused imports/vars, `eqeqeq`, import resolution). Config: [`eslint.config.js`](eslint.config.js), [`.prettierrc`](.prettierrc).
 - Run `npm run lint` before committing; CI blocks merge on lint/format failures.
-- **TypeScript policy:** `npm run typecheck` (`tsc --noEmit`, `checkJs` over remaining JS). `npm run typecheck:strict` is `strict: true` + `noUncheckedIndexedAccess` on `src/**/*.ts`. Headless seams live in [`src/core-engine/`](src/core-engine/) (WASM façade, notation, dice-set format, `rollHeadless()`); `npm run check:core-engine` fails the build if that tree imports `three` or uses `window.` / `document.`. **Environment props stay JavaScript** with JSDoc until individually migrated through `propKit`; do not bulk-convert the ~99 prop modules. `src/main.js` / `src/ui.js` / `src/results.js` stay JS until a panel kit exists. No `tsc` emit — Vite bundles `.ts` directly.
+- **TypeScript policy:** `npm run typecheck` (`tsc --noEmit`, `checkJs` over remaining JS). `npm run typecheck:strict` is `strict: true` + `noUncheckedIndexedAccess` on `src/**/*.ts`. Headless seams live in the **`dice-core` workspace package** ([`packages/dice-core/`](packages/dice-core/): WASM façade, `AssetSource`, `SimClock`, notation, dice-set format, `rollHeadless()`). Import it by package name (`dice-core`, `dice-core/wasm/…`) — ESLint rejects relative paths into `packages/dice-core/src`, and the package rejects `three` and imports back into the app. Its own tsconfig compiles with **no DOM lib** (`npm run typecheck` runs it); `npm run check:dice-core` also greps for `three` / `window.` / `document.` and re-export barrels. Vite, vitest, `tsc` and `tsx --conditions=source` read the package's TS sources (`source` export condition); plain Node reads `dist/` (`npm run build:core`). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Headless core). **Environment props stay JavaScript** with JSDoc until individually migrated through `propKit`; do not bulk-convert the ~99 prop modules. `src/main.js` / `src/ui.js` / `src/results.js` stay JS until a panel kit exists. No `tsc` emit — Vite bundles `.ts` directly.
 - Native solver tests always write `src/wasm/build-native/compile_commands.json` (`npm run test:solver`; no `bear`/`compiledb` needed), and `src/wasm/.clangd` points clangd at the _merged_ native + emcc database that `npm run wasm:clangd-db` produces. Without a local EMSDK, download the `clangd-compile-commands` artifact from CI's `wasm-toolchain` job into `src/wasm/compile_commands.json` — otherwise `__EMSCRIPTEN__` / `__wasm_simd128__` branches read as dead code in the editor. CMake also exports `compile_commands.json` (`CMAKE_EXPORT_COMPILE_COMMANDS`) and Debug builds use `emcc_flags.sh` debug profile (`-O0 -g`), not release `-O3 -flto`.
 - **C++ gates:** `npm run test:solver` compiles with `-Werror` (`SOLVER_NO_WERROR=1` to opt out locally), and `npm run lint:cpp` runs clang-tidy over `src/wasm/dice_physics/**` with `WarningsAsErrors: '*'`. The engine is clean under both, so a new diagnostic is a regression. Disabling a clang-tidy check means editing `src/wasm/.clang-tidy` with a reason next to the existing ones — not a `NOLINT` comment.
 - **Do not hand-edit CMake's source list or flags.** `engine_sources.txt` is the only place a new `dice_physics/*.cpp` gets registered, and `emcc_flags.inc.sh` is the only place flags live. CI's `wasm-toolchain` job byte-diffs CMake's `dice_physics.wasm` against `build.sh`'s, so a flag added in one place and not the other fails the build.
 - **Format on save (Cursor / VS Code):** enable Prettier as the default formatter and `"editor.formatOnSave": true` so agent edits match project style. ESLint fixes on save: `"editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" }`.
 - Optional local hook: `npm install` runs `husky` + `lint-staged` (ESLint fix + Prettier on staged `*.{js,mjs}`).
 - Prefix intentionally unused bindings with `_` (e.g. `_elapsedTime`, `catch (_e)`).
-- ES6 modules with named exports (`export function`, `export const`).
+- ES6 modules with named exports (`export function`, `export const`). The root `package.json` is `"type": "module"`: every `.js` file, including the `tests/*.js` Playwright runners, is ESM.
 - Factory functions for environment props use `camelCase`.
 - Constants are `UPPER_SNAKE_CASE`.
 - Physics-related objects store references in `userData` (e.g., `mesh.userData.body`).
@@ -311,10 +311,10 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 - Real dice lose material to recessed numbers, so the low-number face ("1") is heaviest and the high-number face is lightest.
 - The WASM engine owns the bias: each die's centre-of-mass offset is its value-1 face normal (from the face table every caller already uploads) times its hull height times `0.75%` (`DEFAULT_MASS_BIAS_RATIO`), and `integrate()` applies the resulting `r × mg` torque every substep from the solver's own orientation. Nothing in the render loop touches it — the old per-frame `applyDiceMassBiases` (frame-rate dependent, and it woke every die every frame) is gone. See "Pipping bias" in [`docs/WASM_ENGINE.md`](docs/WASM_ENGINE.md).
-- Toggle (parsed in `src/core-engine/wasm/physicsFlags.ts`, forwarded like `?no-drag`):
+- Toggle (parsed in `packages/dice-core/src/wasm/physicsFlags.ts`, forwarded like `?no-drag`):
     - `?fair-dice` disables the bias entirely (perfect Platonic-solid COM) — engine flag `FLAG_FAIR_DICE`.
     - `?bias-ratio=0.01` overrides the default magnitude (clamped to `[0, 0.05]`) — `setMassBiasRatio`.
-    - `rollHeadless()` takes `fairDice` / `massBiasRatio` options and defaults to bias on, like the app.
+    - `rollHeadless()` takes `fairDice` / `massBiasRatio` options and defaults to bias on, like the app. In Node it reads artifacts through `fsAssetSource` (repo `public/` by default); in a browser pass `assets: fetchAssetSource()`.
 
 ### Quadratic drag (air resistance)
 
@@ -468,6 +468,11 @@ npm run test:share-roll-replay   # Two page loads of the same share URL settle t
 npm run test:roll-timeout     # forceNoSettle: a roll that never settles still ends (timedOut, HUD result, re-roll)
 npm run test:a11y             # axe accessibility scan
 npm run test:audio-worklet    # AudioWorklet graph: fixed size, no main-thread oscillators, audible (no WASM needed)
+npm run test:unit             # vitest: `dice-core` project (node env) + `app` project (happy-dom)
+npm run test:core             # just packages/dice-core/test — WASM tests skip locally without a build, fail under $CI
+npm run test:core:coverage    # CI unit-wasm: dice-core coverage floor (70% lines) + no skipped tests allowed
+npm run golden:rolls          # rewrite tests/golden/rolls.json from Node (after a SOLVER_REVISION bump)
+npm run verify:headless-parity  # Chromium reproduces tests/golden/rolls.json (`-- --update` rewrites it from the browser)
 npm run test:notation         # Roll notation parser (Node, no browser)
 npm run test:share-roll       # Shareable roll encoding (Node)
 npm run test:simd-support     # WASM SIMD probe + artifact-dir picker (Node)
@@ -507,7 +512,8 @@ npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when b
 
 - **Every job has a `timeout-minutes`.** GitHub's default is six hours. Keep new jobs at 15 minutes so a hang fails fast instead of burning the account's CI budget. Current exceptions: 20 for `test-solver` (the fuzz run plus a clang-tidy pass), and 30 for `build-wasm`, `render-regression`, and `wasm-toolchain` (the last links both wasm profiles twice for the CMake parity diff).
 
-- `test:wasm-gameplay-loop`, `test:wasm-authoritative`, `test:share-roll-replay`, `test:roll-timeout` and `check:world-fixture` run in CI (`verify-tests` matrix); `verify:worker-replay`, `verify:tower-drop-replay` and `test:tavern-world` run in the `verify` matrix. All of them need the `wasm-artifacts` build (`npm run build:wasm`) to exercise the WASM-authoritative path rather than skipping.
+- `test:wasm-gameplay-loop`, `test:wasm-authoritative`, `test:share-roll-replay`, `test:roll-timeout` and `check:world-fixture` run in CI (`verify-tests` matrix); `verify:worker-replay`, `verify:tower-drop-replay`, `verify:headless-parity` and `test:tavern-world` run in the `verify` matrix.
+- **Unit tests in two vitest projects.** `build-js` runs only the `app` project (`tests/unit/`, happy-dom, no WASM). The `unit-wasm` job (needs `build-wasm`) runs the `dice-core` project (`packages/dice-core/test/`, node env) with the artifacts: under `$CI` a missing artifact is a failing test ([`wasmGate.ts`](packages/dice-core/test/wasmGate.ts)), `test:core:coverage` rejects any skipped test, and the job imports `rollHeadless` from the built `dist/` in plain Node. Put a test that needs only `dice-core` under `packages/dice-core/test/`, and wrap anything that needs the compiled engine in `describeWasm` — never `it.skipIf(!hasWasm)`. All of them need the `wasm-artifacts` build (`npm run build:wasm`) to exercise the WASM-authoritative path rather than skipping.
 - **Settle waits.** Use `waitForRollFinished()` (a roll's own `settled | timedOut`, via `__app.getRollState()`) or `waitForSettle()` from [`tests/helpers/browser.js`](tests/helpers/browser.js) — never a hand-rolled `waitForFunction(areDiceSettled)`. `ready` fires before a share-URL replay spawns its dice, so `areDiceSettled()` alone can pass on an empty table, and both helpers append the engine's sleep diagnostics to a timeout.
 
 **Automation hooks** (require `?test`, `?debug`, or `?debug-perf`):

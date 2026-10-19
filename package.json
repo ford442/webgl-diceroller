@@ -1,6 +1,13 @@
 {
+    "name": "webgl-diceroller",
+    "private": true,
+    "type": "module",
+    "workspaces": [
+        "packages/*"
+    ],
     "dependencies": {
-        "three": "^0.181.2"
+        "three": "^0.181.2",
+        "dice-core": "0.1.0"
     },
     "scripts": {
         "dev": "vite",
@@ -11,7 +18,7 @@
         "check:bundle-size": "node scripts/check-bundle-size.mjs",
         "check:deploy-size": "node scripts/check-deploy-size.mjs",
         "check:cycles": "madge --circular --extensions js,ts src/",
-        "check:core-engine": "node scripts/check-core-engine-isolation.mjs",
+        "check:dice-core": "node scripts/check-dice-core-isolation.mjs",
         "verify:bundle-loading": "node scripts/verify-bundle-loading.mjs",
         "audit:prop-colliders": "node scripts/prop-collider-audit.mjs",
         "verify:pwa-isolation": "node scripts/verify-pwa-isolation.mjs",
@@ -27,8 +34,8 @@
         "convert:props": "node scripts/convert-props.mjs",
         "optimize:fallback-jpgs": "node scripts/reencode-fallback-jpgs.mjs",
         "verify:worker-physics": "node scripts/verify-worker-physics.mjs",
-        "verify:worker-replay": "tsx scripts/verify-worker-replay.mjs",
-        "verify:tower-drop-replay": "tsx scripts/verify-tower-drop-replay.mjs",
+        "verify:worker-replay": "tsx --conditions=source scripts/verify-worker-replay.mjs",
+        "verify:tower-drop-replay": "tsx --conditions=source scripts/verify-tower-drop-replay.mjs",
         "verify:godrays": "node scripts/verify-godrays.mjs",
         "verify:shader-parity": "node scripts/verify-shader-parity.mjs",
         "verify:clutter-unification": "node scripts/verify-clutter-unification.mjs",
@@ -36,8 +43,8 @@
         "verify:wasm-interaction": "node scripts/verify-wasm-interaction.mjs",
         "verify:render-regression": "node scripts/render-regression.mjs && node scripts/compare-render-baseline.mjs",
         "verify:cmake-wasm": "bash scripts/verify-cmake-wasm-parity.sh",
-        "verify:renderer-factory": "tsx scripts/verify-renderer-factory.mjs",
-        "typecheck": "tsc --noEmit",
+        "verify:renderer-factory": "tsx --conditions=source scripts/verify-renderer-factory.mjs",
+        "typecheck": "tsc --noEmit && tsc -p packages/dice-core/tsconfig.json --noEmit",
         "typecheck:strict": "tsc -p tsconfig.strict.json --noEmit",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
@@ -53,7 +60,12 @@
         "test:dicecup": "node tests/dicecup.js",
         "test:mobile-touch": "node tests/mobile-touch.js",
         "test:unit": "vitest run",
-        "test:unit:coverage": "vitest run --coverage",
+        "test:unit:coverage": "vitest run --project app --coverage",
+        "test:core": "vitest run --project dice-core",
+        "test:core:coverage": "DICE_CORE_COVERAGE=1 vitest run --project dice-core --coverage --reporter=default --reporter=json --outputFile.json=coverage/dice-core-results.json && node scripts/assert-no-skipped-tests.mjs coverage/dice-core-results.json",
+        "golden:rolls": "tsx --conditions=source scripts/generate-roll-goldens.mjs",
+        "verify:headless-parity": "tsx --conditions=source scripts/verify-headless-parity.mjs",
+        "build:core": "npm run build -w dice-core",
         "test:share-roll-replay": "node tests/share-roll-replay.js",
         "test:roll-timeout": "node tests/roll-timeout.js",
         "test:wasm-authoritative": "node tests/wasm-authoritative.js",
@@ -61,7 +73,7 @@
         "test:a11y": "node tests/a11y.js",
         "fixture:world": "node scripts/export-collider-fixture.mjs",
         "check:world-fixture": "node scripts/export-collider-fixture.mjs --check",
-        "test:tavern-world": "TAVERN_SEEDS=200 vitest run tests/unit/tavernWorldSettle.test.ts",
+        "test:tavern-world": "TAVERN_SEEDS=200 vitest run --project dice-core packages/dice-core/test/tavernWorldSettle.test.ts",
         "test:audio-worklet": "node tests/audio-worklet.js",
         "test:solver": "bash src/wasm/build_solver_test.sh",
         "signal:dev": "npm --prefix signaling run dev",

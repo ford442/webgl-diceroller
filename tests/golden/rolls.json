@@ -1,0 +1,508 @@
+{
+    "version": 1,
+    "solverRevision": 10,
+    "dt": 0.008333333333333333,
+    "generatedBy": "node",
+    "vectors": [
+        {
+            "expression": "1d4",
+            "seed": 1,
+            "world": "plane",
+            "faces": [4],
+            "values": [4],
+            "opposed": null,
+            "total": 4,
+            "steps": 417
+        },
+        {
+            "expression": "1d6",
+            "seed": 2,
+            "world": "plane",
+            "faces": [3],
+            "values": [3],
+            "opposed": null,
+            "total": 3,
+            "steps": 308
+        },
+        {
+            "expression": "1d8",
+            "seed": 3,
+            "world": "plane",
+            "faces": [7],
+            "values": [7],
+            "opposed": null,
+            "total": 7,
+            "steps": 349
+        },
+        {
+            "expression": "1d10",
+            "seed": 4,
+            "world": "plane",
+            "faces": [8],
+            "values": [8],
+            "opposed": null,
+            "total": 8,
+            "steps": 590
+        },
+        {
+            "expression": "1d12",
+            "seed": 5,
+            "world": "plane",
+            "faces": [7],
+            "values": [7],
+            "opposed": null,
+            "total": 7,
+            "steps": 688
+        },
+        {
+            "expression": "1d20",
+            "seed": 6,
+            "world": "plane",
+            "faces": [4],
+            "values": [4],
+            "opposed": null,
+            "total": 4,
+            "steps": 523
+        },
+        {
+            "expression": "1d2",
+            "seed": 7,
+            "world": "plane",
+            "faces": [5],
+            "values": [1],
+            "opposed": null,
+            "total": 1,
+            "steps": 370
+        },
+        {
+            "expression": "1d3",
+            "seed": 8,
+            "world": "plane",
+            "faces": [5],
+            "values": [2],
+            "opposed": null,
+            "total": 2,
+            "steps": 412
+        },
+        {
+            "expression": "1d5",
+            "seed": 9,
+            "world": "plane",
+            "faces": [4],
+            "values": [4],
+            "opposed": null,
+            "total": 4,
+            "steps": 498
+        },
+        {
+            "expression": "4dF",
+            "seed": 10,
+            "world": "plane",
+            "faces": [5, 4, 6, 5],
+            "values": [0, -1, 1, 0],
+            "opposed": null,
+            "total": 0,
+            "steps": 427
+        },
+        {
+            "expression": "1d100",
+            "seed": 11,
+            "world": "plane",
+            "faces": [8, 4],
+            "values": [8, 4],
+            "opposed": null,
+            "total": 84,
+            "steps": 676
+        },
+        {
+            "expression": "1d%",
+            "seed": 12,
+            "world": "plane",
+            "faces": [8, 4],
+            "values": [8, 4],
+            "opposed": null,
+            "total": 84,
+            "steps": 631
+        },
+        {
+            "expression": "4d6",
+            "seed": 777,
+            "world": "plane",
+            "faces": [3, 4, 6, 5],
+            "values": [3, 4, 6, 5],
+            "opposed": null,
+            "total": 18,
+            "steps": 386
+        },
+        {
+            "expression": "2d20",
+            "seed": 5,
+            "world": "plane",
+            "faces": [7, 6],
+            "values": [7, 6],
+            "opposed": null,
+            "total": 13,
+            "steps": 501
+        },
+        {
+            "expression": "1d20+1d6",
+            "seed": 3,
+            "world": "plane",
+            "faces": [7, 3],
+            "values": [7, 3],
+            "opposed": null,
+            "total": 10,
+            "steps": 449
+        },
+        {
+            "expression": "3d8+2d10",
+            "seed": 99,
+            "world": "plane",
+            "faces": [2, 7, 5, 4, 4],
+            "values": [2, 7, 5, 4, 4],
+            "opposed": null,
+            "total": 22,
+            "steps": 580
+        },
+        {
+            "expression": "4d4",
+            "seed": 13,
+            "world": "plane",
+            "faces": [3, 3, 3, 3],
+            "values": [3, 3, 3, 3],
+            "opposed": null,
+            "total": 12,
+            "steps": 433
+        },
+        {
+            "expression": "2d12",
+            "seed": 14,
+            "world": "plane",
+            "faces": [8, 7],
+            "values": [8, 7],
+            "opposed": null,
+            "total": 15,
+            "steps": 750
+        },
+        {
+            "expression": "6d6",
+            "seed": 15,
+            "world": "plane",
+            "faces": [3, 1, 6, 5, 3, 5],
+            "values": [3, 1, 6, 5, 3, 5],
+            "opposed": null,
+            "total": 23,
+            "steps": 417
+        },
+        {
+            "expression": "1d4+1d6+1d8+1d10+1d12+1d20",
+            "seed": 16,
+            "world": "plane",
+            "faces": [2, 5, 8, 10, 7, 9],
+            "values": [2, 5, 8, 10, 7, 9],
+            "opposed": null,
+            "total": 41,
+            "steps": 874
+        },
+        {
+            "expression": "10d6",
+            "seed": 17,
+            "world": "plane",
+            "faces": [3, 3, 4, 6, 1, 1, 3, 2, 4, 5],
+            "values": [3, 3, 4, 6, 1, 1, 3, 2, 4, 5],
+            "opposed": null,
+            "total": 32,
+            "steps": 510
+        },
+        {
+            "expression": "3d20",
+            "seed": 18,
+            "world": "plane",
+            "faces": [7, 16, 9],
+            "values": [7, 16, 9],
+            "opposed": null,
+            "total": 32,
+            "steps": 604
+        },
+        {
+            "expression": "5d10",
+            "seed": 19,
+            "world": "plane",
+            "faces": [4, 2, 5, 2, 5],
+            "values": [4, 2, 5, 2, 5],
+            "opposed": null,
+            "total": 18,
+            "steps": 659
+        },
+        {
+            "expression": "2d8+3",
+            "seed": 20,
+            "world": "plane",
+            "faces": [4, 2],
+            "values": [4, 2],
+            "opposed": null,
+            "total": 9,
+            "steps": 419
+        },
+        {
+            "expression": "1d20+7",
+            "seed": 21,
+            "world": "plane",
+            "faces": [11],
+            "values": [11],
+            "opposed": null,
+            "total": 18,
+            "steps": 600
+        },
+        {
+            "expression": "4d6kh3",
+            "seed": 22,
+            "world": "plane",
+            "faces": [4, 1, 5, 6],
+            "values": [4, 1, 5, 6],
+            "opposed": null,
+            "total": 15,
+            "steps": 430
+        },
+        {
+            "expression": "4d6dl1",
+            "seed": 23,
+            "world": "plane",
+            "faces": [1, 1, 4, 2],
+            "values": [1, 1, 4, 2],
+            "opposed": null,
+            "total": 7,
+            "steps": 416
+        },
+        {
+            "expression": "2d20kh1",
+            "seed": 24,
+            "world": "plane",
+            "faces": [7, 10],
+            "values": [7, 10],
+            "opposed": null,
+            "total": 10,
+            "steps": 543
+        },
+        {
+            "expression": "2d20kl1",
+            "seed": 25,
+            "world": "plane",
+            "faces": [17, 17],
+            "values": [17, 17],
+            "opposed": null,
+            "total": 17,
+            "steps": 563
+        },
+        {
+            "expression": "4d6dh1",
+            "seed": 26,
+            "world": "plane",
+            "faces": [3, 6, 2, 3],
+            "values": [3, 6, 2, 3],
+            "opposed": null,
+            "total": 8,
+            "steps": 435
+        },
+        {
+            "expression": "3d6!",
+            "seed": 27,
+            "world": "plane",
+            "faces": [5, 1, 5],
+            "values": [5, 1, 5],
+            "opposed": null,
+            "total": 11,
+            "steps": 432
+        },
+        {
+            "expression": "2d6!!",
+            "seed": 28,
+            "world": "plane",
+            "faces": [1, 6, 6, 3],
+            "values": [1, 6, 6, 3],
+            "opposed": null,
+            "total": 16,
+            "steps": 1093
+        },
+        {
+            "expression": "4d6r1",
+            "seed": 29,
+            "world": "plane",
+            "faces": [3, 5, 1, 6, 3],
+            "values": [3, 5, 1, 6, 3],
+            "opposed": null,
+            "total": 17,
+            "steps": 690
+        },
+        {
+            "expression": "8d6r2",
+            "seed": 30,
+            "world": "plane",
+            "faces": [5, 3, 3, 3, 6, 4, 5, 2, 4],
+            "values": [5, 3, 3, 3, 6, 4, 5, 2, 4],
+            "opposed": null,
+            "total": 33,
+            "steps": 834
+        },
+        {
+            "expression": "2d10!",
+            "seed": 31,
+            "world": "plane",
+            "faces": [4, 4],
+            "values": [4, 4],
+            "opposed": null,
+            "total": 8,
+            "steps": 548
+        },
+        {
+            "expression": "1d20+5 vs 1d20+2",
+            "seed": 32,
+            "world": "plane",
+            "faces": [14],
+            "values": [14],
+            "opposed": [9],
+            "total": 19,
+            "steps": 967
+        },
+        {
+            "expression": "2d6 vs 1d12",
+            "seed": 33,
+            "world": "plane",
+            "faces": [6, 6],
+            "values": [6, 6],
+            "opposed": [10],
+            "total": 12,
+            "steps": 1018
+        },
+        {
+            "expression": "1d20",
+            "seed": 0,
+            "world": "plane",
+            "faces": [13],
+            "values": [13],
+            "opposed": null,
+            "total": 13,
+            "steps": 619
+        },
+        {
+            "expression": "1d20",
+            "seed": 4294967295,
+            "world": "plane",
+            "faces": [4],
+            "values": [4],
+            "opposed": null,
+            "total": 4,
+            "steps": 530
+        },
+        {
+            "expression": "1d20",
+            "seed": 2654435769,
+            "world": "plane",
+            "faces": [13],
+            "values": [13],
+            "opposed": null,
+            "total": 13,
+            "steps": 401
+        },
+        {
+            "expression": "3d6",
+            "seed": 1234567,
+            "world": "plane",
+            "faces": [4, 5, 3],
+            "values": [4, 5, 3],
+            "opposed": null,
+            "total": 12,
+            "steps": 409
+        },
+        {
+            "expression": "3d6",
+            "seed": 7654321,
+            "world": "plane",
+            "faces": [6, 1, 5],
+            "values": [6, 1, 5],
+            "opposed": null,
+            "total": 12,
+            "steps": 363
+        },
+        {
+            "expression": "2d20",
+            "seed": 3735928559,
+            "world": "plane",
+            "faces": [9, 6],
+            "values": [9, 6],
+            "opposed": null,
+            "total": 15,
+            "steps": 603
+        },
+        {
+            "expression": "1d6+1d8",
+            "seed": 424242,
+            "world": "plane",
+            "faces": [1, 5],
+            "values": [1, 5],
+            "opposed": null,
+            "total": 6,
+            "steps": 425
+        },
+        {
+            "expression": "1d20",
+            "seed": 101,
+            "world": "tavern",
+            "faces": [14],
+            "values": [14],
+            "opposed": null,
+            "total": 14,
+            "steps": 356
+        },
+        {
+            "expression": "1d20+1d6",
+            "seed": 102,
+            "world": "tavern",
+            "faces": [2, 5],
+            "values": [2, 5],
+            "opposed": null,
+            "total": 7,
+            "steps": 409
+        },
+        {
+            "expression": "1d4+1d8+1d12",
+            "seed": 103,
+            "world": "tavern",
+            "faces": [2, 4, 8],
+            "values": [2, 4, 8],
+            "opposed": null,
+            "total": 14,
+            "steps": 565
+        },
+        {
+            "expression": "2d6+1d10",
+            "seed": 104,
+            "world": "tavern",
+            "faces": [6, 2, 4],
+            "values": [6, 2, 4],
+            "opposed": null,
+            "total": 12,
+            "steps": 520
+        },
+        {
+            "expression": "3d6+2d20",
+            "seed": 105,
+            "world": "tavern",
+            "faces": [1, 5, 1, 12, 7],
+            "values": [1, 5, 1, 12, 7],
+            "opposed": null,
+            "total": 26,
+            "steps": 412
+        },
+        {
+            "expression": "4dF",
+            "seed": 106,
+            "world": "tavern",
+            "faces": [3, 5, 4, 6],
+            "values": [1, 0, -1, 1],
+            "opposed": null,
+            "total": 1,
+            "steps": 302
+        }
+    ]
+}

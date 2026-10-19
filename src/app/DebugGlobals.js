@@ -10,10 +10,7 @@ import {
     getWorldRecorder,
     readSleepDiagnostics,
 } from '../wasm/PhysicsBridge.js';
-import {
-    decodeSleepDiagnostics,
-    summarizeSleepDiagnostics,
-} from '../core-engine/wasm/sleepDiagnostics.js';
+import { decodeSleepDiagnostics, summarizeSleepDiagnostics } from 'dice-core/wasm/sleepDiagnostics';
 import { spawnedDice, setForceNoSettle } from '../dice.js';
 import { AppEvent } from '../core/AppEvents.js';
 

@@ -1,6 +1,7 @@
 /**
- * Regression guard: vitest.config.js's `test.include` glob must match every
- * `*.test.*` file actually present under tests/unit/. The include used to be
+ * Regression guard: each vitest project's `include` glob must match every
+ * `*.test.*` file actually present under its directory (tests/unit/ for the
+ * app, packages/dice-core/test/ for the core). The include used to be
  * hardcoded to `**\/*.test.js`, so a `tests/unit/foo.test.ts` file silently
  * ran zero tests (vitest reports success having executed nothing) instead of
  * failing loudly. This test fails the moment a new test-file extension shows
@@ -10,10 +11,18 @@ import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import vitestConfig from '../../vitest.config.js';
+import { APP_INCLUDE, DICE_CORE_INCLUDE } from '../../vitest.config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const unitDir = path.resolve(__dirname);
+const REPO_ROOT = path.resolve(__dirname, '../..');
+const PROJECTS = [
+    { name: 'app', dir: path.join(REPO_ROOT, 'tests/unit'), include: APP_INCLUDE },
+    {
+        name: 'dice-core',
+        dir: path.join(REPO_ROOT, 'packages/dice-core/test'),
+        include: DICE_CORE_INCLUDE,
+    },
+];
 
 function listTestFiles(dir) {
     const files = [];
@@ -35,19 +44,20 @@ function extensionsFromIncludeGlob(include) {
 }
 
 describe('vitest include glob', () => {
-    it('covers the extension of every *.test.* file under tests/unit/', () => {
-        const includePatterns = vitestConfig.test.include;
-        expect(Array.isArray(includePatterns)).toBe(true);
+    for (const project of PROJECTS) {
+        it(`covers the extension of every *.test.* file in the ${project.name} project`, () => {
+            expect(Array.isArray(project.include)).toBe(true);
 
-        const coveredExtensions = new Set(includePatterns.flatMap(extensionsFromIncludeGlob));
-        const testFiles = listTestFiles(unitDir);
-        expect(testFiles.length).toBeGreaterThan(0);
+            const coveredExtensions = new Set(project.include.flatMap(extensionsFromIncludeGlob));
+            const testFiles = listTestFiles(project.dir);
+            expect(testFiles.length).toBeGreaterThan(0);
 
-        const uncovered = testFiles.filter((name) => {
-            const ext = name.split('.').pop();
-            return !coveredExtensions.has(ext);
+            const uncovered = testFiles.filter((name) => {
+                const ext = name.split('.').pop();
+                return !coveredExtensions.has(ext);
+            });
+
+            expect(uncovered).toEqual([]);
         });
-
-        expect(uncovered).toEqual([]);
-    });
+    }
 });
