@@ -138,6 +138,11 @@ Initiative / turn tracking and durable multiplayer rooms are wired through **`Ap
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md).
 
+### Table games
+
+- Games are pure `GameRules` modules in `dice-core` ([`packages/dice-core/src/game/`](packages/dice-core/src/game/)): no Three, no DOM, no scene reads. Physics supplies a `SettledRoll`; `apply` is pure; a game replays from `(seats, seed, action log)`. Farkle and its expected-value bot are the first; play one headlessly with `playGame` + `createRngRoller` (no WASM) or `createHeadlessRoller` (real solver).
+- New games go next to `Farkle.ts` with `fast-check` property tests under `packages/dice-core/test/`. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Table games).
+
 ## Architecture Details
 
 ### Audio system

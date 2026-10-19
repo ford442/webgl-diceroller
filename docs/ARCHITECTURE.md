@@ -67,6 +67,17 @@ Assets reach the core through one seam, [`AssetSource`](../packages/dice-core/sr
 
 `tests/golden/rolls.json` pins 50 `(expression, seed, world) → faces` vectors (every hull and derived face sequence, keep/drop/explode/reroll, opposed rolls, six rolls into the recorded tavern world). The dice-core vitest project asserts it in Node; `npm run verify:headless-parity` asserts the same file in Chromium (`-- --update` rewrites it from the browser, `npm run golden:rolls` from Node). Regenerate after a `SOLVER_REVISION` bump or a re-exported `tests/fixtures/tavern-world.json`. The page still imports [`src/wasm/PhysicsBridge.ts`](../src/wasm/PhysicsBridge.ts) for collider helpers that need `THREE.Object3D`.
 
+### Table games: `GameRules` (`packages/dice-core/src/game/`)
+
+A game is a pure rules module in the headless core, [`GameRules<S, A, V>`](../packages/dice-core/src/game/GameRules.ts): `init(seats, rng)`, `toAct`, `legalActions`, `throwFor(state, action)` (which dice an action throws, by stable die id), `apply(state, action, roll?)`, `view(state, seat)` and `outcome`. Rules never read the scene or a clock: a roller supplies a `SettledRoll` (`faces` index-aligned with the throw request, plus the physics seed), and `apply` returns a new state or throws `IllegalActionError`.
+
+- `playGame({ rules, seats, seed, policies, roller, createRng })` drives a game to its outcome and returns the action log; throw seeds come from the game's own RNG, so `(seats, seed)` plus deterministic policies and roller reproduce the same log. `replayGame(rules, seats, rng, log)` rebuilds the state from the log with no physics.
+- Rollers: `createRngRoller(createSeededRng)` (uniform faces, no WASM — unit and property tests) and `createHeadlessRoller()` (each throw is a `rollHeadless()` of the requested dice — the same solver as the table).
+- [`Farkle.ts`](../packages/dice-core/src/game/Farkle.ts) is the first game (six d6, held dice + partial re-throws, final round once a seat banks to the target, `maxRounds` hard stop). [`FarkleBot.ts`](../packages/dice-core/src/game/FarkleBot.ts) is a one-step expected-value bot built on the exact bust odds of n dice (`farkleRollStats`).
+- Tests: `packages/dice-core/test/farkle.test.ts` (scoring table; `fast-check` properties — the turn score never drops mid-turn, a bust zeroes it, random play terminates and replays from its log) and `farkleHeadless.test.ts` (bot vs bot on `rollHeadless`, under 30 s; `describeWasm`).
+
+The table side — dice parked in the jail as held, subset throws in share links and the multiplayer protocol, a HUD panel — is the next slice of the games roadmap; nothing in `src/` consumes `GameRules` yet.
+
 ### Test / debug hooks
 
 Under `?test`, `?debug`, or `?debug-perf`, [`AppTestHooks.js`](../src/core/AppTestHooks.js) installs **`window.__app`** — the stable documented API for Playwright and manual debugging.
