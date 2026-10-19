@@ -1,4 +1,4 @@
-import type { PhysicsPreset } from './physicsPresets';
+import type { PhysicsPreset } from 'dice-core/types/physicsPresets';
 
 export type DieTypeId = 'd4' | 'd6' | 'd8' | 'd10' | 'd12' | 'd20' | 'd100';
 

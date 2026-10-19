@@ -26,10 +26,11 @@ export {
     setContainerActive,
     setContainerPlanes,
     setPhysicsHidden,
-} from '../core-engine/wasm/PhysicsBridge.js';
+    setPhysicsTimerScale,
+} from 'dice-core/wasm/PhysicsBridge';
 
 import type { Object3D } from 'three';
-import { getWasmEngine, isWasmAvailable } from '../core-engine/wasm/PhysicsBridge.js';
+import { getWasmEngine, isWasmAvailable } from 'dice-core/wasm/PhysicsBridge';
 import { addDynamicColliderForEngine, removeDynamicColliderForEngine } from './dynamicColliders.js';
 import {
     addStaticColliderForEngine,

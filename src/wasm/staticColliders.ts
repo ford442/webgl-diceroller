@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { PhysicsEngine } from '../core-engine/wasm/physicsTypes.js';
+import type { PhysicsEngine } from 'dice-core/wasm/physicsTypes';
 import type { StaticColliderSpec } from '../types/staticCollider.js';
 
 /** @enum {number} */

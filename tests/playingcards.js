@@ -1,5 +1,5 @@
-const { runTest } = require('./helpers/browser');
-const { BASE } = require('./helpers/server');
+import { runTest } from './helpers/browser.js';
+import { BASE } from './helpers/server.js';
 
 // E2E: PlayingCards are present AND interactive (clicking draws/flips a card).
 // `forceProps=PlayingCards` guarantees the randomPool prop spawns regardless of seed.

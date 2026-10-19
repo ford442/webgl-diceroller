@@ -1,8 +1,5 @@
 import * as THREE from 'three';
-import {
-    DIE_PHYSICS_PRESETS,
-    getDieSides as coreGetDieSides,
-} from '../core-engine/wasm/physicsPresets.js';
+import { DIE_PHYSICS_PRESETS, getDieSides as coreGetDieSides } from 'dice-core/wasm/physicsPresets';
 import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
 
 /** WASM is the only dice physics backend; kept as a named check since callers

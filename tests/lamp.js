@@ -1,6 +1,6 @@
-const fs = require('fs');
-const { launchPage } = require('./helpers/browser');
-const { BASE, HOST } = require('./helpers/server');
+import fs from 'node:fs';
+import { launchPage } from './helpers/browser.js';
+import { BASE, HOST } from './helpers/server.js';
 
 /**
  * Verification script for the fixed billiard lamp.

@@ -1,0 +1,21 @@
+{
+    // The package boundary, enforced by the compiler: no DOM lib, so a
+    // `document` / `window` / `HTMLElement` reference is a type error here
+    // rather than a grep hit in check:core-engine. Host APIs the engine does
+    // use (fetch, Worker, timers, the worker global) are declared once, at the
+    // width the engine needs them, in src/host.d.ts.
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "customConditions": ["source"],
+        "lib": ["ES2022"],
+        "types": ["node"],
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "isolatedModules": true,
+        "skipLibCheck": true,
+        "noEmit": true
+    },
+    "include": ["src/**/*.ts"]
+}

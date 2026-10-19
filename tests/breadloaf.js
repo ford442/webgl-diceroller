@@ -1,6 +1,6 @@
-const { runTest, capturePng } = require('./helpers/browser');
-const { BASE } = require('./helpers/server');
-const fs = require('fs');
+import { runTest, capturePng } from './helpers/browser.js';
+import { BASE } from './helpers/server.js';
+import fs from 'node:fs';
 
 const url = `${BASE}/?webgl&no-post&fair-dice&forceProps=BreadLoaf&test`;
 

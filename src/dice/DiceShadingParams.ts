@@ -15,7 +15,7 @@ import type {
     InclusionType,
     MarkingStyle,
     MaterialPresetId,
-} from '../core-engine/dice/DiceSetFormat.js';
+} from 'dice-core/dice/DiceSetFormat';
 
 export interface PresetParams {
     label: string;

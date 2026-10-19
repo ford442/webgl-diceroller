@@ -1,0 +1,153 @@
+export interface DiceGroup {
+    count: number;
+    sides: number;
+    keep: 'h' | 'l' | null;
+    keepCount: number;
+    drop: 'h' | 'l' | null;
+    dropCount: number;
+    explode: boolean;
+    compound: boolean;
+    /** Faces <= this are rerolled once. */
+    rerollMax: number | null;
+    percentile: boolean;
+    /** Fudge/Fate die: a d6 hull showing -1, 0, +1 twice over. */
+    fudge?: boolean;
+}
+
+export interface ParsedRoll {
+    groups: DiceGroup[];
+    modifier: number;
+    raw: string;
+    opposed: { groups: DiceGroup[]; modifier: number; raw: string } | null;
+}
+
+export interface DieOutcome {
+    groupIndex: number;
+    dieIndex: number;
+    type: string;
+    value: number | null;
+    role?: 'tens' | 'ones' | null;
+    kept?: boolean;
+    dropped?: boolean;
+    exploded?: boolean;
+    rerolled?: boolean;
+    replacedByReroll?: boolean;
+    originalValue?: number | null;
+    /** Percentile display override or explosion slot total. */
+    displayValue?: number | null;
+    /** Read after a settle timeout without lying flat (see SettleWatch). */
+    cocked?: boolean;
+}
+
+export interface RollOutcomeEntry {
+    die: string;
+    faces: number;
+    value: number | null;
+    exploded?: boolean;
+    kept?: boolean;
+    dropped?: boolean;
+    rerolled?: boolean;
+}
+
+export interface RollGroupSubtotal {
+    label: string;
+    subtotal: number;
+    groupIndex?: number;
+}
+
+export interface RollFlags {
+    crit: boolean;
+    fumble: boolean;
+    advantage: boolean;
+    disadvantage: boolean;
+    strongHit?: boolean;
+    weakHit?: boolean;
+    miss?: boolean;
+    opposedWin?: boolean;
+    opposedTie?: boolean;
+    opposedLoss?: boolean;
+}
+
+export interface EvaluatedRoll {
+    expression: string;
+    dice: DieOutcome[];
+    rolls: RollOutcomeEntry[];
+    groupSubtotals: RollGroupSubtotal[];
+    modifier: number;
+    total: number;
+    flags: RollFlags;
+    seed: number | null;
+    /** A side hit the settle timeout and was read as it lay. */
+    timedOut?: boolean;
+    opposed: {
+        expression: string;
+        total: number;
+        margin: number;
+        dice: DieOutcome[];
+        groupSubtotals: RollGroupSubtotal[];
+        modifier: number;
+        rolls: RollOutcomeEntry[];
+    } | null;
+}
+
+export interface DieSpec {
+    type: string;
+    role: 'tens' | 'ones' | null;
+    groupIndex: number;
+    dieIndex: number;
+    explode: boolean;
+    sides: number;
+    replacesDieIndex?: number;
+}
+
+export interface RollHistoryEntry {
+    id: string | number;
+    timestamp: number;
+    diceSet?: Record<string, number>;
+    diceResults?: Array<{ type: string; value: number | null; total?: number }>;
+    expression?: string;
+    seed?: number | null;
+    total?: number;
+}
+
+export interface RollDieStats {
+    dieType: string;
+    sides: number;
+    totalRolls: number;
+    observedCounts: number[];
+    chiSquared: number;
+    criticalValue: number | null;
+    expectedMean: number;
+    actualMean: number;
+    hasEnoughSamples: boolean;
+    passes: boolean | null;
+}
+
+export interface RollSessionDeps {
+    /** Scene handle from the renderer; opaque in the headless core. */
+    scene: unknown;
+    /** ammo.js was retired; this legacy param is always null now. */
+    world: null;
+    replaceDiceSet: (scene: unknown, world: null, specs: DieSpec[]) => void;
+    throwDice: (scene: unknown, world: null, seed?: number | null) => void;
+    /** `allowCocked`: read awake dice from their mesh after a settle timeout. */
+    readAllDiceValues: (options?: { allowCocked?: boolean }) => Array<{
+        type: string;
+        value: number | null;
+        role?: 'tens' | 'ones' | null;
+        groupIndex?: number;
+        cocked?: boolean;
+    }>;
+    areDiceSettled: () => boolean;
+    /**
+     * A fresh settle watch per throw (core-engine/roll/SettleWatch). Without
+     * one the session falls back to polling `areDiceSettled` with a frame cap.
+     */
+    createSettleWatch?: () => import('../roll/SettleWatch.js').SettleWatch;
+    /** Resolves once every spawned die has an engine body (worker round trip). */
+    whenDiceRegistered?: () => Promise<void>;
+    waitFrame?: () => Promise<void>;
+    setDeferAutoResults?: (active: boolean) => void;
+    onComplete?: (result: EvaluatedRoll) => void;
+    onStateChange?: (state: string) => void;
+}

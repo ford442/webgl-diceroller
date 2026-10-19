@@ -1,6 +1,6 @@
-const { AxeBuilder } = require('@axe-core/playwright');
-const { launchPage } = require('./helpers/browser');
-const { BASE } = require('./helpers/server');
+import { AxeBuilder } from '@axe-core/playwright';
+import { launchPage } from './helpers/browser.js';
+import { BASE } from './helpers/server.js';
 
 const url = `${BASE}/?webgl&no-post&fair-dice&test`;
 

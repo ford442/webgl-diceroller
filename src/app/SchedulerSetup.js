@@ -5,7 +5,13 @@
  * camera controller, ...) are only assigned after registration happens.
  */
 
-import { getWasmEngine, isWasmAvailable, flushWorkerCommandBatch } from '../wasm/PhysicsBridge.js';
+import { SimClock } from 'dice-core/wasm/SimClock';
+import {
+    getWasmEngine,
+    isUsingWorkerPhysics,
+    isWasmAvailable,
+    flushWorkerCommandBatch,
+} from '../wasm/PhysicsBridge.js';
 import {
     updateDiceVisuals,
     pollPhysicsCollisionEvents,
@@ -71,14 +77,18 @@ export function registerFrameCallbacks(scheduler, deps) {
     // Write-only, mirrors main.js's original unused gong flash bookkeeping.
     let _gongFlashIntensity = 0;
 
+    /** @type {SimClock | null} */
+    let simClock = null;
+
     scheduler.register('physicsStep', 'dicePhysics', ({ deltaTime }) => {
         if (!isSimulationReady()) return;
 
-        // Hands elapsed time to the engine, which banks it and runs fixed
-        // 1/120 s ticks — the same clock as the worker and rollHeadless().
-        // A no-op on the worker bridge (the worker self-paces).
-        if (isWasmAvailable()) {
-            getWasmEngine().step(deltaTime);
+        // In-process (?no-worker) only: hand the frame's elapsed time to the
+        // same SimClock the worker and rollHeadless() use, which feeds the
+        // engine's fixed 1/120 s ticks. The worker self-paces on its own clock.
+        if (isWasmAvailable() && !isUsingWorkerPhysics()) {
+            simClock ??= new SimClock(getWasmEngine());
+            simClock.advanceBy(deltaTime);
         }
     });
 

@@ -20,14 +20,12 @@
  *
  * Env: DICE_BASE_URL to use an already-running preview instead of starting one.
  */
-import { createRequire } from 'node:module';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const require = createRequire(import.meta.url);
-const { launchPage } = require('../tests/helpers/browser.js');
-const { startPreview } = require('../tests/helpers/server.js');
+import { launchPage } from '../tests/helpers/browser.js';
+import { startPreview } from '../tests/helpers/server.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURE = path.join(REPO_ROOT, 'tests/fixtures/tavern-world.json');

@@ -27,7 +27,6 @@
  * now leave CHUTE_MIN_CLEARANCE (diceTowerLayout.ts). `--no-require-settle`
  * reduces it to a warning, for bisecting a determinism failure on its own.
  */
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -35,20 +34,18 @@ import {
     createDiceTowerHopperFrame,
     worldDiceTowerColliders,
 } from '../src/environment/diceTowerLayout.js';
-import {
-    applyDropParams,
-    computeSeededHopperDropParams,
-} from '../src/core-engine/wasm/seededHopperDrop.js';
-import { createSeededRng } from '../src/core-engine/wasm/seededThrowParams.js';
+import { applyDropParams, computeSeededHopperDropParams } from 'dice-core/wasm/seededHopperDrop';
+import { createSeededRng } from 'dice-core/wasm/seededThrowParams';
 import {
     PHYSICS_GRAVITY,
     PHYSICS_TABLE_HALF,
     PHYSICS_TABLE_Y,
     getDieSides,
     presetForShape,
-} from '../src/core-engine/wasm/physicsPresets.js';
-import { createInProcessPhysicsSession } from '../src/core-engine/wasm/WasmPhysicsBridge.js';
-import { createNodeAssetUrl, wasmArtifactsPresent } from '../src/core-engine/rollHeadless.js';
+} from 'dice-core/wasm/physicsPresets';
+import { createInProcessPhysicsSession } from 'dice-core/wasm/WasmPhysicsBridge';
+import { fsAssetSource } from 'dice-core/assets/AssetSource';
+import { wasmArtifactsPresent } from 'dice-core/rollHeadless';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC_DIR = path.join(REPO_ROOT, 'public');
@@ -95,20 +92,6 @@ function addTowerStatics(engine) {
         );
     }
     return colliders.length;
-}
-
-/**
- * Read hulls.json off disk rather than letting the bridge fetch it.
- *
- * `loadHullTable` uses `fetch`, which cannot read a `file:` URL in Node — it
- * throws, the bridge swallows it, and every die silently becomes a sphere with
- * no face table, so `getFaceValues()` comes back all zeros. That would make
- * this harness's whole point ("same seed, same faces") vacuously true while
- * testing marbles instead of dice down the chute.
- */
-async function loadHullsFromDisk() {
-    const raw = await readFile(path.join(PUBLIC_DIR, 'wasm', 'hulls.json'), 'utf8');
-    return JSON.parse(raw);
 }
 
 function stepUntilSettled(engine) {
@@ -195,12 +178,18 @@ async function main() {
         return;
     }
 
+    // Hulls are required: without them every die is a sphere with no face
+    // table, and "same seed, same faces" would be vacuously true for marbles.
     const session = await createInProcessPhysicsSession({
-        assetUrl: createNodeAssetUrl(PUBLIC_DIR),
-        loadHulls: loadHullsFromDisk,
+        assets: fsAssetSource(PUBLIC_DIR),
+        requireHulls: true,
+        quiet: true,
     });
     if (!session.available) {
-        console.error('[verify-tower-drop-replay] WASM engine failed to load.');
+        console.error(
+            '[verify-tower-drop-replay] WASM engine failed to load:',
+            session.error?.message
+        );
         process.exitCode = 1;
         return;
     }

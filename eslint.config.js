@@ -17,6 +17,51 @@ const importRules = {
     ],
 };
 
+/**
+ * The package boundary, from both sides. App code, tests and scripts reach
+ * dice-core only through its package name (`dice-core`, `dice-core/wasm/…`),
+ * never by a relative path into its sources — and the old `core-engine`
+ * re-export barrels cannot come back.
+ */
+const packageBoundaryRule = {
+    'no-restricted-imports': [
+        'error',
+        {
+            patterns: [
+                {
+                    group: ['**/core-engine', '**/core-engine/**'],
+                    message:
+                        'src/core-engine moved to packages/dice-core — import from "dice-core".',
+                },
+                {
+                    group: ['**/packages/dice-core/src', '**/packages/dice-core/src/**'],
+                    message: 'Import dice-core by package name ("dice-core/…"), not by path.',
+                },
+            ],
+        },
+    ],
+};
+
+/** Inside packages/dice-core/src: no Three.js, no reaching back into the app. */
+const insidePackageRule = {
+    'no-restricted-imports': [
+        'error',
+        {
+            patterns: [
+                {
+                    group: ['three', 'three/*'],
+                    message: 'dice-core is Three.js-free; keep rendering in src/.',
+                },
+                {
+                    group: ['../../*', '../../**', 'dice-core', 'dice-core/*'],
+                    message:
+                        'Stay inside packages/dice-core/src (relative imports, no self-reference).',
+                },
+            ],
+        },
+    ],
+};
+
 const coreRules = {
     ...js.configs.recommended.rules,
     eqeqeq: ['error', 'always', { null: 'ignore' }],
@@ -45,6 +90,7 @@ export default [
             'public/**',
             'src/wasm/third_party/**',
             'coverage/**',
+            'packages/*/dist/**',
             'render-regression-*.png',
         ],
     },
@@ -64,6 +110,8 @@ export default [
                 typescript: {
                     alwaysTryTypes: true,
                     project: './tsconfig.json',
+                    // Workspace packages export TS sources under `source`.
+                    conditionNames: ['source', 'types', 'import', 'node', 'default'],
                 },
                 node: {
                     extensions: ['.js', '.mjs', '.ts'],
@@ -76,7 +124,12 @@ export default [
         },
     },
     ...tseslint.config({
-        files: ['src/**/*.ts', 'tests/unit/**/*.ts'],
+        files: [
+            'src/**/*.ts',
+            'tests/unit/**/*.ts',
+            'packages/*/src/**/*.ts',
+            'packages/*/test/**/*.ts',
+        ],
         extends: [tseslint.configs.recommended],
         languageOptions: {
             ecmaVersion: 2022,
@@ -93,6 +146,8 @@ export default [
                 typescript: {
                     alwaysTryTypes: true,
                     project: './tsconfig.json',
+                    // Workspace packages export TS sources under `source`.
+                    conditionNames: ['source', 'types', 'import', 'node', 'default'],
                 },
                 node: {
                     extensions: ['.js', '.mjs', '.ts'],
@@ -110,7 +165,7 @@ export default [
         },
     }),
     ...tseslint.config({
-        files: ['src/core-engine/wasm/dice_physics.worker.ts'],
+        files: ['packages/dice-core/src/wasm/dice_physics.worker.ts'],
         extends: [tseslint.configs.recommended],
         languageOptions: {
             ecmaVersion: 2022,
@@ -127,6 +182,8 @@ export default [
                 typescript: {
                     alwaysTryTypes: true,
                     project: './tsconfig.json',
+                    // Workspace packages export TS sources under `source`.
+                    conditionNames: ['source', 'types', 'import', 'node', 'default'],
                 },
                 node: {
                     extensions: ['.js', '.mjs', '.ts'],
@@ -166,6 +223,8 @@ export default [
                 typescript: {
                     alwaysTryTypes: true,
                     project: './tsconfig.json',
+                    // Workspace packages export TS sources under `source`.
+                    conditionNames: ['source', 'types', 'import', 'node', 'default'],
                 },
                 node: {
                     extensions: ['.js', '.mjs', '.ts'],
@@ -178,17 +237,6 @@ export default [
         },
     },
     {
-        files: ['tests/**/*.js', 'tests/helpers/**/*.js'],
-        languageOptions: {
-            sourceType: 'commonjs',
-            globals: {
-                ...globals.node,
-                ...globals.commonjs,
-                ...globals.browser,
-            },
-        },
-    },
-    {
         files: ['tests/unit/**/*.js'],
         languageOptions: {
             ecmaVersion: 2022,
@@ -198,6 +246,19 @@ export default [
                 ...globals.es2021,
             },
         },
+    },
+    {
+        files: [
+            'src/**/*.{js,ts}',
+            'tests/**/*.{js,ts,mjs}',
+            'scripts/**/*.{js,mjs}',
+            'packages/*/test/**/*.ts',
+        ],
+        rules: packageBoundaryRule,
+    },
+    {
+        files: ['packages/dice-core/src/**/*.ts'],
+        rules: insidePackageRule,
     },
     eslintConfigPrettier,
 ];

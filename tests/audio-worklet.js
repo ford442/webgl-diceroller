@@ -1,5 +1,5 @@
-const { launchPage } = require('./helpers/browser');
-const { BASE } = require('./helpers/server');
+import { launchPage } from './helpers/browser.js';
+import { BASE } from './helpers/server.js';
 
 /**
  * Tavern audio graph smoke (#326). Needs the preview server, not WASM: it

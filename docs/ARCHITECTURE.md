@@ -55,9 +55,17 @@ Desktop **initiative / turn strip** and multiplayer session sync live outside `m
 
 State flows through **`AppContext`** (`app.session`, `app.multiplayer`) and **`AppEvents`** — not new `window.*` globals.
 
-### Headless core (`src/core-engine/`)
+### Headless core: the `dice-core` package (`packages/dice-core/`)
 
-Physics loading, worker/in-process bridges, notation, shareable dice-set format, commit-reveal, and [`rollHeadless()`](../src/core-engine/rollHeadless.ts) live in a Three.js-free tree. The page still imports [`src/wasm/PhysicsBridge.ts`](../src/wasm/PhysicsBridge.ts) for collider helpers that need `THREE.Object3D`. `npm run check:core-engine` rejects a `three` import (or `window.` / `document.` use) in that folder. Unit tests call `rollHeadless()` under vitest when `public/wasm/` artifacts exist; `verify:worker-replay` compares solver face values against the worker path.
+Physics loading, worker/in-process bridges, the `SimClock`, notation, shareable dice-set format, commit-reveal, and [`rollHeadless()`](../packages/dice-core/src/rollHeadless.ts) live in an npm workspace package that the app depends on as `dice-core`. The boundary is enforced three ways:
+
+- **Compiler.** [`packages/dice-core/tsconfig.json`](../packages/dice-core/tsconfig.json) is `strict` + `noUncheckedIndexedAccess` with `lib: ["ES2022"]` and **no DOM**; the host APIs the engine does use (module workers, the worker global, `WebAssembly.validate`, Web Crypto) are declared at exactly that width in [`src/host.d.ts`](../packages/dice-core/src/host.d.ts). `npm run typecheck` runs it.
+- **Imports.** App code, tests and scripts import `dice-core` / `dice-core/<path>` by package name; ESLint's `no-restricted-imports` rejects a relative path into `packages/dice-core/src` (or the old `core-engine/`), and rejects `three` or an escape back into the app from inside the package. `npm run check:dice-core` additionally greps for `three` / `window.` / `document.` and for re-export barrels in `src/`.
+- **Resolution.** The package exports its TS sources under a `source` condition (used by Vite, vitest, `tsc` and `tsx --conditions=source`) and compiled `dist/` for everyone else: `npm run build:core`, then `node -e "import('dice-core').then(m => m.rollHeadless('4d6', 777))"` works from plain Node.
+
+Assets reach the core through one seam, [`AssetSource`](../packages/dice-core/src/assets/AssetSource.ts): `fetchAssetSource()` in pages and workers, `fsAssetSource(publicDir)` in Node (via `process.getBuiltinModule`, so no `node:` import enters the browser graph). Node's `fetch` cannot read `file:` URLs; that used to turn every headless die into a sphere reading face 0. `rollHeadless()` now requires `hulls.json` and throws without it.
+
+`tests/golden/rolls.json` pins 50 `(expression, seed, world) → faces` vectors (every hull and derived face sequence, keep/drop/explode/reroll, opposed rolls, six rolls into the recorded tavern world). The dice-core vitest project asserts it in Node; `npm run verify:headless-parity` asserts the same file in Chromium (`-- --update` rewrites it from the browser, `npm run golden:rolls` from Node). Regenerate after a `SOLVER_REVISION` bump or a re-exported `tests/fixtures/tavern-world.json`. The page still imports [`src/wasm/PhysicsBridge.ts`](../src/wasm/PhysicsBridge.ts) for collider helpers that need `THREE.Object3D`.
 
 ### Test / debug hooks
 
@@ -95,7 +103,7 @@ Playwright URLs should include `&test`, e.g. `?webgl&no-post&fair-dice&test`.
 | `render`          | Composer / TSL post stack                                   |
 | `postRender`      | Debug overlays, adaptive quality                            |
 
-The engine owns the physics clock: `step(dt)` banks `dt` and runs fixed 1/120 s ticks (4 substeps each, at most 8 ticks per call), so the worker (`step(1/120)` per 120 Hz timer wakeup), `?no-worker` (FrameScheduler's 1/60 chunks → 2 ticks each) and `rollHeadless()` all integrate identically. The worker parks its timer when the world is asleep or the page is hidden and resumes without replaying a backlog. The pipping centre-of-mass bias is applied inside each substep, not from the render loop. See "Fixed clock" and "Pipping bias" in [`WASM_ENGINE.md`](WASM_ENGINE.md).
+The engine owns the physics clock: `step(dt)` banks `dt` and runs fixed 1/120 s ticks (4 substeps each, at most 8 ticks per call). One JS [`SimClock`](../packages/dice-core/src/wasm/SimClock.ts) feeds it everywhere — the worker (wall time since the previous wakeup, so a throttled timer catches up instead of slowing the dice), `?no-worker` (FrameScheduler's 1/60 chunks → 2 ticks each) and `rollHeadless()` — so all three integrate identically. `stepIndex` (the engine tick counter, published in the SAB header as `H_TICKS`) is how settle timeouts and replays refer to time. The worker parks its timer when the world is asleep or the page is hidden and resumes without replaying a backlog. The pipping centre-of-mass bias is applied inside each substep, not from the render loop. See "Fixed clock" and "Pipping bias" in [`WASM_ENGINE.md`](WASM_ENGINE.md).
 
 Systems register via `scheduler.register(phase, name, fn, { priority })`. Prop `update` callbacks and interactables hook into `updates` through [`LoadingTiers.js`](../src/core/LoadingTiers.js) and [`PropRegistry.js`](../src/environment/PropRegistry.js) `afterCreate` handlers — avoid ad-hoc per-frame calls in `main.js`.
 
@@ -238,7 +246,7 @@ artifacts), `WasmPhysicsBridge.ts`'s existing no-op JS stub takes over,
 an error banner, and the tavern still loads with zero dice — an honest failure
 mode rather than a second, differently-behaving engine.
 
-Bridges: [`WasmPhysicsBridge.ts`](../src/core-engine/wasm/WasmPhysicsBridge.ts) (main-thread), [`WorkerPhysicsBridge.ts`](../src/core-engine/wasm/WorkerPhysicsBridge.ts) (default), selected by [`PhysicsBridge.ts`](../src/wasm/PhysicsBridge.ts). Flags: `?no-wasm` (forces the no-op stub), `?no-worker` / `?worker-physics=off` (forces the main-thread bridge) — see AGENTS.md and WASM_ENGINE.md.
+Bridges: [`WasmPhysicsBridge.ts`](../packages/dice-core/src/wasm/WasmPhysicsBridge.ts) (main-thread), [`WorkerPhysicsBridge.ts`](../packages/dice-core/src/wasm/WorkerPhysicsBridge.ts) (default), selected by [`PhysicsBridge.ts`](../src/wasm/PhysicsBridge.ts). Flags: `?no-wasm` (forces the no-op stub), `?no-worker` / `?worker-physics=off` (forces the main-thread bridge) — see AGENTS.md and WASM_ENGINE.md.
 
 Declarative static and dynamic colliders go through [`StaticColliderBridge.ts`](../src/core/StaticColliderBridge.ts), which registers every collider type (box, plane, cylinder/openCylinder, convexHull, compound) directly on the WASM engine — there is no other collider backend. `DicePhysicsEngine::MAX_STATICS` (512, see [`WASM_ENGINE.md`](WASM_ENGINE.md)) caps the WASM static registry; `addStaticBox`/etc. report drops past that cap via `getStaticCapacityDroppedCount()` rather than silently no-op'ing.
 
@@ -248,7 +256,7 @@ Declarative static and dynamic colliders go through [`StaticColliderBridge.ts`](
 src/
   core/           Frame loop, renderer, loading, textures, culling, metrics
   environment/    Prop modules + PropRegistry + propKit
-  core-engine/    Three-free headless core: WASM bridges + worker, notation, rolls, dice-set format
+  (packages/dice-core/ — Three-free headless core: WASM bridges + worker, notation, rolls, dice-set format)
   wasm/           C++ engine, page-facing PhysicsBridge facade, collider registration
   shaders/        ShaderKit graphs (god rays, vignette, post params) → GLSL + TSL
   ui/             DOM panels beyond core ui.js

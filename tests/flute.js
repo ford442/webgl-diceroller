@@ -1,5 +1,5 @@
-const { runTest } = require('./helpers/browser');
-const { BASE } = require('./helpers/server');
+import { runTest } from './helpers/browser.js';
+import { BASE } from './helpers/server.js';
 
 // E2E: the Flute is present AND interactive (clicking plays a melody).
 // `forceProps=Flute` guarantees the randomPool prop spawns regardless of seed.
