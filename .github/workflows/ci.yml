@@ -182,6 +182,39 @@ jobs:
                   clang-tidy --version
             - run: npm run lint:cpp
 
+    # The same engine under the other compiler and the sanitizers. Every leg
+    # runs compare-solver-golden against tests/fixtures/solver-golden.json, so
+    # the clang leg passing next to test-solver's g++ run is the proof that
+    # the two code generators produce identical serialized state for the
+    # golden seeds. The libFuzzer leg fuzzes deserializeState (bytes a
+    # multiplayer peer sent) and collider registration under ASan + UBSan.
+    test-solver-matrix:
+        name: Native solver (${{ matrix.name }})
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - name: clang
+                      run: CXX=clang++ FUZZ_SEEDS=500 npm run test:solver
+                    - name: clang asan+ubsan
+                      run: CXX=clang++ FUZZ_SEEDS=50 npm run test:solver:san
+                    - name: libFuzzer
+                      run: CXX=clang++ FUZZ_TIME=120 npm run fuzz:solver
+        steps:
+            - uses: actions/checkout@v5
+            - name: Install clang sanitizer + libFuzzer runtimes
+              run: |
+                  clang++ --version
+                  echo 'extern "C" int LLVMFuzzerTestOneInput(const unsigned char*, unsigned long) { return 0; }' > "$RUNNER_TEMP/probe.cpp"
+                  if ! clang++ -fsanitize=fuzzer,address,undefined "$RUNNER_TEMP/probe.cpp" -o "$RUNNER_TEMP/probe"; then
+                    major="$(clang++ -dumpversion | cut -d. -f1)"
+                    sudo apt-get update
+                    sudo apt-get install -y "libclang-rt-${major}-dev"
+                  fi
+            - run: ${{ matrix.run }}
+
     # CMake is the database clangd and IDE tooling read, build.sh is what ships.
     # This job proves they are the same build: it configures CMake through
     # emcmake and byte-diffs its dice_physics.wasm against build.sh's, then

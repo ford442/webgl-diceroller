@@ -260,11 +260,25 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
         off += len;
         return true;
     };
+    // The bytes may come from a multiplayer peer: never memcpy into a bool
+    // (any byte but 0/1 is UB to load), and never reserve more records than
+    // the remaining bytes could hold (a forged count must not allocate GBs).
+    auto readBool = [&](bool& value) {
+        uint8_t byte = 0;
+        if (!read(&byte, sizeof(byte))) return false;
+        value = byte != 0;
+        return true;
+    };
+    auto boundedCount = [&](uint32_t count, size_t recordBytes) {
+        return std::min<size_t>(count, (data.size() - off) / recordBytes);
+    };
     uint32_t version = 0, count = 0;
     if (!read(&version, sizeof(version))) return;
     if (version != 1 && version != 2 && version != 3) return;
     if (!read(&count, sizeof(count))) return;
-    bodies_.clear(); bodies_.reserve(count);
+    bodies_.clear();
+    bodies_.reserve(boundedCount(count, 2 * sizeof(int) + 3 * sizeof(Vec3) + sizeof(Quat) +
+                                            sizeof(float) + 2));
     for (uint32_t i = 0; i < count; ++i) {
         RigidBody b;
         if (!read(&b.id, sizeof(b.id))) break;
@@ -273,9 +287,9 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
         if (!read(&b.velocity, sizeof(b.velocity))) break;
         if (!read(&b.rotation, sizeof(b.rotation))) break;
         if (!read(&b.angularVelocity, sizeof(b.angularVelocity))) break;
-        if (!read(&b.sleeping, sizeof(b.sleeping))) break;
+        if (!readBool(b.sleeping)) break;
         if (!read(&b.sleepTimer, sizeof(b.sleepTimer))) break;
-        if (!read(&b.useHull, sizeof(b.useHull))) break;
+        if (!readBool(b.useHull)) break;
         b.radius = radiusForSides(b.sides);
         b.mass = 5.0f;
         b.invMass = 1.0f / b.mass;
@@ -289,7 +303,8 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
     if (version >= 2) {
         uint32_t dynCount = 0;
         if (read(&dynCount, sizeof(dynCount))) {
-            dynamics_.reserve(dynCount);
+            dynamics_.reserve(boundedCount(dynCount, sizeof(int) + 2 + 4 * sizeof(Vec3) + sizeof(Quat) +
+                                                         2 * sizeof(float) + 2));
             for (uint32_t i = 0; i < dynCount; ++i) {
                 DynamicBody d;
                 uint8_t shape = 0;
@@ -301,11 +316,13 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
                 if (!read(&d.velocity, sizeof(d.velocity))) break;
                 if (!read(&d.rotation, sizeof(d.rotation))) break;
                 if (!read(&d.angularVelocity, sizeof(d.angularVelocity))) break;
-                if (!read(&d.sleeping, sizeof(d.sleeping))) break;
+                if (!readBool(d.sleeping)) break;
                 if (!read(&d.sleepTimer, sizeof(d.sleepTimer))) break;
-                if (!read(&d.kinematic, sizeof(d.kinematic))) break;
+                if (!readBool(d.kinematic)) break;
                 if (!read(&d.mass, sizeof(d.mass))) break;
                 if (!read(&halfExtents, sizeof(halfExtents))) break;
+                // Unknown shape tag: the record was consumed, drop the body.
+                if (shape > static_cast<uint8_t>(DynamicShapeType::Hull)) continue;
                 d.shape = static_cast<DynamicShapeType>(shape);
                 d.halfExtents = halfExtents;
                 d.invMass = d.mass > 0.0f ? 1.0f / d.mass : 0.0f;
@@ -331,7 +348,8 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
     if (version >= 3) {
         uint32_t manCount = 0;
         if (read(&manCount, sizeof(manCount))) {
-            manifolds_.reserve(manCount);
+            manifolds_.reserve(boundedCount(manCount, 1 + 3 * sizeof(int) + sizeof(Vec3) +
+                                                          2 * sizeof(float) + 1));
             for (uint32_t i = 0; i < manCount; ++i) {
                 ContactManifold m;
                 uint8_t kind = 0;
@@ -344,7 +362,8 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
                 if (!read(&m.friction, sizeof(m.friction))) break;
                 if (!read(&m.restitution, sizeof(m.restitution))) break;
                 if (!read(&pc, sizeof(pc))) break;
-                m.kind = static_cast<ManifoldKind>(kind);
+                const bool knownKind = kind <= static_cast<uint8_t>(ManifoldKind::DynamicContainer);
+                m.kind = knownKind ? static_cast<ManifoldKind>(kind) : ManifoldKind::DieDie;
                 m.pointCount = std::min(static_cast<int>(pc), MAX_MANIFOLD_POINTS);
                 tangentBasis(m.normal, m.tangent1, m.tangent2);
                 m.stale = false;
@@ -397,7 +416,8 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
                         }
                         break;
                 }
-                manifolds_.push_back(m);
+                // Unknown kind: its points were consumed above, drop it.
+                if (knownKind) manifolds_.push_back(m);
             }
         }
     }

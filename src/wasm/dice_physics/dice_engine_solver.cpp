@@ -8,7 +8,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <set>
 #include <vector>
 
 namespace dice_physics {
@@ -525,9 +524,12 @@ void DicePhysicsEngine::generateDieDieContacts(float spec, StepStats& stats) {
     // Grid cells overlap, so a pair can be visited more than once. Dedup
     // before the SAT / event path so warm-start and collision audio stay
     // one-shot per substep.
-    std::set<std::pair<size_t, size_t>> pairSet;
-    forEachDiePair([&](size_t i, size_t j) { pairSet.insert({i, j}); }, spec);
-    for (const auto& pair : pairSet) {
+    diePairScratch_.clear();
+    forEachDiePair([&](size_t i, size_t j) { diePairScratch_.emplace_back(i, j); }, spec);
+    std::sort(diePairScratch_.begin(), diePairScratch_.end());
+    diePairScratch_.erase(std::unique(diePairScratch_.begin(), diePairScratch_.end()),
+                          diePairScratch_.end());
+    for (const auto& pair : diePairScratch_) {
         processDiePair(pair.first, pair.second, stats, spec);
     }
 }

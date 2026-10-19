@@ -218,6 +218,7 @@ After each build, [`build.sh`](../src/wasm/build.sh) emits `build-info.json` (gi
 | Flag                                                                               | Purpose                                                                                                                                    |
 | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `--bind -std=c++17`                                                                | Embind exports                                                                                                                             |
+| `-ffp-contract=off`                                                                | No `a*b+c` → FMA fusion; same flag in the native test build, so neither side rounds by target default (determinism requirement)            |
 | `-O3 -flto`                                                                        | Release optimisation (+ ~30–60 s link time in CI)                                                                                          |
 | `-msimd128`                                                                        | WASM SIMD128 for SAT hot paths (`projectHullOntoAxis`, `transformHullVerts`; `#ifdef __wasm_simd128__`; native `test:solver` stays scalar) |
 | `DICE_FORCE_SCALAR_SAT`                                                            | Compile-time scalar SAT path (`public/wasm-scalar/`) for SIMD parity checks and old-browser fallback                                       |
@@ -317,6 +318,18 @@ npm run test:solver
 
 # Tune fuzz volume (default 2000 seeds, ~6 s on CI):
 FUZZ_SEEDS=500 npm run test:solver
+
+# The other compiler (CI's test-solver-matrix runs this next to g++; both must
+# match tests/fixtures/solver-golden.json byte for byte):
+CXX=clang++ npm run test:solver
+
+# Same run under ASan + UBSan, any finding fatal (build-native-san/):
+CXX=clang++ FUZZ_SEEDS=50 npm run test:solver:san
+
+# Coverage-guided fuzzing of deserializeState + collider registration
+# (src/wasm/fuzz/; libFuzzer with clang + compiler-rt, else a seeded
+# mutation loop). FUZZ_TIME seconds per target, default 60:
+FUZZ_TIME=600 npm run fuzz:solver
 
 # The "Tavern world" case rolls into tests/fixtures/tavern-world.json — the
 # colliders the app actually registers — with the shipped hulls and the app's
@@ -1196,3 +1209,72 @@ folkloric.
       Determinism must not depend on thread arrival order; if that cannot be
       _proven_, this does not ship. Seeded replay is the product feature at
       stake, not an implementation detail.
+
+### Phase 10 (Native determinism + hostile-input hardening)
+
+Toolchain issue, native half. **No behaviour change for valid input** —
+`SOLVER_REVISION` is untouched and `tests/fixtures/solver-golden.json` and the
+pinned hashes in `solver_tests.cpp` are unchanged under both g++ and clang.
+
+- [x] **`-ffp-contract=off` on both builds** (`emcc_flags.inc.sh` and
+      `build_solver_test.sh`). GCC defaults to `-ffp-contract=fast`, which fuses
+      `a*b+c` into an FMA wherever the target has one (arm64, `x86-64-v3`) and
+      changes rounding; the golden and native↔WASM parity checks compare state
+      byte for byte, so the contract is now stated instead of left to the
+      target. A no-op for today's x86-64 baseline and `-msimd128` output, which
+      have no FMA — that is why the goldens did not move.
+- [x] **g++ and clang agree.** The `test-solver-matrix` CI job runs the suite
+      under clang next to `test-solver`'s g++. Turning it on found that they did
+      _not_ agree on `Golden traces` — not an engine bug, a harness one:
+      `runDeterministicScenario` passed three `randomFloat()` draws as arguments
+      to one call, and argument evaluation order is unspecified (g++ right to
+      left, clang left to right), so the two compilers threw different dice. All
+      such call sites in `solver_tests.cpp` now draw into sequenced locals, in
+      the order g++ always used, so the pinned hashes stand. The engine itself
+      never draws twice in one expression.
+- [x] **ASan + UBSan profile** — `npm run test:solver:san` (`SOLVER_SANITIZE=1`:
+      `-O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all`), a CI leg
+      of its own. Clean.
+- [x] **libFuzzer targets** — `src/wasm/fuzz/fuzz_deserialize.cpp`
+      (`deserializeState` parses bytes a multiplayer peer sent; the corpus is
+      real snapshots from `make_seed_corpus.cpp`) and `fuzz_colliders.cpp`
+      (an op stream over `addStatic*` / `addDynamic*` / container planes / die
+      hulls, then steps). `npm run fuzz:solver`; CI runs each for 120 s. They
+      found, within seconds:
+    - `deserializeState` `memcpy`'d raw bytes into `bool` fields (any byte but
+      0/1 is UB to load) and `reserve()`d whatever count the header claimed (a
+      forged `0xFFFFFFFF` asks for gigabytes and aborts under
+      `ABORTING_MALLOC=0` + no exceptions). Bools are now read as a byte and
+      compared to 0, reserves are bounded by the bytes left, and unknown
+      `ManifoldKind` / `DynamicShapeType` tags drop the record instead of
+      becoming out-of-range enums. The wire format is unchanged.
+    - The broadphase cell index cast `floor(rel / cell)` to `int` before
+      clamping, which is UB for a NaN/Inf/far-off position (a forged snapshot,
+      a degenerate collider). `cellIndex()` now clamps in float space first —
+      identical for every in-range value, so pair order does not change.
+    - `satTestFromWorld` pushed every face normal of both hulls into its
+      256-entry stack array unchecked (only the edge axes were bounded): two
+      large hulls overflowed the stack. Face axes are now bounded too.
+- [x] **No per-substep `std::set`.** `generateDieDieContacts()` deduplicated
+      broadphase pairs through a `std::set<std::pair>` — a node allocation per
+      pair per 120 Hz substep under `emmalloc`. It now sorts and uniques an
+      engine-owned `diePairScratch_` vector (the pattern
+      `dieDynamicPairScratch_` already used); sorted order equals the set's
+      iteration order, so contact order and the goldens are unchanged. The three
+      `collect*PairsForTesting` hooks keep their `std::set` (test-only).
+
+#### Still deferred after Phase 10
+
+- [ ] **EMSDK pin bump** — still 3.1.61. Needs the `emsdk-experiment.yml`
+      table recorded above before `EMSDK_VERSION` / `PINNED_EMSDK_VERSION` move,
+      and with them the `-sWASM_BIGINT` / `--closure 1` / `-sSTRICT=1` /
+      `-fno-rtti` / `-fno-exceptions` / split-`ENVIRONMENT` /
+      `-gseparate-dwarf` flag pass (each kept or rejected with a number).
+- [ ] **`--emit-tsd`** to generate the Embind surface that
+      `physicsTypes.d.ts` mirrors by hand, diffed in CI. Needs an emcc in the
+      loop, so it rides the pin bump.
+- [ ] **C++20** (`std::span` across Embind, `<bit>`, `constexpr` tables). Not
+      attempted on 3.1.61.
+- [ ] **Zero-allocation `step()` assertion** after warm-up. The per-substep
+      set is gone; a counting allocator in the native build is what would prove
+      nothing else allocates.

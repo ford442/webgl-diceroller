@@ -17,7 +17,27 @@ if ! command -v "${CXX}" >/dev/null 2>&1; then
     CXX=clang++
 fi
 
-CXXFLAGS=(-std=c++17 -O2 -Wall -Wextra -Wpedantic -I"${SCRIPT_DIR}")
+# -ffp-contract=off: seeded replay is specified IEEE-754 bit-exact, and the
+# golden traces plus the native<->WASM parity check compare this build's
+# state byte for byte. GCC defaults to -ffp-contract=fast, which fuses a*b+c
+# into an FMA on any target that has one (arm64, x86-64-v3) and changes the
+# rounding. emcc_flags.inc.sh sets the same flag, so neither side relies on a
+# target default.
+CXXFLAGS=(-std=c++17 -Wall -Wextra -Wpedantic -ffp-contract=off -I"${SCRIPT_DIR}")
+
+# SOLVER_SANITIZE=1 (npm run test:solver:san): the same unit + fuzz + golden
+# run under ASan + UBSan, any finding fatal. Slower, so CI lowers FUZZ_SEEDS
+# for it and skips the benchmarks.
+if [ "${SOLVER_SANITIZE:-0}" = "1" ]; then
+    CXXFLAGS+=(-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all)
+    BUILD_DIR="${SCRIPT_DIR}/build-native-san"
+    BIN="${BUILD_DIR}/solver_tests"
+    export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1:abort_on_error=1}"
+    export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
+    echo "[test:solver] SOLVER_SANITIZE=1 -- ASan + UBSan build in ${BUILD_DIR}."
+else
+    CXXFLAGS+=(-O2)
+fi
 
 # -Werror: the engine TUs are warning-clean under g++ 13 and clang 18, and CI
 # pins ubuntu-latest, so a new warning is a real signal rather than toolchain
@@ -125,7 +145,7 @@ else
     echo "[test:solver] Skipping WASM parity (public/wasm/dice_physics.wasm not present)."
 fi
 
-if [ "${BENCH_SOLVER:-}" = "1" ]; then
+if [ "${BENCH_SOLVER:-}" = "1" ] && [ "${SOLVER_SANITIZE:-0}" != "1" ]; then
     echo "[test:solver] Running step-time benchmarks (native, scalar path)..."
     for N in 10 50 100 200; do
         "${BIN}" --bench --dice="${N}" --steps=600 --warmup=60
