@@ -354,6 +354,11 @@ private:
     // cell in the 3x3 neighbor scan; sort+unique before dispatch removes
     // exactly those duplicates.
     std::vector<std::pair<size_t, size_t>> dieDynamicPairScratch_;
+    // Same dedup for generateDieDieContacts' die-die pairs. Engine-owned so
+    // the per-substep sort+unique reuses its capacity instead of allocating a
+    // std::set node per pair; sorted order matches the std::set it replaced,
+    // so contact (and therefore solver) order is unchanged.
+    std::vector<std::pair<size_t, size_t>> diePairScratch_;
     int gridCols_ = 0;
     int gridRows_ = 0;
     float gridOriginX_ = 0.0f;

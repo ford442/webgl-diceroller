@@ -2,6 +2,10 @@
 # Sourced by build.sh, build_colab.sh, and emcc_flags.sh (--print-link-line for CMake).
 #
 # Determinism: do not add -ffast-math or PRECISE_F32=0 — seeded replay is IEEE-754.
+# -ffp-contract=off — stated, not left to the target default: no a*b+c is ever
+#   fused into an FMA (relaxed-simd's madd, or a future default), so wasm and
+#   the native test build (build_solver_test.sh sets the same flag) round
+#   identically. A no-op for today's -msimd128 output, which has no FMA.
 # -s STACK_SIZE=262144 — EMSDK 3.1.61 default stack is small; manifold SI + SAT
 #   recursion/temps need headroom. Do not drop without a stack-highwater check.
 # -s WASM_BIGINT=1 — lets Embind bind uint64_t/int64_t (seedRNG) directly as a
@@ -18,6 +22,7 @@ EMCC_INITIAL_MEMORY="16MB"
 EMCC_COMMON=(
     --bind
     -std=c++17
+    -ffp-contract=off
     -s WASM=1
     -s ALLOW_MEMORY_GROWTH=1
     -s MAXIMUM_MEMORY=64MB

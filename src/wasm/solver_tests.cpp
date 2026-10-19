@@ -150,14 +150,18 @@ void runDeterministicScenario(DicePhysicsEngine& engine, uint64_t seed) {
         float z = engine.randomFloat() * 4.0f - 2.0f;
         int id = engine.addDie(sides[i % 6], x, y, z);
         engine.setDieHull(id, cubeFlat);
-        engine.applyImpulse(id,
-            (engine.randomFloat() - 0.5f) * 50.0f,
-            engine.randomFloat() * 10.0f,
-            (engine.randomFloat() - 0.5f) * 50.0f);
-        engine.applyTorqueImpulse(id,
-            (engine.randomFloat() - 0.5f) * 200.0f,
-            (engine.randomFloat() - 0.5f) * 200.0f,
-            (engine.randomFloat() - 0.5f) * 200.0f);
+        // One draw per statement: function-argument evaluation order is
+        // unspecified, and g++ (right to left) and clang (left to right) used
+        // to give these dice different impulses. Drawn last-argument-first,
+        // the order g++ always used, so the pinned golden hash is unchanged.
+        const float fz = (engine.randomFloat() - 0.5f) * 50.0f;
+        const float fy = engine.randomFloat() * 10.0f;
+        const float fx = (engine.randomFloat() - 0.5f) * 50.0f;
+        engine.applyImpulse(id, fx, fy, fz);
+        const float tz = (engine.randomFloat() - 0.5f) * 200.0f;
+        const float ty = (engine.randomFloat() - 0.5f) * 200.0f;
+        const float tx = (engine.randomFloat() - 0.5f) * 200.0f;
+        engine.applyTorqueImpulse(id, tx, ty, tz);
     }
 
     for (int frame = 0; frame < 240; ++frame) {
@@ -1073,14 +1077,17 @@ TEST_CASE("Fuzz: table non-penetration stays bounded") {
         engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
         const int n = 1 + static_cast<int>(master.next() % 6);
         for (int d = 0; d < n; ++d) {
-            int id = engine.addDie(6, master.nextFloat() * 4.0f - 2.0f,
-                2.0f + master.nextFloat() * 3.0f,
-                master.nextFloat() * 4.0f - 2.0f);
+            // Sequenced draws (see runDeterministicScenario): same order on
+            // every compiler, last argument first as g++ always did.
+            const float z = master.nextFloat() * 4.0f - 2.0f;
+            const float y = 2.0f + master.nextFloat() * 3.0f;
+            const float x = master.nextFloat() * 4.0f - 2.0f;
+            int id = engine.addDie(6, x, y, z);
             engine.setDieHull(id, cubeFlat);
-            engine.applyImpulse(id,
-                (master.nextFloat() - 0.5f) * 40.0f,
-                master.nextFloat() * 8.0f,
-                (master.nextFloat() - 0.5f) * 40.0f);
+            const float fz = (master.nextFloat() - 0.5f) * 40.0f;
+            const float fy = master.nextFloat() * 8.0f;
+            const float fx = (master.nextFloat() - 0.5f) * 40.0f;
+            engine.applyImpulse(id, fx, fy, fz);
         }
         for (int frame = 0; frame < 180; ++frame) {
             engine.step(1.0f / 60.0f);
@@ -1192,9 +1199,13 @@ TEST_CASE("Resting contact: dice thrown onto the tavern table boxes all sleep") 
         for (int k = 0; k < 2; ++k) {
             const int id = engine.addDie(k ? 20 : 6, -2.0f + 4.0f * k, 6.0f, 0.0f);
             engine.setDieHull(id, flattenHull(k ? d20 : d6));
+            // Sequenced draws (see runDeterministicScenario).
             const float r = engine.randomFloat();
-            engine.applyImpulse(id, (r - 0.5f) * 20.0f, -5.0f, (engine.randomFloat() - 0.5f) * 20.0f);
-            engine.applyTorqueImpulse(id, engine.randomFloat() * 3.0f, engine.randomFloat() * 3.0f, 0.0f);
+            const float fz = (engine.randomFloat() - 0.5f) * 20.0f;
+            engine.applyImpulse(id, (r - 0.5f) * 20.0f, -5.0f, fz);
+            const float ty = engine.randomFloat() * 3.0f;
+            const float tx = engine.randomFloat() * 3.0f;
+            engine.applyTorqueImpulse(id, tx, ty, 0.0f);
         }
         if (stepUntilAsleep(engine, 60 * 12) < 0) {
             ++failures;
@@ -1698,10 +1709,11 @@ TEST_CASE("Fuzz: dynamics-heavy scenarios preserve invariants") {
             int id = engine.addDie(6, x, y, z);
             if (id < 0) continue;
             engine.setDieHull(id, cubeFlat);
-            engine.applyImpulse(id,
-                (master.nextFloat() - 0.5f) * 20.0f,
-                master.nextFloat() * 5.0f,
-                (master.nextFloat() - 0.5f) * 20.0f);
+            // Sequenced draws (see runDeterministicScenario).
+            const float fz = (master.nextFloat() - 0.5f) * 20.0f;
+            const float fy = master.nextFloat() * 5.0f;
+            const float fx = (master.nextFloat() - 0.5f) * 20.0f;
+            engine.applyImpulse(id, fx, fy, fz);
         }
 
         const int dynCount = static_cast<int>(master.next() % 20);
@@ -1757,10 +1769,11 @@ TEST_CASE("Fuzz: random scenarios preserve invariants and settle") {
             float iy = master.nextFloat() * 15.0f;
             float iz = (master.nextFloat() - 0.5f) * 60.0f;
             engine.applyImpulse(id, ix, iy, iz);
-            engine.applyTorqueImpulse(id,
-                (master.nextFloat() - 0.5f) * 250.0f,
-                (master.nextFloat() - 0.5f) * 250.0f,
-                (master.nextFloat() - 0.5f) * 250.0f);
+            // Sequenced draws (see runDeterministicScenario).
+            const float tz = (master.nextFloat() - 0.5f) * 250.0f;
+            const float ty = (master.nextFloat() - 0.5f) * 250.0f;
+            const float tx = (master.nextFloat() - 0.5f) * 250.0f;
+            engine.applyTorqueImpulse(id, tx, ty, tz);
             energyBudget += 0.5f * 5.0f * (ix*ix + iy*iy + iz*iz);
         }
 

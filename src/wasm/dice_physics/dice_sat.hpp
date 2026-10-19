@@ -193,8 +193,14 @@ inline bool satTestFromWorld(
     int axisCount = 0;
     int bestAxis = 0;
 
-    for (const auto& n : ha.faceNormals) axes[axisCount++] = rotA.rotate(n);
-    for (const auto& n : hb.faceNormals) axes[axisCount++] = rotB.rotate(n);
+    // Bounded like the edge axes below: two large (or degenerate) hulls can
+    // carry more than MAX_AXES face normals between them.
+    for (const auto& n : ha.faceNormals) {
+        if (axisCount < MAX_AXES) axes[axisCount++] = rotA.rotate(n);
+    }
+    for (const auto& n : hb.faceNormals) {
+        if (axisCount < MAX_AXES) axes[axisCount++] = rotB.rotate(n);
+    }
     for (const auto& ea : ha.edgeDirs) {
         Vec3 wea = rotA.rotate(ea);
         for (const auto& eb : hb.edgeDirs) {

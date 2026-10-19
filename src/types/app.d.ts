@@ -49,6 +49,16 @@ export interface RendererState {
         released: 'event' | 'timeout' | 'none';
     } | null;
     usePostAA?: boolean;
+    /** ContextProfile row the live context was created from (see src/core/ContextProfile.ts). */
+    contextProfile?: import('../core/ContextProfile').ContextProfileId;
+    contextProfileReason?: string;
+    contextAlpha?: boolean;
+    contextPost?: import('../core/ContextProfile').ContextPost;
+    contextShadows?: import('../core/ContextProfile').ContextShadows;
+    /** MSAA samples of the output (1 = none); null when unreadable. */
+    sampleCount?: number | null;
+    /** WebGPU adapter identity, or the WebGL probe's unmasked renderer string. */
+    adapterDescription?: string | null;
     _recoveryCleanup?: (() => void) | null;
     [key: string]: unknown;
 }

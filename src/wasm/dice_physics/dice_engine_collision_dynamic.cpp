@@ -12,6 +12,21 @@
 
 namespace dice_physics {
 
+namespace {
+
+// floor(rel / cell) clamped to [0, maxIndex], clamped *before* the int cast:
+// a NaN/Inf or far-off position (a forged snapshot, a degenerate collider)
+// must not hit the float->int UB the cast would otherwise be. Identical to
+// clamp(int(floor(...))) for every in-range value, so pair order is unchanged.
+int cellIndex(float rel, float cell, int maxIndex) {
+    const float f = std::floor(rel / cell);
+    if (!(f >= 0.0f)) return 0;
+    if (f >= static_cast<float>(maxIndex)) return maxIndex;
+    return static_cast<int>(f);
+}
+
+} // namespace
+
 void DicePhysicsEngine::ensureDieGridDimensions() {
     if (gridCols_ > 0) return;
     gridOriginX_ = -tableHalfW_ - GRID_CELL_SIZE;
@@ -24,26 +39,22 @@ void DicePhysicsEngine::ensureDieGridDimensions() {
 
 int DicePhysicsEngine::bodyCellXMin(float x, float radius) const {
     const float rel = x - radius - gridOriginX_;
-    const int c = static_cast<int>(std::floor(rel / GRID_CELL_SIZE));
-    return std::clamp(c, 0, gridCols_ - 1);
+    return cellIndex(rel, GRID_CELL_SIZE, gridCols_ - 1);
 }
 
 int DicePhysicsEngine::bodyCellXMax(float x, float radius) const {
     const float rel = x + radius - gridOriginX_;
-    const int c = static_cast<int>(std::floor(rel / GRID_CELL_SIZE));
-    return std::clamp(c, 0, gridCols_ - 1);
+    return cellIndex(rel, GRID_CELL_SIZE, gridCols_ - 1);
 }
 
 int DicePhysicsEngine::bodyCellZMin(float z, float radius) const {
     const float rel = z - radius - gridOriginZ_;
-    const int c = static_cast<int>(std::floor(rel / GRID_CELL_SIZE));
-    return std::clamp(c, 0, gridRows_ - 1);
+    return cellIndex(rel, GRID_CELL_SIZE, gridRows_ - 1);
 }
 
 int DicePhysicsEngine::bodyCellZMax(float z, float radius) const {
     const float rel = z + radius - gridOriginZ_;
-    const int c = static_cast<int>(std::floor(rel / GRID_CELL_SIZE));
-    return std::clamp(c, 0, gridRows_ - 1);
+    return cellIndex(rel, GRID_CELL_SIZE, gridRows_ - 1);
 }
 
 } // namespace dice_physics

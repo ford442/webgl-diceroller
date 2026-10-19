@@ -108,7 +108,8 @@ npm run format:check        # Prettier check (CI)
 - `?fair-dice` disables the pipping COM bias.
 - Render/perf flags:
     - WebGPU is the default; `?webgpu` / `?wgpu` are redundant but still force it explicitly.
-    - `?webgl` forces the stable WebGL baseline path (escape hatch / older browsers).
+    - `?webgl` forces the stable WebGL baseline path (escape hatch / older browsers). It is no longer needed to get a working boot: a missing or software/fallback WebGPU adapter routes to the classic `WebGLRenderer` on its own (`?webgpu` keeps a software adapter for testing).
+    - Context creation options come from one `ContextProfile` table (`src/core/ContextProfile.ts`: `desktop`, `mobile`, `xr`, `software`, `overlay`, `preview`). `?context=<profile>` forces a row; `?overlay` selects the transparent #315 overlay profile (alpha canvas, no shadows, no post). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Context profiles).
     - `?xr` / `?xr-emulator` enable the seated WebXR spike (forces WebGL + no-post). See [`docs/XR.md`](docs/XR.md).
     - `?xr-snap=45` sets VR snap-turn degrees (15–90) when `?xr` is active.
     - `?pr=N` sets render pixel ratio (clamped to `[0.5, 3]`); default is `min(devicePixelRatio, 2)`. At `pr=1` MSAA is enabled; above 1.0 FXAA is used in the post chain instead.
@@ -287,7 +288,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 - Run `npm run lint` before committing; CI blocks merge on lint/format failures.
 - **TypeScript policy:** `npm run typecheck` (`tsc --noEmit`, `checkJs` over remaining JS). `npm run typecheck:strict` is `strict: true` + `noUncheckedIndexedAccess` on `src/**/*.ts`. Headless seams live in the **`dice-core` workspace package** ([`packages/dice-core/`](packages/dice-core/): WASM façade, `AssetSource`, `SimClock`, notation, dice-set format, `rollHeadless()`). Import it by package name (`dice-core`, `dice-core/wasm/…`) — ESLint rejects relative paths into `packages/dice-core/src`, and the package rejects `three` and imports back into the app. Its own tsconfig compiles with **no DOM lib** (`npm run typecheck` runs it); `npm run check:dice-core` also greps for `three` / `window.` / `document.` and re-export barrels. Vite, vitest, `tsc` and `tsx --conditions=source` read the package's TS sources (`source` export condition); plain Node reads `dist/` (`npm run build:core`). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Headless core). **Environment props stay JavaScript** with JSDoc until individually migrated through `propKit`; do not bulk-convert the ~99 prop modules. `src/main.js` / `src/ui.js` / `src/results.js` stay JS until a panel kit exists. No `tsc` emit — Vite bundles `.ts` directly.
 - Native solver tests always write `src/wasm/build-native/compile_commands.json` (`npm run test:solver`; no `bear`/`compiledb` needed), and `src/wasm/.clangd` points clangd at the _merged_ native + emcc database that `npm run wasm:clangd-db` produces. Without a local EMSDK, download the `clangd-compile-commands` artifact from CI's `wasm-toolchain` job into `src/wasm/compile_commands.json` — otherwise `__EMSCRIPTEN__` / `__wasm_simd128__` branches read as dead code in the editor. CMake also exports `compile_commands.json` (`CMAKE_EXPORT_COMPILE_COMMANDS`) and Debug builds use `emcc_flags.sh` debug profile (`-O0 -g`), not release `-O3 -flto`.
-- **C++ gates:** `npm run test:solver` compiles with `-Werror` (`SOLVER_NO_WERROR=1` to opt out locally), and `npm run lint:cpp` runs clang-tidy over `src/wasm/dice_physics/**` with `WarningsAsErrors: '*'`. The engine is clean under both, so a new diagnostic is a regression. Disabling a clang-tidy check means editing `src/wasm/.clang-tidy` with a reason next to the existing ones — not a `NOLINT` comment.
+- **C++ gates:** `npm run test:solver` compiles with `-Werror` and `-ffp-contract=off` (`SOLVER_NO_WERROR=1` to opt out locally) and must pass under both g++ and clang — CI's `test-solver-matrix` runs clang, ASan + UBSan (`test:solver:san`) and the libFuzzer targets (`fuzz:solver`). Never pass two RNG draws as arguments to one call in the solver or its tests: argument evaluation order is unspecified and g++/clang differ. `npm run lint:cpp` runs clang-tidy over `src/wasm/dice_physics/**` with `WarningsAsErrors: '*'`. The engine is clean under both, so a new diagnostic is a regression. Disabling a clang-tidy check means editing `src/wasm/.clang-tidy` with a reason next to the existing ones — not a `NOLINT` comment.
 - **Do not hand-edit CMake's source list or flags.** `engine_sources.txt` is the only place a new `dice_physics/*.cpp` gets registered, and `emcc_flags.inc.sh` is the only place flags live. CI's `wasm-toolchain` job byte-diffs CMake's `dice_physics.wasm` against `build.sh`'s, so a flag added in one place and not the other fails the build.
 - **Format on save (Cursor / VS Code):** enable Prettier as the default formatter and `"editor.formatOnSave": true` so agent edits match project style. ESLint fixes on save: `"editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" }`.
 - Optional local hook: `npm install` runs `husky` + `lint-staged` (ESLint fix + Prettier on staged `*.{js,mjs}`).
@@ -466,6 +467,7 @@ npm run test:wasm-authoritative  # Visual sync + interaction with physicsWorld =
 npm run test:wasm-gameplay-loop  # Full-app: visual sync, drag interaction, collision audio (getStats().played)
 npm run test:share-roll-replay   # Two page loads of the same share URL settle to identical readAllDiceValues()
 npm run test:roll-timeout     # forceNoSettle: a roll that never settles still ends (timedOut, HUD result, re-roll)
+npm run test:default-route    # `/` without ?webgl reaches ready on SwiftShader (classic WebGL); ?overlay has real alpha (no WASM needed)
 npm run test:a11y             # axe accessibility scan
 npm run test:audio-worklet    # AudioWorklet graph: fixed size, no main-thread oscillators, audible (no WASM needed)
 npm run test:unit             # vitest: `dice-core` project (node env) + `app` project (happy-dom)
@@ -480,7 +482,9 @@ npm run test:breadloaf        # BreadLoaf prop in scene graph
 npm run test:dicecup          # DiceCup interactable (needs WASM for available:true)
 
 # Physics / renderer harnesses (scripts/)
-npm run test:solver                 # Native C++ unit + fuzz, -Werror (see docs/WASM_ENGINE.md)
+npm run test:solver                 # Native C++ unit + fuzz, -Werror (see docs/WASM_ENGINE.md); CXX=clang++ for the other compiler
+npm run test:solver:san             # Same run under ASan + UBSan (SOLVER_SANITIZE=1)
+npm run fuzz:solver                 # libFuzzer over deserializeState + collider registration (FUZZ_TIME=secs)
 npm run lint:cpp                    # clang-tidy over src/wasm/dice_physics/**
 npm run verify:cmake-wasm           # CMake vs build.sh .wasm byte parity (needs an EMSDK)
 node scripts/verify-wasm-primitives.mjs
@@ -562,7 +566,7 @@ Setup is just `npm install` (the startup update script). Run `npm run test:solve
 
 Running/verifying the app in this headless, software-rendered, WASM-absent environment has a few non-obvious gotchas:
 
-- **Use the `?webgl` baseline path.** There is no GPU, so WebGPU is unavailable. The default renderer falls back to the Three.js WebGL2 _TSL_ backend, which throws `Cannot read properties of undefined (reading 'buffers')` under SwiftShader and never finishes loading. Forcing `?webgl` (the classic `WebGLRenderer`) renders fine.
+- **The default route works without a GPU.** With no WebGPU adapter (or a software/fallback one) `RendererFactory` picks the classic `WebGLRenderer` itself, so `/` reaches `ready` on SwiftShader (`npm run test:default-route` checks this). `?webgl` still skips the WebGPU probe entirely. Never construct a device-less `WebGPURenderer`: that is the path that lands on Three's WebGL2 _TSL_ backend, which throws `Cannot read properties of undefined (reading 'buffers')` under SwiftShader and never finishes loading.
 - **No WASM here means no dice, not a different engine.** Emscripten is not installed, so there are no `public/wasm/` artifacts; ammo.js was retired, so there is no rigid-body fallback any more either. `PhysicsBootstrap.showLoadFailure()` shows an error banner and the scene still finishes loading and becomes ready (`window.__app.ready === true` under `&test`) as a static tavern with zero dice. `?fair-dice` is unrelated to this now — it only disables the pipping COM-bias torque and has nothing to do with whether the scene loads. Building the WASM module (`npm run build:wasm`, needs Emscripten) is the only way to get real dice/physics in this environment.
 - So a reliable local URL is e.g. `http://localhost:5173/?webgl&no-post&test&renderer-info` (dev) or the same on `:4173` (preview) — dice just won't be present without a WASM build. Trigger a roll programmatically with `window.__app.replayRoll(seed)` or via the top-right "Roll All" button / `R` key once WASM is built.
 - **Multiplayer (optional):** run `npm run signal:dev` (Cloudflare Worker on `:8787`), then `VITE_SIGNALING_URL=http://127.0.0.1:8787 npm run dev`. See [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md). Guests need WASM for deterministic replay.

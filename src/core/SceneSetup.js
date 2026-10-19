@@ -177,9 +177,20 @@ export async function setupScene(container) {
     const params = new URLSearchParams(window.location.search);
     const isSoftwareRenderer = rendererState.isSoftwareRenderer;
     const initialQuality = guessInitialQualityProfile(rendererState);
-    const forceLowPost = params.has('low-post');
+    // The context profile sets the post floor: `none` (xr, overlay) and `low`
+    // (mobile, software) here, the URL flags on top.
+    const forceLowPost = params.has('low-post') || rendererState.contextPost === 'low';
     // ?xr implies no-post — EffectComposer fights the XR framebuffer.
-    const disablePost = params.has('no-post') || params.has('xr') || params.has('xr-emulator');
+    const disablePost =
+        params.has('no-post') ||
+        params.has('xr') ||
+        params.has('xr-emulator') ||
+        rendererState.contextPost === 'none';
+    // A transparent profile (?overlay) shows the host page through the canvas:
+    // drop the opaque backdrop so the alpha-0 clear actually reaches it.
+    if (rendererState.contextAlpha) {
+        scene.background = null;
+    }
     const disableBloom = params.has('no-bloom');
     const disableGodRays = params.has('no-godrays');
     const reducedMotion = prefersReducedMotion();

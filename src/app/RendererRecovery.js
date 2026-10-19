@@ -100,6 +100,47 @@ export function createShadowController(getRenderer, sceneRef) {
     };
 }
 
+/**
+ * ` · desktop · 1.00x · MSAA 4x` — profile, pixel ratio and sample count.
+ * @param {import('../types/app').RendererState | undefined} state
+ */
+export function describeContextLabel(state) {
+    const parts = [];
+    if (state?.contextProfile) parts.push(state.contextProfile);
+    if (state?.pixelRatio != null) parts.push(`${state.pixelRatio.toFixed(2)}x`);
+    if (typeof state?.sampleCount === 'number') {
+        parts.push(
+            state.sampleCount > 1
+                ? `MSAA ${state.sampleCount}x`
+                : state.usePostAA
+                  ? 'FXAA'
+                  : 'no AA'
+        );
+    }
+    return parts.length > 0 ? ` · ${parts.join(' · ')}` : '';
+}
+
+/**
+ * Hover text: adapter, why this profile, and why a fallback happened.
+ * @param {import('../types/app').RendererState | undefined} state
+ */
+export function describeContextDetail(state) {
+    const lines = [];
+    if (state?.adapterDescription) lines.push(`adapter: ${state.adapterDescription}`);
+    if (state?.contextProfile) {
+        lines.push(`profile: ${state.contextProfile} (${state.contextProfileReason ?? 'default'})`);
+    }
+    if (state?.glPowerPreference) {
+        const why = state.powerReasons?.length ? ` (${state.powerReasons.join(', ')})` : '';
+        lines.push(`power: ${state.glPowerPreference}${why}`);
+    }
+    if (state?.fallbackReason) lines.push(`fallback: ${state.fallbackReason}`);
+    if (state?.gpuLimitNote && !state.fallbackReason?.includes(state.gpuLimitNote)) {
+        lines.push(`limits: ${state.gpuLimitNote}`);
+    }
+    return lines.join('\n');
+}
+
 // Small, unobtrusive indicator of the active renderer. Shown when ?debug is on,
 // when ?renderer-info is requested, or whenever WebGPU fell back to WebGL so the
 // user understands they're on the degraded baseline path. In the happy WebGPU
@@ -156,12 +197,8 @@ export function createRendererBadge(state, { persistent } = {}, onRemoved = () =
             return;
         }
 
-        const prLabel =
-            nextState?.pixelRatio != null ? ` · ${nextState.pixelRatio.toFixed(2)}x` : '';
-        badge.textContent = isFallback
-            ? `renderer: ${type} (fallback)${prLabel}`
-            : `renderer: ${type}${prLabel}`;
-        badge.title = nextState?.fallbackReason ?? nextState?.gpuLimitNote ?? '';
+        badge.textContent = `renderer: ${type}${isFallback ? ' (fallback)' : ''}${describeContextLabel(nextState)}`;
+        badge.title = describeContextDetail(nextState);
         badge.style.backgroundColor = isFallback ? 'rgba(120, 40, 0, 0.7)' : 'rgba(0, 0, 0, 0.55)';
         badge.style.color = isFallback ? '#ffd9b0' : '#bfe8ff';
         badge.style.opacity = '1';
