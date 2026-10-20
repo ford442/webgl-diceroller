@@ -31,7 +31,8 @@ export function createDiceCasePanel(hooks) {
     const hudPanel = createHudPanel({
         id: 'dice-case-panel',
         ariaLabel: 'Dice case',
-        anchor: 'center-left',
+        anchor: 'left-stack',
+        stackOrder: 0,
         title: 'Dice Case',
         collapsible: true,
         className: 'hud-panel--dice-case',

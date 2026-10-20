@@ -27,4 +27,10 @@ describe('resolvePublicAssetUrl', () => {
             'https://go.1ink.us/dice-roller/images/wood_diffuse.jpg'
         );
     });
+
+    it('resolves the public root itself (handed to the physics worker)', () => {
+        expect(resolvePublicAssetUrl('', './', 'https://test.1ink.us/dice-roller/index.html')).toBe(
+            'https://test.1ink.us/dice-roller/'
+        );
+    });
 });

@@ -61,7 +61,12 @@ describe('SettleWatch', () => {
 
     it('times out after the simulated budget, measured in engine ticks', () => {
         const { world, probe, now } = makeWorld();
-        const watch = createSettleWatch(probe, { now, timeoutSimSeconds: 12, stallMs: 1e9 });
+        const watch = createSettleWatch(probe, {
+            now,
+            timeoutSimSeconds: 12,
+            stallMs: 1e9,
+            maxWallMs: Infinity,
+        });
         watch.begin();
         let status = watch.poll();
         // 11.9 s of sim: still pending, however much wall time passes.
@@ -99,6 +104,43 @@ describe('SettleWatch', () => {
         expect(watch.poll().state).toBe('pending');
         world.wall = 65_000;
         expect(watch.poll()).toMatchObject({ state: 'timedOut', reason: 'stalled' });
+    });
+
+    it('times out on wall time when the engine ticks too slowly to reach the sim budget', () => {
+        // Main-thread physics on a multi-second frame: ticks keep coming, so it
+        // is not a stall, but 12 s of sim would take minutes of real time.
+        const { world, probe, now } = makeWorld();
+        const watch = createSettleWatch(probe, { now, stallMs: 5000, maxWallMs: 30_000 });
+        watch.begin();
+        let status = watch.poll();
+        while (status.state === 'pending' && world.wall < 60_000) {
+            world.ticks = (world.ticks ?? 0) + 10;
+            world.wall += 4000;
+            status = watch.poll();
+        }
+        expect(status).toMatchObject({ state: 'timedOut', reason: 'wallTimeout' });
+        expect(world.wall).toBe(32_000);
+        expect(status.simSeconds).toBeLessThan(12);
+    });
+
+    it('does not count a hidden tab toward the wall-time backstop', () => {
+        const { world, probe, now } = makeWorld();
+        let paused = true;
+        const watch = createSettleWatch(probe, {
+            now,
+            stallMs: 1e9,
+            maxWallMs: 30_000,
+            isPaused: () => paused,
+        });
+        watch.begin();
+        world.wall = 120_000;
+        expect(watch.poll().state).toBe('pending');
+        paused = false;
+        world.ticks = 2;
+        world.wall = 149_000;
+        expect(watch.poll().state).toBe('pending');
+        world.wall = 150_000;
+        expect(watch.poll()).toMatchObject({ state: 'timedOut', reason: 'wallTimeout' });
     });
 
     it('times out with missingBodies when the engine never registers the dice', () => {

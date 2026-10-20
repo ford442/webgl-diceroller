@@ -15,13 +15,16 @@
  *                    passed (fixed ticks, so a slow CPU or a throttled tab does
  *                    not cut a roll short); `stalled`: the engine stopped
  *                    ticking while dice were awake; `missingBodies`: the table
- *                    has dice the engine never registered.
+ *                    has dice the engine never registered; `wallTimeout`: the
+ *                    engine ticks, but so slowly (main-thread physics on a
+ *                    slow frame rate) that `timeoutSimSeconds` would take
+ *                    minutes — a visible-wall-time backstop.
  *
  * Pure and DOM-free: the probe and the clock are injected.
  */
 
 export type SettleState = 'pending' | 'settled' | 'timedOut';
-export type SettleTimeoutReason = 'simTimeout' | 'stalled' | 'missingBodies';
+export type SettleTimeoutReason = 'simTimeout' | 'stalled' | 'missingBodies' | 'wallTimeout';
 
 export interface SettleProbe {
     /** Dice on the table that should have engine bodies. */
@@ -41,6 +44,11 @@ export interface SettleWatchOptions {
     tickHz?: number;
     /** Wall ms with no tick progress (dice awake) before giving up. Default 5000. */
     stallMs?: number;
+    /**
+     * Visible wall ms (paused time excluded) after which a roll is read as it
+     * lies even though the engine is still ticking. Default 30000.
+     */
+    maxWallMs?: number;
     /** Wall ms the engine may lag the table's die count. Default 3000. */
     missingBodiesMs?: number;
     /** Consecutive asleep polls required. Default 3. */
@@ -66,6 +74,7 @@ export interface SettleWatch {
 }
 
 export const DEFAULT_SETTLE_TIMEOUT_SIM_SECONDS = 12;
+export const DEFAULT_SETTLE_MAX_WALL_MS = 30000;
 
 export function createSettleWatch(
     probe: SettleProbe,
@@ -74,6 +83,7 @@ export function createSettleWatch(
     const timeoutSim = options.timeoutSimSeconds ?? DEFAULT_SETTLE_TIMEOUT_SIM_SECONDS;
     const tickHz = options.tickHz ?? 120;
     const stallMs = options.stallMs ?? 5000;
+    const maxWallMs = options.maxWallMs ?? DEFAULT_SETTLE_MAX_WALL_MS;
     const missingBodiesMs = options.missingBodiesMs ?? 3000;
     const stableChecks = Math.max(1, options.stableChecks ?? 3);
     const minTicksAfterBegin = options.minTicksAfterBegin ?? 2;
@@ -85,6 +95,8 @@ export function createSettleWatch(
     let startWall = 0;
     let lastTicks: number | null = null;
     let lastProgressWall = 0;
+    let lastPollWall = 0;
+    let visibleWallMs = 0;
     let missingSince: number | null = null;
     let stable = 0;
     let finished: SettleStatus | null = null;
@@ -106,6 +118,8 @@ export function createSettleWatch(
             lastTicks = startTicks;
             startWall = now();
             lastProgressWall = startWall;
+            lastPollWall = startWall;
+            visibleWallMs = 0;
             missingSince = null;
             stable = 0;
         },
@@ -114,6 +128,8 @@ export function createSettleWatch(
             if (!active) this.begin();
 
             const t = now();
+            if (!isPaused()) visibleWallMs += t - lastPollWall;
+            lastPollWall = t;
             const ticks = probe.ticks();
             const simSeconds =
                 ticks != null && startTicks != null ? (ticks - startTicks) / tickHz : null;
@@ -154,6 +170,9 @@ export function createSettleWatch(
             }
             if (ticks != null && t - lastProgressWall >= stallMs) {
                 return finish({ state: 'timedOut', reason: 'stalled', simSeconds });
+            }
+            if (visibleWallMs >= maxWallMs) {
+                return finish({ state: 'timedOut', reason: 'wallTimeout', simSeconds });
             }
             return { state: 'pending', simSeconds };
         },

@@ -116,6 +116,10 @@ function reshapeExistingDice(dieKey, template) {
 }
 
 export const loadDiceModels = async (onProgress) => {
+    // Fetch the decoder alongside the GLBs rather than after the first one
+    // parses: index.html <link rel=preload>s draco_decoder.wasm, and the later
+    // fetch left that preload unused long enough for Chrome to warn.
+    dracoLoader.preload();
     let done = 0;
     const total = diceTypes.length;
 

@@ -118,21 +118,38 @@ export async function createLamp() {
         };
     }
 
+    // Some OBJ parts were exported without UVs. A textured material on them
+    // only ever samples texel (0,0), and the WebGPU node builder warns
+    // 'Vertex attribute "uv" not found' for each — give them an untextured twin.
+    const untextured = new Map();
+    const withoutMaps = (material) => {
+        let twin = untextured.get(material);
+        if (!twin) {
+            twin = material.clone();
+            twin.map = null;
+            twin.bumpMap = null;
+            untextured.set(material, twin);
+        }
+        return twin;
+    };
+
     // 2. Apply Materials based on mesh names (never mutate geometry here)
     object.traverse((child) => {
         if (child.isMesh) {
             child.castShadow = true;
             child.receiveShadow = true;
             const name = (child.name || '').toLowerCase();
+            let material;
             if (name.includes('glass') || name.includes('shade')) {
-                child.material = matGlass;
+                material = matGlass;
             } else if (name.includes('wood')) {
-                child.material = matWood;
+                material = matWood;
             } else if (name.includes('steel') || name.includes('chain')) {
-                child.material = matSteel;
+                material = matSteel;
             } else {
-                child.material = matCopper;
+                material = matCopper;
             }
+            child.material = child.geometry?.attributes?.uv ? material : withoutMaps(material);
         }
     });
 

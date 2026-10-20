@@ -701,8 +701,19 @@ async function createWebGpuRenderer({
         device: curated.device as GPUDevice,
         trackTimestamp: curated.trackTimestamp,
     });
+    // WebGPURenderer quietly swaps in its WebGL2 TSL backend when
+    // WebGPUBackend.init() throws (e.g. the canvas has no 'webgpu' context even
+    // though the curated device exists). That backend is the one we never run
+    // (see the device-less note in createRenderer), and the app would still
+    // label it "webgpu". Drop the fallback so init() rejects with the real
+    // error and createRenderer falls back to the classic WebGLRenderer.
+    (renderer as unknown as { _getFallback: unknown })._getFallback = null;
     applySharedRendererConfig(renderer, width, height, pixelRatio, { shadows, alpha });
     await renderer.init();
+    if ((renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend !== true) {
+        renderer.dispose();
+        throw new Error('WebGPURenderer did not start its WebGPU backend');
+    }
     return renderer;
 }
 
