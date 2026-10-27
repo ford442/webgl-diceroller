@@ -10,7 +10,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { formatSolverBuildId } from 'dice-core/wasm/SolverBuildId';
 
-import { RoomDurableObject } from '../../signaling/src/RoomDurableObject.js';
+// A non-literal specifier so the app tsconfig (tests/**/*.js, checkJs) does
+// not follow this into the Cloudflare worker, which uses Durable Object globals.
+const workerModule = '../../signaling/src/RoomDurableObject.js';
+const { RoomDurableObject } = await import(/* @vite-ignore */ workerModule);
 
 const PREVIOUS = formatSolverBuildId({ solver_revision: 10, wasm_sha256: 'a'.repeat(64) });
 const CURRENT = formatSolverBuildId({ solver_revision: 11, wasm_sha256: 'b'.repeat(64) });
