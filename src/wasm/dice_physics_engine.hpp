@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -30,6 +31,28 @@ namespace dice_physics {
 // ---------------------------------------------------------------------------
 // Physics engine
 // ---------------------------------------------------------------------------
+
+/**
+ * One island's contact solve, handed to an IslandRunner: task(k) solves
+ * island k (warm start, velocity and position passes over its manifolds).
+ */
+struct IslandTask {
+    void (*fn)(void* ctx, uint32_t island) = nullptr;
+    void* ctx = nullptr;
+    void operator()(uint32_t island) const { fn(ctx, island); }
+};
+
+/**
+ * Test seam for the island solve. run() must call task(k) exactly once for
+ * every k in [0, count) before it returns, in any order, on any threads.
+ * Islands share no body the solver writes, so the result may not depend on
+ * which order or thread that is; the native tests hold the engine to that.
+ */
+class IslandRunner {
+public:
+    virtual ~IslandRunner() = default;
+    virtual void run(uint32_t count, const IslandTask& task) = 0;
+};
 
 class DicePhysicsEngine {
 public:
@@ -216,6 +239,16 @@ public:
     void setBroadphaseForTesting(bool enabled);
 
     /**
+     * Test hook: solve the islands through `runner` instead of in island
+     * order on this thread (nullptr restores that). Not owned. Not bound to
+     * JS: the shipped module is single-threaded (docs/WASM_ENGINE.md,
+     * Phase 11).
+     */
+    void setIslandRunnerForTesting(IslandRunner* runner) { islandRunner_ = runner; }
+    /** Islands with at least one manifold in the last substep's solve. */
+    uint32_t getIslandCount() const { return islandCount_; }
+
+    /**
      * Test hook: the die–die pairs whose bounding spheres overlap (expand 0),
      * as the broadphase walker reports them, without running the solver.
      */
@@ -352,13 +385,23 @@ private:
     // Per manifold: its A and B slots, or {-1, -1} when either body index is
     // out of range (the manifold is skipped).
     std::vector<std::array<int32_t, 2>> manifoldBodySlots_;
-    // Engine-owned scratch the step reuses instead of allocating: the
-    // velocity solver's manifold order, the island union-find, and the posed
-    // face planes addSatContacts builds for each hull pair.
+    // Engine-owned scratch the step reuses instead of allocating: the solve
+    // order, the island partition, and the posed face planes addSatContacts
+    // builds for each hull pair.
     std::vector<size_t> solveOrder_;
     std::vector<int> islandParent_;
+    // Island root of every node (dice, then dynamics), from buildIslands();
+    // updateIslandSleep reuses it rather than partitioning again.
     std::vector<int> islandRoot_;
     std::vector<float> islandKe_;
+    // Islands as CSR over solveOrder_: island k solves
+    // islandItems_[islandStart_[k] .. islandStart_[k + 1]), in solve order.
+    // islandOfRoot_ numbers a root's island by first appearance.
+    std::vector<int32_t> islandOfRoot_;
+    std::vector<uint32_t> islandStart_;
+    std::vector<size_t> islandItems_;
+    uint32_t islandCount_ = 0;
+    IslandRunner* islandRunner_ = nullptr;
     std::vector<HullPlane> satPlanesA_;
     std::vector<HullPlane> satPlanesB_;
     std::vector<CollisionEvent> events_;
@@ -518,18 +561,29 @@ private:
     void generateContacts(float dt, StepStats& stats);
     /** Sort manifold indices into solveOrder_, the order every pass walks. */
     void buildSolveOrder();
-    void warmStartManifolds();
-    void prepareVelocityConstraints(float dt);
-    void solveVelocityConstraints(float dt);
-    void solvePositionConstraints();
+    /**
+     * Partition this substep's manifolds into islands (islandRoot_,
+     * islandStart_, islandItems_). Needs buildSolveOrder() and
+     * gatherSolverBodies() first.
+     */
+    void buildIslands();
+    /** Every pass, over island k's manifolds only. */
+    void solveIsland(uint32_t island, float dt);
+    using ManifoldSpan = std::span<const size_t>;
+    void warmStartManifolds(ManifoldSpan manifolds);
+    void prepareVelocityConstraints(ManifoldSpan manifolds, float dt);
+    void solveVelocityConstraints(ManifoldSpan manifolds, float dt);
+    void solvePositionConstraints(ManifoldSpan manifolds);
     void solveContacts(float dt);
     void updateIslandSleep(float dt);
     /**
      * Union-find over body-body manifolds (dice + dynamic props; statics and
      * the table never join an island). root[i] is the island of node i (dice
-     * first, then dynamics); islandKe[root] is its most energetic member's
-     * kinetic energy.
+     * first, then dynamics).
      */
+    void partitionIslands(std::vector<int>& root);
+    /** islandKe[root]: the island's most energetic member's kinetic energy. */
+    void islandEnergies(const std::vector<int>& root, std::vector<float>& islandKe) const;
     void computeIslands(std::vector<int>& root, std::vector<float>& islandKe);
     float speculativeFor(const Vec3& velocity, float dt) const;
     void gatherSolverBodies();

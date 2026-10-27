@@ -1047,8 +1047,53 @@ void DicePhysicsEngine::buildSolveOrder() {
     });
 }
 
-void DicePhysicsEngine::warmStartManifolds() {
+void DicePhysicsEngine::buildIslands() {
+    partitionIslands(islandRoot_);
+    // Number islands by their first manifold in solve order and keep that
+    // order inside each, so island k and its manifold list are functions of
+    // the manifold keys, like solveOrder_ itself.
+    islandOfRoot_.assign(islandRoot_.size(), -1);
+    islandStart_.assign(islandRoot_.size() + 1, 0);
+    islandCount_ = 0;
+    // Manifold mi's island number, by its root, or nullptr for a manifold
+    // the solver skips. Solver slot s holds node s - 1 (slot 0 is the world
+    // anchor), and a pair's two bodies share a root, so body A names it.
+    auto islandOf = [&](size_t mi) -> int32_t* {
+        const int32_t slot = manifoldBodySlots_[mi][0];
+        if (slot <= 0) return nullptr;
+        return &islandOfRoot_[static_cast<size_t>(islandRoot_[static_cast<size_t>(slot - 1)])];
+    };
     for (const size_t mi : solveOrder_) {
+        int32_t* island = islandOf(mi);
+        if (!island) continue;
+        if (*island < 0) *island = static_cast<int32_t>(islandCount_++);
+        ++islandStart_[static_cast<size_t>(*island) + 1];
+    }
+    for (uint32_t k = 0; k < islandCount_; ++k) islandStart_[k + 1] += islandStart_[k];
+    if (islandItems_.capacity() < manifolds_.capacity()) islandItems_.reserve(manifolds_.capacity());
+    islandItems_.resize(islandStart_[islandCount_]);
+    // Fill with islandStart_ as the cursor: afterwards islandStart_[k] is
+    // where island k ends, so shifting it up one slot restores the starts.
+    for (const size_t mi : solveOrder_) {
+        const int32_t* island = islandOf(mi);
+        if (!island) continue;
+        islandItems_[islandStart_[static_cast<size_t>(*island)]++] = mi;
+    }
+    for (uint32_t k = islandCount_; k > 0; --k) islandStart_[k] = islandStart_[k - 1];
+    islandStart_[0] = 0;
+}
+
+void DicePhysicsEngine::solveIsland(uint32_t island, float dt) {
+    const ManifoldSpan manifolds{islandItems_.data() + islandStart_[island],
+                                 islandStart_[island + 1] - islandStart_[island]};
+    prepareVelocityConstraints(manifolds, dt);
+    warmStartManifolds(manifolds);
+    solveVelocityConstraints(manifolds, dt);
+    solvePositionConstraints(manifolds);
+}
+
+void DicePhysicsEngine::warmStartManifolds(ManifoldSpan manifolds) {
+    for (const size_t mi : manifolds) {
         auto& m = manifolds_[mi];
         BodyView va, vb;
         if (!bindViews(mi, va, vb)) continue;
@@ -1063,8 +1108,8 @@ void DicePhysicsEngine::warmStartManifolds() {
     }
 }
 
-void DicePhysicsEngine::prepareVelocityConstraints(float dt) {
-    for (size_t mi = 0; mi < manifolds_.size(); ++mi) {
+void DicePhysicsEngine::prepareVelocityConstraints(ManifoldSpan manifolds, float dt) {
+    for (const size_t mi : manifolds) {
         auto& m = manifolds_[mi];
         BodyView va, vb;
         if (!bindViews(mi, va, vb)) continue;
@@ -1094,10 +1139,10 @@ float effectiveMass(const BodyView& va, const BodyView& vb, const Vec3& rA, cons
 }
 } // namespace
 
-void DicePhysicsEngine::solveVelocityConstraints(float dt) {
+void DicePhysicsEngine::solveVelocityConstraints(ManifoldSpan manifolds, float dt) {
     const float invDt = dt > 0.0f ? 1.0f / dt : 0.0f;
     for (int iter = 0; iter < VELOCITY_ITERATIONS; ++iter) {
-        for (const size_t oi : solveOrder_) {
+        for (const size_t oi : manifolds) {
             auto& m = manifolds_[oi];
             BodyView va, vb;
             if (!bindViews(oi, va, vb)) continue;
@@ -1152,9 +1197,9 @@ void DicePhysicsEngine::solveVelocityConstraints(float dt) {
     }
 }
 
-void DicePhysicsEngine::solvePositionConstraints() {
+void DicePhysicsEngine::solvePositionConstraints(ManifoldSpan manifolds) {
     for (int iter = 0; iter < POSITION_ITERATIONS; ++iter) {
-        for (const size_t mi : solveOrder_) {
+        for (const size_t mi : manifolds) {
             auto& m = manifolds_[mi];
             BodyView va, vb;
             if (!bindViews(mi, va, vb)) continue;
@@ -1173,12 +1218,11 @@ void DicePhysicsEngine::solvePositionConstraints() {
     }
 }
 
-void DicePhysicsEngine::computeIslands(std::vector<int>& root, std::vector<float>& islandKe) {
+void DicePhysicsEngine::partitionIslands(std::vector<int>& root) {
     const int dieN = static_cast<int>(bodies_.size());
     const int dynN = static_cast<int>(dynamics_.size());
     const int n = dieN + dynN;
     root.assign(static_cast<size_t>(n), 0);
-    islandKe.assign(static_cast<size_t>(n), 0.0f);
     if (n <= 0) return;
     std::vector<int>& parent = islandParent_;
     parent.resize(static_cast<size_t>(n));
@@ -1208,6 +1252,12 @@ void DicePhysicsEngine::computeIslands(std::vector<int>& root, std::vector<float
     }
 
     for (int i = 0; i < n; ++i) root[static_cast<size_t>(i)] = find(i);
+}
+
+void DicePhysicsEngine::islandEnergies(const std::vector<int>& root, std::vector<float>& islandKe) const {
+    const int dieN = static_cast<int>(bodies_.size());
+    const int dynN = static_cast<int>(dynamics_.size());
+    islandKe.assign(root.size(), 0.0f);
     auto accumulate = [&](int node, const auto& b) {
         if (b.kinematic) return;
         const float ke = 0.5f * b.mass * b.velocity.lengthSq()
@@ -1219,13 +1269,21 @@ void DicePhysicsEngine::computeIslands(std::vector<int>& root, std::vector<float
     for (int i = 0; i < dynN; ++i) accumulate(dieN + i, dynamics_[static_cast<size_t>(i)]);
 }
 
+void DicePhysicsEngine::computeIslands(std::vector<int>& root, std::vector<float>& islandKe) {
+    partitionIslands(root);
+    islandEnergies(root, islandKe);
+}
+
 void DicePhysicsEngine::updateIslandSleep(float dt) {
     const int dieN = static_cast<int>(bodies_.size());
     const int dynN = static_cast<int>(dynamics_.size());
     if (dieN + dynN <= 0) return;
+    // The partition the solve just used: nothing between buildIslands() and
+    // here adds or drops a manifold. Energies are read after the solve.
     std::vector<int>& roots = islandRoot_;
     std::vector<float>& islandKe = islandKe_;
-    computeIslands(roots, islandKe);
+    if (roots.size() != static_cast<size_t>(dieN + dynN)) partitionIslands(roots);
+    islandEnergies(roots, islandKe);
     auto find = [&](int node) { return roots[static_cast<size_t>(node)]; };
     auto dieNode = [&](int idx) { return idx; };
     auto dynNode = [&](int idx) { return dieN + idx; };
@@ -1267,10 +1325,25 @@ void DicePhysicsEngine::updateIslandSleep(float dt) {
 void DicePhysicsEngine::solveContacts(float dt) {
     gatherSolverBodies();
     buildSolveOrder();
-    prepareVelocityConstraints(dt);
-    warmStartManifolds();
-    solveVelocityConstraints(dt);
-    solvePositionConstraints();
+    buildIslands();
+    // Each island reads and writes only its own bodies' solver rows (slot 0
+    // and kinematic rows are never written) and its own manifolds, so the
+    // islands can run in any order, or at once, with the same result.
+    if (islandRunner_) {
+        struct Ctx {
+            DicePhysicsEngine* engine;
+            float dt;
+        } ctx{this, dt};
+        const IslandTask task{
+            [](void* c, uint32_t island) {
+                auto* x = static_cast<Ctx*>(c);
+                x->engine->solveIsland(island, x->dt);
+            },
+            &ctx};
+        islandRunner_->run(islandCount_, task);
+    } else {
+        for (uint32_t k = 0; k < islandCount_; ++k) solveIsland(k, dt);
+    }
     scatterSolverBodies();
     // No post-solve velocity projection. There used to be one that stripped
     // a body's centre-of-mass velocity along any static/world contact normal,

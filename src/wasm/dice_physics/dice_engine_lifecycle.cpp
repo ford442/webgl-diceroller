@@ -39,6 +39,7 @@ void DicePhysicsEngine::reserveContactStorage() {
     const size_t cap = manifolds_.capacity();
     if (solveOrder_.capacity() < cap) solveOrder_.reserve(cap);
     if (manifoldBodySlots_.capacity() < cap) manifoldBodySlots_.reserve(cap);
+    if (islandItems_.capacity() < cap) islandItems_.reserve(cap);
 }
 
 void DicePhysicsEngine::setFlags(uint32_t flags) {

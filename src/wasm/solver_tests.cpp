@@ -14,12 +14,14 @@
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <new>
 #include <sstream>
 #include <string>
 #include <chrono>
+#include <thread>
 
 using namespace dice_physics;
 
@@ -27,14 +29,14 @@ using namespace dice_physics;
 // Counting allocator: every global operator new in this binary goes through
 // here, so a test can arm it around engine calls and assert that none
 // allocated. The sanitizer runtimes ship their own operator new (clang's
-// static ASan runtime would collide at link time), so the probe and its test
-// are compiled out under SOLVER_SANITIZE.
+// static ASan and TSan runtimes would collide at link time), so the probe and
+// its test are compiled out under SOLVER_SANITIZE.
 // ---------------------------------------------------------------------------
 
-#if defined(__SANITIZE_ADDRESS__)
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
 #define SOLVER_ALLOC_PROBE 0
 #elif defined(__has_feature)
-#if __has_feature(address_sanitizer)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
 #define SOLVER_ALLOC_PROBE 0
 #endif
 #endif
@@ -1718,6 +1720,159 @@ TEST_CASE("Allocation-free step: nothing in step() allocates after warm-up") {
     CHECK(engine.allBodyStatesFinite());
 }
 #endif
+
+namespace {
+
+// IslandRunners for the island-order test. Each checks the contract it was
+// handed (every island once) so a runner bug cannot pass as determinism.
+struct CheckedRunner : IslandRunner {
+    uint32_t runs = 0;
+    uint32_t maxIslands = 0;
+    bool everyIslandOnce = true;
+    std::vector<std::atomic<uint32_t>> seen = std::vector<std::atomic<uint32_t>>(4096);
+
+    void run(uint32_t count, const IslandTask& task) override {
+        REQUIRE(count <= seen.size());
+        for (uint32_t k = 0; k < count; ++k) seen[k] = 0;
+        dispatch(count, [&](uint32_t k) {
+            seen[k].fetch_add(1);
+            task(k);
+        });
+        for (uint32_t k = 0; k < count; ++k) everyIslandOnce = everyIslandOnce && seen[k] == 1;
+        ++runs;
+        maxIslands = std::max(maxIslands, count);
+    }
+    virtual void dispatch(uint32_t count, const std::function<void(uint32_t)>& solve) = 0;
+};
+
+struct ReversedRunner : CheckedRunner {
+    void dispatch(uint32_t count, const std::function<void(uint32_t)>& solve) override {
+        for (uint32_t k = count; k > 0; --k) solve(k - 1);
+    }
+};
+
+// A different permutation every call, from a fixed LCG.
+struct ShuffledRunner : CheckedRunner {
+    uint64_t state = 0x9E3779B97F4A7C15ULL;
+    std::vector<uint32_t> perm;
+    void dispatch(uint32_t count, const std::function<void(uint32_t)>& solve) override {
+        perm.resize(count);
+        for (uint32_t k = 0; k < count; ++k) perm[k] = k;
+        for (uint32_t k = count; k > 1; --k) {
+            state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+            const auto j = static_cast<uint32_t>((state >> 33) % k);
+            std::swap(perm[k - 1], perm[j]);
+        }
+        for (const uint32_t k : perm) solve(k);
+    }
+};
+
+// Islands claimed from a shared counter by `threads` threads, so which
+// thread solves which island, and when, is up to the scheduler.
+struct ThreadedRunner : CheckedRunner {
+    unsigned threads;
+    explicit ThreadedRunner(unsigned t) : threads(t) {}
+    void dispatch(uint32_t count, const std::function<void(uint32_t)>& solve) override {
+        std::atomic<uint32_t> next{0};
+        auto work = [&] {
+            for (uint32_t k = next.fetch_add(1); k < count; k = next.fetch_add(1)) solve(k);
+        };
+        std::vector<std::thread> pool;
+        for (unsigned t = 1; t < threads; ++t) pool.emplace_back(work);
+        work();
+        for (auto& th : pool) th.join();
+    }
+};
+
+/**
+ * Two piles that never touch, at opposite corners of the table: d6s against
+ * a static box and a kinematic die swept through them on one side, d20s and
+ * two dynamic props on the other. Returns serializeState() after `frames`
+ * plus an FNV-1a over every frame's collision-event buffer.
+ */
+std::pair<std::vector<uint8_t>, uint64_t> runSplitScene(IslandRunner* runner, int frames) {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    engine.setIslandRunnerForTesting(runner);
+    engine.addStaticBox(1, -9.0f, -2.25f, -9.0f, 1.0f, 0.5f, 1.0f, 0, 0, 0, 1, 2);
+    const auto cube = flattenHull(makeUnitCubeHull());
+    const auto d20 = flattenHull(makeD20Hull());
+    for (int i = 0; i < 10; ++i) {
+        const int id = engine.addDie(6, -7.5f + static_cast<float>(i % 3) * 0.8f,
+                                     -1.0f + static_cast<float>(i) * 0.6f,
+                                     -7.5f + static_cast<float>(i % 2) * 0.8f);
+        engine.setDieHull(id, cube);
+        uploadD6FaceTable(engine, id);
+        engine.setDieVelocity(id, -1.0f, -2.0f, -1.0f, 3.0f, 1.0f, -2.0f);
+    }
+    const int held = engine.addDie(6, -6.0f, -1.5f, -9.0f);
+    engine.setDieHull(held, cube);
+    engine.setDieKinematic(held, true);
+    for (int i = 0; i < 10; ++i) {
+        const int id = engine.addDie(20, 7.5f - static_cast<float>(i % 3) * 0.8f,
+                                     -1.0f + static_cast<float>(i) * 0.6f,
+                                     7.5f - static_cast<float>(i % 2) * 0.8f);
+        engine.setDieHull(id, d20);
+        uploadD20FaceTable(engine, id);
+        engine.setDieVelocity(id, 1.0f, -2.0f, 1.0f, -2.0f, 3.0f, 1.0f);
+    }
+    engine.addDynamicBox(100, 0.8f, 8.5f, -2.3f, 6.5f, 0.4f, 0.3f, 0.4f, 0, 0, 0, 1, 0);
+    engine.addDynamicBox(101, 0.8f, 6.5f, -2.3f, 8.5f, 0.3f, 0.3f, 0.3f, 0, 0, 0, 1, 0);
+
+    uint64_t events = 14695981039346656037ULL;
+    for (int f = 0; f < frames; ++f) {
+        const float t = static_cast<float>(f) / 60.0f;
+        engine.setDieTransform(held, -7.0f + std::sin(t) * 1.5f, -2.2f, -7.0f, 0, 0, 0, 1);
+        engine.step(1.0f / 60.0f);
+        const auto& buf = engine.buildCollisionEventBuffer();
+        const auto* bytes = reinterpret_cast<const uint8_t*>(buf.data());
+        for (size_t i = 0; i < buf.size() * sizeof(float); ++i) {
+            events ^= bytes[i];
+            events *= 1099511628211ULL;
+        }
+    }
+    return {engine.serializeState(), events};
+}
+
+} // namespace
+
+TEST_CASE("Islands: solve order and threads do not change the result") {
+    const int frames = 240;
+    const auto reference = runSplitScene(nullptr, frames);
+
+    ReversedRunner reversed;
+    ShuffledRunner shuffled;
+    ThreadedRunner threaded(4);
+    CheckedRunner* runners[] = {&reversed, &shuffled, &threaded};
+    const std::string names[] = {"reversed", "shuffled", "threaded"};
+    for (size_t r = 0; r < 3; ++r) {
+        INFO("runner " << names[r]);
+        const auto result = runSplitScene(runners[r], frames);
+        CHECK(runners[r]->runs == static_cast<uint32_t>(frames * 2 * SUB_STEPS));
+        CHECK(runners[r]->everyIslandOnce);
+        // Not vacuous: the two piles (and the dice still falling alone) were
+        // separate islands, so order and concurrency had room to matter.
+        CHECK(runners[r]->maxIslands >= 2);
+        CHECK(result.first == reference.first);
+        CHECK(result.second == reference.second);
+    }
+}
+
+TEST_CASE("Islands: one per connected group, numbered by first manifold") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    const auto cube = flattenHull(makeUnitCubeHull());
+    // Two resting stacks of two, far apart, and one die alone.
+    const float spots[][3] = {
+        {-6.0f, -2.25f, 0.0f}, {-6.0f, -1.25f, 0.0f}, {6.0f, -2.25f, 0.0f}, {6.0f, -1.25f, 0.0f},
+        {0.0f, -2.25f, 6.0f}};
+    for (const auto& p : spots) {
+        const int id = engine.addDie(6, p[0], p[1], p[2]);
+        engine.setDieHull(id, cube);
+    }
+    engine.step(1.0f / 60.0f);
+    CHECK(engine.getIslandCount() == 3);
+}
 
 TEST_CASE("Broadphase grid matches brute-force pair set and serialize state") {
     PolyHull cube = makeUnitCubeHull();

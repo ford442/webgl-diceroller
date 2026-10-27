@@ -326,6 +326,10 @@ CXX=clang++ npm run test:solver
 # Same run under ASan + UBSan, any finding fatal (build-native-san/):
 CXX=clang++ FUZZ_SEEDS=50 npm run test:solver:san
 
+# ThreadSanitizer over the island tests, which solve islands on std::threads
+# (build-native-tsan/; the full suite under TSan would not fit a CI job):
+CXX=clang++ npm run test:solver:tsan
+
 # Coverage-guided fuzzing of deserializeState + collider registration
 # (src/wasm/fuzz/; libFuzzer with clang + compiler-rt, else a seeded
 # mutation loop). FUZZ_TIME seconds per target, default 60:
@@ -343,7 +347,8 @@ fails on a diff (`npm run check:world-fixture`), so a prop whose colliders move
 shows up as a fixture change. `npm run test:tavern-world` runs the same 200
 seeds through the WASM build via `rollHeadless(…, { world })`.
 
-Compiled with `-std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror`. The engine TUs
+Compiled with `-std=c++20 -O2 -pthread -Wall -Wextra -Wpedantic -Werror`
+(`-pthread` for the island test's threads; the engine spawns none). The engine TUs
 are warning-clean under g++ 13 and clang 18 and CI pins `ubuntu-latest`, so a
 new warning is signal rather than toolchain noise. If a newer local compiler
 disagrees, `SOLVER_NO_WERROR=1 npm run test:solver` gets you moving — but the
@@ -745,10 +750,26 @@ go through SAT (`satTestFromWorld`) and `addSatContacts`:
 - **Open cylinders** (mugs, goblets) are inward radial planes for a body
   inside the radius and a single solid wall from outside.
 
-Sleep is per contact island (dice and dynamic props joined by body-body
-manifolds; statics never join an island): an island whose most energetic
-member stays under `SLEEP_ENERGY_THRESHOLD` (0.08 J) for `SLEEP_DELAY` (0.5 s)
-sleeps. A body-body contact only wakes the sleeper — waking both every substep
+**Islands.** After contact generation each substep, `buildIslands()` joins
+dice and dynamic props connected by body-body manifolds (statics, the table,
+walls and container planes never join one, and a kinematic die joins the
+bodies it touches). The contact solve then runs island by island: warm start,
+16 velocity iterations and the position pass over one island's manifolds,
+then the next. Every pass walks the manifolds in one canonical order,
+`buildSolveOrder()`'s sort on the full key (rank: table, statics, the rest;
+then `idA`, kind, `idB`, aux). Islands are numbered by their first manifold in
+that order and keep it inside, so the island list is a function of body ids.
+An island writes only its own bodies' solver rows (the world anchor and
+kinematic rows are never written) and its own manifolds, so solving the
+islands in any order, or concurrently, gives the same bytes as solving them
+in order: the native "Islands" test runs a split scene reversed, shuffled
+and on four threads against the sequential run and compares
+`serializeState()` and every event buffer, and `test:solver:tsan` runs it
+under ThreadSanitizer. The shipped module stays single-threaded (Phase 11).
+
+Sleep is per contact island, reusing the solve's partition: an island whose
+most energetic member stays under `SLEEP_ENERGY_THRESHOLD` (0.08 J) for
+`SLEEP_DELAY` (0.5 s) sleeps. A body-body contact only wakes the sleeper — waking both every substep
 reset the sleep timer and kept dice resting against props awake for ever.
 
 `getSleepDiagnostics()` packs one `SLEEP_DIAG_STRIDE`-float record per die,
@@ -1122,7 +1143,7 @@ const t2 = window.__app.getWasmEngine().getTransforms();
 - [x] `MAX_DYNAMICS` raised 64 → 256 now that dynamics-involving pairs are grid-broadphased rather than brute-forced; `workerLayout.ts`'s mirrored `MAX_DYNAMICS` (sizes the dynamics SharedArrayBuffer) bumped to match — the two had been kept in sync only because both happened to be 64.
 - [x] `collectDieDynamicPairsForTesting` / `collectDynamicPairsForTesting` test hooks + a dedicated doctest verify the grid produces the exact same pair _set_ as brute force on a dense, boundary-straddling layout. Post-simulation trajectories are allowed to diverge between the two paths (a sequential-impulse solver is iteration-order-sensitive, and grid vs. brute-force visit candidate pairs in a different order) — invariants (finite, in-bounds) are checked on both instead of requiring byte-identical `serializeState()`, unlike the pre-existing die-die grid-vs-brute test, which happens to stay byte-identical for its specific low-chaos layout.
 - [x] Cached rotation matrix (`BodyView::invInertiaWorldMat`, `inertiaWorldMat3` in `dice_physics/dice_sat.hpp`): `solveVelocityConstraints` rebuilds a `BodyView` once per (velocity iteration, manifold) and then calls `applyInvInertiaWorld` up to ~3x per contact point against it (normal + up to 2 tangents), with a rotation that is constant across all of those calls within one substep. Precomputing `R * diag(invInertia) * R^T` once at `BodyView` construction (`viewDie`/`viewDyn`) and reusing it as a single `Mat3::mul` replaces two quaternion rotates per call with one matrix-vector multiply. Verified mathematically equivalent to the old two-quaternion-rotate formula via a dedicated doctest (5000 random rotations/vectors/inertias, 1e-4 tolerance) before wiring it in; SOLVER_REVISION bumped anyway since the floating-point operation order (and therefore golden hashes) changed. `RigidBody`/`DynamicBody`'s own `applyInvInertiaWorld` — used only by `applyTorqueImpulse`, a single call per user API invocation, not a hot loop — is deliberately left on the quaternion form: a body-resident cache would need invalidating at every site that mutates `rotation` or `invInertia` (`setDieTransform`, `setDieHull`, `deserializeState`, ...), which is easy to miss and silently produce subtly-wrong physics; `BodyView` sidesteps that because it's always rebuilt fresh from the live body right before use.
-- [ ] Deferred (still open; see "Still deferred after Phase 9" below): full SoA layout (`position`/`velocity`/`angularVelocity`/sleep as separate parallel arrays instead of `std::vector<RigidBody>`) for the actual SIMD win the cached rotation matrix above is a precursor to. Not attempted here — it touches nearly every file under `dice_physics/` (integration, both collision-static and collision-dynamic, the solver, face-value) and its payoff can only really be judged against a real before/after SIMD benchmark in the actual WASM build, which this environment cannot produce (no EMSDK). Whoever picks this up should keep `DICE_FORCE_SCALAR_SAT` byte-compatible per `scripts/compare-solver-simd.mjs`, same as the existing SIMD work above.
+- [x] ~~Deferred~~ — measured and closed in Phase 11: the solver runs on parallel arrays gathered per substep; `RigidBody` stays the canonical store because what a canonical layout would speed up is 3.7% of a WASM step. Original note: full SoA layout (`position`/`velocity`/`angularVelocity`/sleep as separate parallel arrays instead of `std::vector<RigidBody>`) for the actual SIMD win the cached rotation matrix above is a precursor to. Not attempted here — it touches nearly every file under `dice_physics/` (integration, both collision-static and collision-dynamic, the solver, face-value) and its payoff can only really be judged against a real before/after SIMD benchmark in the actual WASM build, which this environment cannot produce (no EMSDK). Whoever picks this up should keep `DICE_FORCE_SCALAR_SAT` byte-compatible per `scripts/compare-solver-simd.mjs`, same as the existing SIMD work above.
 
 ### Phase 9 (Toolchain: CMake parity, clangd in CI, `-Werror`, clang-tidy)
 
@@ -1192,7 +1213,8 @@ folkloric.
 
 #### Still deferred after Phase 9
 
-- [ ] **SoA hot fields** (`position` / `velocity` / `angularVelocity` /
+- [x] **SoA hot fields** — Phase 11 (solver-local rows; canonical storage
+      measured and left AoS). Original note: (`position` / `velocity` / `angularVelocity` /
       `sleeping` as parallel arrays; hull and face tables stay AoS; `BodyView`
       stays the per-manifold adapter). Unchanged from the Phase 8 note below: it
       touches nearly every file under `dice_physics/`, it is a behaviour change
@@ -1204,7 +1226,9 @@ folkloric.
       `-Werror` and clang-tidy now cover the files it will rewrite, and the CMake
       byte-diff means the IDE and the shipped build cannot silently disagree
       about a layout change.
-- [ ] **Island stepping order made canonical**, and optionally `-pthread` +
+- [x] **Island stepping order made canonical** — Phase 11 (islands proven
+      order- and thread-independent natively; WASM pthreads not shipped).
+      Original note: and optionally `-pthread` +
       `PTHREAD_POOL_SIZE` for independent islands (COOP/COEP is already on).
       Determinism must not depend on thread arrival order; if that cannot be
       _proven_, this does not ship. Seeded replay is the product feature at
@@ -1275,6 +1299,69 @@ pinned hashes in `solver_tests.cpp` are unchanged under both g++ and clang.
       loop, so it rides the pin bump.
 - [ ] **C++20** (`std::span` across Embind, `<bit>`, `constexpr` tables). Not
       attempted on 3.1.61.
-- [ ] **Zero-allocation `step()` assertion** after warm-up. The per-substep
-      set is gone; a counting allocator in the native build is what would prove
-      nothing else allocates.
+- [x] **Zero-allocation `step()` assertion** after warm-up — Phase 11.
+
+### Phase 11 (Solver hot path, #357)
+
+Measured on the WASM SIMD artifact (`scripts/bench-solver-wasm.mjs`: N unit
+cubes dropped as an overlapping block and stepped at 1/60 for frames
+60–660), never on the native build, which is scalar. Numbers are ms per
+`step(1/60)`, the middle of three runs, emcc 6.0.6 in Node 24 on the
+development host:
+
+BENCH_TABLE
+
+"Layout" is the three byte-identical commits (state and every event buffer
+unchanged on a set of dense, tavern, cup and tower scenes) and is the
+layout's own effect; "revision 11" adds the canonical order, which changes
+trajectories, and islands.
+
+- [x] **Broadphase: CSR bucket grid, partners gathered per body.** The die
+      and dynamics grids are counting-sorted into one items array per substep
+      (no per-cell vectors), and each body gathers its partners from the cells
+      it covers, deduplicated with a stamp and culled by bounding sphere, so a
+      pair is offered once instead of once per shared cell and then sorted and
+      uniqued. At 200 dice the old walk produced ~300k duplicate candidates
+      per substep and the sort that removed them was over half the step. The
+      walkers' contract (each overlapping pair once, ascending) is now the
+      same with the grid on or off.
+- [x] **Manifold lookup indexed.** `findManifold` / `acquireManifold` go
+      through an open-addressing index rebuilt at the start of each contact
+      pass instead of a linear scan of every manifold, and the post-commit
+      reads no longer create a manifold on a miss.
+- [x] **SoA solver bodies.** `gatherSolverBodies()` copies each body's
+      position, velocity, angular velocity, world inverse inertia, inverse
+      mass and kinematic flag into parallel arrays (slot 0 is the world
+      anchor) once per substep; every solver pass works on those rows through
+      `BodyView` and `scatterSolverBodies()` writes back the three it changes.
+      The canonical store stays `std::vector<RigidBody>`: profiling the
+      `--profiling-funcs` SIMD build at 200 dice puts SAT contact generation
+      at ~41% of the step and the velocity solve at ~48%, while everything a
+      canonical SoA layout would speed up (integrate, derived refresh,
+      gather/scatter, the table clamp; all inlined into `fixedTick`) is 3.7%.
+      Rewriting ~280 field accesses for at most that was not worth it.
+- [x] **`step()` allocates nothing after one warm-up step.** A counting
+      `operator new` in the native test build (compiled out under the
+      sanitizers, whose runtimes own it) is armed around 240 measured
+      `step()` calls over contacts, a container, a kinematic die, statics of
+      every shape and dynamic boxes and hulls; one allocation fails the test.
+      Capacity is reserved when bodies are added (`reserveContactStorage()`),
+      and every per-substep scratch vector is engine-owned.
+- [x] **One canonical solve order (`SOLVER_REVISION` 11).** See the
+      revision table in [`MULTIPLAYER.md`](MULTIPLAYER.md): the full-key sort,
+      the dynamics walker visiting each pair once, and plane statics keeping
+      their warm start. Goldens regenerated in the same commit.
+- [x] **Islands** (see "Contacts and sleep"): partitioned once per substep,
+      solved one at a time through an `IslandRunner` seam
+      (`setIslandRunnerForTesting`), proven independent of order and thread
+      natively and under TSan. Byte-identical to the single canonical pass.
+- [ ] **WASM pthreads: not shipped.** The proof above is native. A threaded
+      WASM build is a second artifact that needs `SharedArrayBuffer` memory
+      everywhere it runs, including `rollHeadless()` in Node and the
+      `?no-worker` path, and the bench gives it little to do: in the 200-die
+      case the largest island holds 134–164 dice at every sampled second and
+      is the only island from 7 s on, so island threads could only overlap
+      the small islands' share of the solve (and none of contact
+      generation, which is ~41% of the step). Threads are worth revisiting
+      when a scene with several large independent piles (a second room,
+      #340) is what the bench measures.

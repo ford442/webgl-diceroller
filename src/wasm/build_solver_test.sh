@@ -24,11 +24,26 @@ fi
 # rounding. emcc_flags.inc.sh sets the same flag, so neither side relies on a
 # target default.
 CXXFLAGS=(-std=c++20 -Wall -Wextra -Wpedantic -ffp-contract=off -I"${SCRIPT_DIR}")
+# -pthread: the island test solves islands on std::threads to show the result
+# does not depend on which thread ran which island. The engine itself spawns
+# none, and the WASM build is not threaded (docs/WASM_ENGINE.md, Phase 11).
+CXXFLAGS+=(-pthread)
 
 # SOLVER_SANITIZE=1 (npm run test:solver:san): the same unit + fuzz + golden
 # run under ASan + UBSan, any finding fatal. Slower, so CI lowers FUZZ_SEEDS
 # for it and skips the benchmarks.
-if [ "${SOLVER_SANITIZE:-0}" = "1" ]; then
+# SOLVER_SANITIZE=thread (npm run test:solver:tsan): ThreadSanitizer over the
+# island tests only, the one place the tests run engine code on several
+# threads. The full suite under TSan would not fit a CI job.
+TEST_ARGS=()
+if [ "${SOLVER_SANITIZE:-0}" = "thread" ]; then
+    CXXFLAGS+=(-O1 -g -fno-omit-frame-pointer -fsanitize=thread)
+    BUILD_DIR="${SCRIPT_DIR}/build-native-tsan"
+    BIN="${BUILD_DIR}/solver_tests"
+    TEST_ARGS=(--test-case='Islands*')
+    export TSAN_OPTIONS="${TSAN_OPTIONS:-halt_on_error=1}"
+    echo "[test:solver] SOLVER_SANITIZE=thread -- TSan build of the island tests in ${BUILD_DIR}."
+elif [ "${SOLVER_SANITIZE:-0}" = "1" ]; then
     CXXFLAGS+=(-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all)
     BUILD_DIR="${SCRIPT_DIR}/build-native-san"
     BIN="${BUILD_DIR}/solver_tests"
@@ -134,13 +149,14 @@ NODE
 # .clangd reads src/wasm/compile_commands.json (CompilationDatabase: .), not
 # build-native/. Merge it now so clangd works straight after test:solver:
 # native-only without an EMSDK, native + emcc when one is on PATH. The
-# sanitizer build writes build-native-san/, which the merge does not read.
-if [ "${SOLVER_SANITIZE:-0}" != "1" ]; then
+# sanitizer builds write build-native-san/ and build-native-tsan/, which the
+# merge does not read.
+if [ "${SOLVER_SANITIZE:-0}" = "0" ]; then
     "${SCRIPT_DIR}/generate-clangd-db.sh"
 fi
 
 echo "[test:solver] Running unit + fuzz tests..."
-(cd "${REPO_ROOT}" && "${BIN}")
+(cd "${REPO_ROOT}" && "${BIN}" "${TEST_ARGS[@]}")
 
 echo "[test:solver] Checking golden traces..."
 node "${REPO_ROOT}/scripts/compare-solver-golden.mjs" "${BIN}"
@@ -152,7 +168,7 @@ else
     echo "[test:solver] Skipping WASM parity (public/wasm/dice_physics.wasm not present)."
 fi
 
-if [ "${BENCH_SOLVER:-}" = "1" ] && [ "${SOLVER_SANITIZE:-0}" != "1" ]; then
+if [ "${BENCH_SOLVER:-}" = "1" ] && [ "${SOLVER_SANITIZE:-0}" = "0" ]; then
     echo "[test:solver] Running step-time benchmarks (native, scalar path)..."
     for N in 10 50 100 200; do
         "${BIN}" --bench --dice="${N}" --steps=600 --warmup=60
