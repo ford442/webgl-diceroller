@@ -23,5 +23,5 @@
         "scripts/verify-wasm-primitives.mjs",
         "tests/**/*.js"
     ],
-    "exclude": ["node_modules", "dist", "public"]
+    "exclude": ["node_modules", "dist", "public", "src/wasm/build-*"]
 }
