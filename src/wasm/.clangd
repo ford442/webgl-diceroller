@@ -4,5 +4,9 @@ CompileFlags:
     # (build-emcc/, from `emcmake cmake`, when an EMSDK is available) into
     # src/wasm/compile_commands.json, so engine sources resolve
     # __EMSCRIPTEN__/__wasm_simd128__ instead of only the native branches.
-    # Run it after checkout and whenever engine_sources.txt changes.
+    # npm run test:solver regenerates it; npm run wasm:clangd-db does only
+    # the merge (rerun it after engine_sources.txt or emcc flags change).
     CompilationDatabase: .
+    # -Werror is the build's gate (test:solver, lint:cpp), not the editor's:
+    # clangd surfaces doctest.h's unused-function warnings as errors without it.
+    Remove: [-Werror]

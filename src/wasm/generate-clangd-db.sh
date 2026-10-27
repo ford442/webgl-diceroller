@@ -47,9 +47,17 @@ else
          "until this is re-run with an EMSDK available."
 fi
 
-node - "${NATIVE_DB}" "${EMCC_DB}" "${OUT_DB}" <<'NODE'
+# clangd parses em++ entries as the host target unless told otherwise, which
+# rejects -msimd128 and leaves __EMSCRIPTEN__ undefined. Point those entries at
+# wasm32-unknown-emscripten and the EMSDK sysroot, as em++ itself would.
+EMCC_SYSROOT=""
+if command -v em-config >/dev/null 2>&1; then
+    EMCC_SYSROOT="$(em-config CACHE 2>/dev/null)/sysroot"
+fi
+
+node - "${NATIVE_DB}" "${EMCC_DB}" "${OUT_DB}" "${EMCC_SYSROOT}" <<'NODE'
 const fs = require('fs');
-const [nativePath, emccPath, outPath] = process.argv.slice(2);
+const [nativePath, emccPath, outPath, emccSysroot] = process.argv.slice(2);
 
 const readDb = (p) => {
     if (!fs.existsSync(p)) return [];
@@ -70,6 +78,13 @@ const seenEmcc = new Set();
 for (const entry of emcc) {
     if (seenEmcc.has(entry.file)) continue;
     seenEmcc.add(entry.file);
+    const extra = ['--target=wasm32-unknown-emscripten'];
+    if (emccSysroot) extra.push(`--sysroot=${emccSysroot}`);
+    if (entry.command) {
+        entry.command = entry.command.replace(/^(\S+)/, `$1 ${extra.join(' ')}`);
+    } else if (entry.arguments) {
+        entry.arguments.splice(1, 0, ...extra);
+    }
     merged.set(entry.file, entry);
 }
 

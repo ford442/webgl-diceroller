@@ -31,7 +31,7 @@ fi
 
 # Same language level and FP contract as the shipped engine
 # (emcc_flags.inc.sh / build_solver_test.sh), so a finding reproduces there.
-CXXFLAGS=(-std=c++17 -O1 -g -fno-omit-frame-pointer -ffp-contract=off
+CXXFLAGS=(-std=c++20 -O1 -g -fno-omit-frame-pointer -ffp-contract=off
     -fsanitize=address,undefined -fno-sanitize-recover=all -I"${SCRIPT_DIR}")
 
 ENGINE_SOURCES=()

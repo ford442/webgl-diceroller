@@ -1,5 +1,5 @@
 {
-    "revision": 10,
+    "revision": 11,
     "notes": "Native FNV-1a of serializeState() after the named scenarios. Update with solver_tests --dump-golden when SOLVER_REVISION or behaviour changes.",
     "traces": [
         {
@@ -11,7 +11,7 @@
             "name": "seed-deadbeefcafebabe",
             "seed": "0xDEADBEEFCAFEBABE",
             "frames": 240,
-            "hash": "0xbacbcf9091d212f9"
+            "hash": "0x18e5bb310b16c34b"
         }
     ]
 }

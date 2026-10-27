@@ -188,6 +188,7 @@ jobs:
     # the two code generators produce identical serialized state for the
     # golden seeds. The libFuzzer leg fuzzes deserializeState (bytes a
     # multiplayer peer sent) and collider registration under ASan + UBSan.
+    # The TSan leg runs the island tests, which solve islands on std::threads.
     test-solver-matrix:
         name: Native solver (${{ matrix.name }})
         runs-on: ubuntu-latest
@@ -200,6 +201,8 @@ jobs:
                       run: CXX=clang++ FUZZ_SEEDS=500 npm run test:solver
                     - name: clang asan+ubsan
                       run: CXX=clang++ FUZZ_SEEDS=50 npm run test:solver:san
+                    - name: clang tsan (islands)
+                      run: CXX=clang++ npm run test:solver:tsan
                     - name: libFuzzer
                       run: CXX=clang++ FUZZ_TIME=120 npm run fuzz:solver
         steps:

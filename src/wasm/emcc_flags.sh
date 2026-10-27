@@ -48,7 +48,7 @@ if [[ "${1:-}" == "--print-compile-line" ]]; then
     #                 time; -lembind is what the *link* step consumes, and the
     #                 link line (--print-link-line) still carries it.
     # Everything else (-O3, -flto, -msimd128, -DDICE_FORCE_SCALAR_SAT,
-    # -std=c++17, -g) must reach the compiler: -msimd128 is what defines
+    # -std=c++20, -g) must reach the compiler: -msimd128 is what defines
     # __wasm_simd128__ and -D... selects the scalar SAT path, so passing these
     # at link time only silently yields a non-SIMD build identical to the
     # scalar one.

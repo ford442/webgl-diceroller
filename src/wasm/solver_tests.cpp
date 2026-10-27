@@ -11,15 +11,62 @@
 #include "dice_physics_engine.hpp"
 #include "test_support/mini_json.hpp"
 
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <iomanip>
 #include <iostream>
+#include <new>
 #include <sstream>
 #include <string>
 #include <chrono>
+#include <thread>
 
 using namespace dice_physics;
+
+// ---------------------------------------------------------------------------
+// Counting allocator: every global operator new in this binary goes through
+// here, so a test can arm it around engine calls and assert that none
+// allocated. The sanitizer runtimes ship their own operator new (clang's
+// static ASan and TSan runtimes would collide at link time), so the probe and
+// its test are compiled out under SOLVER_SANITIZE.
+// ---------------------------------------------------------------------------
+
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+#define SOLVER_ALLOC_PROBE 0
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+#define SOLVER_ALLOC_PROBE 0
+#endif
+#endif
+#ifndef SOLVER_ALLOC_PROBE
+#define SOLVER_ALLOC_PROBE 1
+#endif
+
+#if SOLVER_ALLOC_PROBE
+namespace alloc_probe {
+std::atomic<bool> armed{false};
+std::atomic<uint64_t> count{0};
+std::atomic<size_t> lastSize{0};
+} // namespace alloc_probe
+
+void* operator new(std::size_t size) {
+    if (alloc_probe::armed.load(std::memory_order_relaxed)) {
+        alloc_probe::count.fetch_add(1, std::memory_order_relaxed);
+        alloc_probe::lastSize.store(size, std::memory_order_relaxed);
+    }
+    if (void* p = std::malloc(size == 0 ? 1 : size)) return p;
+    throw std::bad_alloc();
+}
+void* operator new[](std::size_t size) { return ::operator new(size); }
+// noinline: inlined into std::allocator, g++ sees free() on operator new's
+// pointer and reports -Wmismatched-new-delete for the pair defined here.
+[[gnu::noinline]] void operator delete(void* p) noexcept { std::free(p); }
+[[gnu::noinline]] void operator delete[](void* p) noexcept { std::free(p); }
+[[gnu::noinline]] void operator delete(void* p, std::size_t) noexcept { std::free(p); }
+[[gnu::noinline]] void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
+#endif
 
 namespace {
 
@@ -605,7 +652,7 @@ TEST_CASE("Golden traces: seed and parity hashes are stable") {
     // `solver_tests --dump-golden` (see scripts/compare-solver-golden.mjs and
     // tests/fixtures/solver-golden.json) whenever SOLVER_REVISION bumps.
     CHECK(p1.hashSerializedState() == 0xa1d45868a58d37daULL);
-    CHECK(a.hashSerializedState() == 0xbacbcf9091d212f9ULL);
+    CHECK(a.hashSerializedState() == 0x18e5bb310b16c34bULL);
 }
 
 TEST_CASE("Determinism: same seed yields identical serialize output") {
@@ -1575,6 +1622,258 @@ TEST_CASE("Static capacity: exceeding MAX_STATICS reports drops instead of silen
     CHECK(engine.getStaticCapacityDroppedCount() == 0);
 }
 
+#if SOLVER_ALLOC_PROBE
+// The 120 Hz path must not touch the heap once a scene is warm: under
+// emmalloc a per-substep std::set or temporary vector is a node allocation
+// per pair per substep, and nothing else would notice it coming back. One
+// warm-up step sizes the per-population buffers (grid, solver rows, island
+// scratch); contact storage is reserved when bodies are added. If this
+// fails, the INFO line names the first frame and allocation size.
+TEST_CASE("Allocation-free step: nothing in step() allocates after warm-up") {
+    // The probe itself must be live, or every assertion below is vacuous.
+    alloc_probe::count = 0;
+    alloc_probe::armed = true;
+    {
+        std::vector<int> probe(16);
+        CHECK(probe.size() == 16);
+    }
+    alloc_probe::armed = false;
+    REQUIRE(alloc_probe::count.load() == 1);
+
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    const auto cube = flattenHull(makeUnitCubeHull());
+    const auto d20 = flattenHull(makeD20Hull());
+
+    // One of every static shape: a velvet slab, a wooden wedge hull, a
+    // closed-bottom cup, and a plane the dice never reach.
+    REQUIRE(engine.addStaticBox(1, 6.0f, -2.5f, 0.0f, 3.0f, 0.25f, 3.0f, 0, 0, 0, 1, 1) == 1);
+    REQUIRE(engine.addStaticConvexHull(2, -6.0f, -2.75f, 0.0f, 0, 0, 0, 1,
+                                       {-2, 0, -2, 2, 0, -2, 2, 0, 2, -2, 0, 2, -2, 1, -2, -2, 1, 2},
+                                       2) == 2);
+    REQUIRE(engine.addStaticOpenCylinder(3, 0.0f, -1.25f, 6.0f, 2.0f, 1.5f, 12, true, 4) == 3);
+    REQUIRE(engine.addStaticPlane(4, 0.0f, -1.0f, 0.0f, -30.0f, 0) == 4);
+    // A dice-cup container around all of it.
+    engine.setContainerActive(true);
+    engine.setContainerPlanes({0, 1, 0, -2.75f, -1, 0, 0, -10, 1, 0, 0, -10, 0, 0, -1, -10, 0, 0, 1, -10});
+
+    std::vector<int> ids;
+    auto die = [&](int sides, float x, float y, float z, float vx, float vz) {
+        const int id = engine.addDie(sides, x, y, z);
+        engine.setDieHull(id, sides == 20 ? d20 : cube);
+        if (sides == 20) uploadD20FaceTable(engine, id);
+        else uploadD6FaceTable(engine, id);
+        engine.setDieDrag(id, 0.002f);
+        engine.setDieVelocity(id, vx, -2.0f, vz, 3.0f, -2.0f, 4.0f);
+        ids.push_back(id);
+        return id;
+    };
+    for (int i = 0; i < 4; ++i) die(6, 0.4f * static_cast<float>(i % 2), -2.0f + 1.05f * i, 6.0f, 0.5f, 0.3f);
+    for (int i = 0; i < 4; ++i) die(20, 5.0f + 0.9f * i, -1.0f, 0.5f * i, -0.5f, 0.4f);
+    for (int i = 0; i < 4; ++i) die(6, -6.5f + 0.6f * i, -0.8f, -1.0f + 0.7f * i, 1.0f, 0.0f);
+    for (int i = 0; i < 6; ++i) die(6, -1.0f + 0.8f * (i % 3), -2.0f + 1.1f * (i / 3), -0.5f, 0.0f, 0.5f);
+    const int held = die(6, -3.0f, -2.0f, 0.0f, 0.0f, 0.0f);
+    engine.setDieKinematic(held, true);
+    REQUIRE(engine.addDynamicBox(100, 1.5f, 1.5f, -2.3f, 1.0f, 0.4f, 0.4f, 0.4f, 0, 0, 0, 1, 2) == 100);
+    REQUIRE(engine.addDynamicBox(101, 1.0f, -1.5f, -2.4f, 1.2f, 0.3f, 0.3f, 0.3f, 0, 0, 0, 1, 2) == 101);
+    REQUIRE(engine.addDynamicHull(102, 0.8f, 0.0f, -1.0f, -2.0f, 0, 0, 0, 1,
+                                  {-0.3f, -0.3f, -0.3f, 0.3f, -0.3f, -0.3f, 0.0f, -0.3f, 0.3f, 0.0f, 0.3f, 0.0f},
+                                  3) == 102);
+
+    // The held die sweeps back and forth through the middle pile, so contacts
+    // keep appearing and disappearing for the whole measured window.
+    auto drive = [&](int frame) {
+        const float t = static_cast<float>(frame) * (1.0f / 60.0f);
+        engine.setDieTransform(held, 3.0f * std::sin(t * 2.0f), -2.0f, 0.3f * std::cos(t * 3.0f),
+                               0, 0, 0, 1);
+    };
+
+    const int warmup = 1; // One step: the scene is in contact from the first frame.
+    for (int frame = 0; frame < warmup; ++frame) {
+        drive(frame);
+        engine.step(1.0f / 60.0f);
+        engine.buildCollisionEventBuffer();
+    }
+
+    uint64_t allocations = 0;
+    size_t firstSize = 0;
+    int firstFrame = -1;
+    int framesWithSat = 0;
+    for (int frame = warmup; frame < warmup + 240; ++frame) {
+        drive(frame);
+        alloc_probe::count = 0;
+        alloc_probe::armed = true;
+        engine.step(1.0f / 60.0f);
+        alloc_probe::armed = false;
+        if (alloc_probe::count.load() > 0 && firstFrame < 0) {
+            firstFrame = frame;
+            firstSize = alloc_probe::lastSize.load();
+        }
+        allocations += alloc_probe::count.load();
+        if (engine.getLastStepStats().satTests > 0) ++framesWithSat;
+        engine.buildCollisionEventBuffer();
+    }
+    INFO("first allocation at frame " << firstFrame << " (last size " << firstSize << " bytes)");
+    CHECK(allocations == 0);
+    // Not vacuous: the window had live SAT contacts every frame.
+    CHECK(framesWithSat == 240);
+    CHECK(engine.allBodyStatesFinite());
+}
+#endif
+
+namespace {
+
+// IslandRunners for the island-order test. Each checks the contract it was
+// handed (every island once) so a runner bug cannot pass as determinism.
+struct CheckedRunner : IslandRunner {
+    uint32_t runs = 0;
+    uint32_t maxIslands = 0;
+    bool everyIslandOnce = true;
+    std::vector<std::atomic<uint32_t>> seen = std::vector<std::atomic<uint32_t>>(4096);
+
+    void run(uint32_t count, const IslandTask& task) override {
+        REQUIRE(count <= seen.size());
+        for (uint32_t k = 0; k < count; ++k) seen[k] = 0;
+        dispatch(count, [&](uint32_t k) {
+            seen[k].fetch_add(1);
+            task(k);
+        });
+        for (uint32_t k = 0; k < count; ++k) everyIslandOnce = everyIslandOnce && seen[k] == 1;
+        ++runs;
+        maxIslands = std::max(maxIslands, count);
+    }
+    virtual void dispatch(uint32_t count, const std::function<void(uint32_t)>& solve) = 0;
+};
+
+struct ReversedRunner : CheckedRunner {
+    void dispatch(uint32_t count, const std::function<void(uint32_t)>& solve) override {
+        for (uint32_t k = count; k > 0; --k) solve(k - 1);
+    }
+};
+
+// A different permutation every call, from a fixed LCG.
+struct ShuffledRunner : CheckedRunner {
+    uint64_t state = 0x9E3779B97F4A7C15ULL;
+    std::vector<uint32_t> perm;
+    void dispatch(uint32_t count, const std::function<void(uint32_t)>& solve) override {
+        perm.resize(count);
+        for (uint32_t k = 0; k < count; ++k) perm[k] = k;
+        for (uint32_t k = count; k > 1; --k) {
+            state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+            const auto j = static_cast<uint32_t>((state >> 33) % k);
+            std::swap(perm[k - 1], perm[j]);
+        }
+        for (const uint32_t k : perm) solve(k);
+    }
+};
+
+// Islands claimed from a shared counter by `threads` threads, so which
+// thread solves which island, and when, is up to the scheduler.
+struct ThreadedRunner : CheckedRunner {
+    unsigned threads;
+    explicit ThreadedRunner(unsigned t) : threads(t) {}
+    void dispatch(uint32_t count, const std::function<void(uint32_t)>& solve) override {
+        std::atomic<uint32_t> next{0};
+        auto work = [&] {
+            for (uint32_t k = next.fetch_add(1); k < count; k = next.fetch_add(1)) solve(k);
+        };
+        std::vector<std::thread> pool;
+        for (unsigned t = 1; t < threads; ++t) pool.emplace_back(work);
+        work();
+        for (auto& th : pool) th.join();
+    }
+};
+
+/**
+ * Two piles that never touch, at opposite corners of the table: d6s against
+ * a static box and a kinematic die swept through them on one side, d20s and
+ * two dynamic props on the other. Returns serializeState() after `frames`
+ * plus an FNV-1a over every frame's collision-event buffer.
+ */
+std::pair<std::vector<uint8_t>, uint64_t> runSplitScene(IslandRunner* runner, int frames) {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    engine.setIslandRunnerForTesting(runner);
+    engine.addStaticBox(1, -9.0f, -2.25f, -9.0f, 1.0f, 0.5f, 1.0f, 0, 0, 0, 1, 2);
+    const auto cube = flattenHull(makeUnitCubeHull());
+    const auto d20 = flattenHull(makeD20Hull());
+    for (int i = 0; i < 10; ++i) {
+        const int id = engine.addDie(6, -7.5f + static_cast<float>(i % 3) * 0.8f,
+                                     -1.0f + static_cast<float>(i) * 0.6f,
+                                     -7.5f + static_cast<float>(i % 2) * 0.8f);
+        engine.setDieHull(id, cube);
+        uploadD6FaceTable(engine, id);
+        engine.setDieVelocity(id, -1.0f, -2.0f, -1.0f, 3.0f, 1.0f, -2.0f);
+    }
+    const int held = engine.addDie(6, -6.0f, -1.5f, -9.0f);
+    engine.setDieHull(held, cube);
+    engine.setDieKinematic(held, true);
+    for (int i = 0; i < 10; ++i) {
+        const int id = engine.addDie(20, 7.5f - static_cast<float>(i % 3) * 0.8f,
+                                     -1.0f + static_cast<float>(i) * 0.6f,
+                                     7.5f - static_cast<float>(i % 2) * 0.8f);
+        engine.setDieHull(id, d20);
+        uploadD20FaceTable(engine, id);
+        engine.setDieVelocity(id, 1.0f, -2.0f, 1.0f, -2.0f, 3.0f, 1.0f);
+    }
+    engine.addDynamicBox(100, 0.8f, 8.5f, -2.3f, 6.5f, 0.4f, 0.3f, 0.4f, 0, 0, 0, 1, 0);
+    engine.addDynamicBox(101, 0.8f, 6.5f, -2.3f, 8.5f, 0.3f, 0.3f, 0.3f, 0, 0, 0, 1, 0);
+
+    uint64_t events = 14695981039346656037ULL;
+    for (int f = 0; f < frames; ++f) {
+        const float t = static_cast<float>(f) / 60.0f;
+        engine.setDieTransform(held, -7.0f + std::sin(t) * 1.5f, -2.2f, -7.0f, 0, 0, 0, 1);
+        engine.step(1.0f / 60.0f);
+        const auto& buf = engine.buildCollisionEventBuffer();
+        const auto* bytes = reinterpret_cast<const uint8_t*>(buf.data());
+        for (size_t i = 0; i < buf.size() * sizeof(float); ++i) {
+            events ^= bytes[i];
+            events *= 1099511628211ULL;
+        }
+    }
+    return {engine.serializeState(), events};
+}
+
+} // namespace
+
+TEST_CASE("Islands: solve order and threads do not change the result") {
+    const int frames = 240;
+    const auto reference = runSplitScene(nullptr, frames);
+
+    ReversedRunner reversed;
+    ShuffledRunner shuffled;
+    ThreadedRunner threaded(4);
+    CheckedRunner* runners[] = {&reversed, &shuffled, &threaded};
+    const std::string names[] = {"reversed", "shuffled", "threaded"};
+    for (size_t r = 0; r < 3; ++r) {
+        INFO("runner " << names[r]);
+        const auto result = runSplitScene(runners[r], frames);
+        CHECK(runners[r]->runs == static_cast<uint32_t>(frames * 2 * SUB_STEPS));
+        CHECK(runners[r]->everyIslandOnce);
+        // Not vacuous: the two piles (and the dice still falling alone) were
+        // separate islands, so order and concurrency had room to matter.
+        CHECK(runners[r]->maxIslands >= 2);
+        CHECK(result.first == reference.first);
+        CHECK(result.second == reference.second);
+    }
+}
+
+TEST_CASE("Islands: one per connected group, numbered by first manifold") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    const auto cube = flattenHull(makeUnitCubeHull());
+    // Two resting stacks of two, far apart, and one die alone.
+    const float spots[][3] = {
+        {-6.0f, -2.25f, 0.0f}, {-6.0f, -1.25f, 0.0f}, {6.0f, -2.25f, 0.0f}, {6.0f, -1.25f, 0.0f},
+        {0.0f, -2.25f, 6.0f}};
+    for (const auto& p : spots) {
+        const int id = engine.addDie(6, p[0], p[1], p[2]);
+        engine.setDieHull(id, cube);
+    }
+    engine.step(1.0f / 60.0f);
+    CHECK(engine.getIslandCount() == 3);
+}
+
 TEST_CASE("Broadphase grid matches brute-force pair set and serialize state") {
     PolyHull cube = makeUnitCubeHull();
     auto cubeFlat = flattenHull(cube);
@@ -1625,7 +1924,7 @@ TEST_CASE("Broadphase grid matches brute force for die-dynamic and dynamic-dynam
         // Dice and dynamic boxes interleaved on a dense grid (spacing well
         // under GRID_CELL_SIZE=2.2) so several bodies straddle a cell
         // boundary and land in more than one grid cell -- exactly the case
-        // forEachDieDynamicPair's sort+unique dedup exists for.
+        // the walkers' per-body partner dedup exists for.
         for (int i = 0; i < 10; ++i) {
             const float x = static_cast<float>((i % 5) - 2) * 0.9f;
             const float y = 2.5f + static_cast<float>(i) * 0.08f;
@@ -1656,17 +1955,11 @@ TEST_CASE("Broadphase grid matches brute force for die-dynamic and dynamic-dynam
     CHECK(gridDynDyn.size() == bruteDynDyn.size());
     CHECK(std::equal(gridDynDyn.begin(), gridDynDyn.end(), bruteDynDyn.begin()));
 
-    // Unlike the die-die grid (20 dice on a regular layout, where grid and
-    // brute-force traversal order happen to coincide -- see the test above),
-    // this scenario is dense enough that a handful of simultaneous new
-    // contacts resolve in a different order between the two paths, and a
-    // sequential-impulse solver is order-sensitive: grid and brute diverge
-    // into different (both valid) trajectories rather than staying
-    // byte-identical. That's expected -- production always runs one path
-    // (useBroadphase_ defaults true; setBroadphaseForTesting is test-only),
-    // so replay determinism only needs "same code path -> same result",
-    // which the pair-set equality above already establishes. What both
-    // paths must still do is stay physically valid.
+    // Same pairs in the same order, and a solve order that depends on the
+    // manifold keys rather than on when each manifold was created, so the
+    // two paths are byte-identical here too. (Before the dynamic walker
+    // stopped revisiting straddling pairs, this scene only checked that both
+    // stayed physically valid.)
     auto runScenario = [&](bool useBroadphase) {
         DicePhysicsEngine engine = setupEngine();
         engine.setBroadphaseForTesting(useBroadphase);
@@ -1676,9 +1969,12 @@ TEST_CASE("Broadphase grid matches brute force for die-dynamic and dynamic-dynam
             CHECK(engine.allBodyStatesInWorldBounds(20.0f));
         }
         CHECK(engine.getDynamicCapacityDroppedCount() == 0);
+        return engine.serializeState();
     };
-    runScenario(true);
-    runScenario(false);
+    const auto gridState = runScenario(true);
+    const auto bruteState = runScenario(false);
+    REQUIRE(gridState.size() == bruteState.size());
+    CHECK(std::memcmp(gridState.data(), bruteState.data(), gridState.size()) == 0);
 }
 
 TEST_CASE("Fuzz: dynamics-heavy scenarios preserve invariants") {

@@ -78,6 +78,7 @@
         "test:audio-worklet": "node tests/audio-worklet.js",
         "test:solver": "bash src/wasm/build_solver_test.sh",
         "test:solver:san": "SOLVER_SANITIZE=1 bash src/wasm/build_solver_test.sh",
+        "test:solver:tsan": "SOLVER_SANITIZE=thread bash src/wasm/build_solver_test.sh",
         "fuzz:solver": "bash src/wasm/build_fuzz.sh",
         "signal:dev": "npm --prefix signaling run dev",
         "signal:deploy": "npm --prefix signaling run deploy"

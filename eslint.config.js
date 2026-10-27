@@ -89,6 +89,8 @@ export default [
             'legacy/**',
             'public/**',
             'src/wasm/third_party/**',
+            // CMake/native build trees (test:solver now configures build-emcc).
+            'src/wasm/build-*/**',
             'coverage/**',
             'packages/*/dist/**',
             'render-regression-*.png',

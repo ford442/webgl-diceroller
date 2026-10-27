@@ -10,9 +10,9 @@
  *
  * Broadphase: since Phase 8 (docs/WASM_ENGINE.md), die-dynamic and
  * dynamic-dynamic pairs are grid-broadphased rather than brute-forced.
- * Dynamics get their own per-cell bucket (`dynGridCells_`, rebuilt by
- * `rebuildDynGrid` in dice_engine_solver.cpp) sharing the die grid's
- * dimensions and origin; the templated `forEachDieDynamicPair` /
+ * Dynamics get their own CSR bucket grid (`dynGrid_`, rebuilt each substep by
+ * `rebuildBroadphase` in dice_engine_collision_dynamic.cpp) sharing the die
+ * grid's dimensions and origin; the templated `forEachDieDynamicPair` /
  * `forEachDynamicPair` in dice_physics_engine.hpp walk it.
  *
  * Both walkers still keep a nested-loop path, taken when `useBroadphase_` is
@@ -200,6 +200,7 @@ int DicePhysicsEngine::addDynamicBox(int userId, float mass,
     });
     body.computeInertiaFromHull();
     dynamics_.push_back(body);
+    reserveContactStorage();
     return userId;
 }
 
@@ -238,6 +239,7 @@ int DicePhysicsEngine::addDynamicHull(int userId, float mass,
     body.radius = std::max((body.hull.aabbMax - body.hull.aabbMin).length() * 0.5f, 0.05f);
     body.computeInertiaFromHull();
     dynamics_.push_back(body);
+    reserveContactStorage();
     return userId;
 }
 

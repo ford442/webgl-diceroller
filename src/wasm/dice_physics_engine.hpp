@@ -14,7 +14,9 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -29,6 +31,28 @@ namespace dice_physics {
 // ---------------------------------------------------------------------------
 // Physics engine
 // ---------------------------------------------------------------------------
+
+/**
+ * One island's contact solve, handed to an IslandRunner: task(k) solves
+ * island k (warm start, velocity and position passes over its manifolds).
+ */
+struct IslandTask {
+    void (*fn)(void* ctx, uint32_t island) = nullptr;
+    void* ctx = nullptr;
+    void operator()(uint32_t island) const { fn(ctx, island); }
+};
+
+/**
+ * Test seam for the island solve. run() must call task(k) exactly once for
+ * every k in [0, count) before it returns, in any order, on any threads.
+ * Islands share no body the solver writes, so the result may not depend on
+ * which order or thread that is; the native tests hold the engine to that.
+ */
+class IslandRunner {
+public:
+    virtual ~IslandRunner() = default;
+    virtual void run(uint32_t count, const IslandTask& task) = 0;
+};
 
 class DicePhysicsEngine {
 public:
@@ -214,13 +238,26 @@ public:
     /** Test hook: disable broadphase to compare against brute-force pair generation. */
     void setBroadphaseForTesting(bool enabled);
 
-    /** Test hook: enumerate die–die pair indices without running the solver. */
+    /**
+     * Test hook: solve the islands through `runner` instead of in island
+     * order on this thread (nullptr restores that). Not owned. Not bound to
+     * JS: the shipped module is single-threaded (docs/WASM_ENGINE.md,
+     * Phase 11).
+     */
+    void setIslandRunnerForTesting(IslandRunner* runner) { islandRunner_ = runner; }
+    /** Islands with at least one manifold in the last substep's solve. */
+    uint32_t getIslandCount() const { return islandCount_; }
+
+    /**
+     * Test hook: the die–die pairs whose bounding spheres overlap (expand 0),
+     * as the broadphase walker reports them, without running the solver.
+     */
     std::vector<std::pair<size_t, size_t>> collectDiePairsForTesting(bool useBroadphase);
 
-    /** Test hook: enumerate (dieIndex, dynamicIndex) pairs without running the solver. */
+    /** Test hook: the same for (dieIndex, dynamicIndex) pairs. */
     std::vector<std::pair<size_t, size_t>> collectDieDynamicPairsForTesting(bool useBroadphase);
 
-    /** Test hook: enumerate dynamic–dynamic pair indices without running the solver. */
+    /** Test hook: the same for dynamic–dynamic pairs. */
     std::vector<std::pair<size_t, size_t>> collectDynamicPairsForTesting(bool useBroadphase);
 
     /** hasDice() && allAsleep(): a roll is finished. False for an empty engine. */
@@ -320,6 +357,53 @@ private:
     std::vector<StaticBody> statics_;
     std::vector<DynamicBody> dynamics_;
     std::vector<ContactManifold> manifolds_;
+    // Open-addressing index over manifolds_ by (kind, idA, idB, aux), rebuilt
+    // at the start of every contact pass and extended as manifolds are
+    // created. A slot holds a manifolds_ index or -1; keys are compared
+    // against the live manifold, and findManifold returns the lowest
+    // matching index, which is what the linear scan it replaced returned.
+    std::vector<int32_t> manifoldSlots_;
+    /**
+     * Struct-of-arrays body state for the contact solve. Slot 0 is the world
+     * anchor; dice occupy slots 1..N and dynamic props N+1..N+D.
+     * gatherSolverBodies copies the hot fields in once per substep (with each
+     * body's world inverse inertia) and binds every manifold to its two
+     * slots; scatterSolverBodies writes position, velocity and spin back.
+     * The solver iterates manifolds VELOCITY_ITERATIONS times, and building
+     * its BodyViews from these rows is a few pointer stores instead of a walk
+     * over two RigidBody records.
+     */
+    struct SolverBodies {
+        std::vector<Vec3> position;
+        std::vector<Vec3> velocity;
+        std::vector<Vec3> angularVelocity;
+        std::vector<Mat3> invInertiaWorld;
+        std::vector<float> invMass;
+        std::vector<uint8_t> kinematic;
+    };
+    SolverBodies solverBodies_;
+    // Per manifold: its A and B slots, or {-1, -1} when either body index is
+    // out of range (the manifold is skipped).
+    std::vector<std::array<int32_t, 2>> manifoldBodySlots_;
+    // Engine-owned scratch the step reuses instead of allocating: the solve
+    // order, the island partition, and the posed face planes addSatContacts
+    // builds for each hull pair.
+    std::vector<size_t> solveOrder_;
+    std::vector<int> islandParent_;
+    // Island root of every node (dice, then dynamics), from buildIslands();
+    // updateIslandSleep reuses it rather than partitioning again.
+    std::vector<int> islandRoot_;
+    std::vector<float> islandKe_;
+    // Islands as CSR over solveOrder_: island k solves
+    // islandItems_[islandStart_[k] .. islandStart_[k + 1]), in solve order.
+    // islandOfRoot_ numbers a root's island by first appearance.
+    std::vector<int32_t> islandOfRoot_;
+    std::vector<uint32_t> islandStart_;
+    std::vector<size_t> islandItems_;
+    uint32_t islandCount_ = 0;
+    IslandRunner* islandRunner_ = nullptr;
+    std::vector<HullPlane> satPlanesA_;
+    std::vector<HullPlane> satPlanesB_;
     std::vector<CollisionEvent> events_;
     std::vector<ContainerPlane> containerPlanes_;
     mutable std::vector<float> transformBuffer_;
@@ -343,22 +427,34 @@ private:
     bool useBroadphase_ = true;
 
     static constexpr float GRID_CELL_SIZE = 2.2f;
-    std::vector<std::vector<size_t>> dieGridCells_;
-    // Dynamics share the die grid's dimensions/origin (ensureDieGridDimensions)
-    // but get their own per-cell bucket, since a die index and a dynamics_
-    // index are different spaces.
-    std::vector<std::vector<size_t>> dynGridCells_;
-    // Scratch buffer for forEachDieDynamicPair's candidate pairs (cleared and
-    // refilled each call) — a die/dynamic straddling a cell boundary can
-    // otherwise surface the same (dieIndex, dynIndex) pair from more than one
-    // cell in the 3x3 neighbor scan; sort+unique before dispatch removes
-    // exactly those duplicates.
-    std::vector<std::pair<size_t, size_t>> dieDynamicPairScratch_;
-    // Same dedup for generateDieDieContacts' die-die pairs. Engine-owned so
-    // the per-substep sort+unique reuses its capacity instead of allocating a
-    // std::set node per pair; sorted order matches the std::set it replaced,
-    // so contact (and therefore solver) order is unchanged.
-    std::vector<std::pair<size_t, size_t>> diePairScratch_;
+    /**
+     * Uniform XZ bucket grid in CSR form: cell c holds
+     * items[start[c] .. start[c + 1]), the bodies whose expanded XZ bounds
+     * overlap it, in ascending body index. range holds each body's
+     * (minCx, maxCx, minCz, maxCz). Rebuilt by counting sort into storage
+     * sized from the population, so a rebuild never grows a per-cell vector.
+     */
+    struct BroadphaseGrid {
+        std::vector<uint32_t> start;
+        std::vector<uint32_t> items;
+        std::vector<uint32_t> cursor;
+        std::vector<int32_t> range;
+    };
+    // Dice and dynamics share one set of grid dimensions/origin
+    // (ensureDieGridDimensions) but are bucketed separately, since a die
+    // index and a dynamics_ index are different spaces.
+    BroadphaseGrid dieGrid_;
+    BroadphaseGrid dynGrid_;
+    // The expand both grids were last built with; the walkers' bounding-sphere
+    // cull uses the same value.
+    float gridExpand_ = 0.0f;
+    // Per-walk dedup: stamp[j] == i once j has been offered as i's partner,
+    // so a pair that shares several cells is seen once.
+    std::vector<int32_t> dieStamp_;
+    std::vector<int32_t> dynStamp_;
+    // One body's partners, sorted before dispatch so every walker visits
+    // pairs in ascending (i, j) — the order the brute-force loops use.
+    std::vector<uint32_t> partnerScratch_;
     int gridCols_ = 0;
     int gridRows_ = 0;
     float gridOriginX_ = 0.0f;
@@ -402,18 +498,51 @@ private:
     int bodyCellXMax(float x, float radius) const;
     int bodyCellZMin(float z, float radius) const;
     int bodyCellZMax(float z, float radius) const;
-    void rebuildDieGrid(float expand);
-    void rebuildDynGrid(float expand);
+    /** Bucket dice and dynamics for this substep; the walkers read the result. */
+    void rebuildBroadphase(float expand);
+    template <typename BodyVec>
+    void rebuildGrid(BroadphaseGrid& grid, const BodyVec& bodies, float expand);
+    /**
+     * The walkers' shared contract: fn(i, j) once for every pair whose
+     * expanded bounding spheres overlap (|pj - pi| < ri + rj + expand), in
+     * ascending (i, j), whether or not the broadphase is enabled. Returns the
+     * number of distinct candidate pairs examined. Grid mode needs
+     * rebuildBroadphase(expand) first.
+     */
     template <typename Fn>
-    void forEachDiePair(Fn&& fn, float expand = 0.0f);
+    uint32_t forEachDiePair(Fn&& fn);
     template <typename Fn>
-    void forEachDynamicPair(Fn&& fn, float expand = 0.0f);
+    uint32_t forEachDieDynamicPair(Fn&& fn);
     template <typename Fn>
-    void forEachDieDynamicPair(Fn&& fn, float expand = 0.0f);
+    uint32_t forEachDynamicPair(Fn&& fn);
+    template <typename A, typename B>
+    static bool spheresOverlap(const A& a, const B& b, float expand) {
+        const Vec3 delta = b.position - a.position;
+        const float combinedR = a.radius + b.radius + expand;
+        return !(delta.lengthSq() >= combinedR * combinedR);
+    }
     void processDiePair(size_t i, size_t j, StepStats& stats, float spec);
     void generateDieDieContacts(float spec, StepStats& stats);
 
-    ContactManifold* matchManifold(ManifoldKind kind, int idA, int idB, int aux);
+    static constexpr size_t MAX_MANIFOLDS = 8192;
+    /**
+     * Grow manifolds_ (and the per-manifold solver scratch tied to its
+     * capacity) for the current population, outside step(): a dense pile
+     * peaks near four manifolds per body after compaction and twice that
+     * while a contact pass is still appending, so step() starts with room.
+     */
+    void reserveContactStorage();
+    /**
+     * Find-or-create the manifold for this key (nullptr at MAX_MANIFOLDS).
+     * Only for a caller about to commit points: anything that just wants to
+     * know whether a pair touched this substep uses findManifold, so a miss
+     * does not leave an empty manifold behind to take a slot until the pass
+     * ends.
+     */
+    ContactManifold* acquireManifold(ManifoldKind kind, int idA, int idB, int aux);
+    ContactManifold* findManifold(ManifoldKind kind, int idA, int idB, int aux);
+    void rebuildManifoldIndex();
+    void indexManifold(size_t index);
     void commitManifoldPoints(ContactManifold& m, ContactPoint* pts, int count, const Vec3& normal);
     void addPlaneContacts(
         ManifoldKind kind, int idA, int idB, int aux,
@@ -430,21 +559,37 @@ private:
         float spec, float friction, float restitution, StepStats* stats
     );
     void generateContacts(float dt, StepStats& stats);
-    void warmStartManifolds();
-    void prepareVelocityConstraints(float dt);
-    void solveVelocityConstraints(float dt);
-    void solvePositionConstraints();
+    /** Sort manifold indices into solveOrder_, the order every pass walks. */
+    void buildSolveOrder();
+    /**
+     * Partition this substep's manifolds into islands (islandRoot_,
+     * islandStart_, islandItems_). Needs buildSolveOrder() and
+     * gatherSolverBodies() first.
+     */
+    void buildIslands();
+    /** Every pass, over island k's manifolds only. */
+    void solveIsland(uint32_t island, float dt);
+    using ManifoldSpan = std::span<const size_t>;
+    void warmStartManifolds(ManifoldSpan manifolds);
+    void prepareVelocityConstraints(ManifoldSpan manifolds, float dt);
+    void solveVelocityConstraints(ManifoldSpan manifolds, float dt);
+    void solvePositionConstraints(ManifoldSpan manifolds);
     void solveContacts(float dt);
     void updateIslandSleep(float dt);
     /**
      * Union-find over body-body manifolds (dice + dynamic props; statics and
      * the table never join an island). root[i] is the island of node i (dice
-     * first, then dynamics); islandKe[root] is its most energetic member's
-     * kinetic energy.
+     * first, then dynamics).
      */
-    void computeIslands(std::vector<int>& root, std::vector<float>& islandKe) const;
+    void partitionIslands(std::vector<int>& root);
+    /** islandKe[root]: the island's most energetic member's kinetic energy. */
+    void islandEnergies(const std::vector<int>& root, std::vector<float>& islandKe) const;
+    void computeIslands(std::vector<int>& root, std::vector<float>& islandKe);
     float speculativeFor(const Vec3& velocity, float dt) const;
-    bool bindViews(ContactManifold& m, BodyView& a, BodyView& b, WorldAnchor& world);
+    void gatherSolverBodies();
+    void scatterSolverBodies();
+    BodyView solverView(int32_t slot);
+    bool bindViews(size_t manifold, BodyView& a, BodyView& b);
 
     // -- Dynamic (non-die) rigid-body props -----------------------------
     static float inertiaScalar(const DynamicBody& b);
@@ -472,157 +617,120 @@ private:
     void generateDynamicDynamicContacts(float spec, StepStats& stats);
 };
 
-template <typename Fn>
-void DicePhysicsEngine::forEachDiePair(Fn&& fn, float expand) {
-    if (!useBroadphase_ || bodies_.size() < 2) {
-        for (size_t i = 0; i < bodies_.size(); ++i) {
-            for (size_t j = i + 1; j < bodies_.size(); ++j) {
-                fn(i, j);
-            }
-        }
-        return;
-    }
+namespace detail {
 
-    rebuildDieGrid(expand);
-    for (int cz = 0; cz < gridRows_; ++cz) {
-        for (int cx = 0; cx < gridCols_; ++cx) {
-            const auto& cell = dieGridCells_[static_cast<size_t>(cz * gridCols_ + cx)];
-
-            for (size_t ai = 0; ai < cell.size(); ++ai) {
-                for (size_t bi = ai + 1; bi < cell.size(); ++bi) {
-                    fn(cell[ai], cell[bi]);
-                }
-            }
-
-            for (int dz = 0; dz <= 1; ++dz) {
-                const int dxStart = dz == 0 ? 1 : -1;
-                for (int dx = dxStart; dx <= 1; ++dx) {
-                    if (dx == 0 && dz == 0) continue;
-                    const int nx = cx + dx;
-                    const int nz = cz + dz;
-                    if (nx < 0 || nx >= gridCols_ || nz < 0 || nz >= gridRows_) continue;
-                    if (nz < cz || (nz == cz && nx <= cx)) continue;
-
-                    const auto& neighbor =
-                        dieGridCells_[static_cast<size_t>(nz * gridCols_ + nx)];
-                    for (size_t a : cell) {
-                        for (size_t b : neighbor) {
-                            if (a < b) {
-                                fn(a, b);
-                            } else if (b < a) {
-                                fn(b, a);
-                            }
-                        }
-                    }
-                }
+/**
+ * Gather body `i`'s partners from the cells its range covers into `out`,
+ * sorted ascending. `selfGrid` supplies i's range; `otherGrid` the cells to
+ * read; `minPartner` skips partners below it (i + 1 within one population, 0
+ * across two). Each partner is offered once (stamp) and kept only when
+ * keep(j) — the bounding-sphere cull. Returns the distinct partners offered.
+ */
+template <typename Grid, typename Keep>
+uint32_t gatherPartners(const Grid& selfGrid, const Grid& otherGrid, int cols, size_t i,
+                        uint32_t minPartner, std::vector<int32_t>& stamp,
+                        std::vector<uint32_t>& out, Keep&& keep) {
+    out.clear();
+    uint32_t offered = 0;
+    const int32_t* r = selfGrid.range.data() + i * 4;
+    const auto tag = static_cast<int32_t>(i);
+    for (int cz = r[2]; cz <= r[3]; ++cz) {
+        for (int cx = r[0]; cx <= r[1]; ++cx) {
+            const auto c = static_cast<size_t>(cz) * static_cast<size_t>(cols) + static_cast<size_t>(cx);
+            const uint32_t* first = otherGrid.items.data() + otherGrid.start[c];
+            const uint32_t* last = otherGrid.items.data() + otherGrid.start[c + 1];
+            // Cells hold ascending indices: start at the first eligible one.
+            for (const uint32_t* it = std::lower_bound(first, last, minPartner); it != last; ++it) {
+                const uint32_t j = *it;
+                if (stamp[j] == tag) continue;
+                stamp[j] = tag;
+                ++offered;
+                if (keep(j)) out.push_back(j);
             }
         }
     }
+    std::sort(out.begin(), out.end());
+    return offered;
 }
 
-// Mirrors forEachDiePair exactly, over dynamics_/dynGridCells_ instead of
-// bodies_/dieGridCells_ — same-population pairs, so the same "only walk the
-// forward half of the 3x3 neighborhood" trick avoids double-counting.
+} // namespace detail
+
 template <typename Fn>
-void DicePhysicsEngine::forEachDynamicPair(Fn&& fn, float expand) {
-    if (!useBroadphase_ || dynamics_.size() < 2) {
-        for (size_t i = 0; i < dynamics_.size(); ++i) {
-            for (size_t j = i + 1; j < dynamics_.size(); ++j) {
-                fn(i, j);
+uint32_t DicePhysicsEngine::forEachDiePair(Fn&& fn) {
+    const size_t n = bodies_.size();
+    if (!useBroadphase_ || n < 2) {
+        uint32_t offered = 0;
+        for (size_t i = 0; i < n; ++i) {
+            for (size_t j = i + 1; j < n; ++j) {
+                ++offered;
+                if (spheresOverlap(bodies_[i], bodies_[j], gridExpand_)) fn(i, j);
             }
         }
-        return;
+        return offered;
     }
-
-    rebuildDynGrid(expand);
-    for (int cz = 0; cz < gridRows_; ++cz) {
-        for (int cx = 0; cx < gridCols_; ++cx) {
-            const auto& cell = dynGridCells_[static_cast<size_t>(cz * gridCols_ + cx)];
-
-            for (size_t ai = 0; ai < cell.size(); ++ai) {
-                for (size_t bi = ai + 1; bi < cell.size(); ++bi) {
-                    fn(cell[ai], cell[bi]);
-                }
-            }
-
-            for (int dz = 0; dz <= 1; ++dz) {
-                const int dxStart = dz == 0 ? 1 : -1;
-                for (int dx = dxStart; dx <= 1; ++dx) {
-                    if (dx == 0 && dz == 0) continue;
-                    const int nx = cx + dx;
-                    const int nz = cz + dz;
-                    if (nx < 0 || nx >= gridCols_ || nz < 0 || nz >= gridRows_) continue;
-                    if (nz < cz || (nz == cz && nx <= cx)) continue;
-
-                    const auto& neighbor =
-                        dynGridCells_[static_cast<size_t>(nz * gridCols_ + nx)];
-                    for (size_t a : cell) {
-                        for (size_t b : neighbor) {
-                            if (a < b) {
-                                fn(a, b);
-                            } else if (b < a) {
-                                fn(b, a);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    uint32_t offered = 0;
+    dieStamp_.assign(n, -1);
+    for (size_t i = 0; i < n; ++i) {
+        offered += detail::gatherPartners(
+            dieGrid_, dieGrid_, gridCols_, i, static_cast<uint32_t>(i + 1), dieStamp_,
+            partnerScratch_,
+            [&](uint32_t j) { return spheresOverlap(bodies_[i], bodies_[j], gridExpand_); });
+        for (const uint32_t j : partnerScratch_) fn(i, static_cast<size_t>(j));
     }
+    return offered;
 }
 
-// Bipartite (die index space x dynamics index space): unlike forEachDiePair /
-// forEachDynamicPair, there is no single canonical ordering to dedupe on, so
-// a die or dynamic body that straddles a cell boundary (and is therefore
-// bucketed into more than one grid cell) can otherwise surface the same
-// (dieIndex, dynIndex) candidate from more than one cell in the 3x3 neighbor
-// scan below. Collect candidates into a scratch buffer and sort+unique
-// before dispatch, so every pair reaches fn() exactly once regardless of how
-// many cells either body overlaps — matching the brute-force branch's
-// semantics exactly (verified against it in solver_tests.cpp).
+// Bipartite (die index space x dynamics index space): a die's range is read
+// from the die grid, its partners from the dynamics grid, which shares its
+// dimensions, origin and expand.
 template <typename Fn>
-void DicePhysicsEngine::forEachDieDynamicPair(Fn&& fn, float expand) {
-    if (!useBroadphase_ || bodies_.empty() || dynamics_.empty()) {
-        for (size_t di = 0; di < bodies_.size(); ++di) {
-            for (size_t pi = 0; pi < dynamics_.size(); ++pi) {
-                fn(di, pi);
+uint32_t DicePhysicsEngine::forEachDieDynamicPair(Fn&& fn) {
+    const size_t n = bodies_.size();
+    const size_t d = dynamics_.size();
+    if (!useBroadphase_ || n == 0 || d == 0) {
+        uint32_t offered = 0;
+        for (size_t di = 0; di < n; ++di) {
+            for (size_t pi = 0; pi < d; ++pi) {
+                ++offered;
+                if (spheresOverlap(bodies_[di], dynamics_[pi], gridExpand_)) fn(di, pi);
             }
         }
-        return;
+        return offered;
     }
+    uint32_t offered = 0;
+    dynStamp_.assign(d, -1);
+    for (size_t di = 0; di < n; ++di) {
+        offered += detail::gatherPartners(
+            dieGrid_, dynGrid_, gridCols_, di, 0u, dynStamp_, partnerScratch_,
+            [&](uint32_t pi) { return spheresOverlap(bodies_[di], dynamics_[pi], gridExpand_); });
+        for (const uint32_t pi : partnerScratch_) fn(di, static_cast<size_t>(pi));
+    }
+    return offered;
+}
 
-    rebuildDieGrid(expand);
-    rebuildDynGrid(expand);
-
-    dieDynamicPairScratch_.clear();
-    for (int cz = 0; cz < gridRows_; ++cz) {
-        for (int cx = 0; cx < gridCols_; ++cx) {
-            const auto& dieCell = dieGridCells_[static_cast<size_t>(cz * gridCols_ + cx)];
-            if (dieCell.empty()) continue;
-
-            const int nzMin = std::max(0, cz - 1);
-            const int nzMax = std::min(gridRows_ - 1, cz + 1);
-            const int nxMin = std::max(0, cx - 1);
-            const int nxMax = std::min(gridCols_ - 1, cx + 1);
-            for (int nz = nzMin; nz <= nzMax; ++nz) {
-                for (int nx = nxMin; nx <= nxMax; ++nx) {
-                    const auto& dynCell = dynGridCells_[static_cast<size_t>(nz * gridCols_ + nx)];
-                    for (size_t di : dieCell) {
-                        for (size_t pi : dynCell) {
-                            dieDynamicPairScratch_.emplace_back(di, pi);
-                        }
-                    }
-                }
+template <typename Fn>
+uint32_t DicePhysicsEngine::forEachDynamicPair(Fn&& fn) {
+    const size_t n = dynamics_.size();
+    if (!useBroadphase_ || n < 2) {
+        uint32_t offered = 0;
+        for (size_t i = 0; i < n; ++i) {
+            for (size_t j = i + 1; j < n; ++j) {
+                ++offered;
+                if (spheresOverlap(dynamics_[i], dynamics_[j], gridExpand_)) fn(i, j);
             }
         }
+        return offered;
     }
-    std::sort(dieDynamicPairScratch_.begin(), dieDynamicPairScratch_.end());
-    dieDynamicPairScratch_.erase(
-        std::unique(dieDynamicPairScratch_.begin(), dieDynamicPairScratch_.end()),
-        dieDynamicPairScratch_.end());
-    for (const auto& pr : dieDynamicPairScratch_) {
-        fn(pr.first, pr.second);
+    uint32_t offered = 0;
+    dynStamp_.assign(n, -1);
+    for (size_t i = 0; i < n; ++i) {
+        offered += detail::gatherPartners(
+            dynGrid_, dynGrid_, gridCols_, i, static_cast<uint32_t>(i + 1), dynStamp_,
+            partnerScratch_,
+            [&](uint32_t j) { return spheresOverlap(dynamics_[i], dynamics_[j], gridExpand_); });
+        for (const uint32_t j : partnerScratch_) fn(i, static_cast<size_t>(j));
     }
+    return offered;
 }
 
 } // namespace dice_physics

@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <set>
 
 namespace dice_physics {
 
@@ -92,31 +91,37 @@ uint32_t DicePhysicsEngine::getStaticCapacityDroppedCount() const { return stati
 
 void DicePhysicsEngine::setBroadphaseForTesting(bool enabled) { useBroadphase_ = enabled; }
 
+// The walkers already report each pair once, ascending; the vector they
+// fill is returned as is, so a duplicate or out-of-order visit fails the
+// grid-vs-brute comparison instead of being folded away by a set.
 std::vector<std::pair<size_t, size_t>> DicePhysicsEngine::collectDiePairsForTesting(bool useBroadphase) {
     const bool saved = useBroadphase_;
     useBroadphase_ = useBroadphase;
-    std::set<std::pair<size_t, size_t>> pairSet;
-    forEachDiePair([&](size_t i, size_t j) { pairSet.insert({i, j}); });
+    rebuildBroadphase(0.0f);
+    std::vector<std::pair<size_t, size_t>> pairs;
+    forEachDiePair([&](size_t i, size_t j) { pairs.emplace_back(i, j); });
     useBroadphase_ = saved;
-    return {pairSet.begin(), pairSet.end()};
+    return pairs;
 }
 
 std::vector<std::pair<size_t, size_t>> DicePhysicsEngine::collectDieDynamicPairsForTesting(bool useBroadphase) {
     const bool saved = useBroadphase_;
     useBroadphase_ = useBroadphase;
-    std::set<std::pair<size_t, size_t>> pairSet;
-    forEachDieDynamicPair([&](size_t di, size_t pi) { pairSet.insert({di, pi}); });
+    rebuildBroadphase(0.0f);
+    std::vector<std::pair<size_t, size_t>> pairs;
+    forEachDieDynamicPair([&](size_t di, size_t pi) { pairs.emplace_back(di, pi); });
     useBroadphase_ = saved;
-    return {pairSet.begin(), pairSet.end()};
+    return pairs;
 }
 
 std::vector<std::pair<size_t, size_t>> DicePhysicsEngine::collectDynamicPairsForTesting(bool useBroadphase) {
     const bool saved = useBroadphase_;
     useBroadphase_ = useBroadphase;
-    std::set<std::pair<size_t, size_t>> pairSet;
-    forEachDynamicPair([&](size_t i, size_t j) { pairSet.insert({i, j}); });
+    rebuildBroadphase(0.0f);
+    std::vector<std::pair<size_t, size_t>> pairs;
+    forEachDynamicPair([&](size_t i, size_t j) { pairs.emplace_back(i, j); });
     useBroadphase_ = saved;
-    return {pairSet.begin(), pairSet.end()};
+    return pairs;
 }
 
 bool DicePhysicsEngine::areAllSettled() const {
@@ -421,6 +426,7 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
             }
         }
     }
+    reserveContactStorage();
 }
 
 uint64_t DicePhysicsEngine::hashSerializedState() const {
