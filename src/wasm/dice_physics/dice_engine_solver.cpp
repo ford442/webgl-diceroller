@@ -408,58 +408,9 @@ void DicePhysicsEngine::addSatContacts(
     commitManifoldPoints(*m, pts, take, normal);
 }
 
-void DicePhysicsEngine::rebuildDieGrid(float expand) {
-    ensureDieGridDimensions();
-    const size_t cellCount = static_cast<size_t>(gridCols_ * gridRows_);
-    if (dieGridCells_.size() != cellCount) {
-        dieGridCells_.assign(cellCount, {});
-    } else {
-        for (auto& cell : dieGridCells_) cell.clear();
-    }
-
-    for (size_t i = 0; i < bodies_.size(); ++i) {
-        const auto& b = bodies_[i];
-        const float r = b.radius + expand;
-        const int minCx = bodyCellXMin(b.position.x, r);
-        const int maxCx = bodyCellXMax(b.position.x, r);
-        const int minCz = bodyCellZMin(b.position.z, r);
-        const int maxCz = bodyCellZMax(b.position.z, r);
-        for (int cz = minCz; cz <= maxCz; ++cz) {
-            for (int cx = minCx; cx <= maxCx; ++cx) {
-                dieGridCells_[static_cast<size_t>(cz * gridCols_ + cx)].push_back(i);
-            }
-        }
-    }
-}
-
-void DicePhysicsEngine::rebuildDynGrid(float expand) {
-    ensureDieGridDimensions();
-    const size_t cellCount = static_cast<size_t>(gridCols_ * gridRows_);
-    if (dynGridCells_.size() != cellCount) {
-        dynGridCells_.assign(cellCount, {});
-    } else {
-        for (auto& cell : dynGridCells_) cell.clear();
-    }
-
-    for (size_t i = 0; i < dynamics_.size(); ++i) {
-        const auto& d = dynamics_[i];
-        const float r = d.radius + expand;
-        const int minCx = bodyCellXMin(d.position.x, r);
-        const int maxCx = bodyCellXMax(d.position.x, r);
-        const int minCz = bodyCellZMin(d.position.z, r);
-        const int maxCz = bodyCellZMax(d.position.z, r);
-        for (int cz = minCz; cz <= maxCz; ++cz) {
-            for (int cx = minCx; cx <= maxCx; ++cx) {
-                dynGridCells_[static_cast<size_t>(cz * gridCols_ + cx)].push_back(i);
-            }
-        }
-    }
-}
-
 void DicePhysicsEngine::processDiePair(size_t i, size_t j, StepStats& stats, float spec) {
     auto& a = bodies_[i];
     auto& b = bodies_[j];
-    stats.pairCandidates++;
     if (a.kinematic && b.kinematic) return;
     if (a.sleeping && b.sleeping) return;
 
@@ -521,17 +472,10 @@ void DicePhysicsEngine::processDiePair(size_t i, size_t j, StepStats& stats, flo
 }
 
 void DicePhysicsEngine::generateDieDieContacts(float spec, StepStats& stats) {
-    // Grid cells overlap, so a pair can be visited more than once. Dedup
-    // before the SAT / event path so warm-start and collision audio stay
-    // one-shot per substep.
-    diePairScratch_.clear();
-    forEachDiePair([&](size_t i, size_t j) { diePairScratch_.emplace_back(i, j); }, spec);
-    std::sort(diePairScratch_.begin(), diePairScratch_.end());
-    diePairScratch_.erase(std::unique(diePairScratch_.begin(), diePairScratch_.end()),
-                          diePairScratch_.end());
-    for (const auto& pair : diePairScratch_) {
-        processDiePair(pair.first, pair.second, stats, spec);
-    }
+    // The walker hands over each overlapping pair once, in ascending (i, j),
+    // so warm-start and collision audio stay one-shot per substep.
+    stats.pairCandidates += forEachDiePair(
+        [&](size_t i, size_t j) { processDiePair(i, j, stats, spec); });
 }
 
 void DicePhysicsEngine::generateTableContacts(RigidBody& b, size_t dieIndex, float spec) {
@@ -853,10 +797,9 @@ void DicePhysicsEngine::generateDynamicStaticContacts(DynamicBody& b, size_t dyn
 }
 
 void DicePhysicsEngine::generateDieDynamicContacts(float spec, StepStats& stats) {
-    forEachDieDynamicPair([&](size_t di, size_t pi) {
+    stats.pairCandidates += forEachDieDynamicPair([&](size_t di, size_t pi) {
         auto& die = bodies_[di];
         auto& prop = dynamics_[pi];
-        stats.pairCandidates++;
         if (die.kinematic && prop.kinematic) return;
         if (die.sleeping && prop.sleeping) return;
         Vec3 delta = prop.position - die.position;
@@ -904,7 +847,7 @@ void DicePhysicsEngine::generateDieDynamicContacts(float spec, StepStats& stats)
         if (speed > 0.5f && events_.size() < static_cast<size_t>(MAX_EVENTS_PER_STEP)) {
             events_.push_back(makeEvent(die, dynamicEventOtherId(prop.userId), speed));
         }
-    }, spec);
+    });
 }
 
 void DicePhysicsEngine::generateDynamicDynamicContacts(float spec, StepStats& stats) {
@@ -933,7 +876,7 @@ void DicePhysicsEngine::generateDynamicDynamicContacts(float spec, StepStats& st
             wake(a);
             wake(b);
         }
-    }, spec);
+    });
 }
 
 void DicePhysicsEngine::generateContacts(float dt, StepStats& stats) {
@@ -943,6 +886,7 @@ void DicePhysicsEngine::generateContacts(float dt, StepStats& stats) {
     for (const auto& b : bodies_) maxSpec = std::max(maxSpec, speculativeFor(b.velocity, dt));
     for (const auto& d : dynamics_) maxSpec = std::max(maxSpec, speculativeFor(d.velocity, dt));
 
+    rebuildBroadphase(maxSpec);
     generateDieDieContacts(maxSpec, stats);
     generateDieDynamicContacts(maxSpec, stats);
     generateDynamicDynamicContacts(maxSpec, stats);
