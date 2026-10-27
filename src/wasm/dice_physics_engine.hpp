@@ -224,7 +224,7 @@ public:
     /** Test hook: the same for (dieIndex, dynamicIndex) pairs. */
     std::vector<std::pair<size_t, size_t>> collectDieDynamicPairsForTesting(bool useBroadphase);
 
-    /** Test hook: enumerate dynamic–dynamic pair indices without running the solver. */
+    /** Test hook: the same for dynamic–dynamic pairs. */
     std::vector<std::pair<size_t, size_t>> collectDynamicPairsForTesting(bool useBroadphase);
 
     /** hasDice() && allAsleep(): a roll is finished. False for an empty engine. */
@@ -471,7 +471,7 @@ private:
     template <typename Fn>
     uint32_t forEachDieDynamicPair(Fn&& fn);
     template <typename Fn>
-    void forEachDynamicPair(Fn&& fn);
+    uint32_t forEachDynamicPair(Fn&& fn);
     template <typename A, typename B>
     static bool spheresOverlap(const A& a, const B& b, float expand) {
         const Vec3 delta = b.position - a.position;
@@ -516,6 +516,8 @@ private:
         float spec, float friction, float restitution, StepStats* stats
     );
     void generateContacts(float dt, StepStats& stats);
+    /** Sort manifold indices into solveOrder_, the order every pass walks. */
+    void buildSolveOrder();
     void warmStartManifolds();
     void prepareVelocityConstraints(float dt);
     void solveVelocityConstraints(float dt);
@@ -652,57 +654,29 @@ uint32_t DicePhysicsEngine::forEachDieDynamicPair(Fn&& fn) {
     return offered;
 }
 
-// Every same-cell and forward-neighbour pair, in cell order, duplicates
-// included — the walk generateDynamicDynamicContacts has always had.
 template <typename Fn>
-void DicePhysicsEngine::forEachDynamicPair(Fn&& fn) {
-    if (!useBroadphase_ || dynamics_.size() < 2) {
-        for (size_t i = 0; i < dynamics_.size(); ++i) {
-            for (size_t j = i + 1; j < dynamics_.size(); ++j) {
-                fn(i, j);
+uint32_t DicePhysicsEngine::forEachDynamicPair(Fn&& fn) {
+    const size_t n = dynamics_.size();
+    if (!useBroadphase_ || n < 2) {
+        uint32_t offered = 0;
+        for (size_t i = 0; i < n; ++i) {
+            for (size_t j = i + 1; j < n; ++j) {
+                ++offered;
+                if (spheresOverlap(dynamics_[i], dynamics_[j], gridExpand_)) fn(i, j);
             }
         }
-        return;
+        return offered;
     }
-
-    auto cellAt = [&](int cx, int cz) {
-        const auto c = static_cast<size_t>(cz) * static_cast<size_t>(gridCols_) + static_cast<size_t>(cx);
-        return std::pair<const uint32_t*, const uint32_t*>{
-            dynGrid_.items.data() + dynGrid_.start[c], dynGrid_.items.data() + dynGrid_.start[c + 1]};
-    };
-    for (int cz = 0; cz < gridRows_; ++cz) {
-        for (int cx = 0; cx < gridCols_; ++cx) {
-            const auto [cellBegin, cellEnd] = cellAt(cx, cz);
-
-            for (const uint32_t* a = cellBegin; a != cellEnd; ++a) {
-                for (const uint32_t* b = a + 1; b != cellEnd; ++b) {
-                    fn(static_cast<size_t>(*a), static_cast<size_t>(*b));
-                }
-            }
-
-            for (int dz = 0; dz <= 1; ++dz) {
-                const int dxStart = dz == 0 ? 1 : -1;
-                for (int dx = dxStart; dx <= 1; ++dx) {
-                    if (dx == 0 && dz == 0) continue;
-                    const int nx = cx + dx;
-                    const int nz = cz + dz;
-                    if (nx < 0 || nx >= gridCols_ || nz < 0 || nz >= gridRows_) continue;
-                    if (nz < cz || (nz == cz && nx <= cx)) continue;
-
-                    const auto [nBegin, nEnd] = cellAt(nx, nz);
-                    for (const uint32_t* a = cellBegin; a != cellEnd; ++a) {
-                        for (const uint32_t* b = nBegin; b != nEnd; ++b) {
-                            if (*a < *b) {
-                                fn(static_cast<size_t>(*a), static_cast<size_t>(*b));
-                            } else if (*b < *a) {
-                                fn(static_cast<size_t>(*b), static_cast<size_t>(*a));
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    uint32_t offered = 0;
+    dynStamp_.assign(n, -1);
+    for (size_t i = 0; i < n; ++i) {
+        offered += detail::gatherPartners(
+            dynGrid_, dynGrid_, gridCols_, i, static_cast<uint32_t>(i + 1), dynStamp_,
+            partnerScratch_,
+            [&](uint32_t j) { return spheresOverlap(dynamics_[i], dynamics_[j], gridExpand_); });
+        for (const uint32_t j : partnerScratch_) fn(i, static_cast<size_t>(j));
     }
+    return offered;
 }
 
 } // namespace dice_physics

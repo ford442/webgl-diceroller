@@ -650,7 +650,7 @@ TEST_CASE("Golden traces: seed and parity hashes are stable") {
     // `solver_tests --dump-golden` (see scripts/compare-solver-golden.mjs and
     // tests/fixtures/solver-golden.json) whenever SOLVER_REVISION bumps.
     CHECK(p1.hashSerializedState() == 0xa1d45868a58d37daULL);
-    CHECK(a.hashSerializedState() == 0xbacbcf9091d212f9ULL);
+    CHECK(a.hashSerializedState() == 0x18e5bb310b16c34bULL);
 }
 
 TEST_CASE("Determinism: same seed yields identical serialize output") {
@@ -1769,7 +1769,7 @@ TEST_CASE("Broadphase grid matches brute force for die-dynamic and dynamic-dynam
         // Dice and dynamic boxes interleaved on a dense grid (spacing well
         // under GRID_CELL_SIZE=2.2) so several bodies straddle a cell
         // boundary and land in more than one grid cell -- exactly the case
-        // forEachDieDynamicPair's sort+unique dedup exists for.
+        // the walkers' per-body partner dedup exists for.
         for (int i = 0; i < 10; ++i) {
             const float x = static_cast<float>((i % 5) - 2) * 0.9f;
             const float y = 2.5f + static_cast<float>(i) * 0.08f;
@@ -1800,17 +1800,11 @@ TEST_CASE("Broadphase grid matches brute force for die-dynamic and dynamic-dynam
     CHECK(gridDynDyn.size() == bruteDynDyn.size());
     CHECK(std::equal(gridDynDyn.begin(), gridDynDyn.end(), bruteDynDyn.begin()));
 
-    // Unlike the die-die grid (20 dice on a regular layout, where grid and
-    // brute-force traversal order happen to coincide -- see the test above),
-    // this scenario is dense enough that a handful of simultaneous new
-    // contacts resolve in a different order between the two paths, and a
-    // sequential-impulse solver is order-sensitive: grid and brute diverge
-    // into different (both valid) trajectories rather than staying
-    // byte-identical. That's expected -- production always runs one path
-    // (useBroadphase_ defaults true; setBroadphaseForTesting is test-only),
-    // so replay determinism only needs "same code path -> same result",
-    // which the pair-set equality above already establishes. What both
-    // paths must still do is stay physically valid.
+    // Same pairs in the same order, and a solve order that depends on the
+    // manifold keys rather than on when each manifold was created, so the
+    // two paths are byte-identical here too. (Before the dynamic walker
+    // stopped revisiting straddling pairs, this scene only checked that both
+    // stayed physically valid.)
     auto runScenario = [&](bool useBroadphase) {
         DicePhysicsEngine engine = setupEngine();
         engine.setBroadphaseForTesting(useBroadphase);
@@ -1820,9 +1814,12 @@ TEST_CASE("Broadphase grid matches brute force for die-dynamic and dynamic-dynam
             CHECK(engine.allBodyStatesInWorldBounds(20.0f));
         }
         CHECK(engine.getDynamicCapacityDroppedCount() == 0);
+        return engine.serializeState();
     };
-    runScenario(true);
-    runScenario(false);
+    const auto gridState = runScenario(true);
+    const auto bruteState = runScenario(false);
+    REQUIRE(gridState.size() == bruteState.size());
+    CHECK(std::memcmp(gridState.data(), bruteState.data(), gridState.size()) == 0);
 }
 
 TEST_CASE("Fuzz: dynamics-heavy scenarios preserve invariants") {

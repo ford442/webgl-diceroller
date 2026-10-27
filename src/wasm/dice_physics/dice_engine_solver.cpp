@@ -126,19 +126,15 @@ void DicePhysicsEngine::indexManifold(size_t index) {
 ContactManifold* DicePhysicsEngine::findManifold(ManifoldKind kind, int idA, int idB, int aux) {
     if (manifoldSlots_.empty()) return nullptr;
     const size_t mask = manifoldSlots_.size() - 1;
-    // Walk the whole run: a manifold whose aux was rewritten after it was
-    // indexed stays in its old key's run, so the lowest match is not
-    // necessarily the first one met.
-    int32_t best = -1;
+    // Keys never change once indexed and slots fill in ascending index order,
+    // so the first match in the run is the lowest-indexed one (only a
+    // snapshot can hold two manifolds with one key).
     for (size_t slot = manifoldHash(kind, idA, idB, aux) & mask; manifoldSlots_[slot] >= 0;
          slot = (slot + 1) & mask) {
-        const int32_t index = manifoldSlots_[slot];
-        if ((best < 0 || index < best) &&
-            manifoldHasKey(manifolds_[static_cast<size_t>(index)], kind, idA, idB, aux)) {
-            best = index;
-        }
+        const auto index = static_cast<size_t>(manifoldSlots_[slot]);
+        if (manifoldHasKey(manifolds_[index], kind, idA, idB, aux)) return &manifolds_[index];
     }
-    return best < 0 ? nullptr : &manifolds_[static_cast<size_t>(best)];
+    return nullptr;
 }
 
 ContactManifold* DicePhysicsEngine::acquireManifold(ManifoldKind kind, int idA, int idB, int aux) {
@@ -549,7 +545,6 @@ void DicePhysicsEngine::resolveStaticPlane(
     );
     ContactManifold* m = findManifold(ManifoldKind::DieStatic, b.id, s.userId, 0);
     if (!m || m->stale) return;
-    m->aux = s.userId;
     if (b.sleeping) wake(b);
     const float impactSpeed = std::max(0.0f, -Vec3::dot(b.velocity, n));
     if (m->points[0].separation < -0.01f && impactSpeed > 1.0f &&
@@ -846,10 +841,13 @@ void DicePhysicsEngine::generateDieDynamicContacts(float spec, StepStats& stats)
 }
 
 void DicePhysicsEngine::generateDynamicDynamicContacts(float spec, StepStats& stats) {
-    forEachDynamicPair([&](size_t i, size_t j) {
+    // Once per pair, like the die walkers. The grid walk this replaced
+    // visited a pair again from every neighbouring cell both bodies covered,
+    // and each visit re-committed the manifold, so a straddling pair's warm
+    // start was scaled by WARM_START_FACTOR more than once per substep.
+    stats.pairCandidates += forEachDynamicPair([&](size_t i, size_t j) {
         auto& a = dynamics_[i];
         auto& b = dynamics_[j];
-        stats.pairCandidates++;
         if (a.kinematic && b.kinematic) return;
         if (a.sleeping && b.sleeping) return;
         Vec3 delta = b.position - a.position;
@@ -1010,8 +1008,47 @@ bool DicePhysicsEngine::bindViews(size_t manifold, BodyView& a, BodyView& b) {
     return true;
 }
 
+namespace {
+// Lower contacts first so table reaction can propagate up a stack.
+int solveRank(ManifoldKind k) {
+    switch (k) {
+        case ManifoldKind::DieTable:
+        case ManifoldKind::DynamicTable: return 0;
+        case ManifoldKind::DieStatic:
+        case ManifoldKind::DynamicStatic: return 1;
+        default: return 2;
+    }
+}
+} // namespace
+
+void DicePhysicsEngine::buildSolveOrder() {
+    // A total order on the manifold key, so the order every solver pass walks
+    // is a function of body ids alone: not of manifolds_ storage order (which
+    // remembers when each contact began), and not of how a std::sort
+    // implementation breaks ties. Sorting on (rank, idA) only left
+    // equal-keyed manifolds, e.g. one die's contacts with two others, in an
+    // order libstdc++ and libc++ need not agree on. The index is the last key
+    // only for a snapshot that holds one key twice.
+    std::vector<size_t>& order = solveOrder_;
+    if (order.capacity() < manifolds_.capacity()) order.reserve(manifolds_.capacity());
+    order.resize(manifolds_.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::sort(order.begin(), order.end(), [&](size_t ia, size_t ib) {
+        const ContactManifold& a = manifolds_[ia];
+        const ContactManifold& b = manifolds_[ib];
+        const int ra = solveRank(a.kind);
+        const int rb = solveRank(b.kind);
+        if (ra != rb) return ra < rb;
+        if (a.idA != b.idA) return a.idA < b.idA;
+        if (a.kind != b.kind) return a.kind < b.kind;
+        if (a.idB != b.idB) return a.idB < b.idB;
+        if (a.aux != b.aux) return a.aux < b.aux;
+        return ia < ib;
+    });
+}
+
 void DicePhysicsEngine::warmStartManifolds() {
-    for (size_t mi = 0; mi < manifolds_.size(); ++mi) {
+    for (const size_t mi : solveOrder_) {
         auto& m = manifolds_[mi];
         BodyView va, vb;
         if (!bindViews(mi, va, vb)) continue;
@@ -1059,29 +1096,8 @@ float effectiveMass(const BodyView& va, const BodyView& vb, const Vec3& rA, cons
 
 void DicePhysicsEngine::solveVelocityConstraints(float dt) {
     const float invDt = dt > 0.0f ? 1.0f / dt : 0.0f;
-    // Solve lower contacts first so table reaction can propagate up a stack.
-    std::vector<size_t>& order = solveOrder_;
-    if (order.capacity() < manifolds_.capacity()) order.reserve(manifolds_.capacity());
-    order.resize(manifolds_.size());
-    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
-    std::sort(order.begin(), order.end(), [&](size_t ia, size_t ib) {
-        const auto& a = manifolds_[ia];
-        const auto& b = manifolds_[ib];
-        const auto rankOf = [](ManifoldKind k) {
-            switch (k) {
-                case ManifoldKind::DieTable:
-                case ManifoldKind::DynamicTable: return 0;
-                case ManifoldKind::DieStatic:
-                case ManifoldKind::DynamicStatic: return 1;
-                default: return 2;
-            }
-        };
-        const int ra = rankOf(a.kind), rb = rankOf(b.kind);
-        if (ra != rb) return ra < rb;
-        return a.idA < b.idA;
-    });
     for (int iter = 0; iter < VELOCITY_ITERATIONS; ++iter) {
-        for (size_t oi : order) {
+        for (const size_t oi : solveOrder_) {
             auto& m = manifolds_[oi];
             BodyView va, vb;
             if (!bindViews(oi, va, vb)) continue;
@@ -1138,7 +1154,7 @@ void DicePhysicsEngine::solveVelocityConstraints(float dt) {
 
 void DicePhysicsEngine::solvePositionConstraints() {
     for (int iter = 0; iter < POSITION_ITERATIONS; ++iter) {
-        for (size_t mi = 0; mi < manifolds_.size(); ++mi) {
+        for (const size_t mi : solveOrder_) {
             auto& m = manifolds_[mi];
             BodyView va, vb;
             if (!bindViews(mi, va, vb)) continue;
@@ -1250,6 +1266,7 @@ void DicePhysicsEngine::updateIslandSleep(float dt) {
 
 void DicePhysicsEngine::solveContacts(float dt) {
     gatherSolverBodies();
+    buildSolveOrder();
     prepareVelocityConstraints(dt);
     warmStartManifolds();
     solveVelocityConstraints(dt);
