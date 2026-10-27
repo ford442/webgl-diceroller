@@ -489,8 +489,14 @@ private:
      * while a contact pass is still appending, so step() starts with room.
      */
     void reserveContactStorage();
-    /** Find-or-create the manifold for this key (nullptr at MAX_MANIFOLDS). */
-    ContactManifold* matchManifold(ManifoldKind kind, int idA, int idB, int aux);
+    /**
+     * Find-or-create the manifold for this key (nullptr at MAX_MANIFOLDS).
+     * Only for a caller about to commit points: anything that just wants to
+     * know whether a pair touched this substep uses findManifold, so a miss
+     * does not leave an empty manifold behind to take a slot until the pass
+     * ends.
+     */
+    ContactManifold* acquireManifold(ManifoldKind kind, int idA, int idB, int aux);
     ContactManifold* findManifold(ManifoldKind kind, int idA, int idB, int aux);
     void rebuildManifoldIndex();
     void indexManifold(size_t index);

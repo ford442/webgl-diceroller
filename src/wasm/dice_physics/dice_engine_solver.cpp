@@ -141,7 +141,7 @@ ContactManifold* DicePhysicsEngine::findManifold(ManifoldKind kind, int idA, int
     return best < 0 ? nullptr : &manifolds_[static_cast<size_t>(best)];
 }
 
-ContactManifold* DicePhysicsEngine::matchManifold(ManifoldKind kind, int idA, int idB, int aux) {
+ContactManifold* DicePhysicsEngine::acquireManifold(ManifoldKind kind, int idA, int idB, int aux) {
     if (ContactManifold* m = findManifold(kind, idA, idB, aux)) return m;
     if (manifolds_.size() >= MAX_MANIFOLDS) return nullptr;
     ContactManifold m;
@@ -201,7 +201,7 @@ void DicePhysicsEngine::addPlaneContacts(
         }
     }
     if (n <= 0) return;
-    ContactManifold* m = matchManifold(kind, idA, idB, aux);
+    ContactManifold* m = acquireManifold(kind, idA, idB, aux);
     if (!m) return;
     m->indexA = indexA;
     m->indexB = indexB;
@@ -394,7 +394,7 @@ void DicePhysicsEngine::addSatContacts(
     }
     if (take <= 0) return;
 
-    ContactManifold* m = matchManifold(kind, idA, idB, aux);
+    ContactManifold* m = acquireManifold(kind, idA, idB, aux);
     if (!m) return;
     m->indexA = indexA;
     m->indexB = indexB;
@@ -444,7 +444,7 @@ void DicePhysicsEngine::processDiePair(size_t i, size_t j, StepStats& stats, flo
         pts[0].point = contact;
         pts[0].separation = -pen;
         pts[0].featureId = 0;
-        ContactManifold* m = matchManifold(ManifoldKind::DieDie, a.id, b.id, 0);
+        ContactManifold* m = acquireManifold(ManifoldKind::DieDie, a.id, b.id, 0);
         if (!m) return;
         m->indexA = static_cast<int>(i);
         m->indexB = static_cast<int>(j);
@@ -454,7 +454,7 @@ void DicePhysicsEngine::processDiePair(size_t i, size_t j, StepStats& stats, flo
         stats.contacts++;
     }
 
-    ContactManifold* found = matchManifold(ManifoldKind::DieDie, a.id, b.id, 0);
+    ContactManifold* found = findManifold(ManifoldKind::DieDie, a.id, b.id, 0);
     if (!found || found->stale) return;
 
     if ((!a.sleeping && b.sleeping) || (a.sleeping && !b.sleeping)) {
@@ -523,7 +523,7 @@ void DicePhysicsEngine::generateContainerContacts(RigidBody& b, size_t dieIndex,
             plane.normal, plane.dist, b.worldVerts, b.position, b.radius,
             spec, b.friction, b.restitution
         );
-        ContactManifold* m = matchManifold(ManifoldKind::DieContainer, b.id, -1, static_cast<int>(pi));
+        ContactManifold* m = findManifold(ManifoldKind::DieContainer, b.id, -1, static_cast<int>(pi));
         if (!m || m->stale || m->pointCount == 0) continue;
         const float impactSpeed = std::max(0.0f, -Vec3::dot(b.velocity, plane.normal));
         if (m->points[0].separation < -0.01f && impactSpeed > 1.0f &&
@@ -547,7 +547,7 @@ void DicePhysicsEngine::resolveStaticPlane(
         n, d, b.worldVerts, b.position, b.radius,
         spec, std::sqrt(b.friction * s.friction), std::min(b.restitution, s.restitution)
     );
-    ContactManifold* m = matchManifold(ManifoldKind::DieStatic, b.id, s.userId, 0);
+    ContactManifold* m = findManifold(ManifoldKind::DieStatic, b.id, s.userId, 0);
     if (!m || m->stale) return;
     m->aux = s.userId;
     if (b.sleeping) wake(b);
@@ -572,7 +572,7 @@ void DicePhysicsEngine::resolveStaticHull(RigidBody& b, const StaticBody& s, flo
         s.hull, s.center, s.rotation, sw,
         spec, std::sqrt(b.friction * s.friction), std::min(b.restitution, s.restitution), nullptr
     );
-    ContactManifold* m = matchManifold(ManifoldKind::DieStatic, b.id, s.userId, 0);
+    ContactManifold* m = findManifold(ManifoldKind::DieStatic, b.id, s.userId, 0);
     if (!m || m->stale) return;
     if (b.sleeping) wake(b);
     const float impactSpeed = std::max(0.0f, -Vec3::dot(b.velocity, m->normal));
@@ -820,7 +820,7 @@ void DicePhysicsEngine::generateDieDynamicContacts(float spec, StepStats& stats)
             pts[0].point = die.position + normal * die.radius;
             pts[0].separation = -pen;
             pts[0].featureId = 0;
-            auto* m = matchManifold(ManifoldKind::DieDynamic, die.id, prop.userId, 0);
+            auto* m = acquireManifold(ManifoldKind::DieDynamic, die.id, prop.userId, 0);
             if (!m) return;
             m->indexA = static_cast<int>(di);
             m->indexB = static_cast<int>(pi);
@@ -828,7 +828,7 @@ void DicePhysicsEngine::generateDieDynamicContacts(float spec, StepStats& stats)
             m->restitution = rest;
             commitManifoldPoints(*m, pts, 1, normal);
         }
-        auto* found = matchManifold(ManifoldKind::DieDynamic, die.id, prop.userId, 0);
+        auto* found = findManifold(ManifoldKind::DieDynamic, die.id, prop.userId, 0);
         if (!found || found->stale) return;
         // Wake the sleeper only. wake() also clears sleepTimer, so waking
         // both every substep kept a die resting against a prop (and the
@@ -865,7 +865,7 @@ void DicePhysicsEngine::generateDynamicDynamicContacts(float spec, StepStats& st
             spec, std::sqrt(a.friction * b.friction), std::min(a.restitution, b.restitution),
             &stats
         );
-        auto* found = matchManifold(ManifoldKind::DynamicDynamic, a.userId, b.userId, 0);
+        auto* found = findManifold(ManifoldKind::DynamicDynamic, a.userId, b.userId, 0);
         if (!found || found->stale) return;
         if (a.sleeping != b.sleeping) {
             wake(a);
