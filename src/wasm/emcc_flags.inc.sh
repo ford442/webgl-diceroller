@@ -21,7 +21,7 @@ EMCC_INITIAL_MEMORY="16MB"
 
 EMCC_COMMON=(
     --bind
-    -std=c++17
+    -std=c++20
     -ffp-contract=off
     -s WASM=1
     -s ALLOW_MEMORY_GROWTH=1

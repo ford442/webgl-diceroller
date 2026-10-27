@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.13)
 project(DicePhysics CXX)
 
 # NOT set(CMAKE_CXX_STANDARD 17): that makes CMake prepend its own
-# -std=gnu++17 ahead of the -std=c++17 emcc_flags.inc.sh already supplies. The
+# -std=gnu++17 ahead of the -std=c++20 emcc_flags.inc.sh already supplies. The
 # later flag wins so the effective standard is the same either way, but it is
 # one more flag on CMake's compile line that build.sh's never has -- and the
 # wasm-toolchain CI job byte-diffs the two builds. emcc_flags.inc.sh owns the
