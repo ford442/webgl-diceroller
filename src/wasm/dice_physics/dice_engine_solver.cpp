@@ -14,52 +14,6 @@ namespace dice_physics {
 
 namespace {
 
-BodyView viewDie(RigidBody& b) {
-    BodyView v;
-    v.position = &b.position;
-    v.velocity = &b.velocity;
-    v.angularVelocity = &b.angularVelocity;
-    v.rotation = &b.rotation;
-    v.invMass = b.kinematic ? 0.0f : b.invMass;
-    v.invInertia = b.invInertia;
-    v.invInertiaWorldMat = inertiaWorldMat3(b.rotation, b.invInertia);
-    v.kinematic = b.kinematic;
-    return v;
-}
-
-BodyView viewDyn(DynamicBody& b) {
-    BodyView v;
-    v.position = &b.position;
-    v.velocity = &b.velocity;
-    v.angularVelocity = &b.angularVelocity;
-    v.rotation = &b.rotation;
-    v.invMass = b.kinematic ? 0.0f : b.invMass;
-    v.invInertia = b.invInertia;
-    v.invInertiaWorldMat = inertiaWorldMat3(b.rotation, b.invInertia);
-    v.kinematic = b.kinematic;
-    return v;
-}
-
-BodyView viewStatic(StaticBody& s) {
-    BodyView v;
-    v.position = &s.center;
-    v.rotation = &s.rotation;
-    v.invMass = 0.0f;
-    v.kinematic = true;
-    return v;
-}
-
-BodyView viewWorld(WorldAnchor& a) {
-    BodyView v;
-    v.position = &a.position;
-    v.velocity = &a.velocity;
-    v.angularVelocity = &a.angular;
-    v.rotation = &a.rotation;
-    v.invMass = 0.0f;
-    v.kinematic = true;
-    return v;
-}
-
 int collectPlanePoints(
     const std::vector<Vec3>& verts,
     const Vec3& fallbackPoint,
@@ -129,17 +83,74 @@ void DicePhysicsEngine::refreshDynamicDerived(DynamicBody& b) const {
     transformHullVerts(b.hull.verts.data(), n, b.rotation, b.position, b.worldVerts.data());
 }
 
-ContactManifold* DicePhysicsEngine::matchManifold(ManifoldKind kind, int idA, int idB, int aux) {
-    for (auto& m : manifolds_) {
-        if (m.kind == kind && m.idA == idA && m.idB == idB && m.aux == aux) return &m;
+namespace {
+
+uint32_t manifoldHash(ManifoldKind kind, int idA, int idB, int aux) {
+    uint32_t h = static_cast<uint32_t>(kind) * 0x9E3779B1u;
+    h ^= static_cast<uint32_t>(idA) * 0x85EBCA77u;
+    h ^= h >> 13;
+    h ^= static_cast<uint32_t>(idB) * 0xC2B2AE3Du;
+    h ^= h >> 16;
+    h ^= static_cast<uint32_t>(aux) * 0x27D4EB2Fu;
+    h ^= h >> 15;
+    return h;
+}
+
+bool manifoldHasKey(const ContactManifold& m, ManifoldKind kind, int idA, int idB, int aux) {
+    return m.kind == kind && m.idA == idA && m.idB == idB && m.aux == aux;
+}
+
+} // namespace
+
+void DicePhysicsEngine::rebuildManifoldIndex() {
+    // At most half full at the manifolds_ capacity, so the table only grows
+    // when manifolds_ itself does.
+    size_t slots = 64;
+    while (slots < 2 * std::max(manifolds_.capacity(), manifolds_.size() + 1)) slots *= 2;
+    manifoldSlots_.assign(slots, -1);
+    for (size_t i = 0; i < manifolds_.size(); ++i) indexManifold(i);
+}
+
+void DicePhysicsEngine::indexManifold(size_t index) {
+    if (2 * (index + 1) > manifoldSlots_.size()) {
+        rebuildManifoldIndex();
+        return;
     }
-    if (manifolds_.size() >= 8192) return nullptr;
+    const ContactManifold& m = manifolds_[index];
+    const size_t mask = manifoldSlots_.size() - 1;
+    size_t slot = manifoldHash(m.kind, m.idA, m.idB, m.aux) & mask;
+    while (manifoldSlots_[slot] >= 0) slot = (slot + 1) & mask;
+    manifoldSlots_[slot] = static_cast<int32_t>(index);
+}
+
+ContactManifold* DicePhysicsEngine::findManifold(ManifoldKind kind, int idA, int idB, int aux) {
+    if (manifoldSlots_.empty()) return nullptr;
+    const size_t mask = manifoldSlots_.size() - 1;
+    // Walk the whole run: a manifold whose aux was rewritten after it was
+    // indexed stays in its old key's run, so the lowest match is not
+    // necessarily the first one met.
+    int32_t best = -1;
+    for (size_t slot = manifoldHash(kind, idA, idB, aux) & mask; manifoldSlots_[slot] >= 0;
+         slot = (slot + 1) & mask) {
+        const int32_t index = manifoldSlots_[slot];
+        if ((best < 0 || index < best) &&
+            manifoldHasKey(manifolds_[static_cast<size_t>(index)], kind, idA, idB, aux)) {
+            best = index;
+        }
+    }
+    return best < 0 ? nullptr : &manifolds_[static_cast<size_t>(best)];
+}
+
+ContactManifold* DicePhysicsEngine::matchManifold(ManifoldKind kind, int idA, int idB, int aux) {
+    if (ContactManifold* m = findManifold(kind, idA, idB, aux)) return m;
+    if (manifolds_.size() >= MAX_MANIFOLDS) return nullptr;
     ContactManifold m;
     m.kind = kind;
     m.idA = idA;
     m.idB = idB;
     m.aux = aux;
     manifolds_.push_back(m);
+    indexManifold(manifolds_.size() - 1);
     return &manifolds_.back();
 }
 
@@ -219,14 +230,9 @@ void DicePhysicsEngine::addSatContacts(
     // Manifolds store the solver normal (A→B), which is what SAT reports.
     const Vec3* preferred = nullptr;
     int preferredAxis = -1;
-    for (const auto& m : manifolds_) {
-        if (m.kind == kind && m.idA == idA && m.idB == idB && m.aux == aux) {
-            if (m.pointCount > 0) {
-                preferred = &m.normal;
-                preferredAxis = static_cast<int>(m.points[0].featureId >> 16);
-            }
-            break;
-        }
+    if (const ContactManifold* m = findManifold(kind, idA, idB, aux); m && m->pointCount > 0) {
+        preferred = &m->normal;
+        preferredAxis = static_cast<int>(m->points[0].featureId >> 16);
     }
     if (!satTestFromWorld(ha, posA, rotA, wa.data(), hb, posB, rotB, wb.data(),
                           normal, pen, contact, &feature, &normalFromA, spec,
@@ -881,6 +887,7 @@ void DicePhysicsEngine::generateDynamicDynamicContacts(float spec, StepStats& st
 
 void DicePhysicsEngine::generateContacts(float dt, StepStats& stats) {
     for (auto& m : manifolds_) m.stale = true;
+    rebuildManifoldIndex();
 
     float maxSpec = SPECULATIVE_SLOP;
     for (const auto& b : bodies_) maxSpec = std::max(maxSpec, speculativeFor(b.velocity, dt));
@@ -921,72 +928,101 @@ void DicePhysicsEngine::generateContacts(float dt, StepStats& stats) {
     stats.contacts = points;
 }
 
-bool DicePhysicsEngine::bindViews(ContactManifold& m, BodyView& a, BodyView& b, WorldAnchor& world) {
-    switch (m.kind) {
-        case ManifoldKind::DieDie:
-            if (m.indexA < 0 || m.indexB < 0) return false;
-            if (static_cast<size_t>(m.indexA) >= bodies_.size()) return false;
-            if (static_cast<size_t>(m.indexB) >= bodies_.size()) return false;
-            a = viewDie(bodies_[static_cast<size_t>(m.indexA)]);
-            b = viewDie(bodies_[static_cast<size_t>(m.indexB)]);
-            return true;
-        case ManifoldKind::DieDynamic:
-            if (m.indexA < 0 || m.indexB < 0) return false;
-            if (static_cast<size_t>(m.indexA) >= bodies_.size()) return false;
-            if (static_cast<size_t>(m.indexB) >= dynamics_.size()) return false;
-            a = viewDie(bodies_[static_cast<size_t>(m.indexA)]);
-            b = viewDyn(dynamics_[static_cast<size_t>(m.indexB)]);
-            return true;
-        case ManifoldKind::DynamicDynamic:
-            if (m.indexA < 0 || m.indexB < 0) return false;
-            if (static_cast<size_t>(m.indexA) >= dynamics_.size()) return false;
-            if (static_cast<size_t>(m.indexB) >= dynamics_.size()) return false;
-            a = viewDyn(dynamics_[static_cast<size_t>(m.indexA)]);
-            b = viewDyn(dynamics_[static_cast<size_t>(m.indexB)]);
-            return true;
-        case ManifoldKind::DieStatic: {
-            if (m.indexA < 0 || static_cast<size_t>(m.indexA) >= bodies_.size()) return false;
-            a = viewDie(bodies_[static_cast<size_t>(m.indexA)]);
-            StaticBody* found = nullptr;
-            for (auto& s : statics_) {
-                if (s.userId == m.idB || s.userId == m.aux) { found = &s; break; }
-            }
-            b = found ? viewStatic(*found) : viewWorld(world);
-            return true;
+void DicePhysicsEngine::gatherSolverBodies() {
+    const size_t dieN = bodies_.size();
+    const size_t slots = 1 + dieN + dynamics_.size();
+    SolverBodies& sb = solverBodies_;
+    sb.position.resize(slots);
+    sb.velocity.resize(slots);
+    sb.angularVelocity.resize(slots);
+    sb.invInertiaWorld.resize(slots);
+    sb.invMass.resize(slots);
+    sb.kinematic.resize(slots);
+    sb.position[0] = {};
+    sb.velocity[0] = {};
+    sb.angularVelocity[0] = {};
+    sb.invInertiaWorld[0] = Mat3::diagonal(0.0f, 0.0f, 0.0f);
+    sb.invMass[0] = 0.0f;
+    sb.kinematic[0] = 1;
+    auto gather = [&](size_t slot, const auto& b) {
+        sb.position[slot] = b.position;
+        sb.velocity[slot] = b.velocity;
+        sb.angularVelocity[slot] = b.angularVelocity;
+        sb.invInertiaWorld[slot] = inertiaWorldMat3(b.rotation, b.invInertia);
+        sb.invMass[slot] = b.kinematic ? 0.0f : b.invMass;
+        sb.kinematic[slot] = b.kinematic ? 1 : 0;
+    };
+    for (size_t i = 0; i < dieN; ++i) gather(1 + i, bodies_[i]);
+    for (size_t i = 0; i < dynamics_.size(); ++i) gather(1 + dieN + i, dynamics_[i]);
+
+    const auto dieSlot = [&](int index) {
+        return index >= 0 && static_cast<size_t>(index) < dieN ? 1 + index : -1;
+    };
+    const auto dynSlot = [&](int index) {
+        return index >= 0 && static_cast<size_t>(index) < dynamics_.size()
+                   ? static_cast<int32_t>(1 + dieN) + index
+                   : -1;
+    };
+    manifoldBodySlots_.resize(manifolds_.size());
+    for (size_t mi = 0; mi < manifolds_.size(); ++mi) {
+        const ContactManifold& m = manifolds_[mi];
+        int32_t a = -1;
+        int32_t b = -1;
+        switch (m.kind) {
+            case ManifoldKind::DieDie: a = dieSlot(m.indexA); b = dieSlot(m.indexB); break;
+            case ManifoldKind::DieDynamic: a = dieSlot(m.indexA); b = dynSlot(m.indexB); break;
+            case ManifoldKind::DynamicDynamic: a = dynSlot(m.indexA); b = dynSlot(m.indexB); break;
+            case ManifoldKind::DieStatic:
+            case ManifoldKind::DieTable:
+            case ManifoldKind::DieWall:
+            case ManifoldKind::DieContainer: a = dieSlot(m.indexA); b = 0; break;
+            case ManifoldKind::DynamicStatic:
+            case ManifoldKind::DynamicTable:
+            case ManifoldKind::DynamicWall:
+            case ManifoldKind::DynamicContainer: a = dynSlot(m.indexA); b = 0; break;
         }
-        case ManifoldKind::DynamicStatic: {
-            if (m.indexA < 0 || static_cast<size_t>(m.indexA) >= dynamics_.size()) return false;
-            a = viewDyn(dynamics_[static_cast<size_t>(m.indexA)]);
-            StaticBody* found = nullptr;
-            for (auto& s : statics_) {
-                if (s.userId == m.idB || s.userId == m.aux) { found = &s; break; }
-            }
-            b = found ? viewStatic(*found) : viewWorld(world);
-            return true;
-        }
-        case ManifoldKind::DieTable:
-        case ManifoldKind::DieWall:
-        case ManifoldKind::DieContainer:
-            if (m.indexA < 0 || static_cast<size_t>(m.indexA) >= bodies_.size()) return false;
-            a = viewDie(bodies_[static_cast<size_t>(m.indexA)]);
-            b = viewWorld(world);
-            return true;
-        case ManifoldKind::DynamicTable:
-        case ManifoldKind::DynamicWall:
-        case ManifoldKind::DynamicContainer:
-            if (m.indexA < 0 || static_cast<size_t>(m.indexA) >= dynamics_.size()) return false;
-            a = viewDyn(dynamics_[static_cast<size_t>(m.indexA)]);
-            b = viewWorld(world);
-            return true;
+        if (a < 0 || b < 0) a = b = -1;
+        manifoldBodySlots_[mi] = {a, b};
     }
-    return false;
+}
+
+void DicePhysicsEngine::scatterSolverBodies() {
+    const SolverBodies& sb = solverBodies_;
+    auto scatter = [&](size_t slot, auto& b) {
+        b.position = sb.position[slot];
+        b.velocity = sb.velocity[slot];
+        b.angularVelocity = sb.angularVelocity[slot];
+    };
+    for (size_t i = 0; i < bodies_.size(); ++i) scatter(1 + i, bodies_[i]);
+    for (size_t i = 0; i < dynamics_.size(); ++i) scatter(1 + bodies_.size() + i, dynamics_[i]);
+}
+
+BodyView DicePhysicsEngine::solverView(int32_t slot) {
+    const auto s = static_cast<size_t>(slot);
+    SolverBodies& sb = solverBodies_;
+    BodyView v;
+    v.position = &sb.position[s];
+    v.velocity = &sb.velocity[s];
+    v.angularVelocity = &sb.angularVelocity[s];
+    v.invInertiaWorld = &sb.invInertiaWorld[s];
+    v.invMass = sb.invMass[s];
+    v.kinematic = sb.kinematic[s] != 0;
+    return v;
+}
+
+bool DicePhysicsEngine::bindViews(size_t manifold, BodyView& a, BodyView& b) {
+    const auto& slots = manifoldBodySlots_[manifold];
+    if (slots[0] < 0) return false;
+    a = solverView(slots[0]);
+    b = solverView(slots[1]);
+    return true;
 }
 
 void DicePhysicsEngine::warmStartManifolds() {
-    WorldAnchor world;
-    for (auto& m : manifolds_) {
+    for (size_t mi = 0; mi < manifolds_.size(); ++mi) {
+        auto& m = manifolds_[mi];
         BodyView va, vb;
-        if (!bindViews(m, va, vb, world)) continue;
+        if (!bindViews(mi, va, vb)) continue;
         for (int i = 0; i < m.pointCount; ++i) {
             auto& p = m.points[i];
             Vec3 impulse = m.normal * p.accN + m.tangent1 * p.accT1 + m.tangent2 * p.accT2;
@@ -999,10 +1035,10 @@ void DicePhysicsEngine::warmStartManifolds() {
 }
 
 void DicePhysicsEngine::prepareVelocityConstraints(float dt) {
-    WorldAnchor world;
-    for (auto& m : manifolds_) {
+    for (size_t mi = 0; mi < manifolds_.size(); ++mi) {
+        auto& m = manifolds_[mi];
         BodyView va, vb;
-        if (!bindViews(m, va, vb, world)) continue;
+        if (!bindViews(mi, va, vb)) continue;
         for (int i = 0; i < m.pointCount; ++i) {
             auto& p = m.points[i];
             Vec3 rA = p.point - *va.position;
@@ -1030,7 +1066,6 @@ float effectiveMass(const BodyView& va, const BodyView& vb, const Vec3& rA, cons
 } // namespace
 
 void DicePhysicsEngine::solveVelocityConstraints(float dt) {
-    WorldAnchor world;
     const float invDt = dt > 0.0f ? 1.0f / dt : 0.0f;
     // Solve lower contacts first so table reaction can propagate up a stack.
     std::vector<size_t> order(manifolds_.size());
@@ -1055,7 +1090,7 @@ void DicePhysicsEngine::solveVelocityConstraints(float dt) {
         for (size_t oi : order) {
             auto& m = manifolds_[oi];
             BodyView va, vb;
-            if (!bindViews(m, va, vb, world)) continue;
+            if (!bindViews(oi, va, vb)) continue;
             for (int i = 0; i < m.pointCount; ++i) {
                 auto& p = m.points[i];
                 Vec3 rA = p.point - *va.position;
@@ -1108,11 +1143,11 @@ void DicePhysicsEngine::solveVelocityConstraints(float dt) {
 }
 
 void DicePhysicsEngine::solvePositionConstraints() {
-    WorldAnchor world;
     for (int iter = 0; iter < POSITION_ITERATIONS; ++iter) {
-        for (auto& m : manifolds_) {
+        for (size_t mi = 0; mi < manifolds_.size(); ++mi) {
+            auto& m = manifolds_[mi];
             BodyView va, vb;
-            if (!bindViews(m, va, vb, world)) continue;
+            if (!bindViews(mi, va, vb)) continue;
             for (int i = 0; i < m.pointCount; ++i) {
                 auto& p = m.points[i];
                 if (p.separation >= -CONTACT_SLOP) continue;
@@ -1219,10 +1254,12 @@ void DicePhysicsEngine::updateIslandSleep(float dt) {
 }
 
 void DicePhysicsEngine::solveContacts(float dt) {
+    gatherSolverBodies();
     prepareVelocityConstraints(dt);
     warmStartManifolds();
     solveVelocityConstraints(dt);
     solvePositionConstraints();
+    scatterSolverBodies();
     // No post-solve velocity projection. There used to be one that stripped
     // a body's centre-of-mass velocity along any static/world contact normal,
     // to mop up residual approach velocity from one-point SAT contacts. It

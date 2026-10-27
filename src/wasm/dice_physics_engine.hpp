@@ -14,6 +14,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -323,6 +324,34 @@ private:
     std::vector<StaticBody> statics_;
     std::vector<DynamicBody> dynamics_;
     std::vector<ContactManifold> manifolds_;
+    // Open-addressing index over manifolds_ by (kind, idA, idB, aux), rebuilt
+    // at the start of every contact pass and extended as manifolds are
+    // created. A slot holds a manifolds_ index or -1; keys are compared
+    // against the live manifold, and findManifold returns the lowest
+    // matching index, which is what the linear scan it replaced returned.
+    std::vector<int32_t> manifoldSlots_;
+    /**
+     * Struct-of-arrays body state for the contact solve. Slot 0 is the world
+     * anchor; dice occupy slots 1..N and dynamic props N+1..N+D.
+     * gatherSolverBodies copies the hot fields in once per substep (with each
+     * body's world inverse inertia) and binds every manifold to its two
+     * slots; scatterSolverBodies writes position, velocity and spin back.
+     * The solver iterates manifolds VELOCITY_ITERATIONS times, and building
+     * its BodyViews from these rows is a few pointer stores instead of a walk
+     * over two RigidBody records.
+     */
+    struct SolverBodies {
+        std::vector<Vec3> position;
+        std::vector<Vec3> velocity;
+        std::vector<Vec3> angularVelocity;
+        std::vector<Mat3> invInertiaWorld;
+        std::vector<float> invMass;
+        std::vector<uint8_t> kinematic;
+    };
+    SolverBodies solverBodies_;
+    // Per manifold: its A and B slots, or {-1, -1} when either body index is
+    // out of range (the manifold is skipped).
+    std::vector<std::array<int32_t, 2>> manifoldBodySlots_;
     std::vector<CollisionEvent> events_;
     std::vector<ContainerPlane> containerPlanes_;
     mutable std::vector<float> transformBuffer_;
@@ -443,7 +472,12 @@ private:
     void processDiePair(size_t i, size_t j, StepStats& stats, float spec);
     void generateDieDieContacts(float spec, StepStats& stats);
 
+    static constexpr size_t MAX_MANIFOLDS = 8192;
+    /** Find-or-create the manifold for this key (nullptr at MAX_MANIFOLDS). */
     ContactManifold* matchManifold(ManifoldKind kind, int idA, int idB, int aux);
+    ContactManifold* findManifold(ManifoldKind kind, int idA, int idB, int aux);
+    void rebuildManifoldIndex();
+    void indexManifold(size_t index);
     void commitManifoldPoints(ContactManifold& m, ContactPoint* pts, int count, const Vec3& normal);
     void addPlaneContacts(
         ManifoldKind kind, int idA, int idB, int aux,
@@ -474,7 +508,10 @@ private:
      */
     void computeIslands(std::vector<int>& root, std::vector<float>& islandKe) const;
     float speculativeFor(const Vec3& velocity, float dt) const;
-    bool bindViews(ContactManifold& m, BodyView& a, BodyView& b, WorldAnchor& world);
+    void gatherSolverBodies();
+    void scatterSolverBodies();
+    BodyView solverView(int32_t slot);
+    bool bindViews(size_t manifold, BodyView& a, BodyView& b);
 
     // -- Dynamic (non-die) rigid-body props -----------------------------
     static float inertiaScalar(const DynamicBody& b);
