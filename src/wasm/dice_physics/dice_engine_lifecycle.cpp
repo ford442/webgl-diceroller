@@ -10,8 +10,36 @@
 
 namespace dice_physics {
 
+namespace {
+
+void poseStaticHull(StaticBody& s) {
+    s.worldVerts.resize(s.hull.verts.size());
+    transformHullVerts(s.hull.verts.data(), static_cast<int>(s.hull.verts.size()), s.rotation,
+                       s.center, s.worldVerts.data());
+}
+
+} // namespace
+
 DicePhysicsEngine::DicePhysicsEngine()
-    : gravity_(-15.0f), tableY_(-2.75f), tableHalfW_(18.0f), tableHalfD_(18.0f), nextId_(0) {}
+    : gravity_(-15.0f), tableY_(-2.75f), tableHalfW_(18.0f), tableHalfD_(18.0f), nextId_(0) {
+    // Collision events accumulate until the host drains them, capped at
+    // MAX_EVENTS_PER_STEP; reserving the cap keeps step() off the heap.
+    events_.reserve(MAX_EVENTS_PER_STEP);
+    // Two posed planes per face of the largest hull addSatContacts can meet.
+    satPlanesA_.reserve(2 * static_cast<size_t>(MAX_VERTICES_PER_HULL));
+    satPlanesB_.reserve(2 * static_cast<size_t>(MAX_VERTICES_PER_HULL));
+}
+
+void DicePhysicsEngine::reserveContactStorage() {
+    const size_t want =
+        std::min(MAX_MANIFOLDS, 8 * (bodies_.size() + dynamics_.size()) + 32);
+    if (manifolds_.capacity() < want) {
+        manifolds_.reserve(std::min(MAX_MANIFOLDS, std::max(want, 2 * manifolds_.capacity())));
+    }
+    const size_t cap = manifolds_.capacity();
+    if (solveOrder_.capacity() < cap) solveOrder_.reserve(cap);
+    if (manifoldBodySlots_.capacity() < cap) manifoldBodySlots_.reserve(cap);
+}
 
 void DicePhysicsEngine::setFlags(uint32_t flags) {
     noDrag_ = (flags & FLAG_NO_DRAG) != 0;
@@ -59,6 +87,7 @@ int DicePhysicsEngine::addDie(int sides, float x, float y, float z) {
     b.invMass = 1.0f / b.mass;
     b.computeInertiaFromHull();
     bodies_.push_back(b);
+    reserveContactStorage();
     return b.id;
 }
 
@@ -219,6 +248,7 @@ int DicePhysicsEngine::addStaticBox(int userId,
         {-hx, -hy, -hz}, { hx, -hy, -hz}, { hx,  hy, -hz}, {-hx,  hy, -hz},
         {-hx, -hy,  hz}, { hx, -hy,  hz}, { hx,  hy,  hz}, {-hx,  hy,  hz},
     });
+    poseStaticHull(body);
     statics_.push_back(body);
     return userId;
 }
@@ -275,6 +305,7 @@ int DicePhysicsEngine::addStaticConvexHull(int userId,
     if (body.hull.verts.empty()) return -1;
     body.boundCenter = body.center + body.rotation.rotate((body.hull.aabbMin + body.hull.aabbMax) * 0.5f);
     body.boundRadius = ((body.hull.aabbMax - body.hull.aabbMin) * 0.5f).length();
+    poseStaticHull(body);
     statics_.push_back(body);
     return userId;
 }

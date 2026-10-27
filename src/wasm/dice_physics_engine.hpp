@@ -352,6 +352,15 @@ private:
     // Per manifold: its A and B slots, or {-1, -1} when either body index is
     // out of range (the manifold is skipped).
     std::vector<std::array<int32_t, 2>> manifoldBodySlots_;
+    // Engine-owned scratch the step reuses instead of allocating: the
+    // velocity solver's manifold order, the island union-find, and the posed
+    // face planes addSatContacts builds for each hull pair.
+    std::vector<size_t> solveOrder_;
+    std::vector<int> islandParent_;
+    std::vector<int> islandRoot_;
+    std::vector<float> islandKe_;
+    std::vector<HullPlane> satPlanesA_;
+    std::vector<HullPlane> satPlanesB_;
     std::vector<CollisionEvent> events_;
     std::vector<ContainerPlane> containerPlanes_;
     mutable std::vector<float> transformBuffer_;
@@ -473,6 +482,13 @@ private:
     void generateDieDieContacts(float spec, StepStats& stats);
 
     static constexpr size_t MAX_MANIFOLDS = 8192;
+    /**
+     * Grow manifolds_ (and the per-manifold solver scratch tied to its
+     * capacity) for the current population, outside step(): a dense pile
+     * peaks near four manifolds per body after compaction and twice that
+     * while a contact pass is still appending, so step() starts with room.
+     */
+    void reserveContactStorage();
     /** Find-or-create the manifold for this key (nullptr at MAX_MANIFOLDS). */
     ContactManifold* matchManifold(ManifoldKind kind, int idA, int idB, int aux);
     ContactManifold* findManifold(ManifoldKind kind, int idA, int idB, int aux);
@@ -506,7 +522,7 @@ private:
      * first, then dynamics); islandKe[root] is its most energetic member's
      * kinetic energy.
      */
-    void computeIslands(std::vector<int>& root, std::vector<float>& islandKe) const;
+    void computeIslands(std::vector<int>& root, std::vector<float>& islandKe);
     float speculativeFor(const Vec3& velocity, float dt) const;
     void gatherSolverBodies();
     void scatterSolverBodies();

@@ -427,6 +427,7 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
             }
         }
     }
+    reserveContactStorage();
 }
 
 uint64_t DicePhysicsEngine::hashSerializedState() const {

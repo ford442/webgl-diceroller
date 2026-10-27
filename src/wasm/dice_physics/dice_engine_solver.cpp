@@ -253,12 +253,8 @@ void DicePhysicsEngine::addSatContacts(
     // n read a box corner that had just entered a die straddling the velvet
     // zone's rim as 10 cm deep, and the solver kicked the die off. #341)
     const float tol = std::max(spec, 0.0f) + 0.01f;
-    struct Plane {
-        Vec3 n;
-        float d;
-    };
     auto planesOf = [](const PolyHull& h, const Quat& rot, const std::vector<Vec3>& w,
-                       std::vector<Plane>& out) {
+                       std::vector<HullPlane>& out) {
         out.clear();
         for (const auto& ln : h.faceNormals) {
             const Vec3 fn = rot.rotate(ln);
@@ -267,10 +263,11 @@ void DicePhysicsEngine::addSatContacts(
             out.push_back({fn, support});
         }
     };
-    std::vector<Plane> planesA, planesB;
+    std::vector<HullPlane>& planesA = satPlanesA_;
+    std::vector<HullPlane>& planesB = satPlanesB_;
     planesOf(ha, rotA, wa, planesA);
     planesOf(hb, rotB, wb, planesB);
-    auto inside = [&](const Vec3& p, const std::vector<Plane>& planes) {
+    auto inside = [&](const Vec3& p, const std::vector<HullPlane>& planes) {
         for (const auto& pl : planes) {
             if (Vec3::dot(pl.n, p) - pl.d > tol) return false;
         }
@@ -278,7 +275,7 @@ void DicePhysicsEngine::addSatContacts(
     };
     // Signed exit distance of p from a hull along `dir`: > 0 when p must move
     // that far to leave it, < 0 when it is already that far outside.
-    auto exitDistance = [](const Vec3& p, const std::vector<Plane>& planes, const Vec3& dir,
+    auto exitDistance = [](const Vec3& p, const std::vector<HullPlane>& planes, const Vec3& dir,
                            float fallback) {
         float best = 1e20f;
         bool any = false;
@@ -566,11 +563,7 @@ void DicePhysicsEngine::resolveStaticPlane(
 
 void DicePhysicsEngine::resolveStaticHull(RigidBody& b, const StaticBody& s, float spec) {
     if (!b.useHull || b.hull.verts.empty() || s.hull.verts.empty()) return;
-    std::vector<Vec3> sw(s.hull.verts.size());
-    transformHullVerts(
-        s.hull.verts.data(), static_cast<int>(s.hull.verts.size()),
-        s.rotation, s.center, sw.data()
-    );
+    const std::vector<Vec3>& sw = s.worldVerts;
     const int dieIndex = static_cast<int>(&b - bodies_.data());
     addSatContacts(
         ManifoldKind::DieStatic, b.id, s.userId, 0,
@@ -742,11 +735,7 @@ void DicePhysicsEngine::resolveDynamicStaticPlane(
 
 void DicePhysicsEngine::resolveDynamicStaticHull(DynamicBody& b, const StaticBody& s, float spec) {
     if (b.hull.verts.empty() || s.hull.verts.empty()) return;
-    std::vector<Vec3> sw(s.hull.verts.size());
-    transformHullVerts(
-        s.hull.verts.data(), static_cast<int>(s.hull.verts.size()),
-        s.rotation, s.center, sw.data()
-    );
+    const std::vector<Vec3>& sw = s.worldVerts;
     const int dynIndex = static_cast<int>(&b - dynamics_.data());
     addSatContacts(
         ManifoldKind::DynamicStatic, b.userId, s.userId, 0,
@@ -963,6 +952,9 @@ void DicePhysicsEngine::gatherSolverBodies() {
                    ? static_cast<int32_t>(1 + dieN) + index
                    : -1;
     };
+    if (manifoldBodySlots_.capacity() < manifolds_.capacity()) {
+        manifoldBodySlots_.reserve(manifolds_.capacity());
+    }
     manifoldBodySlots_.resize(manifolds_.size());
     for (size_t mi = 0; mi < manifolds_.size(); ++mi) {
         const ContactManifold& m = manifolds_[mi];
@@ -1068,7 +1060,9 @@ float effectiveMass(const BodyView& va, const BodyView& vb, const Vec3& rA, cons
 void DicePhysicsEngine::solveVelocityConstraints(float dt) {
     const float invDt = dt > 0.0f ? 1.0f / dt : 0.0f;
     // Solve lower contacts first so table reaction can propagate up a stack.
-    std::vector<size_t> order(manifolds_.size());
+    std::vector<size_t>& order = solveOrder_;
+    if (order.capacity() < manifolds_.capacity()) order.reserve(manifolds_.capacity());
+    order.resize(manifolds_.size());
     for (size_t i = 0; i < order.size(); ++i) order[i] = i;
     std::sort(order.begin(), order.end(), [&](size_t ia, size_t ib) {
         const auto& a = manifolds_[ia];
@@ -1163,14 +1157,15 @@ void DicePhysicsEngine::solvePositionConstraints() {
     }
 }
 
-void DicePhysicsEngine::computeIslands(std::vector<int>& root, std::vector<float>& islandKe) const {
+void DicePhysicsEngine::computeIslands(std::vector<int>& root, std::vector<float>& islandKe) {
     const int dieN = static_cast<int>(bodies_.size());
     const int dynN = static_cast<int>(dynamics_.size());
     const int n = dieN + dynN;
     root.assign(static_cast<size_t>(n), 0);
     islandKe.assign(static_cast<size_t>(n), 0.0f);
     if (n <= 0) return;
-    std::vector<int> parent(static_cast<size_t>(n));
+    std::vector<int>& parent = islandParent_;
+    parent.resize(static_cast<size_t>(n));
     for (int i = 0; i < n; ++i) parent[static_cast<size_t>(i)] = i;
     auto find = [&](int x) {
         while (parent[static_cast<size_t>(x)] != x) {
@@ -1212,8 +1207,8 @@ void DicePhysicsEngine::updateIslandSleep(float dt) {
     const int dieN = static_cast<int>(bodies_.size());
     const int dynN = static_cast<int>(dynamics_.size());
     if (dieN + dynN <= 0) return;
-    std::vector<int> roots;
-    std::vector<float> islandKe;
+    std::vector<int>& roots = islandRoot_;
+    std::vector<float>& islandKe = islandKe_;
     computeIslands(roots, islandKe);
     auto find = [&](int node) { return roots[static_cast<size_t>(node)]; };
     auto dieNode = [&](int idx) { return idx; };

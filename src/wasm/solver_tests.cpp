@@ -11,15 +11,60 @@
 #include "dice_physics_engine.hpp"
 #include "test_support/mini_json.hpp"
 
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <new>
 #include <sstream>
 #include <string>
 #include <chrono>
 
 using namespace dice_physics;
+
+// ---------------------------------------------------------------------------
+// Counting allocator: every global operator new in this binary goes through
+// here, so a test can arm it around engine calls and assert that none
+// allocated. The sanitizer runtimes ship their own operator new (clang's
+// static ASan runtime would collide at link time), so the probe and its test
+// are compiled out under SOLVER_SANITIZE.
+// ---------------------------------------------------------------------------
+
+#if defined(__SANITIZE_ADDRESS__)
+#define SOLVER_ALLOC_PROBE 0
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define SOLVER_ALLOC_PROBE 0
+#endif
+#endif
+#ifndef SOLVER_ALLOC_PROBE
+#define SOLVER_ALLOC_PROBE 1
+#endif
+
+#if SOLVER_ALLOC_PROBE
+namespace alloc_probe {
+std::atomic<bool> armed{false};
+std::atomic<uint64_t> count{0};
+std::atomic<size_t> lastSize{0};
+} // namespace alloc_probe
+
+void* operator new(std::size_t size) {
+    if (alloc_probe::armed.load(std::memory_order_relaxed)) {
+        alloc_probe::count.fetch_add(1, std::memory_order_relaxed);
+        alloc_probe::lastSize.store(size, std::memory_order_relaxed);
+    }
+    if (void* p = std::malloc(size == 0 ? 1 : size)) return p;
+    throw std::bad_alloc();
+}
+void* operator new[](std::size_t size) { return ::operator new(size); }
+// noinline: inlined into std::allocator, g++ sees free() on operator new's
+// pointer and reports -Wmismatched-new-delete for the pair defined here.
+[[gnu::noinline]] void operator delete(void* p) noexcept { std::free(p); }
+[[gnu::noinline]] void operator delete[](void* p) noexcept { std::free(p); }
+[[gnu::noinline]] void operator delete(void* p, std::size_t) noexcept { std::free(p); }
+[[gnu::noinline]] void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
+#endif
 
 namespace {
 
@@ -1574,6 +1619,105 @@ TEST_CASE("Static capacity: exceeding MAX_STATICS reports drops instead of silen
     engine.reset();
     CHECK(engine.getStaticCapacityDroppedCount() == 0);
 }
+
+#if SOLVER_ALLOC_PROBE
+// The 120 Hz path must not touch the heap once a scene is warm: under
+// emmalloc a per-substep std::set or temporary vector is a node allocation
+// per pair per substep, and nothing else would notice it coming back. One
+// warm-up step sizes the per-population buffers (grid, solver rows, island
+// scratch); contact storage is reserved when bodies are added. If this
+// fails, the INFO line names the first frame and allocation size.
+TEST_CASE("Allocation-free step: nothing in step() allocates after warm-up") {
+    // The probe itself must be live, or every assertion below is vacuous.
+    alloc_probe::count = 0;
+    alloc_probe::armed = true;
+    {
+        std::vector<int> probe(16);
+        CHECK(probe.size() == 16);
+    }
+    alloc_probe::armed = false;
+    REQUIRE(alloc_probe::count.load() == 1);
+
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    const auto cube = flattenHull(makeUnitCubeHull());
+    const auto d20 = flattenHull(makeD20Hull());
+
+    // One of every static shape: a velvet slab, a wooden wedge hull, a
+    // closed-bottom cup, and a plane the dice never reach.
+    REQUIRE(engine.addStaticBox(1, 6.0f, -2.5f, 0.0f, 3.0f, 0.25f, 3.0f, 0, 0, 0, 1, 1) == 1);
+    REQUIRE(engine.addStaticConvexHull(2, -6.0f, -2.75f, 0.0f, 0, 0, 0, 1,
+                                       {-2, 0, -2, 2, 0, -2, 2, 0, 2, -2, 0, 2, -2, 1, -2, -2, 1, 2},
+                                       2) == 2);
+    REQUIRE(engine.addStaticOpenCylinder(3, 0.0f, -1.25f, 6.0f, 2.0f, 1.5f, 12, true, 4) == 3);
+    REQUIRE(engine.addStaticPlane(4, 0.0f, -1.0f, 0.0f, -30.0f, 0) == 4);
+    // A dice-cup container around all of it.
+    engine.setContainerActive(true);
+    engine.setContainerPlanes({0, 1, 0, -2.75f, -1, 0, 0, -10, 1, 0, 0, -10, 0, 0, -1, -10, 0, 0, 1, -10});
+
+    std::vector<int> ids;
+    auto die = [&](int sides, float x, float y, float z, float vx, float vz) {
+        const int id = engine.addDie(sides, x, y, z);
+        engine.setDieHull(id, sides == 20 ? d20 : cube);
+        if (sides == 20) uploadD20FaceTable(engine, id);
+        else uploadD6FaceTable(engine, id);
+        engine.setDieDrag(id, 0.002f);
+        engine.setDieVelocity(id, vx, -2.0f, vz, 3.0f, -2.0f, 4.0f);
+        ids.push_back(id);
+        return id;
+    };
+    for (int i = 0; i < 4; ++i) die(6, 0.4f * static_cast<float>(i % 2), -2.0f + 1.05f * i, 6.0f, 0.5f, 0.3f);
+    for (int i = 0; i < 4; ++i) die(20, 5.0f + 0.9f * i, -1.0f, 0.5f * i, -0.5f, 0.4f);
+    for (int i = 0; i < 4; ++i) die(6, -6.5f + 0.6f * i, -0.8f, -1.0f + 0.7f * i, 1.0f, 0.0f);
+    for (int i = 0; i < 6; ++i) die(6, -1.0f + 0.8f * (i % 3), -2.0f + 1.1f * (i / 3), -0.5f, 0.0f, 0.5f);
+    const int held = die(6, -3.0f, -2.0f, 0.0f, 0.0f, 0.0f);
+    engine.setDieKinematic(held, true);
+    REQUIRE(engine.addDynamicBox(100, 1.5f, 1.5f, -2.3f, 1.0f, 0.4f, 0.4f, 0.4f, 0, 0, 0, 1, 2) == 100);
+    REQUIRE(engine.addDynamicBox(101, 1.0f, -1.5f, -2.4f, 1.2f, 0.3f, 0.3f, 0.3f, 0, 0, 0, 1, 2) == 101);
+    REQUIRE(engine.addDynamicHull(102, 0.8f, 0.0f, -1.0f, -2.0f, 0, 0, 0, 1,
+                                  {-0.3f, -0.3f, -0.3f, 0.3f, -0.3f, -0.3f, 0.0f, -0.3f, 0.3f, 0.0f, 0.3f, 0.0f},
+                                  3) == 102);
+
+    // The held die sweeps back and forth through the middle pile, so contacts
+    // keep appearing and disappearing for the whole measured window.
+    auto drive = [&](int frame) {
+        const float t = static_cast<float>(frame) * (1.0f / 60.0f);
+        engine.setDieTransform(held, 3.0f * std::sin(t * 2.0f), -2.0f, 0.3f * std::cos(t * 3.0f),
+                               0, 0, 0, 1);
+    };
+
+    const int warmup = 1; // One step: the scene is in contact from the first frame.
+    for (int frame = 0; frame < warmup; ++frame) {
+        drive(frame);
+        engine.step(1.0f / 60.0f);
+        engine.buildCollisionEventBuffer();
+    }
+
+    uint64_t allocations = 0;
+    size_t firstSize = 0;
+    int firstFrame = -1;
+    int framesWithSat = 0;
+    for (int frame = warmup; frame < warmup + 240; ++frame) {
+        drive(frame);
+        alloc_probe::count = 0;
+        alloc_probe::armed = true;
+        engine.step(1.0f / 60.0f);
+        alloc_probe::armed = false;
+        if (alloc_probe::count.load() > 0 && firstFrame < 0) {
+            firstFrame = frame;
+            firstSize = alloc_probe::lastSize.load();
+        }
+        allocations += alloc_probe::count.load();
+        if (engine.getLastStepStats().satTests > 0) ++framesWithSat;
+        engine.buildCollisionEventBuffer();
+    }
+    INFO("first allocation at frame " << firstFrame << " (last size " << firstSize << " bytes)");
+    CHECK(allocations == 0);
+    // Not vacuous: the window had live SAT contacts every frame.
+    CHECK(framesWithSat == 240);
+    CHECK(engine.allBodyStatesFinite());
+}
+#endif
 
 TEST_CASE("Broadphase grid matches brute-force pair set and serialize state") {
     PolyHull cube = makeUnitCubeHull();

@@ -174,6 +174,15 @@ struct StaticBody {
     // the sphere is centred on its posed AABB midpoint rather than `center`.
     Vec3 boundCenter{};
     float boundRadius = 0.0f;
+    // hull.verts posed by center/rotation (Box and ConvexHull). Statics never
+    // move, so this is computed once at registration instead of per contact.
+    std::vector<Vec3> worldVerts;
+};
+
+/** A posed hull face plane, dot(n, p) <= d inside (addSatContacts scratch). */
+struct HullPlane {
+    Vec3 n;
+    float d;
 };
 
 // ---------------------------------------------------------------------------

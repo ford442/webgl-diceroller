@@ -200,6 +200,7 @@ int DicePhysicsEngine::addDynamicBox(int userId, float mass,
     });
     body.computeInertiaFromHull();
     dynamics_.push_back(body);
+    reserveContactStorage();
     return userId;
 }
 
@@ -238,6 +239,7 @@ int DicePhysicsEngine::addDynamicHull(int userId, float mass,
     body.radius = std::max((body.hull.aabbMax - body.hull.aabbMin).length() * 0.5f, 0.05f);
     body.computeInertiaFromHull();
     dynamics_.push_back(body);
+    reserveContactStorage();
     return userId;
 }
 
