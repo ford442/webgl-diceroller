@@ -23,7 +23,7 @@ fi
 # into an FMA on any target that has one (arm64, x86-64-v3) and changes the
 # rounding. emcc_flags.inc.sh sets the same flag, so neither side relies on a
 # target default.
-CXXFLAGS=(-std=c++17 -Wall -Wextra -Wpedantic -ffp-contract=off -I"${SCRIPT_DIR}")
+CXXFLAGS=(-std=c++20 -Wall -Wextra -Wpedantic -ffp-contract=off -I"${SCRIPT_DIR}")
 
 # SOLVER_SANITIZE=1 (npm run test:solver:san): the same unit + fuzz + golden
 # run under ASan + UBSan, any finding fatal. Slower, so CI lowers FUZZ_SEEDS
@@ -98,8 +98,7 @@ echo "[test:solver] Writing ${BUILD_DIR}/compile_commands.json..."
     echo "]"
 } > "${BUILD_DIR}/compile_commands.json"
 
-# Guard the clangd contract (see .clangd -> CompilationDatabase: build-native):
-# the database must exist, parse as JSON, and carry one entry per translation
+# Guard the native half of the clangd database: it must exist, parse as JSON, and carry one entry per translation
 # unit we just compiled. Runs in CI via `npm run test:solver`.
 echo "[test:solver] Verifying compile_commands.json..."
 node - "${BUILD_DIR}/compile_commands.json" "${#ALL_SOURCES[@]}" <<'NODE'
@@ -131,6 +130,14 @@ for (const entry of db) {
 }
 console.log(`[test:solver] compile_commands.json ok (${db.length} translation units).`);
 NODE
+
+# .clangd reads src/wasm/compile_commands.json (CompilationDatabase: .), not
+# build-native/. Merge it now so clangd works straight after test:solver:
+# native-only without an EMSDK, native + emcc when one is on PATH. The
+# sanitizer build writes build-native-san/, which the merge does not read.
+if [ "${SOLVER_SANITIZE:-0}" != "1" ]; then
+    "${SCRIPT_DIR}/generate-clangd-db.sh"
+fi
 
 echo "[test:solver] Running unit + fuzz tests..."
 (cd "${REPO_ROOT}" && "${BIN}")
