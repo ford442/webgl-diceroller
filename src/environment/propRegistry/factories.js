@@ -9,6 +9,7 @@ import '../TavernCoaster.js';
 import '../Inkwell.js';
 import '../MeltingCandle.js';
 import '../CandleStub.js';
+import '../WineBottle.js';
 
 const environmentModules = import.meta.glob(
     ['../*.js', '!../PropRegistry.js', '!../propKit.js', '!../PropLifecycle.js'],
