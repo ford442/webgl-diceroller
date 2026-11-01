@@ -270,6 +270,10 @@ export const TIER_PROP_DEFINITIONS = {
         }),
     ],
     tier3: [
+        factoryEntry('WineBottle', {
+            randomPool: true,
+            position: { x: -4, y: -2.75, z: -8 },
+        }),
         factoryEntry('Quill', { randomPool: true }),
         factoryEntry('Dagger', {
             randomPool: true,

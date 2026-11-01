@@ -20,6 +20,7 @@ const SEMANTIC_TAGS = {
         'AleKeg',
         'Waterskin',
         'PocketFlask',
+        'WineBottle',
     ],
     paper: [
         'Scroll',
