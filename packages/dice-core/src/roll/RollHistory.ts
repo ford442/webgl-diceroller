@@ -97,6 +97,8 @@ export function createRollHistory({
                 )
                 .map((entry) => ({
                     id: entry.id ?? `roll-${nextId++}`,
+                    // Display-only timestamp on a stored entry.
+                    // eslint-disable-next-line no-restricted-properties
                     timestamp: entry.timestamp ?? Date.now(),
                     diceSet: entry.diceSet ?? {},
                     diceResults: entry.diceResults,
@@ -137,6 +139,8 @@ export function createRollHistory({
         const total = valid.reduce((sum, result) => sum + result.value, 0);
         const entry: RollHistoryEntry = {
             id: `roll-${nextId++}`,
+            // Display-only timestamp on a history entry.
+            // eslint-disable-next-line no-restricted-properties
             timestamp: Date.now(),
             diceSet: meta.diceSet ?? {},
             diceResults: valid.map((result) => ({ type: result.type, value: result.value })),

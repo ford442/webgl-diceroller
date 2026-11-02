@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createProp } from './propKit.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
+import { createSeededRng } from '../core/SeededRng.js';
 
 export function createDiceJail(
     scene,
@@ -164,6 +165,7 @@ export function createDiceJail(
 }
 
 function createSignMaterial() {
+    const rng = createSeededRng(0x4469014a);
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 128;
@@ -184,9 +186,9 @@ function createSignMaterial() {
 
     ctx.fillStyle = 'rgba(0,0,0,0.2)';
     for (let i = 0; i < 20; i++) {
-        const x = Math.random() * 256;
-        const y = Math.random() * 128;
-        const r = Math.random() * 10;
+        const x = rng() * 256;
+        const y = rng() * 128;
+        const r = rng() * 10;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();

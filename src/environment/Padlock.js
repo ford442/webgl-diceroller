@@ -29,7 +29,7 @@ export function createPadlock(
                 materialTag: STATIC_MATERIAL.METAL,
             },
         ],
-        build({ group }) {
+        build({ group, rng }) {
             const ironMaterial = materials.iron();
             ironMaterial.color.setHex(0x222222);
             ironMaterial.roughness = 0.8;
@@ -87,8 +87,8 @@ export function createPadlock(
                 })
             );
 
-            group.rotation.x = (Math.random() - 0.5) * 0.1;
-            group.rotation.z = (Math.random() - 0.5) * 0.1;
+            group.rotation.x = (rng() - 0.5) * 0.1;
+            group.rotation.z = (rng() - 0.5) * 0.1;
         },
     });
 }

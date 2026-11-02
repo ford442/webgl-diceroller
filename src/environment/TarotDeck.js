@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createProp } from './propKit.js';
 import { toCurrentTabletopY } from '../core/SceneMetrics.js';
+import { createSeededRng } from '../core/SeededRng.js';
 
 export function createTarotDeck(
     scene,
@@ -117,6 +118,7 @@ export function createTarotDeck(
 }
 
 function generateCardBackTexture() {
+    const rng = createSeededRng(0x54617201);
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 512;
@@ -163,13 +165,7 @@ function generateCardBackTexture() {
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     for (let i = 0; i < 100; i++) {
         ctx.beginPath();
-        ctx.arc(
-            Math.random() * canvas.width,
-            Math.random() * canvas.height,
-            Math.random() * 3,
-            0,
-            Math.PI * 2
-        );
+        ctx.arc(rng() * canvas.width, rng() * canvas.height, rng() * 3, 0, Math.PI * 2);
         ctx.fill();
     }
 
@@ -179,6 +175,7 @@ function generateCardBackTexture() {
 }
 
 function generateTheFoolTexture() {
+    const rng = createSeededRng(0x54617202);
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 512;
@@ -253,13 +250,7 @@ function generateTheFoolTexture() {
     ctx.fillStyle = 'rgba(139, 69, 19, 0.1)';
     for (let i = 0; i < 50; i++) {
         ctx.beginPath();
-        ctx.arc(
-            Math.random() * canvas.width,
-            Math.random() * canvas.height,
-            Math.random() * 20 + 5,
-            0,
-            Math.PI * 2
-        );
+        ctx.arc(rng() * canvas.width, rng() * canvas.height, rng() * 20 + 5, 0, Math.PI * 2);
         ctx.fill();
     }
 

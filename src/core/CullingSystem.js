@@ -9,7 +9,7 @@ import * as THREE from 'three';
  * never culled by this system.
  */
 const NEVER_CULL_NAMES = new Set([
-    'SkullProp', // Skull (interactive)
+    'Skull', // Skull (interactive)
     'Gong', // Gong (interactive)
     'BilliardLamp', // Hanging lamp (interactive, also the key light source)
 ]);

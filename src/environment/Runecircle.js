@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { propRng } from './propRng.js';
 
 /**
  * Creates a magical arcane runecircle on the floor beneath the table
@@ -6,6 +7,8 @@ import * as THREE from 'three';
  * @returns {Object} Object containing the group and update function
  */
 export function createRunecircle(scene) {
+    // Claimed synchronously; floating-rune setup and the per-frame particle respawn draw from it.
+    const rng = propRng('Runecircle');
     const group = new THREE.Group();
     group.name = 'Runecircle';
 
@@ -150,8 +153,8 @@ export function createRunecircle(scene) {
         rune.userData = {
             baseY: 0.3,
             phase: (i / runeCount) * Math.PI * 2,
-            rotationSpeed: 0.5 + Math.random() * 0.5,
-            floatSpeed: 1 + Math.random() * 0.5,
+            rotationSpeed: 0.5 + rng() * 0.5,
+            floatSpeed: 1 + rng() * 0.5,
         };
 
         runeContainer.add(rune);
@@ -207,20 +210,20 @@ export function createRunecircle(scene) {
         const particle = new THREE.Mesh(particleGeo, particleMat.clone());
 
         // Random position within inner circle
-        const r = Math.random() * (innerRadius - 0.5);
-        const theta = Math.random() * Math.PI * 2;
+        const r = rng() * (innerRadius - 0.5);
+        const theta = rng() * Math.PI * 2;
 
         particle.position.set(
             Math.cos(theta) * r,
-            Math.random() * 2, // Start at various heights
+            rng() * 2, // Start at various heights
             Math.sin(theta) * r
         );
 
         particle.userData = {
-            speed: 0.2 + Math.random() * 0.4,
-            wobble: Math.random() * Math.PI * 2,
-            wobbleSpeed: 1 + Math.random() * 2,
-            maxHeight: 3 + Math.random() * 2,
+            speed: 0.2 + rng() * 0.4,
+            wobble: rng() * Math.PI * 2,
+            wobbleSpeed: 1 + rng() * 2,
+            maxHeight: 3 + rng() * 2,
         };
 
         particle.visible = false;
@@ -285,11 +288,11 @@ export function createRunecircle(scene) {
         particles.forEach((p, _i) => {
             if (!p.visible) {
                 // Random activation based on pulse
-                if (Math.random() < 0.02 * pulse) {
+                if (rng() < 0.02 * pulse) {
                     p.visible = true;
                     // Reset to bottom
-                    const r = Math.random() * (innerRadius - 0.5);
-                    const theta = Math.random() * Math.PI * 2;
+                    const r = rng() * (innerRadius - 0.5);
+                    const theta = rng() * Math.PI * 2;
                     p.position.x = Math.cos(theta) * r;
                     p.position.z = Math.sin(theta) * r;
                     p.position.y = 0.1;

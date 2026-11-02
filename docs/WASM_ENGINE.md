@@ -344,7 +344,13 @@ TAVERN_SEEDS=500 npm run test:solver
 The tavern-world fixture is exported from the running app (`npm run
 fixture:world`, which needs `build:wasm` + `build:js`); CI re-exports it and
 fails on a diff (`npm run check:world-fixture`), so a prop whose colliders move
-shows up as a fixture change. `npm run test:tavern-world` runs the same 200
+shows up as a fixture change. The file is `{ hash, world }`: `hash` is
+`hashWorld(world)` — the same value share links carry as `w=` and room joins
+compare — and the check reports a changed _hash_ (a collider moved) separately
+from changed ids / registration order. Re-running `fixture:world` is
+byte-identical because every prop draws its layout from the seeded stream the
+kit hands it, never `Math.random`. After re-exporting, run `npm run golden:rolls`
+(the goldens replay six rolls into this world). `npm run test:tavern-world` runs the same 200
 seeds through the WASM build via `rollHeadless(…, { world })`.
 
 Compiled with `-std=c++20 -O2 -pthread -Wall -Wextra -Wpedantic -Werror`

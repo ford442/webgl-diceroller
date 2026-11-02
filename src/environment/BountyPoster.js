@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createSeededRng } from '../core/SeededRng.js';
 import { createProp, mesh, STATIC_MATERIAL } from './propKit.js';
 
 export function createBountyPoster(
@@ -19,16 +20,11 @@ export function createBountyPoster(
     ctx.fillStyle = '#e6d5b8';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    const rng = createSeededRng(0x426f7501);
     for (let i = 0; i < 500; i++) {
-        ctx.fillStyle = `rgba(139, 69, 19, ${Math.random() * 0.1})`;
+        ctx.fillStyle = `rgba(139, 69, 19, ${rng() * 0.1})`;
         ctx.beginPath();
-        ctx.arc(
-            Math.random() * canvas.width,
-            Math.random() * canvas.height,
-            Math.random() * 10 + 2,
-            0,
-            Math.PI * 2
-        );
+        ctx.arc(rng() * canvas.width, rng() * canvas.height, rng() * 10 + 2, 0, Math.PI * 2);
         ctx.fill();
     }
 

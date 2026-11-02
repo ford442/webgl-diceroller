@@ -24,6 +24,7 @@ import { LAYOUT_THEMES } from '../core/TableLayoutConfig.js';
 import { disposeObject3D } from './PropLifecycle.js';
 import { mergeScatterHandles } from '../core/StaticPropMerger.js';
 import { registerDynamicProp, unregisterDynamicProp } from './DynamicPropState.js';
+import { withPropScope } from './propRng.js';
 
 /**
  * Registry of tabletop clutter factories consumable by the pool selector.
@@ -116,10 +117,14 @@ function buildWeightedPool(count, seed, theme, rng) {
 
 /**
  * Spawn a sparse, seeded subset of original tier-0 clutter plus the always-on candle.
+ *
+ * `options.seed` is the table's `layout-seed`. It has no wall-clock default: a
+ * caller that forgot to pass one gets seed 0, the same table every time, rather
+ * than a table no other client can rebuild.
  */
 export function createRandomClutter(scene, physicsWorld, options = {}) {
     const count = Math.max(4, Math.min(10, options.count ?? 7));
-    const seed = (options.seed ?? Date.now()) >>> 0;
+    const seed = (options.seed ?? 0) >>> 0;
     const theme = options.theme ?? 'default';
     const rng = createSeededRng(seed);
     const handles = [];
@@ -132,7 +137,13 @@ export function createRandomClutter(scene, physicsWorld, options = {}) {
         handles.push(root);
     };
 
-    const candleData = createCandle(scene, physicsWorld, { rng, track });
+    // Every factory below runs under a prop scope, so its RNG stream is keyed to
+    // (layout seed, registry id, scatter slot) — independent of the shared `rng`
+    // here, which only picks and places props.
+    const candleData = withPropScope(
+        { layoutSeed: seed, key: 'candle', name: 'Candle', slot: 'clutter:candle' },
+        () => createCandle(scene, physicsWorld, { rng, track })
+    );
 
     const selected = buildWeightedPool(count, seed, theme, rng);
     shuffleWithRng(selected, rng);
@@ -146,9 +157,12 @@ export function createRandomClutter(scene, physicsWorld, options = {}) {
     const propUpdates = [];
     const mergeExcluded = new Set();
 
-    const spawnEntry = (entry, spawnOptions) => {
+    const spawnEntry = (entry, spawnOptions, slotKey) => {
         currentEntryId = entry.id;
-        const result = entry.create(scene, physicsWorld, spawnOptions);
+        const result = withPropScope(
+            { layoutSeed: seed, key: entry.id, name: entry.id, slot: slotKey },
+            () => entry.create(scene, physicsWorld, spawnOptions)
+        );
         const root = result?.group ?? (result?.isObject3D ? result : null);
 
         if (typeof result?.update === 'function') {
@@ -165,11 +179,11 @@ export function createRandomClutter(scene, physicsWorld, options = {}) {
     mobile.forEach((entry, index) => {
         const slot = slots[index];
         if (!slot) return;
-        spawnEntry(entry, { placement: slot, rng, track });
+        spawnEntry(entry, { placement: slot, rng, track }, `clutter:${index}`);
     });
 
-    fixed.forEach((entry) => {
-        spawnEntry(entry, { rng, track });
+    fixed.forEach((entry, index) => {
+        spawnEntry(entry, { rng, track }, `clutter:fixed${index}`);
     });
 
     const mergeStats = mergeScatterHandles(handles.filter((root) => !mergeExcluded.has(root)));

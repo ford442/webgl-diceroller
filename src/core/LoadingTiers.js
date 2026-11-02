@@ -48,8 +48,8 @@ function registerUpdate(orchestrator, name, update, priority = 0) {
 }
 
 async function spawnTier(entries, context) {
-    for (const entry of entries) {
-        await spawnProp(entry, context);
+    for (const [slot, entry] of entries.entries()) {
+        await spawnProp(entry, context, { slot });
     }
 }
 

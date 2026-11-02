@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { createProp, mesh, STATIC_MATERIAL } from './propKit.js';
+import { createProp, mesh, propRng, STATIC_MATERIAL } from './propKit.js';
 
 export function createGemstones(
     scene,
@@ -8,6 +8,9 @@ export function createGemstones(
     position = { x: 6, y: -2.75, z: -5 },
     rotation = 0
 ) {
+    // Claimed up front: the collider scatter below is drawn from it, and createProp
+    // reuses it for the mesh rotations instead of claiming a second stream.
+    const rng = propRng('Gemstones');
     const gemConfigs = [
         { type: 'ruby', color: 0xff0044, size: 0.25, x: -0.4, z: 0.2 },
         { type: 'sapphire', color: 0x0044ff, size: 0.22, x: 0.3, z: 0.4 },
@@ -20,8 +23,8 @@ export function createGemstones(
 
     const gems = [];
     const colliders = gemConfigs.map((config) => {
-        const scatterX = config.x + (Math.random() - 0.5) * 0.3;
-        const scatterZ = config.z + (Math.random() - 0.5) * 0.3;
+        const scatterX = config.x + (rng() - 0.5) * 0.3;
+        const scatterZ = config.z + (rng() - 0.5) * 0.3;
         config._scatterX = scatterX;
         config._scatterZ = scatterZ;
         return {
@@ -41,22 +44,23 @@ export function createGemstones(
 
     const result = createProp(scene, physicsWorld, {
         name: 'Gemstones',
+        rng,
         position,
         rotation,
         colliders,
         build({ group }) {
             gemConfigs.forEach((config, index) => {
                 const gem = createGem(config);
-                const rotY = Math.random() * Math.PI * 2;
-                const rotX = Math.random() * 0.5;
-                const rotZ = Math.random() * 0.5;
+                const rotY = rng() * Math.PI * 2;
+                const rotX = rng() * 0.5;
+                const rotZ = rng() * 0.5;
 
                 gem.position.set(config._scatterX, config.size * 0.6, config._scatterZ);
                 gem.rotation.set(rotX, rotY, rotZ);
                 gem.userData = {
                     baseY: gem.position.y,
                     offset: index * 0.5,
-                    rotationSpeed: 0.2 + Math.random() * 0.3,
+                    rotationSpeed: 0.2 + rng() * 0.3,
                 };
                 group.add(gem);
                 gems.push(gem);

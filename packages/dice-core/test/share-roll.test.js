@@ -10,11 +10,13 @@ import {
     buildShareableRollUrl,
     ROLL_IDS_PARAM,
     SUPPORTED_REPLAY_VERSIONS,
+    WORLD_HASH_PARAM,
     parseDiceParam,
     parseRollIds,
     parseRollSource,
     parseShareableRollDiceSet,
     parseShareableRollParams,
+    parseWorldHash,
     serializeDiceCounts,
     serializeRollIds,
 } from 'dice-core/roll/ShareableRoll';
@@ -102,6 +104,50 @@ describe('ShareableRoll', () => {
         );
         expect(atDefaults.searchParams.get('density')).toBe('med');
         expect(atDefaults.searchParams.get('theme')).toBe('default');
+    });
+
+    describe('collider-world hash (?w=)', () => {
+        const base = 'http://example.test/roller';
+        const hash = '6c4bd4797b1abbf6';
+
+        it('writes the hash next to the layout and reads it back', () => {
+            const url = new URL(
+                buildShareableRollUrl(42, { d20: 1 }, base, null, {
+                    layout: { seed: 7, density: 'high', theme: 'wizard' },
+                    worldHash: hash,
+                })
+            );
+            expect(url.searchParams.get(WORLD_HASH_PARAM)).toBe(hash);
+            // Older clients ignore it, so the format version does not move.
+            expect(url.searchParams.get('v')).toBe('1');
+
+            const replay = parseShareableRollParams(url.searchParams);
+            if (!replay || 'error' in replay) throw new Error('expected a successful parse');
+            expect(replay.worldHash).toBe(hash);
+        });
+
+        it('is absent on a link that never carried one, and dropped when not given', () => {
+            const params = new URLSearchParams('seed=7&v=1');
+            const result = parseShareableRollParams(params);
+            if (!result || 'error' in result) throw new Error('expected a successful parse');
+            expect(result.worldHash).toBeNull();
+
+            const rewritten = new URL(
+                buildShareableRollUrl(7, { d6: 1 }, `${base}?w=${hash}`, null, {})
+            );
+            expect(rewritten.searchParams.has(WORLD_HASH_PARAM)).toBe(false);
+        });
+
+        it('only writes and accepts well-formed hashes', () => {
+            expect(parseWorldHash(hash.toUpperCase())).toBe(hash);
+            for (const bad of [null, '', 'xyz', '6c4bd4797b1abbf', '6c4bd4797b1abbf66']) {
+                expect(parseWorldHash(bad)).toBeNull();
+            }
+            const url = new URL(
+                buildShareableRollUrl(7, { d6: 1 }, base, null, { worldHash: 'not-a-hash' })
+            );
+            expect(url.searchParams.has(WORLD_HASH_PARAM)).toBe(false);
+        });
     });
 
     it('marks a tower drop on the URL and reads it back', () => {

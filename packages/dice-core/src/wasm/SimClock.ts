@@ -39,7 +39,9 @@ export interface SimClockOptions {
     maxCatchUpTicks?: number;
 }
 
+// Wall time paces how many fixed ticks to run; it never enters a tick.
 const defaultNow = (): number =>
+    // eslint-disable-next-line no-restricted-properties
     typeof performance !== 'undefined' ? performance.now() : Date.now();
 
 export class SimClock {

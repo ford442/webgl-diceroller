@@ -12,11 +12,11 @@ export function createShield(
     const rimThickness = 0.1;
 
     createProp(scene, physicsWorld, {
-        name: 'VikingShield',
+        name: 'Shield',
         position,
         rotation: rotationY,
         colliders: [{ type: 'box', halfExtents: [radius, radius, thickness / 2 + 0.1] }],
-        build({ group }) {
+        build({ group, rng }) {
             const woodMaterial = new THREE.MeshStandardMaterial({
                 map: createShieldTexture(),
                 roughness: 0.8,
@@ -57,7 +57,7 @@ export function createShield(
             group.add(boss);
 
             group.rotation.order = 'YXZ';
-            group.rotation.x = Math.random() * Math.PI;
+            group.rotation.x = rng() * Math.PI;
         },
     });
 }

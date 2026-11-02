@@ -24,11 +24,13 @@ let active: PhysicsBridgeModule = mainBridge;
 let _worldRecorder: WorldRecorder | null = null;
 
 /**
- * Under `?test`, wrap the engine before anything registers a collider so the
- * world it builds can be exported (`scripts/export-collider-fixture.mjs`).
+ * Wrap the engine before anything registers a collider, so the world the page
+ * builds can be hashed (share links and room joins carry `worldHash()`) and,
+ * under `?test`, exported (`scripts/export-collider-fixture.mjs`). Always on:
+ * the recorder keeps one small record per collider and nothing per frame.
  */
 function maybeInstallWorldRecorder(ok: boolean): boolean {
-    if (ok && !_worldRecorder && _params.has('test') && active.isWasmAvailable()) {
+    if (ok && !_worldRecorder && active.isWasmAvailable()) {
         _worldRecorder = installWorldRecorder(active.getWasmEngine());
     }
     return ok;
@@ -51,8 +53,14 @@ export const loadWasmEngine = async (): Promise<boolean> => {
     return maybeInstallWorldRecorder(await active.loadWasmEngine());
 };
 
-/** The `?test` collider-world recorder, or null outside tests / without WASM. */
+/** The collider-world recorder, or null without WASM. */
 export const getWorldRecorder = (): WorldRecorder | null => _worldRecorder;
+
+/**
+ * Hash of the collider world the page has registered so far (see `hashWorld`),
+ * or null without WASM. Only meaningful once every tier has loaded.
+ */
+export const getWorldHash = (): string | null => _worldRecorder?.worldHash() ?? null;
 
 export const isWasmAvailable = (): boolean => active.isWasmAvailable();
 export const isWasmInitialized = (): boolean => active.isWasmInitialized();

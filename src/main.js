@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 import './ui/hud.css';
-import { isWasmAvailable } from './wasm/PhysicsBridge.js';
+import { getWorldHash, isWasmAvailable } from './wasm/PhysicsBridge.js';
 import {
     syncAllDiceToWasm,
     areDiceSettled,
@@ -253,6 +253,7 @@ async function init() {
         getDiceJailController: () => diceJailController,
         interceptRoll: () => gameRef.current?.interceptRoll() ?? false,
         getTableLayoutConfig: () => layoutManagerRef.current?.getConfig?.() ?? null,
+        getWorldHash,
     });
 
     const rendererRecoveryDeps = {

@@ -33,14 +33,14 @@ export function createCandelabra(
 
     const flames = [];
 
-    function addCandle(parent, offsetX, offsetY, offsetZ) {
+    function addCandle(parent, offsetX, offsetY, offsetZ, rng) {
         parent.add(
             mesh(new THREE.CylinderGeometry(0.3, 0.2, 0.2, 16), brassMat, {
                 position: { x: offsetX, y: offsetY, z: offsetZ },
             })
         );
 
-        const candleHeight = 0.8 + Math.random() * 0.4;
+        const candleHeight = 0.8 + rng() * 0.4;
         parent.add(
             mesh(new THREE.CylinderGeometry(0.15, 0.15, candleHeight, 16), waxMaterial, {
                 position: { x: offsetX, y: offsetY + 0.1 + candleHeight / 2, z: offsetZ },
@@ -94,7 +94,7 @@ export function createCandelabra(
                 materialTag: STATIC_MATERIAL.METAL,
             },
         ],
-        build({ group }) {
+        build({ group, rng }) {
             group.add(
                 mesh(new THREE.CylinderGeometry(0.8, 1.2, 0.2, 16), brassMat, {
                     position: { y: 0.1 },
@@ -111,7 +111,7 @@ export function createCandelabra(
                 mesh(new THREE.SphereGeometry(0.3, 16, 16), brassMat, { position: { y: 1.0 } })
             );
 
-            addCandle(group, 0, 1.7, 0);
+            addCandle(group, 0, 1.7, 0, rng);
 
             const numArms = 4;
             const armRadius = 1.0;
@@ -140,7 +140,8 @@ export function createCandelabra(
                     group,
                     Math.cos(angle) * armRadius,
                     armHeight,
-                    Math.sin(angle) * armRadius
+                    Math.sin(angle) * armRadius,
+                    rng
                 );
             }
         },

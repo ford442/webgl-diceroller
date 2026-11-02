@@ -32,7 +32,8 @@ const PROBE_SRC = `
 import { fetchAssetSource } from 'dice-core';
 import { loadWasmBuildInfo } from 'dice-core/wasm/SolverBuildId';
 import { GOLDEN_CASES, GOLDEN_DT, runGoldenCase } from '/packages/dice-core/test/rollGoldens.ts';
-import tavernWorld from '/tests/fixtures/tavern-world.json';
+import tavernFixture from '/tests/fixtures/tavern-world.json';
+const tavernWorld = tavernFixture.world;
 
 export async function run() {
     const assets = fetchAssetSource(location.origin + '/');

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createProp } from './propKit.js';
+import { createProp, propRng } from './propKit.js';
 
 export function createRunestones(
     scene,
@@ -7,6 +7,9 @@ export function createRunestones(
     position = { x: 10, y: -2.75, z: -10 },
     _rotationY = 0
 ) {
+    // Claimed up front: the collider layout below is drawn from it, and createProp
+    // reuses it instead of claiming a second stream.
+    const rng = propRng('Runestones');
     const radius = 0.15;
     const height = 0.05;
     const numStones = 5;
@@ -16,15 +19,16 @@ export function createRunestones(
     const baseY = position.y + height / 2;
 
     const stones = Array.from({ length: numStones }, (_, i) => ({
-        offsetX: (Math.random() - 0.5) * 1.5,
-        offsetZ: (Math.random() - 0.5) * 1.5,
+        offsetX: (rng() - 0.5) * 1.5,
+        offsetZ: (rng() - 0.5) * 1.5,
         y: baseY + i * 0.001,
-        rotY: Math.random() * Math.PI * 2,
+        rotY: rng() * Math.PI * 2,
         runeColor: runeColors[i % runeColors.length],
     }));
 
     const result = createProp(scene, physicsWorld, {
         name: 'Runestones',
+        rng,
         colliders: stones.map((stone) => ({
             type: 'cylinder',
             radius,
@@ -34,7 +38,7 @@ export function createRunestones(
         })),
         build({ group }) {
             stones.forEach((stone) => {
-                const texture = generateRuneTexture(stone.runeColor);
+                const texture = generateRuneTexture(stone.runeColor, rng);
                 const stoneMat = new THREE.MeshStandardMaterial({
                     color: 0x333333,
                     roughness: 0.8,
@@ -66,7 +70,7 @@ export function createRunestones(
     return result.group;
 }
 
-function generateRuneTexture(glowColor) {
+function generateRuneTexture(glowColor, rng) {
     const canvas = document.createElement('canvas');
     canvas.width = 128;
     canvas.height = 128;
@@ -76,9 +80,9 @@ function generateRuneTexture(glowColor) {
     ctx.fillRect(0, 0, 128, 128);
 
     for (let i = 0; i < 500; i++) {
-        const x = Math.random() * 128;
-        const y = Math.random() * 128;
-        const c = Math.floor(Math.random() * 30 + 10);
+        const x = rng() * 128;
+        const y = rng() * 128;
+        const c = Math.floor(rng() * 30 + 10);
         ctx.fillStyle = `rgb(${c},${c},${c})`;
         ctx.fillRect(x, y, 2, 2);
     }
@@ -88,13 +92,13 @@ function generateRuneTexture(glowColor) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
-    let cx = 64 + (Math.random() - 0.5) * 20;
-    let cy = 64 + (Math.random() - 0.5) * 20;
+    let cx = 64 + (rng() - 0.5) * 20;
+    let cy = 64 + (rng() - 0.5) * 20;
     ctx.moveTo(cx, cy);
-    const segments = Math.floor(Math.random() * 3) + 3;
+    const segments = Math.floor(rng() * 3) + 3;
     for (let s = 0; s < segments; s++) {
-        cx += (Math.random() - 0.5) * 60;
-        cy += (Math.random() - 0.5) * 60;
+        cx += (rng() - 0.5) * 60;
+        cy += (rng() - 0.5) * 60;
         cx = Math.max(30, Math.min(98, cx));
         cy = Math.max(30, Math.min(98, cy));
         ctx.lineTo(cx, cy);

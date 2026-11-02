@@ -10,8 +10,14 @@
  * file, so the solver is tested against the world the app actually builds
  * rather than a lone plane (#341).
  *
- * The file is checked in. Re-run after adding, moving or re-shaping a prop's
- * colliders; CI regenerates it and fails on a diff.
+ * The file is `{ hash, world }`: the world plus `hashWorld(world)`, the same
+ * hash share links carry as `w=` and room joins compare (#369). It is checked
+ * in. Re-run after adding, moving or re-shaping a prop's colliders; CI
+ * regenerates it and fails on a diff — hash first, so the message says whether
+ * the *world* moved or only ids / registration order did.
+ *
+ * Every prop draws its layout from the seeded stream the kit hands it, so two
+ * runs at one `layout-seed` write byte-identical files.
  *
  * Usage:
  *   npm run build:wasm && npm run build:js
@@ -23,6 +29,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { hashWorld, serializeWorldFixtureFile } from 'dice-core/wasm/WorldRecorder';
 
 import { launchPage } from '../tests/helpers/browser.js';
 import { startPreview } from '../tests/helpers/server.js';
@@ -46,24 +54,21 @@ async function capture(base) {
         });
         const wasm = await page.evaluate(() => window.__app.isWasmAvailable?.() === true);
         if (!wasm) throw new Error('WASM physics not available — run `npm run build:wasm` first');
-        const world = await page.evaluate(() => window.__app.physics.exportWorld?.());
+        const { world, pageHash } = await page.evaluate(() => ({
+            world: window.__app.physics.exportWorld?.(),
+            pageHash: window.__app.physics.worldHash?.(),
+        }));
         if (!world?.init) throw new Error('world recorder returned nothing (is ?test honoured?)');
-        return { world, errors };
+        // The page hashes in the browser, this script in Node: they must agree,
+        // or `w=` links and room joins would compare apples to oranges.
+        const hash = hashWorld(world);
+        if (pageHash !== hash) {
+            throw new Error(`page worldHash ${pageHash} != hashWorld(exportWorld()) ${hash}`);
+        }
+        return { world, hash, errors };
     } finally {
         await browser.close();
     }
-}
-
-/** One collider per line: a moved prop shows up as a one-line diff. */
-function serializeWorld(world) {
-    const list = (items) =>
-        items.length
-            ? `[\n${items.map((item) => `  ${JSON.stringify(item)}`).join(',\n')}\n ]`
-            : '[]';
-    return (
-        `{\n "version": ${world.version},\n "init": ${JSON.stringify(world.init)},\n` +
-        ` "statics": ${list(world.statics)},\n "dynamics": ${list(world.dynamics)}\n}\n`
-    );
 }
 
 async function main() {
@@ -74,16 +79,23 @@ async function main() {
         base = server.base;
     }
     try {
-        const { world } = await capture(base);
-        const text = serializeWorld(world);
+        const { world, hash } = await capture(base);
+        const text = serializeWorldFixtureFile({ hash, world });
         const summary =
             `${world.statics.length} statics, ${world.dynamics.length} dynamics ` +
-            `(table plane y=${world.init.tableY})`;
+            `(table plane y=${world.init.tableY}), world ${hash}`;
         if (check) {
             const current = await readFile(FIXTURE, 'utf8').catch(() => '');
             if (current !== text) {
+                const recorded = /"hash":\s*"([0-9a-f]+)"/.exec(current)?.[1] ?? 'none';
+                // The hash first: it ignores ids and registration order, so it
+                // separates "a collider moved" from "same world, different ids".
+                const why =
+                    recorded === hash
+                        ? `the world is unchanged (${hash}) but collider ids or registration order moved`
+                        : `the world changed: fixture ${recorded}, app ${hash}`;
                 console.error(
-                    `[fixture:world] ${path.relative(REPO_ROOT, FIXTURE)} is stale — ` +
+                    `[fixture:world] ${path.relative(REPO_ROOT, FIXTURE)} is stale — ${why}; ` +
                         `the app now registers ${summary}. Run \`npm run fixture:world\` and commit it.`
                 );
                 process.exit(1);

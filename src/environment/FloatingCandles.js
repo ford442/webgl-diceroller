@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FLAME_CHANNEL, flameFlicker } from '../core/LightingSystems.js';
+import { propRng } from './propRng.js';
 
 /**
  * Creates magical floating candles that bob gently in the air
@@ -7,6 +8,8 @@ import { FLAME_CHANNEL, flameFlicker } from '../core/LightingSystems.js';
  * @returns {Object} Object containing the group and update function
  */
 export function createFloatingCandles(scene) {
+    // Claimed synchronously; candle variety and the per-frame wax-drip activation draw from it.
+    const rng = propRng('FloatingCandles');
     const group = new THREE.Group();
     group.name = 'FloatingCandles';
 
@@ -66,7 +69,7 @@ export function createFloatingCandles(scene) {
             const angle = (i / 3) * Math.PI * 2;
             dripMesh.position.set(
                 Math.cos(angle) * radius * 0.9,
-                height * 0.3 - Math.random() * 0.1,
+                height * 0.3 - rng() * 0.1,
                 Math.sin(angle) * radius * 0.9
             );
             dripMesh.scale.y = 1.5;
@@ -103,9 +106,9 @@ export function createFloatingCandles(scene) {
         candleGroup.position.set(config.x, config.y, config.z);
 
         // Random rotation for variety
-        candleGroup.rotation.y = Math.random() * Math.PI * 2;
-        candleGroup.rotation.z = (Math.random() - 0.5) * 0.1; // Slight tilt
-        candleGroup.rotation.x = (Math.random() - 0.5) * 0.1;
+        candleGroup.rotation.y = rng() * Math.PI * 2;
+        candleGroup.rotation.z = (rng() - 0.5) * 0.1; // Slight tilt
+        candleGroup.rotation.x = (rng() - 0.5) * 0.1;
 
         group.add(candleGroup);
 
@@ -137,7 +140,7 @@ export function createFloatingCandles(scene) {
                 candleIndex: index,
                 active: false,
                 life: 0,
-                maxLife: 2 + Math.random() * 2,
+                maxLife: 2 + rng() * 2,
                 velocity: new THREE.Vector3(),
             });
 
@@ -181,7 +184,7 @@ export function createFloatingCandles(scene) {
         particles.forEach((p) => {
             if (!p.active) {
                 // Random chance to activate
-                if (Math.random() < 0.005) {
+                if (rng() < 0.005) {
                     p.active = true;
                     p.life = 0;
 
@@ -191,11 +194,7 @@ export function createFloatingCandles(scene) {
                     p.mesh.position.y -= 0.3; // Bottom of candle body
 
                     // Initial velocity (falling with slight horizontal drift)
-                    p.velocity.set(
-                        (Math.random() - 0.5) * 0.1,
-                        -0.2 - Math.random() * 0.2,
-                        (Math.random() - 0.5) * 0.1
-                    );
+                    p.velocity.set((rng() - 0.5) * 0.1, -0.2 - rng() * 0.2, (rng() - 0.5) * 0.1);
 
                     p.mesh.visible = true;
                     p.mesh.material.opacity = 0.8;

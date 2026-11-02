@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { playPropImpact } from '../audio/DiceCollisionAudio.js';
-import { createProp, mesh, STATIC_MATERIAL } from './propKit.js';
+import { createProp, mesh, propRng, STATIC_MATERIAL } from './propKit.js';
 
 export function createCauldron(
     scene,
@@ -40,11 +40,13 @@ export function createCauldron(
     const _impactPos = new THREE.Vector3();
     const liquidHeight = rimHeight - 0.2;
     const baseLiquidY = liquidHeight;
-    let timeOffset = Math.random() * 100;
+    const rng = propRng('Cauldron');
+    let timeOffset = rng() * 100;
     let bubbleTime = 0;
 
     const result = createProp(scene, physicsWorld, {
         name: 'Cauldron',
+        rng,
         position,
         rotation,
         colliders: [

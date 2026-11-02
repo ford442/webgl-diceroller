@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createProp } from './propKit.js';
 
-function generateCharacterSheetTexture() {
+function generateCharacterSheetTexture(rng) {
     const canvas = document.createElement('canvas');
     canvas.width = 512;
     canvas.height = 700;
@@ -29,7 +29,7 @@ function generateCharacterSheetTexture() {
         ctx.fillText(stat, 40, y + 30);
         ctx.strokeRect(100, y, 60, 40);
         ctx.font = '20px monospace';
-        const score = Math.floor(Math.random() * 8) + 10;
+        const score = Math.floor(rng() * 8) + 10;
         ctx.fillText(score.toString(), 115, y + 27);
         ctx.font = 'bold 24px serif';
     });
@@ -69,10 +69,10 @@ export function createParchment(
         rotation: rotationY,
         scale,
         colliders: [{ type: 'box', halfExtents: [width / 2, thickness / 2, depth / 2] }],
-        build({ group }) {
+        build({ group, rng }) {
             const geometry = new THREE.BoxGeometry(width, thickness, depth);
             const material = new THREE.MeshStandardMaterial({
-                map: generateCharacterSheetTexture(),
+                map: generateCharacterSheetTexture(rng),
                 color: 0xffffff,
                 roughness: 0.9,
                 bumpScale: 0.01,

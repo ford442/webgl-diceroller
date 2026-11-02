@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createSeededRng } from '../core/SeededRng.js';
 import { createProp, mesh, STATIC_MATERIAL } from './propKit.js';
 
 export function createMug(
@@ -14,9 +15,11 @@ export function createMug(
 
     let innerMaterial;
     let steamGroup;
+    // The steam respawns in `update`, so the closure keeps the build stream.
+    let steamRng;
 
     const result = createProp(scene, physicsWorld, {
-        name: 'EnhancedMug',
+        name: 'Mug',
         position,
         rotation: rotationY,
         footOffsetY: height / 2,
@@ -31,7 +34,8 @@ export function createMug(
                 mass: 0.4,
             },
         ],
-        build({ group }) {
+        build({ group, rng }) {
+            steamRng = rng;
             const { diffuseMap, roughnessMap, bumpMap } = generateCeramicTextures();
 
             const clayMaterial = new THREE.MeshStandardMaterial({
@@ -77,7 +81,7 @@ export function createMug(
             group.add(bodyMesh);
             group.add(handleMesh);
 
-            steamGroup = createSteamParticles();
+            steamGroup = createSteamParticles(rng);
             steamGroup.position.y = height / 2 + 0.05;
             group.add(steamGroup);
         },
@@ -99,8 +103,8 @@ export function createMug(
                 particle.material.opacity <= 0.01
             ) {
                 particle.position.y = height / 2 + 0.05;
-                particle.position.x = (Math.random() - 0.5) * 0.3;
-                particle.position.z = (Math.random() - 0.5) * 0.3;
+                particle.position.x = (steamRng() - 0.5) * 0.3;
+                particle.position.z = (steamRng() - 0.5) * 0.3;
                 particle.material.opacity = 0.4;
                 particle.scale.setScalar(1);
             }
@@ -114,6 +118,7 @@ export function createMug(
 }
 
 function generateCeramicTextures() {
+    const rng = createSeededRng(0x4d756701);
     const size = 256;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -123,10 +128,10 @@ function generateCeramicTextures() {
     ctx.fillStyle = '#8b5a2b';
     ctx.fillRect(0, 0, size, size);
     for (let i = 0; i < 100; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const r = Math.random() * 2 + 1;
-        ctx.fillStyle = Math.random() > 0.5 ? '#7a4f25' : '#9c6531';
+        const x = rng() * size;
+        const y = rng() * size;
+        const r = rng() * 2 + 1;
+        ctx.fillStyle = rng() > 0.5 ? '#7a4f25' : '#9c6531';
         ctx.globalAlpha = 0.3;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -139,9 +144,9 @@ function generateCeramicTextures() {
     ctx.fillStyle = '#888888';
     ctx.fillRect(0, 0, size, size);
     for (let i = 0; i < 20; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const r = Math.random() * 30 + 20;
+        const x = rng() * size;
+        const y = rng() * size;
+        const r = rng() * 30 + 20;
         const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
         gradient.addColorStop(0, '#444444');
         gradient.addColorStop(1, '#888888');
@@ -156,9 +161,9 @@ function generateCeramicTextures() {
     ctx.fillStyle = '#808080';
     ctx.fillRect(0, 0, size, size);
     for (let i = 0; i < 500; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        ctx.fillStyle = Math.random() > 0.5 ? '#858585' : '#7b7b7b';
+        const x = rng() * size;
+        const y = rng() * size;
+        ctx.fillStyle = rng() > 0.5 ? '#858585' : '#7b7b7b';
         ctx.globalAlpha = 0.2;
         ctx.fillRect(x, y, 2, 2);
     }
@@ -168,7 +173,7 @@ function generateCeramicTextures() {
     return { diffuseMap, roughnessMap, bumpMap };
 }
 
-function createSteamParticles() {
+function createSteamParticles(rng) {
     const group = new THREE.Group();
     const steamMaterial = new THREE.MeshStandardMaterial({
         color: 0xffffff,
@@ -182,15 +187,15 @@ function createSteamParticles() {
 
     for (let i = 0; i < 8; i++) {
         const particle = mesh(new THREE.PlaneGeometry(0.15, 0.15), steamMaterial.clone());
-        const angle = Math.random() * Math.PI * 2;
-        const r = Math.random() * 0.25;
-        particle.position.set(Math.cos(angle) * r, Math.random() * 0.5, Math.sin(angle) * r);
-        particle.rotation.z = Math.random() * Math.PI;
+        const angle = rng() * Math.PI * 2;
+        const r = rng() * 0.25;
+        particle.position.set(Math.cos(angle) * r, rng() * 0.5, Math.sin(angle) * r);
+        particle.rotation.z = rng() * Math.PI;
         particle.userData = {
-            speed: 0.5 + Math.random() * 0.5,
-            wiggleSpeed: 1 + Math.random() * 2,
-            phase: Math.random() * Math.PI * 2,
-            maxHeight: 0.8 + Math.random() * 0.4,
+            speed: 0.5 + rng() * 0.5,
+            wiggleSpeed: 1 + rng() * 2,
+            phase: rng() * Math.PI * 2,
+            maxHeight: 0.8 + rng() * 0.4,
         };
         group.add(particle);
     }

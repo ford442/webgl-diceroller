@@ -122,6 +122,12 @@ export interface ShareableRollParams {
     source: RollSource;
     /** Table slots a partial throw moved; null = every die (all pre-v3 links). */
     ids: number[] | null;
+    /**
+     * Hash of the collider world the roll landed in (`w=`), or null on a link
+     * that predates it. The receiver compares it with its own `worldHash()`
+     * before replaying: a different table is a different simulation.
+     */
+    worldHash: string | null;
     version: number;
 }
 
@@ -151,6 +157,24 @@ export interface ShareableRollExtras {
      * Older clients ignore the extra params, so the format version is unchanged.
      */
     layout?: { seed: number; density?: string | null; theme?: string | null } | null;
+    /**
+     * `hashWorld` of the table the roll landed on, written as `w=`. The layout
+     * params say how to *build* the table; this says what the sender actually
+     * built, so a receiver whose props or colliders differ (another app
+     * version, a doctored position) can tell before it replays. Only
+     * well-formed hashes are written; older clients ignore the param.
+     */
+    worldHash?: string | null;
+}
+
+/** Collider-world hash param of a share link (see ShareableRollExtras.worldHash). */
+export const WORLD_HASH_PARAM = 'w';
+const WORLD_HASH_PATTERN = /^[0-9a-f]{16}$/;
+
+/** The hash if it is a well-formed `hashWorld` value, else null. */
+export function parseWorldHash(raw: string | null | undefined): string | null {
+    const value = raw?.trim().toLowerCase();
+    return value && WORLD_HASH_PATTERN.test(value) ? value : null;
 }
 
 /** Layout params `buildShareableRollUrl` writes (see ShareableRollExtras.layout). */
@@ -166,6 +190,9 @@ export function generateRollSeed(): number {
         crypto.getRandomValues(buf);
         return (buf[0] ?? 0) >>> 0;
     }
+    // Only mints a *new* seed when no CSPRNG exists; the seed then travels in
+    // the link, so replays never re-draw it.
+    // eslint-disable-next-line no-restricted-properties
     return (Math.random() * 0xffffffff) >>> 0;
 }
 
@@ -244,6 +271,7 @@ export function parseShareableRollParams(
         system,
         source,
         ids,
+        worldHash: parseWorldHash(searchParams.get(WORLD_HASH_PARAM)),
         version,
     };
 }
@@ -299,6 +327,10 @@ export function buildShareableRollUrl(
         url.searchParams.set('density', layout.density?.trim() || DEFAULT_LAYOUT_DENSITY);
         url.searchParams.set('theme', layout.theme?.trim() || DEFAULT_LAYOUT_THEME);
     }
+
+    const worldHash = parseWorldHash(extras.worldHash);
+    if (worldHash) url.searchParams.set(WORLD_HASH_PARAM, worldHash);
+    else url.searchParams.delete(WORLD_HASH_PARAM);
 
     return url.toString();
 }

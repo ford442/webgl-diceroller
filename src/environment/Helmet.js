@@ -13,7 +13,7 @@ export function createHelmet(
     const centerShift = helmetHeight / 2;
 
     return createProp(scene, physicsWorld, {
-        name: 'IronHelmet',
+        name: 'Helmet',
         position,
         rotation: rotationY,
         footOffsetY: centerShift,

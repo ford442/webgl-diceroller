@@ -109,6 +109,7 @@ Minimum `__app` surface:
 | `replayRoll`, `areDiceSettled`, `readAllDiceValues`                                 | Dice / replay                                |
 | `getRollState`, `physics.getSleepDiagnostics`, `physics.forceNoSettle`              | Roll lifecycle / "why is it awake?" (#341)   |
 | `physics.exportWorld`, `physics.getDieLog` (`?test` only)                           | Recorded collider world / die add-remove log |
+| `physics.worldHash()`                                                               | Hash of the recorded collider world (#369)   |
 | `events`                                                                            | Subscribe to `AppEvent` names                |
 | `game`                                                                              | Table game (Farkle) controls; null w/o WASM  |
 
@@ -183,6 +184,32 @@ root through `options.track` so the scatter merge and culling systems see it. An
 still living only in `clutter/*.js` (coins, candle, book, parchment, quill, tarot,
 poster, gemstone, potion, d20 holder) has no named twin — give it one under
 `src/environment/` rather than adding a second implementation.
+
+### Deterministic table: prop RNG and the world hash (#369)
+
+A share link carries `layout-seed`; replaying it is only honest if the receiver rebuilds the **same collider world**. Two mechanisms make that true and provable.
+
+**One RNG per prop.** No module under `src/environment/` draws from `Math.random` (or `Date.now`) — ESLint's `no-restricted-properties` rejects it, and also rejects it in `packages/dice-core/src`. Instead [`propRng.js`](../src/environment/propRng.js) derives a seeded stream for each spawned prop from
+
+```
+(layoutSeed, registry key, slot, ordinal) → fnv1a32 → createSeededRng
+```
+
+- the spawn paths open a scope around the factory call (`withPropScope`): `spawnProp` uses the table's `layout-seed`, the entry's `name` as the key and its index in the tier list as the slot; `RandomClutter` uses the same seed, the clutter id and the scatter slot (`clutter:3`). Two instances of one prop therefore never share a scatter, even at one position, and which other props the seeded draw picked never changes this one.
+- `createProp` claims the stream from the open scope and passes it to `build({ group, materials, mesh, rng })`; `colliders` may be a function `({ group, rng }) => spec[]`. A factory that needs numbers before it can declare colliders calls `propRng('Name')` itself (synchronously, before any `await`) and hands the result back as `createProp({ rng })`. `ordinal` counts claims inside one factory call, so a meal's tankard and plate get separate streams.
+- Canvas-texture noise uses `createSeededRng(CONSTANT)` per generator, so a cached texture never depends on which instance built it first. Per-frame `update` code captures the prop's `rng` in its closure.
+- A factory called outside any scope (a unit test) still gets a deterministic stream (layout seed 0, slot 0).
+- `createProp` names the group after the registry entry (`Mug`, not `EnhancedMug`) when the author gives no name, so `SHADOW_DISABLED_PROP_NAMES`, the culling set and the tests match on one name.
+
+**A collider-world hash.** [`WorldRecorder.ts`](../packages/dice-core/src/wasm/WorldRecorder.ts) wraps the engine's structural methods in every session (not only `?test`) and keeps the live set of colliders. `hashWorld()` is FNV-1a/64 over a canonical text — shape, pose and material of each collider, **without ids and in sorted order**, because ids come from a global counter a layout re-roll does not reset. Two clients that registered the same colliders (to the 1e-5 the recorder rounds to) report the same 16-hex hash, however their tiers happened to interleave. It is only meaningful once every tier has loaded.
+
+| Where                                    | What happens on a mismatch                                                                                                                       |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Share link `…&w=<hash>`                  | `replayShareableRoll` skips the replay and shows a dismissible "different table" badge. A link with no `w=` (older links) replays as before.     |
+| `?room=` join (`roomExists`, WS upgrade) | Guest status goes to `error` ("Table mismatch…"); the Durable Object answers `403 world_hash_mismatch`. The host's hash replaces the stored one. |
+| `hello` message                          | Carries `worldHash` next to `solverBuildId` (informational).                                                                                     |
+
+`tests/fixtures/tavern-world.json` is `{ hash, world }`; `npm run check:world-fixture` compares the hash first and says whether the _world_ changed or only ids / registration order did. `tests/unit/propDeterminism.test.js` spawns every tabletop tier entry and the clutter pass under two different `Math.random` sequences and requires identical colliders.
 
 `createProp`'s `scale` option scales the group **and** the collider spec
 (`scaleColliderSpec` — lengths and offsets by `scale`, mass by `scale³`), because

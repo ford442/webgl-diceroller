@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createProp } from './propKit.js';
+import { createProp, propRng } from './propKit.js';
 
 export function createTavernMeal(
     scene,
@@ -14,11 +14,13 @@ export function createTavernMeal(
 function createMealTankard(scene, physicsWorld, basePosition, baseRotation) {
     const radius = 0.35;
     const height = 0.8;
+    const rng = propRng('Tankard');
 
     createProp(scene, physicsWorld, {
         name: 'Tankard',
+        rng,
         position: { x: basePosition.x - 0.5, y: -2.35, z: basePosition.z - 0.5 },
-        rotation: baseRotation + (Math.random() - 0.5) * 0.2,
+        rotation: baseRotation + (rng() - 0.5) * 0.2,
         colliders: [
             {
                 type: 'cylinder',
@@ -84,11 +86,13 @@ function createMealTankard(scene, physicsWorld, basePosition, baseRotation) {
 function createFoodPlate(scene, physicsWorld, basePosition, baseRotation) {
     const plateRadius = 0.8;
     const plateHeight = 0.1;
+    const rng = propRng('FoodPlate');
 
     createProp(scene, physicsWorld, {
         name: 'FoodPlate',
+        rng,
         position: { x: basePosition.x + 0.5, y: -2.7, z: basePosition.z + 0.5 },
-        rotation: baseRotation + (Math.random() - 0.5) * 0.3,
+        rotation: baseRotation + (rng() - 0.5) * 0.3,
         colliders: [
             {
                 type: 'cylinder',

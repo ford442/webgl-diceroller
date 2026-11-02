@@ -45,7 +45,7 @@ export function createCrown(
     });
 
     return createProp(scene, physicsWorld, {
-        name: 'KingsCrown',
+        name: 'Crown',
         position,
         rotation: rotationY,
         footOffsetY: height / 2,

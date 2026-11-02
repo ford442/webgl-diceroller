@@ -4,15 +4,16 @@ import { createFire } from '../Fire.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
 import { getWaxMaterial, getWickMaterial } from '../../core/MaterialPalette.js';
 import { FLAME_CHANNEL, flameFlicker, flameTime } from '../../core/LightingSystems.js';
+import { propRng } from '../propRng.js';
 
 const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
-const randomUnit = (options) => (options?.rng ?? Math.random)();
 
 function addCylinderCollider(physicsWorld, anchor, radius, halfHeight) {
     createStaticCollider(physicsWorld, anchor, { type: 'cylinder', radius, halfHeight });
 }
 
 export function createCandle(scene, physicsWorld, options = {}) {
+    const rng = propRng('Candle');
     const candleGroup = new THREE.Group();
 
     const radius = 0.4;
@@ -33,8 +34,8 @@ export function createCandle(scene, physicsWorld, options = {}) {
     drips.instanceMatrix.setUsage(THREE.StaticDrawUsage);
     const dripDummy = new THREE.Object3D();
     for (let i = 0; i < dripCount; i++) {
-        const angle = (i / dripCount) * Math.PI * 2 + randomUnit(options) * 0.5;
-        const dripHeight = 0.3 + randomUnit(options) * 0.4;
+        const angle = (i / dripCount) * Math.PI * 2 + rng() * 0.5;
+        const dripHeight = 0.3 + rng() * 0.4;
         dripDummy.scale.set(1, dripHeight / 0.35, 1);
 
         const dripX = Math.cos(angle) * (radius - 0.02);

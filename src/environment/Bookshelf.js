@@ -23,7 +23,7 @@ export function createBookshelf(
                 offset: { y: height / 2 },
             },
         ],
-        build({ group, mesh: meshHelper }) {
+        build({ group, mesh: meshHelper, rng }) {
             const wood = materials.woodTextured();
             const books = materials.bookCovers();
             const paper = materials.paper();
@@ -58,7 +58,15 @@ export function createBookshelf(
             for (let i = 1; i < numShelves; i++) {
                 const y = i * shelfSpacing;
                 group.add(meshHelper(topBotGeo, wood, { position: { y } }));
-                populateShelf(group, y, width - thickness * 2, depth - thickness, books, paper);
+                populateShelf(
+                    group,
+                    y,
+                    width - thickness * 2,
+                    depth - thickness,
+                    books,
+                    paper,
+                    rng
+                );
             }
 
             populateShelf(
@@ -67,43 +75,44 @@ export function createBookshelf(
                 width - thickness * 2,
                 depth - thickness,
                 books,
-                paper
+                paper,
+                rng
             );
         },
     });
 }
 
-function populateShelf(group, shelfY, shelfWidth, shelfDepth, coverMats, paperMat) {
+function populateShelf(group, shelfY, shelfWidth, shelfDepth, coverMats, paperMat, rng) {
     let currentX = -shelfWidth / 2 + 0.5;
     const maxX = shelfWidth / 2 - 0.5;
 
     while (currentX < maxX) {
-        const bThick = 0.2 + Math.random() * 0.3;
-        const bHeight = 1.5 + Math.random() * 0.8;
-        const bDepth = shelfDepth * 0.8 + Math.random() * (shelfDepth * 0.1);
+        const bThick = 0.2 + rng() * 0.3;
+        const bHeight = 1.5 + rng() * 0.8;
+        const bDepth = shelfDepth * 0.8 + rng() * (shelfDepth * 0.1);
 
         if (currentX + bThick > maxX) break;
 
-        if (Math.random() < 0.1) {
-            currentX += 0.5 + Math.random() * 1.0;
+        if (rng() < 0.1) {
+            currentX += 0.5 + rng() * 1.0;
             continue;
         }
 
-        const lean = Math.random() < 0.2 ? Math.random() * 0.3 - 0.15 : 0;
-        const book = createBookMesh(bThick, bHeight, bDepth, coverMats, paperMat);
+        const lean = rng() < 0.2 ? rng() * 0.3 - 0.15 : 0;
+        const book = createBookMesh(bThick, bHeight, bDepth, coverMats, paperMat, rng);
         const surfaceY = shelfY + 0.25;
 
         book.position.set(currentX + bThick / 2, surfaceY + bHeight / 2, 0);
         book.rotation.z = lean;
-        book.position.z = (Math.random() - 0.5) * 0.2;
+        book.position.z = (rng() - 0.5) * 0.2;
 
         group.add(book);
         currentX += bThick + 0.02;
     }
 }
 
-function createBookMesh(width, height, depth, coverMats, _paperMat) {
-    const mat = coverMats[Math.floor(Math.random() * coverMats.length)];
+function createBookMesh(width, height, depth, coverMats, _paperMat, rng) {
+    const mat = coverMats[Math.floor(rng() * coverMats.length)];
     const book = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), mat);
     book.castShadow = true;
     book.receiveShadow = true;

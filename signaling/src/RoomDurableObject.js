@@ -18,6 +18,7 @@ const STORAGE_KEY = 'room';
  *   createdAt: number,
  *   protocolVersion: number,
  *   solverBuildId: string | null,
+ *   worldHash: string | null,
  *   hostPeerId: string | null,
  *   diceCounts: Record<string, number> | null,
  *   presence: unknown,
@@ -55,6 +56,7 @@ export class RoomDurableObject {
             createdAt: Date.now(),
             protocolVersion: 1,
             solverBuildId: null,
+            worldHash: null,
             hostPeerId: null,
             diceCounts: null,
             presence: null,
@@ -112,6 +114,7 @@ export class RoomDurableObject {
                     peerCount: peers.length,
                     protocolVersion: room.protocolVersion,
                     solverBuildId: room.solverBuildId,
+                    worldHash: room.worldHash ?? null,
                 }),
                 { status: 200, headers: corsHeaders() }
             );
@@ -136,6 +139,7 @@ export class RoomDurableObject {
         const peerId = url.searchParams.get('peerId') || crypto.randomUUID();
         const role = url.searchParams.get('role') === 'host' ? 'host' : 'guest';
         const solverBuildId = String(url.searchParams.get('solverBuildId') || '').trim();
+        const worldHash = String(url.searchParams.get('worldHash') || '').trim();
         const protocolVersion = Number(url.searchParams.get('protocolVersion') || 1);
 
         const room = await this.loadRoom();
@@ -168,6 +172,17 @@ export class RoomDurableObject {
             });
         }
 
+        // Same engine is not enough for a seeded replay: the guest has to have
+        // built the host's table (#369). A guest that sends no hash (an older
+        // build) or a room with none recorded yet is admitted — there is
+        // nothing to compare.
+        if (role === 'guest' && room.worldHash && worldHash && room.worldHash !== worldHash) {
+            return new Response(JSON.stringify({ error: 'world_hash_mismatch' }), {
+                status: 403,
+                headers: corsHeaders(),
+            });
+        }
+
         if (role === 'host') {
             const connectedHosts = listConnectedPeers(this.state).filter(
                 (p) => p.role === 'host' && p.peerId !== peerId
@@ -189,7 +204,14 @@ export class RoomDurableObject {
                     await this.persistRoom({ solverBuildId });
                 }
             }
-            await this.persistRoom({ hostPeerId: peerId, protocolVersion });
+            // The host is the authority on the table, so unlike `solverBuildId`
+            // its hash replaces the stored one: a host that re-rolled its layout
+            // and reconnected is the new reference for the guests who join next.
+            await this.persistRoom({
+                hostPeerId: peerId,
+                protocolVersion,
+                ...(worldHash ? { worldHash } : {}),
+            });
         }
 
         const peers = listConnectedPeers(this.state);
@@ -250,6 +272,7 @@ export class RoomDurableObject {
                     lastReveal: room.lastReveal,
                     protocolVersion: room.protocolVersion,
                     solverBuildId: room.solverBuildId,
+                    worldHash: room.worldHash ?? null,
                 })
             );
         } catch {
@@ -308,6 +331,7 @@ export class RoomDurableObject {
                 presence: msg.presence ?? room.presence,
                 lastRoll: msg.lastRoll ?? room.lastRoll,
                 layoutSeed: msg.layoutSeed ?? room.layoutSeed,
+                worldHash: msg.worldHash ?? room.worldHash ?? null,
                 session: msg.session ?? room.session,
                 pendingCommit: msg.pendingCommit ?? room.pendingCommit,
                 lastReveal: msg.lastReveal ?? room.lastReveal,

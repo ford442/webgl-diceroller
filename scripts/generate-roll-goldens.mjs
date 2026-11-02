@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 import { defaultPublicDir, fsAssetSource, wasmArtifactsPresent } from 'dice-core';
 import { loadWasmBuildInfo } from 'dice-core/wasm/SolverBuildId';
+import { parseWorldFixtureFile } from 'dice-core/wasm/WorldRecorder';
 import { GOLDEN_CASES, GOLDEN_DT, runGoldenCase } from '../packages/dice-core/test/rollGoldens.ts';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -26,7 +27,7 @@ if (!wasmArtifactsPresent()) {
 }
 
 const assets = fsAssetSource(defaultPublicDir());
-const tavernWorld = JSON.parse(
+const { world: tavernWorld } = parseWorldFixtureFile(
     readFileSync(path.join(REPO_ROOT, 'tests/fixtures/tavern-world.json'), 'utf8')
 );
 const { solver_revision: solverRevision = 0 } = await loadWasmBuildInfo('wasm', assets);

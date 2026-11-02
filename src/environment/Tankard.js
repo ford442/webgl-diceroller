@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createSeededRng } from '../core/SeededRng.js';
 import { createProp } from './propKit.js';
 
 /**
@@ -30,7 +31,7 @@ export function createTankard(
                 offset: { y: bodyHeight / 2 },
             },
         ],
-        build({ group }) {
+        build({ group, rng }) {
             const pewterMaterial = new THREE.MeshStandardMaterial({
                 color: 0x8a8a8a,
                 roughness: 0.35,
@@ -126,18 +127,18 @@ export function createTankard(
 
             const bubbleCount = 15;
             for (let i = 0; i < bubbleCount; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const r = Math.random() * (bodyRadius - wallThickness - 0.1) * 0.8;
-                const bubbleSize = 0.08 + Math.random() * 0.12;
+                const angle = rng() * Math.PI * 2;
+                const r = rng() * (bodyRadius - wallThickness - 0.1) * 0.8;
+                const bubbleSize = 0.08 + rng() * 0.12;
 
                 const bubbleGeo = new THREE.SphereGeometry(bubbleSize, 12, 10);
                 bubbleGeo.scale(1, 0.4, 1);
 
                 const bubble = new THREE.Mesh(bubbleGeo, frothMaterial);
-                bubble.position.set(Math.cos(angle) * r, Math.random() * 0.05, Math.sin(angle) * r);
+                bubble.position.set(Math.cos(angle) * r, rng() * 0.05, Math.sin(angle) * r);
                 bubble.userData.originalY = bubble.position.y;
-                bubble.userData.phase = Math.random() * Math.PI * 2;
-                bubble.userData.speed = 0.5 + Math.random() * 1.0;
+                bubble.userData.phase = rng() * Math.PI * 2;
+                bubble.userData.speed = 0.5 + rng() * 1.0;
                 bubble.castShadow = true;
                 frothGroup.add(bubble);
                 bubbles.push(bubble);
@@ -176,6 +177,7 @@ export function createTankard(
 }
 
 function generateWoodGrainTexture() {
+    const rng = createSeededRng(0x54616e01);
     const canvas = document.createElement('canvas');
     canvas.width = 128;
     canvas.height = 256;
@@ -189,13 +191,13 @@ function generateWoodGrainTexture() {
 
     for (let i = 0; i < 20; i++) {
         ctx.beginPath();
-        const x = Math.random() * canvas.width;
+        const x = rng() * canvas.width;
         ctx.moveTo(x, 0);
         for (let y = 0; y < canvas.height; y += 20) {
-            const waveX = x + Math.sin(y * 0.05) * 5 + (Math.random() - 0.5) * 3;
+            const waveX = x + Math.sin(y * 0.05) * 5 + (rng() - 0.5) * 3;
             ctx.lineTo(waveX, y);
         }
-        ctx.globalAlpha = 0.3 + Math.random() * 0.3;
+        ctx.globalAlpha = 0.3 + rng() * 0.3;
         ctx.stroke();
     }
 

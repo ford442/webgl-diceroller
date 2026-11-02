@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { getInstancedMetalMaterial } from '../core/MaterialPalette.js';
-import { createProp, STATIC_MATERIAL } from './propKit.js';
+import { createProp, propRng, STATIC_MATERIAL } from './propKit.js';
 
 export function createCoin(
     scene,
@@ -8,6 +8,9 @@ export function createCoin(
     position = { x: 8, y: -2.75, z: -2 },
     rotationY = 0
 ) {
+    // Claimed up front: the collider layout below is drawn from it, and createProp
+    // reuses it instead of claiming a second stream.
+    const rng = propRng('Coin');
     const radius = 0.3;
     const height = 0.05;
     const numCoins = 12;
@@ -19,11 +22,11 @@ export function createCoin(
     const dummy = new THREE.Object3D();
 
     for (let i = 0; i < numCoins; i++) {
-        const offsetX = (Math.random() - 0.5) * 2.5;
-        const offsetZ = (Math.random() - 0.5) * 2.5;
-        const rotX = (Math.random() - 0.5) * 0.3;
-        const rotY = rotationY + Math.random() * Math.PI * 2;
-        const rotZ = (Math.random() - 0.5) * 0.3;
+        const offsetX = (rng() - 0.5) * 2.5;
+        const offsetZ = (rng() - 0.5) * 2.5;
+        const rotX = (rng() - 0.5) * 0.3;
+        const rotY = rotationY + rng() * Math.PI * 2;
+        const rotZ = (rng() - 0.5) * 0.3;
 
         colliders.push({
             type: 'cylinder',
@@ -37,6 +40,7 @@ export function createCoin(
 
     return createProp(scene, physicsWorld, {
         name: 'Coin',
+        rng,
         position,
         rotation: rotationY,
         colliders,

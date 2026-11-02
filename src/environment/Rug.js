@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createSeededRng } from '../core/SeededRng.js';
 
 export function createRug(scene) {
     const width = 24;
@@ -30,6 +31,7 @@ export function createRug(scene) {
 }
 
 function generateRugTexture() {
+    const rng = createSeededRng(0x52756701);
     const canvas = document.createElement('canvas');
     canvas.width = 1024;
     canvas.height = 1024;
@@ -84,8 +86,8 @@ function generateRugTexture() {
     // Noise/Fray effect (simple dots)
     ctx.fillStyle = 'rgba(0,0,0,0.1)';
     for (let i = 0; i < 5000; i++) {
-        const x = Math.random() * w;
-        const y = Math.random() * h;
+        const x = rng() * w;
+        const y = rng() * h;
         ctx.fillRect(x, y, 2, 2);
     }
 

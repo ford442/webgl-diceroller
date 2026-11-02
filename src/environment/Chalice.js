@@ -66,7 +66,7 @@ export function createChalice(
                 materialTag: STATIC_MATERIAL.METAL,
             },
         ],
-        build({ group }) {
+        build({ group, rng }) {
             group.add(
                 mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.1, 16), goldMat, {
                     position: { y: 0.05 },
@@ -97,9 +97,9 @@ export function createChalice(
                             z: Math.sin(angle) * 0.12,
                         },
                         rotation: {
-                            x: Math.random(),
-                            y: Math.random(),
-                            z: Math.random(),
+                            x: rng(),
+                            y: rng(),
+                            z: rng(),
                         },
                     })
                 );

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createSeededRng } from '../core/SeededRng.js';
 import { createProp, materials, mesh, STATIC_MATERIAL } from './propKit.js';
 
 export function createLockpicks(
@@ -115,6 +116,7 @@ function createTensionWrench(mat) {
 }
 
 function generateLeatherTextures() {
+    const rng = createSeededRng(0x4c6f6301);
     const size = 512;
 
     const diffCanvas = document.createElement('canvas');
@@ -124,18 +126,18 @@ function generateLeatherTextures() {
     diffCtx.fillStyle = '#4a2e15';
     diffCtx.fillRect(0, 0, size, size);
     for (let i = 0; i < 5000; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        if (Math.random() > 0.5) {
+        const x = rng() * size;
+        const y = rng() * size;
+        if (rng() > 0.5) {
             diffCtx.fillStyle = '#3a200a';
             diffCtx.globalAlpha = 0.1;
             diffCtx.beginPath();
-            diffCtx.arc(x, y, Math.random() * 5 + 1, 0, Math.PI * 2);
+            diffCtx.arc(x, y, rng() * 5 + 1, 0, Math.PI * 2);
             diffCtx.fill();
         } else {
             diffCtx.fillStyle = '#5c3a1b';
             diffCtx.globalAlpha = 0.05;
-            diffCtx.fillRect(x, y, Math.random() * 20 + 2, 1);
+            diffCtx.fillRect(x, y, rng() * 20 + 2, 1);
         }
     }
     const diffuseMap = new THREE.CanvasTexture(diffCanvas);
@@ -151,12 +153,12 @@ function generateLeatherTextures() {
     roughCtx.fillStyle = '#cccccc';
     roughCtx.fillRect(0, 0, size, size);
     for (let i = 0; i < 2000; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        roughCtx.fillStyle = Math.random() > 0.7 ? '#999999' : '#eeeeee';
+        const x = rng() * size;
+        const y = rng() * size;
+        roughCtx.fillStyle = rng() > 0.7 ? '#999999' : '#eeeeee';
         roughCtx.globalAlpha = 0.2;
         roughCtx.beginPath();
-        roughCtx.arc(x, y, Math.random() * 10 + 2, 0, Math.PI * 2);
+        roughCtx.arc(x, y, rng() * 10 + 2, 0, Math.PI * 2);
         roughCtx.fill();
     }
     const roughnessMap = new THREE.CanvasTexture(roughCanvas);
@@ -172,9 +174,9 @@ function generateLeatherTextures() {
     bumpCtx.fillStyle = '#808080';
     bumpCtx.fillRect(0, 0, size, size);
     for (let i = 0; i < 8000; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        bumpCtx.fillStyle = Math.random() > 0.5 ? '#888888' : '#777777';
+        const x = rng() * size;
+        const y = rng() * size;
+        bumpCtx.fillStyle = rng() > 0.5 ? '#888888' : '#777777';
         bumpCtx.globalAlpha = 0.3;
         bumpCtx.fillRect(x, y, 2, 2);
     }

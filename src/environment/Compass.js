@@ -58,7 +58,7 @@ export function createCompass(
                 materialTag: STATIC_MATERIAL.METAL,
             },
         ],
-        build({ group }) {
+        build({ group, rng }) {
             group.add(mesh(new THREE.CylinderGeometry(radius, radius, height, 32), brassMat));
 
             const innerRadius = radius - 0.05;
@@ -86,7 +86,7 @@ export function createCompass(
 
             needleGroup.add(mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.04, 8), brassMat));
 
-            needleGroup.rotation.y = Math.random() * Math.PI * 2;
+            needleGroup.rotation.y = rng() * Math.PI * 2;
             group.add(needleGroup);
 
             group.add(
