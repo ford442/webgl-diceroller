@@ -15,8 +15,7 @@ import { TABLE_SURFACE_Y } from '../core/SceneMetrics.js';
 import { spawnedDice } from './DiceState.js';
 import { isUsingWasmPhysics, getSecureRandom } from './DicePhysicsPresets.js';
 import { applyWasmImpulseForDie } from './DiceSync.js';
-
-/** @typedef {import('../types/dice').SpawnedDie} SpawnedDie */
+import { selectThrowDice, type ThrowSelectionOptions } from './DiceThrowSelection.js';
 
 const _flickForward = new THREE.Vector3();
 const _flickRight = new THREE.Vector3();
@@ -24,21 +23,35 @@ const _flickImpulse = new THREE.Vector3();
 const _flickTorque = new THREE.Vector3();
 const MAX_FLICK_IMPULSE = 28;
 
+export type ThrowDiceOptions = ThrowSelectionOptions;
+
 /**
- * @param {import('three').Scene} scene
- * @param {unknown} world unused — kept for call-site compatibility
- * @param {number | null} [seed]
+ * Throw dice. With no `ids`, every die that is not held (kinematic) is thrown:
+ * the R key, a notation roll and a share-link replay all want the whole table.
+ * With `ids` (physics body ids) exactly those dice are thrown and the rest are
+ * left where they lie — a game re-throwing what it did not set aside.
+ *
+ * The throw's pose and kick for each die come from the seeded stream in table
+ * order, so the same seed over the same dice set and the same `ids` lands the
+ * same faces on every page.
+ *
+ * @param _scene unused — kept for call-site compatibility
+ * @param _world unused — kept for call-site compatibility
+ * @returns the physics ids of the dice that were thrown, in throw order
  */
-export const throwDice = (scene: any, world: any, seed: any = null) => {
+export const throwDice = (
+    _scene: unknown,
+    _world: unknown,
+    seed: number | null = null,
+    options: ThrowDiceOptions = {}
+): number[] => {
     const engine = isUsingWasmPhysics() ? getWasmEngine() : null;
 
     const useDeterministic = seed !== null;
-    const throwDiceList = spawnedDice.map((die, index) => ({
-        id: die.wasmId ?? index,
-        index,
-    }));
+    const targets = selectThrowDice(spawnedDice, options);
+    const throwDiceList = targets.map(({ id, index }) => ({ id, index }));
     const wasmDice = engine
-        ? throwDiceList.filter((d) => spawnedDice[d.index]?.wasmId != null)
+        ? targets.filter(({ die }) => die.wasmId != null).map(({ id, index }) => ({ id, index }))
         : [];
 
     let paramsById = null;
@@ -76,7 +89,7 @@ export const throwDice = (scene: any, world: any, seed: any = null) => {
         return getSecureRandom();
     };
 
-    spawnedDice.forEach((die, index) => {
+    targets.forEach(({ die, id, index }) => {
         let x;
         let y;
         let z;
@@ -88,8 +101,7 @@ export const throwDice = (scene: any, world: any, seed: any = null) => {
         let spinY;
         let spinZ;
 
-        const paramKey = die.wasmId ?? index;
-        const preset = paramsById?.get(paramKey);
+        const preset = paramsById?.get(id);
         if (paramsById) {
             if (!preset) return;
             ({ x, y, z, forceX, forceY, forceZ, spinX, spinY, spinZ } = preset);
@@ -117,6 +129,8 @@ export const throwDice = (scene: any, world: any, seed: any = null) => {
             }
         }
     });
+
+    return targets.map(({ id }) => id);
 };
 
 export function applyFlickImpulseToDice(

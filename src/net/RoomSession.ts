@@ -50,6 +50,8 @@ export interface RemoteRollMessage {
     diceCounts: Record<string, number> | null;
     /** `'tower'` replays as a dice-tower drop; anything else is a throw. */
     source?: string | null;
+    /** Table slots a partial throw moved; absent / null = every die. */
+    ids?: number[] | null;
 }
 
 export interface RemoteCommitMessage {
@@ -130,6 +132,8 @@ interface LastRoll {
     /** See `RemoteRollMessage.source` — persisted so a late joiner's table
      *  sync replays the host's last roll the way the host rolled it. */
     source?: string | null;
+    /** See `RemoteRollMessage.ids` — a late joiner replays the same subset. */
+    ids?: number[] | null;
     results?: unknown;
 }
 
@@ -341,12 +345,14 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                         notation: msg.notation ?? null,
                         diceCounts: msg.diceCounts ?? null,
                         source: msg.source ?? null,
+                        ids: msg.ids ?? null,
                     });
                     lastRoll = {
                         seed: msg.seed >>> 0,
                         notation: msg.notation ?? null,
                         diceCounts: msg.diceCounts ?? deps.getDiceCounts(),
                         source: msg.source ?? null,
+                        ids: msg.ids ?? null,
                     };
                 } catch (err) {
                     console.warn('[RoomSession] remote roll failed', err);
@@ -569,6 +575,8 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                 expression?: string | null;
                 diceSet?: Record<string, number>;
                 source?: string;
+                /** Table slots of a partial throw (absent = every die). */
+                ids?: number[];
                 commit?: CommitFields;
                 reveal?: {
                     seed: number;
@@ -624,6 +632,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                     presence: deps.getPresencePayload(),
                     throwAt: performance.now(),
                     source: p.source ?? null,
+                    ids: p.ids ?? null,
                 },
                 protocolVersion
             );
@@ -632,6 +641,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                 notation: p.expression ?? null,
                 diceCounts,
                 source: p.source ?? null,
+                ids: p.ids ?? null,
             };
             broadcastEncoded(msg);
             broadcastEncoded(buildPresenceMsg());

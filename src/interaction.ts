@@ -16,6 +16,7 @@ import {
 import { spawnedProps } from './environment/DynamicPropState.js';
 import { propWasmGrabDriver } from './environment/DynamicPropSync.js';
 import type { InteractionHooks } from './types/interaction.js';
+import type { SpawnedDie } from './types/dice.js';
 
 interface InteractiveObjectEntry {
     mesh: THREE.Object3D;
@@ -75,6 +76,11 @@ let lastClickTime = 0;
 let lastClickObject: THREE.Object3D | null = null;
 const DOUBLE_CLICK_DELAY = 300;
 
+/** Set from `hooks.isDieGrabbable`: dice it rejects are neither grabbed nor hover-highlighted. */
+let isDieGrabbable: ((die: SpawnedDie) => boolean) | null = null;
+const grabbableDice = () =>
+    isDieGrabbable ? spawnedDice.filter((d) => isDieGrabbable?.(d) !== false) : spawnedDice;
+
 /** @type {InteractiveObjectEntry[]} */
 const interactiveObjects: InteractiveObjectEntry[] = [];
 
@@ -85,6 +91,7 @@ const interactiveObjects: InteractiveObjectEntry[] = [];
  * @param {InteractionHooks} [hooks]
  */
 export const initInteraction = (camera: any, scene: any, physicsWorld: any, hooks: any = {}) => {
+    isDieGrabbable = hooks.isDieGrabbable ?? null;
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
 
@@ -169,7 +176,7 @@ function onPointerDown(x: any, y: any, camera: any, scene: any, hooks: any = {})
 
     if (isCupInteractionActive()) return;
 
-    const diceGroups = spawnedDice.map((d) => d.mesh);
+    const diceGroups = grabbableDice().map((d) => d.mesh);
     const intersects = raycaster.intersectObjects(diceGroups, true);
 
     if (intersects.length > 0) {
@@ -308,7 +315,7 @@ export const isHoveringOverDice = (camera: any, normX: any, normY: any) => {
     mouse.x = normX;
     mouse.y = normY;
     raycaster.setFromCamera(mouse, camera);
-    const meshes = spawnedDice.map((d) => d.mesh);
+    const meshes = grabbableDice().map((d) => d.mesh);
     const intersects = raycaster.intersectObjects(meshes, true);
     return intersects.length > 0;
 };

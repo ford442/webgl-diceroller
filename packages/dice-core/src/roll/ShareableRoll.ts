@@ -14,13 +14,17 @@ import { getGlobalLocation, getSubtleCrypto } from '../runtimeEnv.js';
  * v2: adds `?src=`, the gameplay path that produced the roll — a tower dump
  *     is a different set of poses from the same seed, so a v1 client must not
  *     silently replay one as a throw.
+ * v3: adds `?ids=`, the table slots a partial throw moved (a game re-throwing
+ *     the dice it did not set aside). Without it a client throws every die, and
+ *     the same seed draws a different pose for each one, so an older client must
+ *     reject the link rather than replay it as a full throw.
  *
  * Bump when solver/throw semantics change.
  */
-export const REPLAY_VERSION = 2;
+export const REPLAY_VERSION = 3;
 
 /** Every version this build can still replay. Older links keep working. */
-export const SUPPORTED_REPLAY_VERSIONS: readonly number[] = [1, 2];
+export const SUPPORTED_REPLAY_VERSIONS: readonly number[] = [1, 2, 3];
 
 /** Query param carrying the gameplay path a shared roll came from. */
 export const ROLL_SOURCE_PARAM = 'src';
@@ -41,6 +45,50 @@ const MIN_VERSION_FOR_SOURCE: Record<RollSource, number> = {
     throw: 1,
     tower: 2,
 };
+
+/**
+ * Query param naming the dice a partial throw moved. Absent means "all of
+ * them", which is what every link written before v3 meant.
+ */
+export const ROLL_IDS_PARAM = 'ids';
+
+/** The oldest format version that can express an `ids` list. */
+const MIN_VERSION_FOR_IDS = 3;
+
+/** A sane ceiling on a table: 10 of each of the catalog's dice, with headroom. */
+const MAX_ROLL_IDS = 128;
+
+/**
+ * A die on the wire is its **table slot**: its zero-based position in the dice
+ * set, i.e. its index in `readAllDiceValues()` — the same order `?dice=` expands
+ * in. It is deliberately not the physics body id, which the engine hands out
+ * per session (a page that rolled before the replay has burned ids a fresh page
+ * has not), so a link that carried body ids would name different dice on the
+ * receiver.
+ */
+export type RollSlots = readonly number[];
+
+/** `[5, 0, 2, 2]` → `0,2,5`; null when there is nothing partial to say. */
+export function serializeRollIds(ids: RollSlots | null | undefined): string | null {
+    if (!ids?.length) return null;
+    const slots = [...new Set(ids)]
+        .filter((n) => Number.isInteger(n) && n >= 0)
+        .sort((a, b) => a - b);
+    return slots.length ? slots.join(',') : null;
+}
+
+/** The slots an `ids` param names, ascending and unique; null reads as "all". */
+export function parseRollIds(raw: string | null | undefined): number[] | null {
+    if (!raw?.trim()) return null;
+    const slots = new Set<number>();
+    for (const part of raw.split(',')) {
+        const trimmed = part.trim();
+        if (!/^\d+$/.test(trimmed)) continue;
+        const n = Number.parseInt(trimmed, 10);
+        if (n < MAX_ROLL_IDS) slots.add(n);
+    }
+    return slots.size ? [...slots].sort((a, b) => a - b) : null;
+}
 
 export function parseRollSource(raw: string | null | undefined): RollSource | null {
     const trimmed = raw?.trim();
@@ -72,6 +120,8 @@ export interface ShareableRollParams {
     expression: string | null;
     system: string | null;
     source: RollSource;
+    /** Table slots a partial throw moved; null = every die (all pre-v3 links). */
+    ids: number[] | null;
     version: number;
 }
 
@@ -86,6 +136,12 @@ export interface ShareableRollExtras {
     system?: string | null;
     /** Defaults to `'throw'`; `'tower'` replays the roll as a dice-tower dump. */
     source?: string | null;
+    /**
+     * Table slots of a partial throw (see `RollSlots`). Absent or empty means
+     * the roll moved every die. Written at v3, since an older client would
+     * ignore it and throw them all.
+     */
+    ids?: RollSlots | null;
     /**
      * The table layout the roll landed on (TableLayoutConfig). Written as
      * `layout-seed` + `density` + `theme`, which the receiving page's layout
@@ -171,6 +227,10 @@ export function parseShareableRollParams(
             ? (parseRollSource(searchParams.get(ROLL_SOURCE_PARAM)) ?? DEFAULT_ROLL_SOURCE)
             : DEFAULT_ROLL_SOURCE;
 
+    // Same rule as `src`: a link older than the param cannot have meant it.
+    const ids =
+        version >= MIN_VERSION_FOR_IDS ? parseRollIds(searchParams.get(ROLL_IDS_PARAM)) : null;
+
     const diceCounts = parseDiceParam(searchParams.get('dice') ?? '');
     const expressionRaw = searchParams.get('expr') ?? searchParams.get('expression');
     const expression = expressionRaw?.trim() ? expressionRaw.trim() : null;
@@ -183,6 +243,7 @@ export function parseShareableRollParams(
         expression,
         system,
         source,
+        ids,
         version,
     };
 }
@@ -205,7 +266,13 @@ export function buildShareableRollUrl(
     const url = new URL(baseUrl ?? getGlobalLocation()?.href ?? 'http://localhost/');
     const source = parseRollSource(extras.source) ?? DEFAULT_ROLL_SOURCE;
     url.searchParams.set('seed', String(seed >>> 0));
-    url.searchParams.set('v', String(MIN_VERSION_FOR_SOURCE[source]));
+    const ids = serializeRollIds(extras.ids);
+    url.searchParams.set(
+        'v',
+        String(Math.max(MIN_VERSION_FOR_SOURCE[source], ids ? MIN_VERSION_FOR_IDS : 0))
+    );
+    if (ids) url.searchParams.set(ROLL_IDS_PARAM, ids);
+    else url.searchParams.delete(ROLL_IDS_PARAM);
     if (source === DEFAULT_ROLL_SOURCE) url.searchParams.delete(ROLL_SOURCE_PARAM);
     else url.searchParams.set(ROLL_SOURCE_PARAM, source);
     const dice = serializeDiceCounts(counts ?? {});

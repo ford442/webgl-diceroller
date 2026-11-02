@@ -145,7 +145,7 @@ export const TIER_PROP_DEFINITIONS = {
                     trigger: () => ctx.callbacks.onDiceJailInteract?.(),
                     hold: (idsOrNearby) =>
                         ctx.callbacks.getDiceJailController?.()?.hold(idsOrNearby),
-                    release: () => ctx.callbacks.getDiceJailController?.()?.release(),
+                    release: (ids) => ctx.callbacks.getDiceJailController?.()?.release(ids),
                     getState: () =>
                         ctx.callbacks.getDiceJailController?.()?.getState() ?? { available: false },
                 });

@@ -48,6 +48,26 @@ describe('multiplayer protocol', () => {
         expect(revealed.msg.source).toBe('tower');
     });
 
+    it('carries the slots of a partial throw, and says nothing for a whole-table roll', () => {
+        // A game re-throwing the dice it did not set aside: a guest that threw
+        // every die with the same seed would pose each one differently.
+        const partial = decode(
+            encodeMessage(makeRoll({ seed: 9, diceCounts: { d6: 6 }, ids: [1, 3, 4] }))
+        );
+        expect(partial.ok).toBe(true);
+        expect(partial.msg.ids).toEqual([1, 3, 4]);
+
+        // Absent means every die, and the wire shape of an ordinary roll is
+        // unchanged — a host on an older build still agrees with this one.
+        for (const ids of [undefined, null, []]) {
+            const whole = makeRoll({ seed: 9, diceCounts: { d6: 6 }, ids });
+            expect('ids' in whole).toBe(false);
+            const decoded = decode(encodeMessage(whole));
+            expect(decoded.ok).toBe(true);
+            expect(decoded.msg.ids).toBeUndefined();
+        }
+    });
+
     it('round-trips a roll message', () => {
         const msg = makeRoll({
             seed: 42424242,

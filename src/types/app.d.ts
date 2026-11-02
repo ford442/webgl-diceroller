@@ -68,6 +68,8 @@ export interface PendingRollMeta {
     expression: string | null;
     diceSet: Record<string, number>;
     source?: string;
+    /** Table slots a partial throw moved (a game re-throwing what it did not set aside). */
+    slots?: number[];
 }
 
 export interface TierLoadCallbacks {
@@ -243,6 +245,25 @@ export interface AppContextDice {
 }
 
 /** Late-bound by `SessionWiring`; the slot itself is owned by `createAppContext()`. */
+/**
+ * Table-game controls for automation (`window.__app.game`). Declared here, not
+ * imported from GameWiring, so the type layer stays a leaf of the import graph.
+ * `submit` / `getSnapshot` are `unknown`-typed on purpose: the action and
+ * snapshot shapes belong to the rules module (dice-core) and GameSession.
+ */
+export interface AppContextGame {
+    start(options?: {
+        seed?: number;
+        config?: { targetScore?: number; maxRounds?: number };
+        pace?: { think?: number; afterThrow?: number };
+    }): Promise<unknown>;
+    stop(): Promise<void>;
+    isActive(): boolean;
+    getSnapshot(): unknown;
+    submit(action: unknown): { ok: true } | { ok: false; error: string };
+    rethrow(): { ok: true } | { ok: false; error: string };
+}
+
 export interface AppContextSession {
     getSnapshot?: () => unknown;
     applyRemoteSession?: (msg: unknown) => void;
@@ -311,6 +332,8 @@ export interface AppContext {
     REPLAY_VERSION: number | null;
     multiplayer?: unknown;
     session: AppContextSession | null;
+    /** Table game (Farkle) controls — see src/app/GameWiring.ts. Null without physics. */
+    game: AppContextGame | null;
     xrResultsHud?: unknown;
     /** WebXR seated-table spike API when `?xr` is set. */
     xr?: unknown;

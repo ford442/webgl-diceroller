@@ -804,3 +804,88 @@
         animation-duration: 0.001ms !important;
     }
 }
+
+/* ---------------------------------------------------------------------
+ * Table game panel (Farkle) — chrome comes from .hud-panel; these are only
+ * the game's own rows.
+ * ------------------------------------------------------------------- */
+
+.hud-game {
+    min-width: 232px;
+    max-width: 280px;
+}
+.hud-game__blurb,
+.hud-game__last {
+    color: var(--hud-fg-muted);
+    font-size: 0.85em;
+}
+.hud-game__seats {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.hud-game__seat {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--hud-gap);
+    padding: 2px 6px;
+    border-radius: var(--hud-radius-sm);
+}
+.hud-game__seat[data-current='true'] {
+    background: rgba(201, 168, 76, 0.18);
+    color: var(--hud-fg-strong);
+}
+.hud-game__seat-score {
+    font-variant-numeric: tabular-nums;
+}
+.hud-game__turn {
+    font-weight: bold;
+}
+.hud-game__status {
+    color: var(--hud-fg-strong);
+}
+.hud-game__notice {
+    color: var(--hud-fg-strong);
+    font-style: italic;
+}
+.hud-game__result {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: var(--hud-fg-strong);
+}
+.hud-game__dice {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.hud-game__die {
+    font-size: 1.6em;
+    line-height: 1;
+    min-width: 2em;
+    padding: 2px 6px;
+}
+.hud-game__die[data-zone='held'] {
+    opacity: 0.55;
+    border-style: dashed;
+}
+.hud-game__die[data-zone='free'] {
+    opacity: 0.8;
+}
+.hud-game__die[data-selected='true'] {
+    outline: 2px solid var(--hud-fg-strong);
+    background: rgba(201, 168, 76, 0.25);
+}
+.hud-game__die[data-cocked='true'] {
+    border-color: #e0794a;
+}
+.hud-game__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.hud-game__primary {
+    font-weight: bold;
+}

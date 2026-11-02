@@ -42,7 +42,7 @@ export function initResultsUI() {
 /**
  * Always-visible HUD showing the current value of each die on the table.
  * @param {DiceReadValue[]} diceResults
- * @param {{ rolling?: boolean }} [options]
+ * @param {{ rolling?: boolean, hidden?: boolean, debugRows?: unknown }} [options]
  */
 export function updateDiceHud(diceResults, options = {}) {
     if (!diceHudRow) return;

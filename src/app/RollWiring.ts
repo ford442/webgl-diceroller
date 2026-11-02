@@ -16,6 +16,8 @@ import {
     readDiceValueAllowingCocked,
 } from '../dice.js';
 import { createSettleWatch } from 'dice-core/roll/SettleWatch';
+import type { ThrowDiceOptions } from '../dice/DiceThrow.js';
+import { diceIdsForSlots, slotsForDiceIds } from '../dice/DiceThrowSelection.js';
 import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
 import { DiceFocusState } from '../core/CameraController.js';
 import { showResults, hideResults, showNotationResults } from '../results.js';
@@ -88,6 +90,11 @@ interface DiceTowerControllerLike {
     ) => Promise<number[]> | number[];
 }
 
+/** What the roll wiring needs from the jail to keep the dice a throw leaves out still. */
+interface DiceJailControllerLike {
+    hold: (idsOrNearby: 'nearby' | number[]) => number;
+}
+
 interface CollisionAudioLike {
     handleCollisionEvent: (ev: unknown) => void;
     checkCollisionPropReactions?: (ev: unknown) => void;
@@ -116,6 +123,18 @@ export interface RollWiringDeps {
      */
     getDiceTowerController?: () => DiceTowerControllerLike | null | undefined;
     /**
+     * A partial throw replayed from a link or a message must not be disturbed
+     * by the dice it leaves out, so those are parked in the jail first. Like the
+     * tower, it loads on a later tier: a getter that may return null.
+     */
+    getDiceJailController?: () => DiceJailControllerLike | null | undefined;
+    /**
+     * A game that owns the table claims every "throw everything" press (R, Roll
+     * All, the results re-roll): returning true means it handled the press and
+     * `roll` must not throw the free dice behind its back.
+     */
+    interceptRoll?: () => boolean;
+    /**
      * The table layout the roll landed on. Its seed rides the share URL: the
      * clutter scattered around the dice zone is part of the collider world, so
      * a replay on a different layout is a different simulation.
@@ -129,11 +148,32 @@ interface LastRollRef {
     source?: string;
     expression?: string | null;
     system?: string;
+    /** Table slots a partial throw moved; absent / null = every die. */
+    ids?: number[] | null;
+}
+
+interface RollOptions {
+    /** Table slots to throw (a replayed partial throw); absent = every free die. */
+    slots?: readonly number[] | null;
 }
 
 interface RollHandlerRef {
-    roll: ((explicitSeed?: number | null) => Promise<number | undefined>) | null;
+    roll:
+        | ((explicitSeed?: number | null, options?: RollOptions) => Promise<number | undefined>)
+        | null;
     lastRoll: LastRollRef | null;
+}
+
+/** How a game's throw ended, read back for the dice it asked to throw. */
+export interface SubsetThrowOutcome {
+    /** Faces, index-aligned with the ids asked for; null when a die could not be read. */
+    values: Array<number | null>;
+    /** Asked-for ids whose die never lay flat (only a timed-out roll can leave one). */
+    cocked: number[];
+    timedOut: boolean;
+    reason: string | null;
+    /** Another roll started before this one settled; `values` are not this throw's. */
+    superseded: boolean;
 }
 
 interface NotationRollOptions {
@@ -249,6 +289,88 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         return seed;
     }
 
+    /**
+     * A game's throw: move exactly `ids` (physics ids) with `seed`, and resolve
+     * with what *this* throw landed once its own `ROLL_SETTLED` arrives.
+     *
+     * It is a seeded roll like a tower drop — the seed reaches the share URL
+     * with the slots it moved, so a link reproduces the partial throw — but it
+     * is deliberately not a notation roll and not a fair-commit one: a game's
+     * seed comes from the game's own RNG, and Farkle has nothing hidden to
+     * commit to. The generic results overlay stays out of it (see the settled
+     * subscriber); the game panel reports the faces.
+     */
+    function throwSubset(ids: readonly number[], seed: number): Promise<SubsetThrowOutcome> {
+        const slots = slotsForDiceIds(spawnedDice, ids);
+        if (!slots.length) {
+            return Promise.resolve({
+                values: ids.map(() => null),
+                cocked: [],
+                timedOut: false,
+                reason: null,
+                superseded: false,
+            });
+        }
+        const seed32 = seed >>> 0;
+        pendingRollMeta = {
+            seed: seed32,
+            expression: null,
+            diceSet: captureDiceSet(),
+            source: 'game',
+            slots,
+        };
+        rollHandlerRef.lastRoll = {
+            seed: seed32,
+            counts: getSpawnedDiceCounts(),
+            system: activeRollSystem,
+            ids: slots,
+        };
+        getShadowController()?.pulse('roll');
+        getDiceGameFeel()?.clearRollState();
+        hideResults();
+        const lampData = getLampData();
+        if (lampData) lampData.setRolling(true);
+
+        // Listen before the dice move: nothing between here and the settle can
+        // be missed, and the settle that arrives is the one for this throw.
+        let started = rollState.startedCount;
+        const settled = new Promise<SubsetThrowOutcome>((resolve) => {
+            const off = appEvents.on(AppEvent.ROLL_SETTLED, (payload) => {
+                off();
+                const done = payload as
+                    | {
+                          results?: Array<{ value: number | null; cocked?: boolean }>;
+                          timedOut?: boolean;
+                          reason?: string | null;
+                      }
+                    | undefined;
+                const rows = done?.results ?? [];
+                const values = ids.map((id) => {
+                    const slot = slotsForDiceIds(spawnedDice, [id])[0];
+                    return slot === undefined ? null : (rows[slot]?.value ?? null);
+                });
+                const cocked = ids.filter((id, i) => {
+                    const slot = slotsForDiceIds(spawnedDice, [id])[0];
+                    return slot === undefined || values[i] === null || rows[slot]?.cocked === true;
+                });
+                resolve({
+                    values,
+                    cocked,
+                    timedOut: done?.timedOut === true,
+                    reason: done?.reason ?? null,
+                    // ROLL_STARTED bumped the count once for us; any more is another roll.
+                    superseded: rollState.startedCount !== started,
+                });
+            });
+        });
+
+        throwDice(getScene(), getPhysicsWorld(), seed32, { ids });
+        getCameraController()?.setState(DiceFocusState.WAITING_FOR_STOP);
+        emitRollStarted({ source: 'game', seed: seed32 });
+        started = rollState.startedCount;
+        return settled;
+    }
+
     async function broadcastFairCommit(
         seed: number,
         expression: string | null,
@@ -288,18 +410,23 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
     function beginRoll(
         seed: number | null = null,
         expression: string | null = null,
-        meta: Record<string, unknown> = {}
+        meta: Record<string, unknown> = {},
+        throwOptions: ThrowDiceOptions = {}
     ): void {
+        const slots = throwOptions.ids?.length
+            ? slotsForDiceIds(spawnedDice, throwOptions.ids)
+            : null;
         pendingRollMeta = {
             seed: seed ?? null,
             expression: expression ?? null,
             diceSet: captureDiceSet(),
+            ...(slots ? { slots } : {}),
             ...meta,
         };
         const shadowController = getShadowController();
         shadowController?.pulse('roll');
         getDiceGameFeel()?.clearRollState();
-        throwDice(getScene(), getPhysicsWorld(), seed);
+        throwDice(getScene(), getPhysicsWorld(), seed, throwOptions);
         getCameraController()?.setState(DiceFocusState.WAITING_FOR_STOP);
         hideResults();
         const lampData = getLampData();
@@ -313,20 +440,52 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             expression: pendingRollMeta.expression,
             diceSet: pendingRollMeta.diceSet,
             source: pendingRollMeta.source,
+            ...(pendingRollMeta.slots ? { ids: pendingRollMeta.slots } : {}),
             ...extra,
         });
     }
 
+    /**
+     * A partial throw replayed from elsewhere (a share link, a room message) is
+     * only reproducible if the dice it leaves out cannot interfere, and a freshly
+     * spawned die sits wherever the spawn put it. Parking them in the jail makes
+     * them kinematic and out of the dice zone, so the same seed over the same
+     * slots lands the same faces every time. (A live game never needs this:
+     * the dice it does not throw are already held there.)
+     */
+    function parkUnthrown(thrownIds: readonly number[]): void {
+        const thrown = new Set(thrownIds);
+        const rest = spawnedDice
+            .filter((die: { wasmId?: number | null; kinematic?: boolean }) => {
+                return die.wasmId != null && !thrown.has(die.wasmId) && !die.kinematic;
+            })
+            .map((die: { wasmId?: number | null }) => die.wasmId as number);
+        if (!rest.length) return;
+        const jail = deps.getDiceJailController?.();
+        if (!jail) {
+            console.warn(
+                '[Roll] partial throw replayed without the dice jail loaded; the dice it ' +
+                    'leaves out stay on the table and may disturb the throw.'
+            );
+            return;
+        }
+        jail.hold(rest);
+    }
+
     function handleResultsReady(results: DiceReadValue[]): void {
+        // A partial throw moved only some dice; history and fairness stats must
+        // not count the ones it left alone (held in the jail) a second time.
+        const moved = pendingRollMeta.slots;
+        const thrown = moved ? results.filter((_, slot) => moved.includes(slot)) : results;
         // RollHistory/RollStats model settled dice as `{ type, value: number }`;
         // `value` is only ever null mid-roll, never once results are ready.
-        const settled = results as unknown as Array<{ type: string; value: number }>;
+        const settled = thrown as unknown as Array<{ type: string; value: number }>;
         rollHistory?.appendRoll(settled, pendingRollMeta);
         rollStats?.recordResults(settled);
         getFairnessMonitor()?.render();
         getRollHistoryPanel()?.refresh();
-        getDiceGameFeel()?.onResultsReady(results);
-        multiplayerRef.current?.recordSettledResults?.(results);
+        getDiceGameFeel()?.onResultsReady(thrown);
+        multiplayerRef.current?.recordSettledResults?.(thrown);
         pendingRollMeta = { seed: null, expression: null, diceSet: {} };
     }
 
@@ -357,7 +516,10 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             rollState.settledCount += 1;
             rollState.lastTimeoutReason = settled?.timedOut ? (settled.reason ?? null) : null;
             rollState.lastResults = results;
-            if (!shouldDeferAutoResults()) {
+            // A game throw reports to the game panel: the generic overlay would
+            // list the dice held in the jail too, and its "re-roll" would throw
+            // outside the game.
+            if (!shouldDeferAutoResults() && pendingRollMeta.source !== 'game') {
                 showResults(results as DiceReadValue[], {
                     timedOut: settled?.timedOut === true,
                     onReroll: () => void rollHandlerRef.roll?.(null),
@@ -449,19 +611,28 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         });
         app.rollSession = rollSessionRef.current;
 
-        rollHandlerRef.roll = async (explicitSeed: number | null = null) => {
+        rollHandlerRef.roll = async (
+            explicitSeed: number | null = null,
+            options: RollOptions = {}
+        ) => {
             if (multiplayerRef.current?.isGuest()) return;
+            if (deps.interceptRoll?.()) return;
             const seed = explicitSeed ?? generateRollSeed();
             const diceSet = captureDiceSet();
+            const ids = options.slots?.length ? diceIdsForSlots(spawnedDice, options.slots) : null;
+            const slots = ids ? slotsForDiceIds(spawnedDice, ids) : null;
+            if (ids) parkUnthrown(ids);
             rollHandlerRef.lastRoll = {
                 seed: seed >>> 0,
                 counts: getSpawnedDiceCounts(),
+                ...(slots ? { ids: slots } : {}),
             };
             pendingRollMeta = {
                 seed: seed >>> 0,
                 expression: null,
                 diceSet,
                 source: 'ui',
+                ...(slots ? { slots } : {}),
             };
             const shadowController = getShadowController();
             shadowController?.pulse('roll');
@@ -469,10 +640,15 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             hideResults();
             const lampData = getLampData();
             if (lampData) lampData.setRolling(true);
-            await broadcastFairCommit(seed, null, diceSet, 'ui');
-            throwDice(getScene(), getPhysicsWorld(), seed);
+            // The commitment does not bind a subset yet, so a partial throw
+            // skips the commit-reveal broadcast (and so is not sent at all
+            // under ?fair-commit) rather than let a host pick ids afterwards.
+            if (!ids) {
+                await broadcastFairCommit(seed, null, diceSet, 'ui');
+            }
+            throwDice(getScene(), getPhysicsWorld(), seed, ids ? { ids } : {});
             getCameraController()!.setState(DiceFocusState.WAITING_FOR_STOP);
-            if (!useFairCommit) {
+            if (!useFairCommit || ids) {
                 emitRollStarted({ source: 'ui', seed: seed >>> 0 });
             }
             return seed;
@@ -558,6 +734,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             expression: last.expression ?? null,
             system: last.system ?? null,
             source: last.source === 'tower' ? 'tower' : null,
+            ids: last.ids ?? null,
             layout: deps.getTableLayoutConfig?.() ?? null,
         });
     }
@@ -598,6 +775,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         notation,
         diceCounts,
         source,
+        ids: slots,
     }: RemoteRollMessage): Promise<void> {
         if (diceCounts) {
             updateDiceSet(getScene(), getPhysicsWorld(), diceCounts);
@@ -615,11 +793,15 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             return;
         }
 
+        // A subset the host named; the dice it left out sit this one out.
+        const subset = slots?.length ? diceIdsForSlots(spawnedDice, slots) : null;
+        if (subset) parkUnthrown(subset);
         pendingRollMeta = {
             seed: seed >>> 0,
             expression: notation,
             diceSet: diceCounts ?? captureDiceSet(),
             source: 'remote',
+            ...(subset ? { slots: slotsForDiceIds(spawnedDice, subset) } : {}),
         };
         hideResults();
         const shadowController = getShadowController();
@@ -634,7 +816,8 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             beginRoll(
                 seed,
                 notation,
-                diceCounts ? { source: 'remote', diceSet: diceCounts } : { source: 'remote' }
+                diceCounts ? { source: 'remote', diceSet: diceCounts } : { source: 'remote' },
+                subset ? { ids: subset } : {}
             );
         }
     }
@@ -650,6 +833,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
                   notation?: string | null;
                   diceCounts?: Record<string, number> | null;
                   source?: string | null;
+                  ids?: number[] | null;
               }
             | null
             | undefined;
@@ -671,7 +855,14 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             } else if (last.diceCounts) {
                 updateDiceSet(getScene(), getPhysicsWorld(), last.diceCounts);
                 await whenDiceRegistered();
-                beginRoll(last.seed, null, { source: 'remote-sync', diceSet: last.diceCounts });
+                const subset = last.ids?.length ? diceIdsForSlots(spawnedDice, last.ids) : null;
+                if (subset) parkUnthrown(subset);
+                beginRoll(
+                    last.seed,
+                    null,
+                    { source: 'remote-sync', diceSet: last.diceCounts },
+                    subset ? { ids: subset } : {}
+                );
             } else {
                 beginRoll(last.seed ?? null, null, { source: 'remote-sync' });
             }
@@ -724,7 +915,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
                             console.warn('[ShareableRoll] expression replay failed', err)
                         );
                 } else {
-                    rollHandlerRef.roll?.(replayRequest.seed);
+                    rollHandlerRef.roll?.(replayRequest.seed, { slots: replayRequest.ids });
                 }
             }
         }
@@ -740,6 +931,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         beginCupRoll,
         beginTowerRoll,
         beginRoll,
+        throwSubset,
         initRollSession,
         createNotationHooks,
         hasShareableRoll,
