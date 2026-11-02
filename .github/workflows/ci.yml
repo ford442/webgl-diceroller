@@ -379,6 +379,11 @@ jobs:
                     - test:wasm-gameplay-loop
                     - test:share-roll-replay
                     - test:roll-timeout
+                    # A throw that names its dice: R skips a held die, and a
+                    # partial-throw share link replays the same faces twice.
+                    - test:partial-throw
+                    # Solo Farkle against the bot, played to an outcome.
+                    - test:game-farkle
                     # Default route (no ?webgl) on SwiftShader must reach
                     # ready on the classic WebGLRenderer; ?overlay has alpha.
                     - test:default-route

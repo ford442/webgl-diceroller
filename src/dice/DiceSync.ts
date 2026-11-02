@@ -131,6 +131,9 @@ let _warnedMissingKinematic = false;
 export const setDieWasmKinematic = (mesh: Object3D, kinematic: boolean): void => {
     const die = findSpawnedDieByMesh(mesh);
     if (!isUsingWasmPhysics() || !die || die.wasmId == null) return;
+    // Recorded before the engine call so that a build without setDieKinematic
+    // (velocity-clamp fallback below) still keeps a held die out of a throw.
+    die.kinematic = kinematic;
     const engine = getWasmEngine();
     if (typeof engine.setDieKinematic === 'function') {
         engine.setDieKinematic(die.wasmId, kinematic);

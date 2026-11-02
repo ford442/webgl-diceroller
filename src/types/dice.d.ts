@@ -6,6 +6,12 @@ export interface SpawnedDie {
     mesh: import('three').Mesh;
     type: string;
     wasmId?: number | null;
+    /**
+     * Mirrors the engine's kinematic flag, written only by `setDieWasmKinematic`
+     * (the one door every grab, cup, tray and jail goes through). A kinematic
+     * die is held by something — a throw with no explicit id list skips it.
+     */
+    kinematic?: boolean;
     physicsPreset?: PhysicsPreset;
     audioBodyId?: number;
     inertiaScalar?: number;

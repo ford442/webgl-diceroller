@@ -125,6 +125,15 @@ which moved with `SOLVER_REVISION` in the same change. A guest whose scene has
 no tower (low tier) skips the replay with a console warning rather than falling
 back to a throw.
 
+`ids` on `roll` (and on the persisted `lastRoll`) names the **table slots** a
+partial throw moved — a game re-throwing the dice it did not set aside. Absent
+means every die, which is what every roll before the field meant, so an ordinary
+roll is byte-identical on the wire. A guest throws exactly those slots (after
+parking the others in its jail) with the same seed. Slots, not physics ids: the
+engine numbers bodies per session. The v2 commitment does not bind a subset yet,
+so a partial throw is not sent under `?fair-commit`; the table-game slice that
+puts a game in a room (`{ action, seed, ids }` on this path) will have to bind it.
+
 Signaling Worker relays SDP/ICE (`signal`), peer join/leave, and `room-snapshot` on reconnect. Host pushes `room-state` over the signaling WebSocket for DO persistence.
 
 ### Mismatch errors

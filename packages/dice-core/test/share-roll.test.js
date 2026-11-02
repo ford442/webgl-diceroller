@@ -8,11 +8,15 @@ import {
     REPLAY_VERSION,
     ROLL_SOURCE_PARAM,
     buildShareableRollUrl,
+    ROLL_IDS_PARAM,
+    SUPPORTED_REPLAY_VERSIONS,
     parseDiceParam,
+    parseRollIds,
     parseRollSource,
     parseShareableRollDiceSet,
     parseShareableRollParams,
     serializeDiceCounts,
+    serializeRollIds,
 } from 'dice-core/roll/ShareableRoll';
 import { computeSeededThrowParams, createSeededRng } from 'dice-core/wasm/seededThrowParams';
 
@@ -130,6 +134,84 @@ describe('ShareableRoll', () => {
         const result = parseShareableRollParams(params);
         if (!result || 'error' in result) throw new Error('expected a successful parse');
         expect(result.source).toBe('throw');
+    });
+
+    describe('partial throws (?ids=)', () => {
+        const base = 'http://example.test/roller';
+
+        it('writes the slots a partial throw moved, at v3', () => {
+            const url = buildShareableRollUrl(5, { d6: 6 }, base, null, { ids: [4, 1, 1, 3] });
+            const parsed = new URL(url);
+            expect(parsed.searchParams.get(ROLL_IDS_PARAM)).toBe('1,3,4');
+            // An older client would ignore `ids` and throw every die, landing
+            // different faces — so a link that needs it must not claim v<3.
+            expect(parsed.searchParams.get('v')).toBe('3');
+
+            const replay = parseShareableRollParams(parsed.searchParams);
+            if (!replay || 'error' in replay) throw new Error('expected a successful parse');
+            expect(replay.ids).toEqual([1, 3, 4]);
+            expect(replay.seed).toBe(5);
+            expect(replay.diceCounts.d6).toBe(6);
+        });
+
+        it('leaves a whole-table throw exactly as it was: no ids, still v1', () => {
+            const parsed = new URL(buildShareableRollUrl(5, { d6: 2 }, base));
+            expect(parsed.searchParams.get(ROLL_IDS_PARAM)).toBeNull();
+            expect(parsed.searchParams.get('v')).toBe('1');
+
+            const replay = parseShareableRollParams(parsed.searchParams);
+            if (!replay || 'error' in replay) throw new Error('expected a successful parse');
+            expect(replay.ids).toBeNull();
+        });
+
+        it('treats an empty or absent list as "every die"', () => {
+            for (const ids of [undefined, null, []]) {
+                const parsed = new URL(buildShareableRollUrl(5, { d6: 2 }, base, null, { ids }));
+                expect(parsed.searchParams.has(ROLL_IDS_PARAM)).toBe(false);
+                expect(parsed.searchParams.get('v')).toBe('1');
+            }
+        });
+
+        it('keeps the higher version when a tower drop is also partial', () => {
+            const parsed = new URL(
+                buildShareableRollUrl(5, { d6: 3 }, base, null, { source: 'tower', ids: [0, 2] })
+            );
+            expect(parsed.searchParams.get('v')).toBe('3');
+            expect(parsed.searchParams.get('src')).toBe('tower');
+            const replay = parseShareableRollParams(parsed.searchParams);
+            if (!replay || 'error' in replay) throw new Error('expected a successful parse');
+            expect(replay.source).toBe('tower');
+            expect(replay.ids).toEqual([0, 2]);
+        });
+
+        it('ignores ids on a v1/v2 link, which predates the param', () => {
+            for (const v of [1, 2]) {
+                const params = new URLSearchParams(`seed=7&v=${v}&ids=0,1`);
+                const result = parseShareableRollParams(params);
+                if (!result || 'error' in result) throw new Error('expected a successful parse');
+                expect(result.ids).toBeNull();
+            }
+        });
+
+        it('parses leniently: sorted, unique, junk dropped', () => {
+            expect(parseRollIds('3, 1,1,x,-2,2.5,')).toEqual([1, 3]);
+            expect(parseRollIds('')).toBeNull();
+            expect(parseRollIds(null)).toBeNull();
+            expect(parseRollIds('nope')).toBeNull();
+            expect(parseRollIds('9999')).toBeNull();
+        });
+
+        it('serializes ascending and unique, and says nothing for nothing', () => {
+            expect(serializeRollIds([5, 0, 2, 2])).toBe('0,2,5');
+            expect(serializeRollIds([])).toBeNull();
+            expect(serializeRollIds(null)).toBeNull();
+            expect(serializeRollIds([-1, 1.5])).toBeNull();
+        });
+
+        it('still reads every older version', () => {
+            expect(SUPPORTED_REPLAY_VERSIONS).toEqual([1, 2, 3]);
+            expect(REPLAY_VERSION).toBe(3);
+        });
     });
 
     it('round-trips notation expression + system', () => {

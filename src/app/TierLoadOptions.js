@@ -67,6 +67,12 @@ export function buildTierLoadOptions(app, deps) {
         },
         getDiceJailController,
         interactionHooks: {
+            // While a game owns the jail, the dice it set aside stay put: a
+            // drag would pull one out from under the rules.
+            isDieGrabbable: (die) => {
+                const jail = getDiceJailController()?.getState();
+                return !(jail?.locked && jail.heldIds?.includes(die.wasmId));
+            },
             onMotionActivityChange: (active, source) => {
                 const shadowController = getShadowController();
                 if (!shadowController) return;

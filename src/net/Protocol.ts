@@ -70,6 +70,14 @@ export interface RollFields {
      * rejected at join on `solverBuildId` (SOLVER_REVISION moved with it).
      */
     source?: string | null;
+    /**
+     * Table slots a partial throw moved (a game re-throwing the dice it did not
+     * set aside). Absent means every die — what every roll before this field
+     * meant, so old hosts and guests keep agreeing. Slots, not physics ids: the
+     * engine hands body ids out per session. Not part of the fair-commit
+     * preimage yet, so the host never sends it on that path.
+     */
+    ids?: number[] | null;
 }
 
 export interface CommitFields {
@@ -145,6 +153,8 @@ export interface RollMessage extends ProtocolEnvelope {
     presence: unknown;
     throwAt: number | null;
     source: string | null;
+    /** See `RollFields.ids`; omitted from the wire when the roll moved every die. */
+    ids?: number[];
 }
 
 export interface CommitMessage extends ProtocolEnvelope {
@@ -288,6 +298,7 @@ export function makeRoll(fields: RollFields, _version: number = PROTOCOL_VERSION
         presence: fields.presence ?? null,
         throwAt: fields.throwAt ?? null,
         source: fields.source ?? null,
+        ...(fields.ids?.length ? { ids: [...fields.ids] } : {}),
     };
 }
 

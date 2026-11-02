@@ -68,6 +68,7 @@ import { createRollWiring } from './app/RollWiring.js';
 import { installDebugGlobals } from './app/DebugGlobals.js';
 import { setupMultiplayer } from './app/MultiplayerWiring.js';
 import { setupSessionWiring } from './app/SessionWiring.js';
+import { setupGameWiring } from './app/GameWiring.js';
 import { isFairCommitEnabled } from './net/protocolFlags.js';
 import { bootstrapPhysics, showLoadFailure } from './app/PhysicsBootstrap.js';
 import { startPostLoadAdaptiveProbe } from './core/AdaptiveQuality.js';
@@ -164,6 +165,9 @@ let diceTrayController = null;
 let diceJailController = null;
 /** @type {{ current: ReturnType<typeof import('./net/RoomSession.js').createRoomSession> | null }} */
 const multiplayerRef = { current: null };
+/** The table game wiring, once built; RollWiring asks it to claim "throw everything" presses. */
+/** @type {{ current: ReturnType<typeof import('./app/GameWiring.js').setupGameWiring> | null }} */
+const gameRef = { current: null };
 
 function isSimulationReady() {
     return isWasmAvailable();
@@ -246,6 +250,8 @@ async function init() {
         getCollisionAudio: () => collisionAudio,
         useFairCommit: isFairCommitEnabled(searchParams),
         getDiceTowerController: () => diceTowerController,
+        getDiceJailController: () => diceJailController,
+        interceptRoll: () => gameRef.current?.interceptRoll() ?? false,
         getTableLayoutConfig: () => layoutManagerRef.current?.getConfig?.() ?? null,
     });
 
@@ -462,6 +468,18 @@ async function init() {
     }
 
     rollWiring.initRollSession({ replaceDiceSet, readAllDiceValues, areDiceSettled });
+
+    // Table games (Farkle) need real dice: with no physics there is no game to offer.
+    if (isWasmAvailable()) {
+        gameRef.current = setupGameWiring(app, {
+            rollWiring,
+            getScene: () => app.scene,
+            getPhysicsWorld: () => app.physicsWorld,
+            getUi: () => ui,
+            getDiceJailController: () => diceJailController,
+            multiplayerRef,
+        });
+    }
 
     // Input handling
     inputState = setupInput({
