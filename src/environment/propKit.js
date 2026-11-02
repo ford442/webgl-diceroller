@@ -27,7 +27,9 @@ import {
     getWroughtIronMaterial,
 } from '../core/MaterialPalette.js';
 import { createStaticCollider, createDynamicCollider } from '../core/StaticColliderBridge.js';
+import { getPropScope, propRng } from './propRng.js';
 export { STATIC_MATERIAL } from '../wasm/staticColliders.js';
+export { propRng } from './propRng.js';
 
 export const materials = {
     wood: (color) => getWoodMaterial(color),
@@ -149,6 +151,15 @@ export function scaleColliderSpec(spec, factor) {
 
 /**
  * Standard prop factory scaffold: group setup, build callback, colliders, scene add.
+ *
+ * The kit hands the prop one seeded RNG (see `propRng.js`): `build` receives it
+ * as `rng`, and `colliders` may be a function of `{ group, rng }` so a collider
+ * layout that depends on random numbers is declared from the same stream as the
+ * meshes it matches. Props never read ambient entropy (ESLint enforces it).
+ *
+ * `group.name` defaults to the registry name the prop was spawned under, so the
+ * scene graph, `SHADOW_DISABLED_PROP_NAMES` and the tests all match on one name.
+ *
  * @param {THREE.Scene} scene
  * @param {import('dice-core/wasm/physicsTypes').PhysicsEngine | null | undefined} physicsWorld
  * @param {{
@@ -157,8 +168,9 @@ export function scaleColliderSpec(spec, factor) {
  *   rotation?: number,
  *   footOffsetY?: number,
  *   scale?: number,
- *   build?: (ctx: { group: THREE.Group, materials: typeof materials, mesh: typeof mesh }) => void,
- *   colliders?: object[],
+ *   rng?: () => number,
+ *   build?: (ctx: { group: THREE.Group, materials: typeof materials, mesh: typeof mesh, rng: () => number }) => void,
+ *   colliders?: object[] | ((ctx: { group: THREE.Group, rng: () => number }) => object[]),
  *   update?: (...args: any[]) => void,
  *   interact?: (...args: any[]) => void,
  *   dispose?: (...args: any[]) => void,
@@ -174,6 +186,7 @@ export function createProp(
         rotation = 0,
         footOffsetY = 0,
         scale = 1,
+        rng: suppliedRng,
         build,
         colliders = [],
         update,
@@ -182,19 +195,25 @@ export function createProp(
         ...extras
     } = {}
 ) {
+    // Claimed before anything else so the stream does not depend on what the
+    // build callback does. A factory that already needed the RNG (to lay out
+    // colliders ahead of time) hands its own in.
+    const rng = suppliedRng ?? propRng(name);
     const group = new THREE.Group();
-    group.name = name;
+    group.name = name ?? getPropScope()?.name ?? '';
     // footOffsetY lifts the group by a prop-local distance, so it scales too.
     group.position.set(position.x, position.y + footOffsetY * scale, position.z);
     group.rotation.y = rotation;
     if (scale !== 1) group.scale.setScalar(scale);
 
-    build?.({ group, materials, mesh });
+    build?.({ group, materials, mesh, rng });
 
     scene.add(group);
 
-    if (colliders.length > 0) {
-        for (const authoredSpec of colliders) {
+    const authoredColliders =
+        typeof colliders === 'function' ? (colliders({ group, rng }) ?? []) : colliders;
+    if (authoredColliders.length > 0) {
+        for (const authoredSpec of authoredColliders) {
             const colliderSpec = scaleColliderSpec(authoredSpec, scale);
             if (colliderSpec.dynamic) {
                 createDynamicCollider(physicsWorld, group, colliderSpec);

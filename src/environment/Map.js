@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createSeededRng } from '../core/SeededRng.js';
 import { createProp, materials, mesh, STATIC_MATERIAL } from './propKit.js';
 
 export function createMap(
@@ -34,7 +35,7 @@ export function createMap(
     ];
 
     createProp(scene, physicsWorld, {
-        name: 'WorldMap',
+        name: 'Map',
         position,
         rotation: rotationY,
         footOffsetY: thickness / 2,
@@ -66,6 +67,7 @@ export function createMap(
 }
 
 function generateMapTexture() {
+    const rng = createSeededRng(0x4d617001);
     const canvas = document.createElement('canvas');
     canvas.width = 1024;
     canvas.height = 768;
@@ -95,7 +97,7 @@ function generateMapTexture() {
     ctx.moveTo(0, 0);
     ctx.lineTo(300, 0);
     for (let y = 0; y <= canvas.height; y += 20) {
-        const x = 300 + Math.sin(y * 0.01) * 50 + Math.random() * 20;
+        const x = 300 + Math.sin(y * 0.01) * 50 + rng() * 20;
         ctx.lineTo(x, y);
     }
     ctx.lineTo(0, canvas.height);
@@ -103,9 +105,9 @@ function generateMapTexture() {
 
     ctx.fillStyle = '#8b4513';
     for (let i = 0; i < 20; i++) {
-        const x = 400 + Math.random() * 400;
-        const y = 100 + Math.random() * 200;
-        const s = 30 + Math.random() * 30;
+        const x = 400 + rng() * 400;
+        const y = 100 + rng() * 200;
+        const s = 30 + rng() * 30;
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(x + s / 2, y - s);
@@ -115,9 +117,9 @@ function generateMapTexture() {
 
     ctx.fillStyle = '#228b22';
     for (let i = 0; i < 50; i++) {
-        const x = 600 + Math.random() * 300;
-        const y = 400 + Math.random() * 300;
-        const r = 10 + Math.random() * 10;
+        const x = 600 + rng() * 300;
+        const y = 400 + rng() * 300;
+        const r = 10 + rng() * 10;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
@@ -131,7 +133,7 @@ function generateMapTexture() {
     let cy = 200;
     while (cx > 300) {
         cx -= 10;
-        cy += (Math.random() - 0.3) * 20;
+        cy += (rng() - 0.3) * 20;
         ctx.lineTo(cx, cy);
     }
     ctx.stroke();

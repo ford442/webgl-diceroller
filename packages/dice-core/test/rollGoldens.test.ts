@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 import { defaultPublicDir, fsAssetSource } from 'dice-core';
 import { loadWasmBuildInfo } from 'dice-core/wasm/SolverBuildId';
-import type { WorldFixture } from 'dice-core/wasm/WorldRecorder';
+import { parseWorldFixtureFile } from 'dice-core/wasm/WorldRecorder';
 import {
     GOLDEN_CASES,
     diffGolden,
@@ -22,9 +22,9 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const golden = JSON.parse(
     readFileSync(path.join(REPO_ROOT, 'tests/golden/rolls.json'), 'utf8')
 ) as GoldenFile;
-const tavernWorld = JSON.parse(
+const { world: tavernWorld } = parseWorldFixtureFile(
     readFileSync(path.join(REPO_ROOT, 'tests/fixtures/tavern-world.json'), 'utf8')
-) as WorldFixture;
+);
 
 it('golden file lists every case in rollGoldens.ts, in order', () => {
     expect(golden.version).toBe(1);

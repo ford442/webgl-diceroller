@@ -1,11 +1,14 @@
 import { resolveTableLayoutConfig } from '../../core/TableLayoutConfig.js';
-import { shuffleWithRng } from '../../core/SeededRng.js';
+import { createSeededRng, shuffleWithRng } from '../../core/SeededRng.js';
 
 /** Half-extent of the velvet dice zone (16×16 table center). */
 export const DICE_ZONE_HALF = 8;
 
 /** Usable tabletop half-extent (36×36 table, inset from lips). */
 export const TABLE_HALF = 17;
+
+/** Seed of the stream a hand-spawned clutter prop takes its yaw from. */
+const PLACEMENT_FALLBACK_SEED = 0x51a7c3;
 
 /** Minimum clearance from dice spawn center (±2) and zone edge. */
 const DICE_SPAWN_MARGIN = 3;
@@ -58,7 +61,10 @@ export function generateClutterSlots(count, rng) {
 
 export function resolvePlacement(options, defaults) {
     const placement = options?.placement;
-    const rng = options?.rng ?? Math.random;
+    // A placement drawn from a scatter slot always carries its yaw. Without one
+    // (a prop spawned by hand) the yaw still has to be a pure function of its
+    // inputs, so it comes from a fixed stream, not from ambient entropy.
+    const rng = options?.rng ?? createSeededRng(PLACEMENT_FALLBACK_SEED);
 
     return {
         x: placement?.x ?? defaults.x,
@@ -67,7 +73,7 @@ export function resolvePlacement(options, defaults) {
     };
 }
 
-export function resolveClutterOptions(searchParams = null, rng = Math.random) {
+export function resolveClutterOptions(searchParams = null, rng) {
     const config = resolveTableLayoutConfig(searchParams, rng);
     return {
         count: config.clutterCount,

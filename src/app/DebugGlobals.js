@@ -7,6 +7,7 @@
 import {
     isWasmAvailable,
     getWasmEngine,
+    getWorldHash,
     getWorldRecorder,
     readSleepDiagnostics,
 } from '../wasm/PhysicsBridge.js';
@@ -85,6 +86,9 @@ export function installDebugGlobals(app, deps) {
     // ?test only: the collider world the page built (tests/fixtures/tavern-world.json)
     // and the recent die add/remove log for "engine has 0 dice" failures.
     app.physics.exportWorld = () => getWorldRecorder()?.exportWorld() ?? null;
+    // Hash of that world (hashWorld): equal across clients that rebuilt the same
+    // table, which is what a share link's `w=` and a room join compare.
+    app.physics.worldHash = () => getWorldHash();
     app.physics.getDieLog = () => getWorldRecorder()?.dieLog() ?? [];
     app.getActiveDiceSet = getActiveDiceSet;
     // Documented for Playwright: patch one die's descriptor entry and the table

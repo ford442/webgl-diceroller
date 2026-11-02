@@ -13,6 +13,7 @@
  * "the engine has 0 dice but the table has 2" failure needs to explain itself.
  */
 
+import { fnv1a64Hex } from '../hash/fnv1a.js';
 import type { PhysicsEngine } from './physicsTypes.js';
 
 export const WORLD_FIXTURE_VERSION = 1;
@@ -87,9 +88,58 @@ export interface DieLogEntry {
     result?: number;
 }
 
+/**
+ * The checked-in `tests/fixtures/tavern-world.json`: the recorded world plus
+ * the hash it was generated from, so a stale fixture is one string compare and
+ * a native test can cite the world it replays.
+ */
+export interface WorldFixtureFile {
+    hash: string;
+    world: WorldFixture;
+}
+
 export interface WorldRecorder {
     exportWorld(): WorldFixture;
+    /** {@link hashWorld} of the live world; memoised until a collider changes. */
+    worldHash(): string;
     dieLog(): DieLogEntry[];
+}
+
+/**
+ * Canonical text of a world, the preimage of {@link hashWorld}.
+ *
+ * Colliders are described by what they are — shape, pose, material — and
+ * sorted, never by the id the page happened to hand out or the order the tiers
+ * registered them in: ids come from a global counter that a layout re-roll
+ * does not reset, so a client that re-rolled into a layout and a client that
+ * loaded it fresh build the same world under different ids. The fixture file
+ * keeps ids and id order (the engine replays them); the hash does not.
+ */
+export function canonicalWorldText(world: WorldFixture): string {
+    const describe = <T extends { id: number }>(items: T[]) =>
+        items
+            .map((item) => {
+                const { id: _id, ...shape } = item;
+                return JSON.stringify(shape);
+            })
+            .sort();
+    return [
+        `world-v${world.version}`,
+        JSON.stringify(world.init),
+        `statics ${world.statics.length}`,
+        ...describe(world.statics),
+        `dynamics ${world.dynamics.length}`,
+        ...describe(world.dynamics),
+    ].join('\n');
+}
+
+/**
+ * Hash of a collider world: FNV-1a/64 over {@link canonicalWorldText}, 16 hex
+ * digits. Two clients with the same hash registered the same colliders (to the
+ * 1e-5 the recorder rounds to), which is what a seeded replay needs.
+ */
+export function hashWorld(world: WorldFixture): string {
+    return fnv1a64Hex(canonicalWorldText(world));
 }
 
 const DIE_LOG_LIMIT = 200;
@@ -107,6 +157,11 @@ export function installWorldRecorder(engine: PhysicsEngine): WorldRecorder {
     let init: WorldFixture['init'] = null;
     const dieLog: DieLogEntry[] = [];
     const target = engine as unknown as Record<string, AnyFn>;
+    // Bumped by every structural change, so `worldHash()` re-hashes only when
+    // the world moved (share links and room joins ask for it repeatedly).
+    let revision = 0;
+    let hashedRevision = -1;
+    let hashed = '';
 
     const log = (entry: Omit<DieLogEntry, 't'>) => {
         dieLog.push({ t: Math.round(performance.now()), ...entry });
@@ -119,6 +174,7 @@ export function installWorldRecorder(engine: PhysicsEngine): WorldRecorder {
         const bound = original.bind(engine);
         target[name] = (...args: any[]) => {
             const result = bound(...args);
+            revision++;
             try {
                 after(args, result);
             } catch (e) {
@@ -231,16 +287,23 @@ export function installWorldRecorder(engine: PhysicsEngine): WorldRecorder {
     wrap('removeDie', ([id]) => log({ op: 'removeDie', id }));
     wrap('clearAllDice', () => log({ op: 'clearAllDice' }));
 
+    const exportWorld = (): WorldFixture => ({
+        // Sorted by id: registration order depends on async tier timing,
+        // and the fixture must diff cleanly between runs.
+        version: WORLD_FIXTURE_VERSION,
+        init,
+        statics: [...statics.values()].sort((a, b) => a.id - b.id),
+        dynamics: [...dynamics.values()].sort((a, b) => a.id - b.id),
+    });
+
     return {
-        exportWorld(): WorldFixture {
-            // Sorted by id: registration order depends on async tier timing,
-            // and the fixture must diff cleanly between runs.
-            return {
-                version: WORLD_FIXTURE_VERSION,
-                init,
-                statics: [...statics.values()].sort((a, b) => a.id - b.id),
-                dynamics: [...dynamics.values()].sort((a, b) => a.id - b.id),
-            };
+        exportWorld,
+        worldHash(): string {
+            if (hashedRevision !== revision) {
+                hashed = hashWorld(exportWorld());
+                hashedRevision = revision;
+            }
+            return hashed;
         },
         dieLog: () => dieLog.slice(),
     };
@@ -256,6 +319,43 @@ function flatVertices(verts: unknown): number[] {
         return out;
     }
     return roundAll(verts as ArrayLike<number>);
+}
+
+/**
+ * The text of `tests/fixtures/tavern-world.json`: the hash first, then the
+ * world with one collider per line, so a moved prop is a one-line diff.
+ */
+export function serializeWorldFixtureFile(file: WorldFixtureFile): string {
+    const list = (items: unknown[]) =>
+        items.length
+            ? `[\n${items.map((item) => `   ${JSON.stringify(item)}`).join(',\n')}\n  ]`
+            : '[]';
+    const { world } = file;
+    return (
+        `{\n "hash": ${JSON.stringify(file.hash)},\n "world": {\n` +
+        `  "version": ${world.version},\n  "init": ${JSON.stringify(world.init)},\n` +
+        `  "statics": ${list(world.statics)},\n  "dynamics": ${list(world.dynamics)}\n }\n}\n`
+    );
+}
+
+/**
+ * Parse the fixture file and check its `hash` still names its `world`. A
+ * mismatch means the world was hand-edited, or {@link hashWorld} changed
+ * without regenerating the fixture — either way the cited hash would lie.
+ */
+export function parseWorldFixtureFile(text: string): WorldFixtureFile {
+    const parsed = JSON.parse(text) as Partial<WorldFixtureFile> | null;
+    if (!parsed?.world || typeof parsed.hash !== 'string') {
+        throw new Error('world fixture must be { hash, world } — run `npm run fixture:world`');
+    }
+    const actual = hashWorld(parsed.world);
+    if (actual !== parsed.hash) {
+        throw new Error(
+            `world fixture hash ${parsed.hash} does not match its world (${actual}) — ` +
+                'run `npm run fixture:world`'
+        );
+    }
+    return { hash: parsed.hash, world: parsed.world };
 }
 
 /**

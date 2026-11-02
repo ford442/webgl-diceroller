@@ -3,11 +3,14 @@ import { createStaticCollider } from '../../core/StaticColliderBridge.js';
 import { TABLETOP_Y_OFFSET } from '../../core/SceneMetrics.js';
 import { getInstancedMetalMaterial } from '../../core/MaterialPalette.js';
 import { resolvePlacement } from './ClutterPlacement.js';
+import { propRng } from '../propRng.js';
 
 const tabletopY = (y) => y + TABLETOP_Y_OFFSET;
-const randomUnit = (options) => (options?.rng ?? Math.random)();
 
 export function createCoins(scene, physicsWorld, options = {}) {
+    // The coin pile's own stream: the shared placement stream in `options.rng`
+    // only places props, so a change here never shifts another prop's slot.
+    const rng = propRng('Coins');
     const radius = 0.3;
     const thickness = 0.05;
     const geometry = new THREE.CylinderGeometry(radius, radius, thickness, 32);
@@ -31,13 +34,12 @@ export function createCoins(scene, physicsWorld, options = {}) {
     coins.receiveShadow = true;
     coins.instanceMatrix.setUsage(THREE.StaticDrawUsage);
     const dummy = new THREE.Object3D();
-    coins.userData.physicsBodies = [];
 
     for (let i = 0; i < count; i++) {
-        coins.setColorAt(i, coinColors[Math.floor(randomUnit(options) * coinColors.length)]);
+        coins.setColorAt(i, coinColors[Math.floor(rng() * coinColors.length)]);
 
-        const angle = randomUnit(options) * Math.PI * 2;
-        const dist = randomUnit(options) * 1.5;
+        const angle = rng() * Math.PI * 2;
+        const dist = rng() * 1.5;
         const x = centerX + Math.cos(angle) * dist;
         const z = centerZ + Math.sin(angle) * dist;
 
@@ -46,23 +48,22 @@ export function createCoins(scene, physicsWorld, options = {}) {
         if (i > 10) y += thickness;
 
         dummy.position.set(x, y, z);
-        dummy.rotation.set(0, randomUnit(options) * Math.PI * 2, 0);
+        dummy.rotation.set(0, rng() * Math.PI * 2, 0);
 
-        if (randomUnit(options) > 0.8) {
-            dummy.rotation.x = (randomUnit(options) - 0.5) * 0.5;
-            dummy.rotation.z = (randomUnit(options) - 0.5) * 0.5;
+        if (rng() > 0.8) {
+            dummy.rotation.x = (rng() - 0.5) * 0.5;
+            dummy.rotation.z = (rng() - 0.5) * 0.5;
             dummy.position.y += 0.05;
         }
 
         dummy.updateMatrix();
         coins.setMatrixAt(i, dummy.matrix);
 
-        const result = createStaticCollider(physicsWorld, dummy, {
+        createStaticCollider(physicsWorld, dummy, {
             type: 'cylinder',
             radius,
             halfHeight: thickness / 2,
         });
-        if (result?.body) coins.userData.physicsBodies.push(result.body);
     }
 
     coins.instanceMatrix.needsUpdate = true;

@@ -10,6 +10,8 @@
  * and must stay importable from Node with no renderer in the module graph.
  */
 
+import { fnv1a64Hex } from '../hash/fnv1a.js';
+
 /** Format version. Bump only on a breaking shape change; add a migration too. */
 export const DICE_SET_VERSION = 1;
 
@@ -360,18 +362,9 @@ export function canonicalizeDiceSet(set: DiceSet): string {
     return JSON.stringify(canonical(rest));
 }
 
-const FNV_OFFSET = 0xcbf29ce484222325n;
-const FNV_PRIME = 0x100000001b3n;
-const MASK64 = 0xffffffffffffffffn;
-
 /** FNV-1a/64 over the UTF-8 canonical form. Stable across Node and browsers. */
 export function hashString(input: string): string {
-    const bytes = new TextEncoder().encode(input);
-    let hash = FNV_OFFSET;
-    for (const byte of bytes) {
-        hash = ((hash ^ BigInt(byte)) * FNV_PRIME) & MASK64;
-    }
-    return hash.toString(16).padStart(16, '0');
+    return fnv1a64Hex(input);
 }
 
 /** Content hash of a set — identical content always yields an identical id. */

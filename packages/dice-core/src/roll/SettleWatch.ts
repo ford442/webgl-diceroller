@@ -87,6 +87,9 @@ export function createSettleWatch(
     const missingBodiesMs = options.missingBodiesMs ?? 3000;
     const stableChecks = Math.max(1, options.stableChecks ?? 3);
     const minTicksAfterBegin = options.minTicksAfterBegin ?? 2;
+    // Wall-clock watchdog for a roll that never settles; it times the wait, it
+    // does not feed the simulation.
+    // eslint-disable-next-line no-restricted-properties
     const now = options.now ?? (() => Date.now());
     const isPaused = options.isPaused ?? (() => false);
 

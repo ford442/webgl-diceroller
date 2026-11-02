@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createProp } from './propKit.js';
+import { createProp, propRng } from './propKit.js';
 
 export function createSmokingPipe(
     scene,
@@ -8,10 +8,13 @@ export function createSmokingPipe(
     rotation = Math.PI / 8,
     { scale = 1 } = {}
 ) {
+    // Claimed up front so `update` (smoke respawn) draws from the same stream as `build`.
+    const rng = propRng('SmokingPipe');
     const smokeParticles = [];
 
     return createProp(scene, physicsWorld, {
         name: 'SmokingPipe',
+        rng,
         position,
         rotation,
         scale,
@@ -150,11 +153,11 @@ export function createSmokingPipe(
 
             for (let i = 0; i < 5; i++) {
                 const flake = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, 0.08), tobaccoMat);
-                const angle = Math.random() * Math.PI * 2;
-                const dist = 0.6 + Math.random() * 0.4;
+                const angle = rng() * Math.PI * 2;
+                const dist = 0.6 + rng() * 0.4;
                 flake.position.set(Math.cos(angle) * dist, 0.01, Math.sin(angle) * dist);
-                flake.rotation.y = Math.random() * Math.PI;
-                flake.rotation.x = Math.random() * 0.3;
+                flake.rotation.y = rng() * Math.PI;
+                flake.rotation.x = rng() * 0.3;
                 flake.castShadow = true;
                 pouchGroup.add(flake);
             }
@@ -176,14 +179,14 @@ export function createSmokingPipe(
                 const smoke = new THREE.Mesh(smokeGeo, smokeMat);
                 smoke.position.set(
                     -0.8 + Math.cos(rotation) * 0.2,
-                    1.2 + Math.random() * 0.5,
+                    1.2 + rng() * 0.5,
                     0 + Math.sin(rotation) * 0.2
                 );
                 smoke.userData = {
                     initialY: smoke.position.y,
-                    speed: 0.2 + Math.random() * 0.3,
-                    offset: Math.random() * Math.PI * 2,
-                    life: Math.random(),
+                    speed: 0.2 + rng() * 0.3,
+                    offset: rng() * Math.PI * 2,
+                    life: rng(),
                 };
                 smokeGroup.add(smoke);
                 smokeParticles.push(smoke);
@@ -195,11 +198,7 @@ export function createSmokingPipe(
                 data.life += 0.01;
                 if (data.life > 1) {
                     data.life = 0;
-                    smoke.position.set(
-                        -0.8 + (Math.random() - 0.5) * 0.1,
-                        1.0,
-                        (Math.random() - 0.5) * 0.1
-                    );
+                    smoke.position.set(-0.8 + (rng() - 0.5) * 0.1, 1.0, (rng() - 0.5) * 0.1);
                     smoke.scale.setScalar(1);
                 }
                 smoke.position.y += data.speed * 0.016;

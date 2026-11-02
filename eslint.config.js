@@ -62,6 +62,35 @@ const insidePackageRule = {
     ],
 };
 
+/**
+ * Nothing that shapes the table may read the wall clock or `Math.random` (#369).
+ *
+ * A share link's `layout-seed` is only a replay contract if every collider a
+ * prop declares is a pure function of it, so props draw from the seeded stream
+ * `createProp` hands them (`build({ rng })`, `colliders: ({ rng }) => …`,
+ * `propRng()`), and dice-core — which owns the simulation and the room protocol
+ * — has no ambient entropy either. A use that provably never reaches a collider
+ * or a material shared across the scene (a wall-clock timestamp, an unseeded
+ * query) takes an `eslint-disable-next-line` with the reason beside it.
+ */
+const deterministicTreeRule = {
+    'no-restricted-properties': [
+        'error',
+        {
+            object: 'Math',
+            property: 'random',
+            message:
+                'Use the prop RNG (createProp build({ rng }) / propRng()) or a createSeededRng constant — Math.random makes the collider world differ per client.',
+        },
+        {
+            object: 'Date',
+            property: 'now',
+            message:
+                'Wall-clock reads make the collider world and replays differ per client. Derive from the layout seed (or disable with a reason if it never reaches the simulation).',
+        },
+    ],
+};
+
 const coreRules = {
     ...js.configs.recommended.rules,
     eqeqeq: ['error', 'always', { null: 'ignore' }],
@@ -261,6 +290,10 @@ export default [
     {
         files: ['packages/dice-core/src/**/*.ts'],
         rules: insidePackageRule,
+    },
+    {
+        files: ['src/environment/**/*.{js,ts}', 'packages/dice-core/src/**/*.ts'],
+        rules: deterministicTreeRule,
     },
     eslintConfigPrettier,
 ];

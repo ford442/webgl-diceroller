@@ -4,6 +4,7 @@ import { createFire } from './Fire.js';
 import { GodRayShader } from '../shaders/GodRayShader.js';
 import { CAMERA_LOOK_AT_Y, ROOM_FLOOR_Y, ROOM_WALL_HEIGHT } from '../core/SceneMetrics.js';
 import { getBrickTextures, getWoodTextures } from '../core/TexturePipeline.js';
+import { createSeededRng } from '../core/SeededRng.js';
 
 function registerBoxCollider(physicsWorld, anchor, halfExtents) {
     createStaticCollider(physicsWorld, anchor, { type: 'box', halfExtents });
@@ -384,6 +385,7 @@ function createGodRays(group, x, y, z, nodeMaterialFactory = null) {
 }
 
 function generateNoiseTexture() {
+    const rng = createSeededRng(0x54615701);
     const size = 256;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -395,10 +397,10 @@ function generateNoiseTexture() {
     ctx.fillRect(0, 0, size, size);
 
     for (let i = 0; i < 400; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const r = Math.random() * 20 + 5;
-        const alpha = Math.random() * 0.1;
+        const x = rng() * size;
+        const y = rng() * size;
+        const r = rng() * 20 + 5;
+        const alpha = rng() * 0.1;
 
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);

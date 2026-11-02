@@ -80,6 +80,8 @@ VITE_SIGNALING_URL=https://<your-worker>.workers.dev npm run build:js
 
 The Worker routes each room code to a Durable Object (`RoomDurableObject`). Persisted fields include `protocolVersion`, `solverBuildId` (`{solver_revision}:{sha256(dice_physics.wasm)[0..12]}` from the loaded artifact's `build-info.json` — content-addressed, so identical solver builds match across deploys and a different compiler or SIMD/scalar artifact does not), dice counts, `lastRoll`, optional layout seed, and session snapshot.
 
+`worldHash` (the `hashWorld` of the collider world the page built) is sent beside `solverBuildId` at join and persisted on the room. The host refreshes it with each `room-state` push (a layout re-roll changes the table), and a guest whose own hash differs is turned away with `world_hash_mismatch` — same engine is not enough for a seeded replay; the guest must also have built the host's table. A client that sends no hash, or a room that recorded none, is admitted.
+
 Rebuild-required UX: any behavioural solver change bumps `SOLVER_REVISION` in `dice_contacts.hpp` (and therefore `solver_revision` in `build-info.json`). Clients send that identity at join; a guest on an older WASM build is rejected with `solver_build_mismatch` until they load a matching `npm run build:wasm` artifact. That is the intended safety net for seeded replay — do not work around it by clearing the room id.
 
 ### Solver revision history
@@ -104,16 +106,16 @@ Rebuild-required UX: any behavioural solver change bumps `SOLVER_REVISION` in `d
 
 Default wire version: `PROTOCOL_VERSION = 1` ([`src/net/Protocol.ts`](../src/net/Protocol.ts)). With `?fair-commit`, clients negotiate v2.
 
-| type                               | direction     | purpose                                                 |
-| ---------------------------------- | ------------- | ------------------------------------------------------- |
-| `hello` / `welcome`                | both          | identity, `protocolVersion`, `solverBuildId`            |
-| `table-sync`                       | host → guest  | dice counts, presence, optional `lastRoll`              |
-| `roll`                             | host → guests | v1: cleartext `seed`, notation, diceCounts, `source`    |
-| `commit` / `commit-ack` / `reveal` | host ↔ guests | v2 commit-reveal (see above); `reveal` carries `source` |
-| `session-sync`                     | host → guests | initiative seats, current actor, last expression        |
-| `presence`                         | host → guests | `buildDicePresencePayload` fields                       |
-| `ping` / `pong`                    | both          | liveness                                                |
-| `error`                            | both          | `commit_mismatch`, version/build mismatch               |
+| type                               | direction     | purpose                                                   |
+| ---------------------------------- | ------------- | --------------------------------------------------------- |
+| `hello` / `welcome`                | both          | identity, `protocolVersion`, `solverBuildId`, `worldHash` |
+| `table-sync`                       | host → guest  | dice counts, presence, optional `lastRoll`                |
+| `roll`                             | host → guests | v1: cleartext `seed`, notation, diceCounts, `source`      |
+| `commit` / `commit-ack` / `reveal` | host ↔ guests | v2 commit-reveal (see above); `reveal` carries `source`   |
+| `session-sync`                     | host → guests | initiative seats, current actor, last expression          |
+| `presence`                         | host → guests | `buildDicePresencePayload` fields                         |
+| `ping` / `pong`                    | both          | liveness                                                  |
+| `error`                            | both          | `commit_mismatch`, version/build mismatch                 |
 
 `source` on `roll` / `reveal` (and on the persisted `lastRoll`) names the
 gameplay path: absent or `null` for a throw, `'tower'` for a dice-tower drop.
@@ -138,10 +140,11 @@ Signaling Worker relays SDP/ICE (`signal`), peer join/leave, and `room-snapshot`
 
 ### Mismatch errors
 
-| Error                       | Meaning                                                                                                          |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `solver_build_mismatch`     | `solver_revision:wasm-hash` differs — rebuild WASM (`npm run build:wasm`) with the same toolchain on all clients |
-| `protocol_version_mismatch` | Mixed v1/v2 or different app builds                                                                              |
+| Error                       | Meaning                                                                                                                                                                             |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `solver_build_mismatch`     | `solver_revision:wasm-hash` differs — rebuild WASM (`npm run build:wasm`) with the same toolchain on all clients                                                                    |
+| `world_hash_mismatch`       | The guest's collider-world hash (`hashWorld`, see ARCHITECTURE "Deterministic table") differs from the host's — open the host's link so the layout matches, on the same app version |
+| `protocol_version_mismatch` | Mixed v1/v2 or different app builds                                                                                                                                                 |
 
 ## COOP / COEP
 

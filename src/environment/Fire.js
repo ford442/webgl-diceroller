@@ -1,9 +1,12 @@
 import * as THREE from 'three';
+import { propRng } from './propRng.js';
 
 // Procedurally generate a fire texture
 const fireTexture = createFireTexture();
 
 export function createFire(options = {}) {
+    // Claimed synchronously: one stream feeds the init loop and the per-frame respawn.
+    const rng = options.rng ?? propRng('Fire');
     const scale = options.scale || 1.0;
     const color = options.color || 0xff5500; // Orange-red base
     const particleCount = options.particleCount || 50;
@@ -18,19 +21,19 @@ export function createFire(options = {}) {
     for (let i = 0; i < particleCount; i++) {
         // Initial random position at base
         positions.push(
-            (Math.random() - 0.5) * spread * scale,
-            Math.random() * 0.2 * scale, // Start low
-            (Math.random() - 0.5) * spread * scale
+            (rng() - 0.5) * spread * scale,
+            rng() * 0.2 * scale, // Start low
+            (rng() - 0.5) * spread * scale
         );
 
         // Random lifetime (offset start time)
-        lifetimes.push(Math.random());
+        lifetimes.push(rng());
 
         // Random velocity
         velocities.push(
-            (Math.random() - 0.5) * 0.5 * scale, // X drift
-            (1.0 + Math.random()) * scale, // Y speed
-            (Math.random() - 0.5) * 0.5 * scale // Z drift
+            (rng() - 0.5) * 0.5 * scale, // X drift
+            (1.0 + rng()) * scale, // Y speed
+            (rng() - 0.5) * 0.5 * scale // Z drift
         );
     }
 
@@ -69,9 +72,9 @@ export function createFire(options = {}) {
             if (life > 1.0) {
                 life = 0; // Reset
                 // Reset position to base
-                positions[i * 3] = (Math.random() - 0.5) * spread * scale * 0.5;
-                positions[i * 3 + 1] = Math.random() * 0.1 * scale;
-                positions[i * 3 + 2] = (Math.random() - 0.5) * spread * scale * 0.5;
+                positions[i * 3] = (rng() - 0.5) * spread * scale * 0.5;
+                positions[i * 3 + 1] = rng() * 0.1 * scale;
+                positions[i * 3 + 2] = (rng() - 0.5) * spread * scale * 0.5;
             }
 
             particleData.lifetimes[i] = life;
@@ -117,14 +120,14 @@ export function createFire(options = {}) {
 
         for (let i = 0; i < particleCount; i++) {
             let life = particleData.lifetimes[i];
-            life += deltaTime * (0.5 + Math.random() * 0.5); // Random speed
+            life += deltaTime * (0.5 + rng() * 0.5); // Random speed
 
             if (life > 1.0) {
                 life = 0;
                 // Reset pos
-                positions[i * 3] = (Math.random() - 0.5) * spread * scale * 0.5;
-                positions[i * 3 + 1] = Math.random() * 0.1 * scale;
-                positions[i * 3 + 2] = (Math.random() - 0.5) * spread * scale * 0.5;
+                positions[i * 3] = (rng() - 0.5) * spread * scale * 0.5;
+                positions[i * 3 + 1] = rng() * 0.1 * scale;
+                positions[i * 3 + 2] = (rng() - 0.5) * spread * scale * 0.5;
             }
             particleData.lifetimes[i] = life;
 

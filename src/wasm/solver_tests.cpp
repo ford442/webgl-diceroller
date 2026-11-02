@@ -1295,7 +1295,8 @@ struct TavernWorld {
 
 const TavernWorld& tavernWorld() {
     static const TavernWorld w{
-        mini_json::parseFile("tests/fixtures/tavern-world.json"),
+        // { "hash": …, "world": { init, statics, dynamics } } — see WorldRecorder.ts.
+        mini_json::parseFile("tests/fixtures/tavern-world.json")["world"],
         mini_json::parseFile("public/wasm/hulls.json"),
     };
     return w;

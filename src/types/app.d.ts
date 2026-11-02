@@ -234,6 +234,8 @@ export interface AppContextPhysics {
     /** `?test` only: the collider world the page registered (WorldRecorder). */
     exportWorld?: () => import('dice-core/wasm/WorldRecorder').WorldFixture | null;
     getDieLog?: () => import('dice-core/wasm/WorldRecorder').DieLogEntry[];
+    /** Hash of the collider world the page registered (`hashWorld`); null without WASM. */
+    worldHash?: () => string | null;
 }
 
 export interface AppContextDice {

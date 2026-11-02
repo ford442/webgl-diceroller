@@ -11,10 +11,9 @@ export function createScroll(
     const radius = 0.35;
     const ribbonRadius = radius + 0.02;
     const ribbonTube = 0.05;
-    const angle = Math.random() * Math.PI * 2;
 
     createProp(scene, physicsWorld, {
-        name: 'SealedScroll',
+        name: 'Scroll',
         position,
         rotation: rotationY,
         colliders: [
@@ -25,7 +24,8 @@ export function createScroll(
                 rotation: { x: Math.PI / 2 },
             },
         ],
-        build({ group }) {
+        build({ group, rng }) {
+            const angle = rng() * Math.PI * 2;
             const parchmentMat = new THREE.MeshStandardMaterial({
                 color: 0xf5deb3,
                 roughness: 0.9,

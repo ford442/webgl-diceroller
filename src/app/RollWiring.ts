@@ -37,6 +37,7 @@ import {
     parseShareableRollParams,
 } from 'dice-core/roll/ShareableRoll';
 import { createCommit, generateNonce, verifyReveal } from 'dice-core/net/CommitReveal';
+import { showTableMismatchBadge } from '../ui/TableMismatchBadge.js';
 import type { AppContext, AppEvents, PendingRollMeta } from '../types/app';
 import type { DiceReadValue } from '../types/dice.js';
 import type { EvaluatedRoll } from 'dice-core/types/roll';
@@ -140,6 +141,12 @@ export interface RollWiringDeps {
      * a replay on a different layout is a different simulation.
      */
     getTableLayoutConfig?: () => { seed: number; density?: string; theme?: string } | null;
+    /**
+     * Hash of the collider world this page built (`hashWorld`), or null without
+     * WASM. Written into share links as `w=` and compared with an incoming
+     * link's, so a replay never runs on a table that differs from the sender's.
+     */
+    getWorldHash?: () => string | null;
 }
 
 interface LastRollRef {
@@ -736,6 +743,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             source: last.source === 'tower' ? 'tower' : null,
             ids: last.ids ?? null,
             layout: deps.getTableLayoutConfig?.() ?? null,
+            worldHash: deps.getWorldHash?.() ?? null,
         });
     }
 
@@ -885,6 +893,28 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
                 if (!isWasmAvailable()) {
                     console.warn(
                         '[ShareableRoll] WASM physics is not available; no dice to replay. Run `npm run build:wasm` first.'
+                    );
+                    return;
+                }
+                // The layout params rebuild the sender's table; `w=` says what the
+                // sender actually built. Props or colliders that differ (another
+                // app version, an edited position) make the same seed a different
+                // roll, so refuse rather than show faces the sender never saw.
+                const localWorldHash = deps.getWorldHash?.() ?? null;
+                if (
+                    replayRequest.worldHash &&
+                    localWorldHash &&
+                    replayRequest.worldHash !== localWorldHash
+                ) {
+                    console.warn(
+                        `[ShareableRoll] Table mismatch: link w=${replayRequest.worldHash}, ` +
+                            `this table ${localWorldHash}; skipping auto-replay.`
+                    );
+                    showTableMismatchBadge(
+                        'This roll was made on a different table — not replayed.',
+                        {
+                            detail: `link table ${replayRequest.worldHash}\nthis table ${localWorldHash}`,
+                        }
                     );
                     return;
                 }

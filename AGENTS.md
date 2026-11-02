@@ -340,14 +340,25 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 1. Create `src/environment/PropName.js` using `createProp` from [`src/environment/propKit.js`](src/environment/propKit.js).
 2. Export a factory: `(scene, physicsWorld?, position?, rotation?, options?)`. Accept `{ scale = 1 } = {}` as the fifth argument and pass it to `createProp` if the prop should also be usable as tabletop clutter.
-3. Build geometry inside the `build({ group, materials, mesh })` callback; use `materials.*` from the kit (backed by [`MaterialPalette.js`](src/core/MaterialPalette.js)) instead of inline `MeshStandardMaterial`.
-4. Declare colliders as a spec array — routed through [`StaticColliderBridge.ts`](src/core/StaticColliderBridge.ts).
+3. Build geometry inside the `build({ group, materials, mesh, rng })` callback; use `materials.*` from the kit (backed by [`MaterialPalette.js`](src/core/MaterialPalette.js)) instead of inline `MeshStandardMaterial`.
+4. Declare colliders as a spec array — routed through [`StaticColliderBridge.ts`](src/core/StaticColliderBridge.ts). `colliders` may also be a function `({ group, rng }) => spec[]` when the layout depends on random numbers.
 5. Return `{ group }` plus optional `update`, `interact`, `body`, etc.
 6. Register in the appropriate tier in [`PropRegistry.js`](src/environment/PropRegistry.js).
 7. Wire `afterCreate` for per-frame updates or click handlers.
 8. For small/decorative props, add the factory name to `SHADOW_DISABLED_PROP_NAMES` in `PropRegistry.js` (shadow policy lives in the registry, not in the prop module).
 
 Tabletop positions in tier entries may still use legacy `y: -2.75`; `PropRegistry.resolveEntryPosition` applies `toCurrentTabletopY` at spawn. Use `footOffsetY` in `createProp` when the mesh origin is not at the resting foot (e.g. a cylinder whose center is mid-height).
+
+#### No `Math.random` — draw from the kit's `rng`
+
+A share link's `layout-seed` is a replay contract only if every collider is a pure function of it (#369), so **nothing under `src/environment/` (or `packages/dice-core/src`) may call `Math.random()` or `Date.now()`** — `npm run lint` rejects both (`no-restricted-properties`). Use:
+
+- `rng` from `build({ rng })` / `colliders: ({ rng }) => …` for anything per-instance (positions, yaw, scatter, particle seeds). It is a `() => [0,1)` stream derived from `(layout seed, registry key, slot, ordinal)`, so two instances never share a scatter.
+- `const rng = propRng('Name')` (from `propKit.js`) at the top of a factory that needs numbers before it can declare colliders or that does not use `createProp`; call it synchronously (before any `await`) and pass it back as `createProp({ rng })`. Per-frame `update` code closes over the same `rng`.
+- `createSeededRng(CONSTANT)` (`src/core/SeededRng.js`) for canvas-texture noise, so a cached texture does not depend on which instance built it first.
+- An `// eslint-disable-next-line no-restricted-properties` is only for something that provably never reaches a collider or a material shared across the scene, and needs the reason beside it.
+
+`createProp` names the group after the registry entry when you give no `name`; keep any explicit `name` equal to the factory name (`Mug`, not `EnhancedMug`) so shadow policy, culling and tests match on one name. `tests/unit/propDeterminism.test.js` spawns every tabletop tier entry under two different `Math.random` sequences and fails if a prop's colliders differ.
 
 #### Never fork a prop for clutter
 
@@ -503,8 +514,8 @@ npm run verify:wasm-interaction     # drag + levitation on the WASM-only path (n
 npm run verify:worker-replay        # Worker-module replay determinism (seededPhysicsThrow) — isolated from the app UI
 npm run verify:tower-drop-replay    # Dice-tower drops replay from a seed and settle in the tray (--no-require-settle to relax)
 npm run test:tavern-world           # 200 WASM rolls into tests/fixtures/tavern-world.json settle within 12 s sim (#341)
-npm run fixture:world               # Re-export the tavern collider fixture from the built app (needs build:wasm + build:js)
-npm run check:world-fixture         # Fails if the checked-in fixture no longer matches what the app registers
+npm run fixture:world               # Re-export the tavern collider fixture ({ hash, world }) from the built app (needs build:wasm + build:js); byte-identical run to run
+npm run check:world-fixture         # Fails if the checked-in fixture no longer matches what the app registers (reports hash drift first)
 npm run verify:bundle-loading       # ?webgl never fetches three.webgpu; ?no-wasm spawns no dice
 node scripts/verify-renderer-factory.mjs
 npm run verify:shader-parity        # Dice / god-ray / vignette graphs: WebGL vs WebGPU pixel diff (no WASM needed)
@@ -535,7 +546,7 @@ npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when b
 
 - `window.__app` — stable API (`ready`, `scene`, `camera`, `renderer`, `interactables`, `replayRoll`, …). All Playwright scripts use this exclusively.
 - `window.__app.getRollState()` — `{ phase: idle | rolling | settled | timedOut, startedCount, settledCount, lastTimeoutReason, lastResults }`.
-- `window.__app.physics.getSleepDiagnostics()` — engine vs spawned die counts plus one record per awake body ("why is it awake?"); `physics.forceNoSettle(bool)` forces the settle timeout; `physics.exportWorld()` / `physics.getDieLog()` (`?test` only) return the recorded collider world and recent die adds/removes.
+- `window.__app.physics.getSleepDiagnostics()` — engine vs spawned die counts plus one record per awake body ("why is it awake?"); `physics.forceNoSettle(bool)` forces the settle timeout; `physics.exportWorld()` / `physics.getDieLog()` (`?test` only) return the recorded collider world and recent die adds/removes; `physics.worldHash()` is the hash of that world (`hashWorld`, 16 hex digits) — equal across clients that rebuilt the same table. Share links carry it as `w=` and a `?room=` join compares it beside `solverBuildId` (mismatch → badge / `world_hash_mismatch`). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Deterministic table).
 - Smoke scripts use `?no-post` (and often `?webgl&fair-dice&test` in headless CI) to reduce GPU load.
 - `?test` also **freezes candle and fireplace flicker** at a fixed sample, so a render-regression capture never races the flame. Without it the flicker still runs, but it is a pure function of elapsed time (`LightingSystems.js`), not `Math.random()` — two runs of the same scene light identically at the same timestamp.
 

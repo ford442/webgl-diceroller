@@ -12,6 +12,7 @@ import {
 import { INTERACTIVE_NAMES } from './propIndex.js';
 import { selectDecorPoolEntries } from './randomPool.js';
 import { registerDynamicProp, unregisterDynamicProp } from '../DynamicPropState.js';
+import { withPropScope } from '../propRng.js';
 
 // Test/debug hook: `?forceProps=Flute,PlayingCards` guarantees those randomPool
 // props spawn regardless of seed, so e2e tests can target their interactions
@@ -55,19 +56,29 @@ export async function spawnTierWithRandomPool(entries, maxRandom, context, optio
 
     const records = [];
 
+    // A prop's RNG stream is keyed by its index in the *full* tier list, not by
+    // where the seeded draw happened to put it, so which other props were drawn
+    // never changes what this one looks like or where its colliders sit.
+    const slotOf = (entry) => Math.max(0, entries.indexOf(entry));
+
     for (const entry of always) {
-        await spawnProp(entry, context);
+        await spawnProp(entry, context, { slot: slotOf(entry) });
     }
 
     for (const entry of selected) {
-        const record = await spawnProp(entry, context);
+        const record = await spawnProp(entry, context, { slot: slotOf(entry) });
         records.push(record);
     }
 
     return records;
 }
 
-export async function spawnProp(entry, context) {
+/**
+ * @param {object} entry tier entry (`factoryEntry`)
+ * @param {object} context spawn context (scene, physicsWorld, layoutConfig, …)
+ * @param {{ slot?: number }} [options] `slot`: the entry's index in its tier list
+ */
+export async function spawnProp(entry, context, options = {}) {
     const factoryName = entry.factoryName || entry.name;
     let result;
     let updateHandle = null;
@@ -79,17 +90,32 @@ export async function spawnProp(entry, context) {
         return updateHandle;
     };
 
+    // The factory runs under a prop scope: its RNG stream is keyed to the
+    // table's layout seed and this entry's name + slot, and its group takes the
+    // factory name. Only the synchronous part of the call sees the scope, which
+    // is where every factory claims its stream (see propRng.js).
+    const scope = {
+        layoutSeed: context.layoutConfig?.seed ?? 0,
+        key: entry.name,
+        name: factoryName,
+        slot: options.slot ?? entry.slot ?? 0,
+    };
+
     if (entry.call) {
-        result = await entry.call(context);
+        result = await withPropScope(scope, () => entry.call(context));
     } else if (entry.position) {
-        result = await getPropFactory(factoryName)(
-            context.scene,
-            context.physicsWorld,
-            resolveEntryPosition(entry),
-            entry.rotation ?? 0
+        result = await withPropScope(scope, () =>
+            getPropFactory(factoryName)(
+                context.scene,
+                context.physicsWorld,
+                resolveEntryPosition(entry),
+                entry.rotation ?? 0
+            )
         );
     } else {
-        result = await getPropFactory(factoryName)(context.scene, context.physicsWorld);
+        result = await withPropScope(scope, () =>
+            getPropFactory(factoryName)(context.scene, context.physicsWorld)
+        );
     }
 
     if (entry.afterCreate) {

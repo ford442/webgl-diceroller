@@ -91,6 +91,14 @@ export interface RoomSessionDeps {
     events: AppEvents;
     protocolVersion: number;
     solverBuildId: string;
+    /**
+     * `hashWorld` of the collider world this page built, or null before it has
+     * (or without WASM). Sent next to `solverBuildId` at join: seeded replay
+     * needs the same engine *and* the same table, and a guest whose props
+     * differ from the host's is turned away the same way a guest on another
+     * solver build is.
+     */
+    getWorldHash?: () => string | null;
     getDiceCounts: () => Record<string, number>;
     /** Opaque presence payload — shape is owned by the dice-appearance/dice-set subsystem. */
     getPresencePayload: () => unknown;
@@ -225,6 +233,9 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
             session: deps.getSessionSnapshot?.() ?? null,
             pendingCommit,
             lastReveal,
+            // The host's table can change under a live room (a layout re-roll);
+            // keep what a late guest is compared against current.
+            worldHash: deps.getWorldHash?.() ?? null,
         });
     }
 
@@ -458,6 +469,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                             role: role ?? 'guest',
                             name: displayName,
                             solverBuildId: deps.solverBuildId,
+                            worldHash: deps.getWorldHash?.() ?? null,
                         },
                         protocolVersion
                     )
@@ -562,6 +574,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
             peerId,
             role: connectRole,
             solverBuildId: deps.solverBuildId,
+            worldHash: deps.getWorldHash?.() ?? undefined,
             protocolVersion,
         });
     }
@@ -694,6 +707,11 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
         ) {
             setStatus('error', 'Solver build mismatch — rebuild WASM on all clients');
             throw new Error('solver_build_mismatch');
+        }
+        const localWorldHash = deps.getWorldHash?.() ?? null;
+        if (info.worldHash && localWorldHash && info.worldHash !== localWorldHash) {
+            setStatus('error', "Table mismatch — open the host's link so your table matches");
+            throw new Error('world_hash_mismatch');
         }
 
         attachMesh();

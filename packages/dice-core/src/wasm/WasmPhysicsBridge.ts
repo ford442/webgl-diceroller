@@ -310,6 +310,8 @@ export const seedPhysicsRNG = (seed: number): void => {
 };
 
 export const randomPhysicsFloat = (): number => {
+    // No engine means no simulation to keep in step with; nothing seeded reads this.
+    // eslint-disable-next-line no-restricted-properties
     if (!_session?.available) return Math.random();
     return _session.engine.randomFloat();
 };

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { playPropImpact } from '../audio/DiceCollisionAudio.js';
-import { createProp, materials, mesh, STATIC_MATERIAL } from './propKit.js';
+import { createProp, materials, mesh, propRng, STATIC_MATERIAL } from './propKit.js';
 
 export function createGong(
     scene,
@@ -8,6 +8,8 @@ export function createGong(
     position = { x: -15, y: -7.5, z: -15 },
     rotationY = Math.PI / 4
 ) {
+    // Claimed up front so the shake jitter in `update` draws from the prop's own stream.
+    const rng = propRng('Gong');
     const gongRadius = 1.2;
     const gongThickness = 0.08;
     const baseWidth = 3.8;
@@ -20,6 +22,7 @@ export function createGong(
 
     const result = createProp(scene, physicsWorld, {
         name: 'Gong',
+        rng,
         position,
         rotation: rotationY,
         colliders: [
@@ -174,8 +177,8 @@ export function createGong(
             const shakeAge = now - shakeStartTime;
             if (shakeAge < shakeDuration) {
                 const intensity = 1 - shakeAge / shakeDuration;
-                const shakeX = (Math.random() - 0.5) * 0.05 * intensity;
-                const shakeY = (Math.random() - 0.5) * 0.05 * intensity;
+                const shakeX = (rng() - 0.5) * 0.05 * intensity;
+                const shakeY = (rng() - 0.5) * 0.05 * intensity;
                 gongMesh.position.x = shakeX;
                 gongMesh.position.y = shakeY;
                 bossMesh.position.x = 0.02 + shakeX;

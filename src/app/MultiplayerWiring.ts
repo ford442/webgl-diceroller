@@ -9,7 +9,7 @@ import {
     applyDicePresencePayload,
     buildDicePresencePayload,
 } from '../dice.js';
-import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
+import { getWorldHash, isWasmAvailable } from '../wasm/PhysicsBridge.js';
 import { createRoomSession, resolveSignalingUrl } from '../net/RoomSession.js';
 import type { RoomSession } from '../net/RoomSession.js';
 import { createMultiplayerPanel } from '../ui/MultiplayerPanel.js';
@@ -45,6 +45,7 @@ export async function setupMultiplayer(
         events: appEvents,
         protocolVersion,
         solverBuildId,
+        getWorldHash,
         useFairCommit,
         getDiceCounts: () => getSpawnedDiceCounts(),
         getPresencePayload: () => buildDicePresencePayload(),

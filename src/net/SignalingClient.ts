@@ -25,6 +25,7 @@ export interface SignalingMessage {
     lastReveal?: unknown;
     protocolVersion?: number;
     solverBuildId?: string | null;
+    worldHash?: string | null;
     [key: string]: unknown;
 }
 
@@ -39,12 +40,15 @@ export interface RoomExistsResult {
     peerCount: number;
     protocolVersion?: number;
     solverBuildId?: string | null;
+    /** The host's collider-world hash, as of its last connect / state push. */
+    worldHash?: string | null;
 }
 
 export interface ConnectRoomOptions {
     peerId: string;
     role: 'host' | 'guest';
     solverBuildId?: string;
+    worldHash?: string;
     protocolVersion?: number;
 }
 
@@ -62,6 +66,8 @@ export interface RoomStatePayload {
     session?: unknown;
     pendingCommit?: unknown;
     lastReveal?: unknown;
+    /** The host's current collider-world hash, so a late guest compares against it. */
+    worldHash?: string | null;
 }
 
 export interface SignalingClient {
@@ -81,6 +87,8 @@ export interface SignalingClient {
 const SIGNALING_ERROR_MESSAGES: Record<string, string> = {
     solver_build_mismatch:
         'Solver build mismatch — rebuild WASM on all clients (npm run build:wasm) and refresh.',
+    world_hash_mismatch:
+        "Table mismatch — this table's colliders differ from the host's. Open the host's link (same layout, same app version).",
     protocol_version_mismatch: 'Protocol version mismatch — use the same app build on all clients.',
     host_already_present: 'Another host is already connected to this room.',
     room_not_found: 'Room not found.',
@@ -150,6 +158,7 @@ export function createSignalingClient(signalingUrl: string): SignalingClient {
         params.set('peerId', opts.peerId);
         params.set('role', opts.role);
         if (opts.solverBuildId) params.set('solverBuildId', opts.solverBuildId);
+        if (opts.worldHash) params.set('worldHash', opts.worldHash);
         if (opts.protocolVersion != null)
             params.set('protocolVersion', String(opts.protocolVersion));
 

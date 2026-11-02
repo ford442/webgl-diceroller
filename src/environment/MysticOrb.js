@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createProp, materials, mesh, STATIC_MATERIAL } from './propKit.js';
+import { createProp, materials, mesh, propRng, STATIC_MATERIAL } from './propKit.js';
 
 export const OrbMode = {
     ICE: 0,
@@ -28,6 +28,8 @@ export function createMysticOrb(
     position = { x: 12, y: -2.75, z: 4 },
     rotationY = 0
 ) {
+    // Claimed synchronously; the particle init and every per-frame respawn draw from it.
+    const rng = propRng('MysticOrb');
     const pedestalBaseRadius = 0.8;
     const pedestalBaseHeight = 0.2;
     const pedestalStemRadius = 0.3;
@@ -49,6 +51,7 @@ export function createMysticOrb(
 
     const result = createProp(scene, physicsWorld, {
         name: 'MysticOrb',
+        rng,
         position,
         rotation: rotationY,
         colliders: [
@@ -182,9 +185,9 @@ export function createMysticOrb(
         particles.push({
             position: new THREE.Vector3(),
             velocity: new THREE.Vector3(),
-            life: Math.random(),
-            maxLife: 1 + Math.random() * 2,
-            size: 0.5 + Math.random() * 0.5,
+            life: rng(),
+            maxLife: 1 + rng() * 2,
+            size: 0.5 + rng() * 0.5,
             mesh: null,
         });
     }
@@ -217,38 +220,38 @@ export function createMysticOrb(
     createParticleMeshes();
 
     const resetParticle = (p, burst = false) => {
-        const angle = Math.random() * Math.PI * 2;
-        const radius = 0.3 + Math.random() * 0.2;
-        const height = orbMesh.position.y + (Math.random() - 0.5) * 0.3;
+        const angle = rng() * Math.PI * 2;
+        const radius = 0.3 + rng() * 0.2;
+        const height = orbMesh.position.y + (rng() - 0.5) * 0.3;
         p.position.set(Math.cos(angle) * radius, height, Math.sin(angle) * radius);
 
         switch (currentMode) {
             case OrbMode.ICE:
                 p.velocity.set(
-                    (Math.random() - 0.5) * 0.2,
-                    burst ? (Math.random() - 0.3) * 0.5 : -0.1 - Math.random() * 0.2,
-                    (Math.random() - 0.5) * 0.2
+                    (rng() - 0.5) * 0.2,
+                    burst ? (rng() - 0.3) * 0.5 : -0.1 - rng() * 0.2,
+                    (rng() - 0.5) * 0.2
                 );
                 break;
             case OrbMode.FIRE:
                 p.velocity.set(
-                    (Math.random() - 0.5) * 0.3,
-                    burst ? (Math.random() + 0.2) * 0.5 : 0.1 + Math.random() * 0.3,
-                    (Math.random() - 0.5) * 0.3
+                    (rng() - 0.5) * 0.3,
+                    burst ? (rng() + 0.2) * 0.5 : 0.1 + rng() * 0.3,
+                    (rng() - 0.5) * 0.3
                 );
                 break;
             case OrbMode.NATURE:
                 p.velocity.set(
-                    (Math.random() - 0.5) * 0.4,
-                    burst ? (Math.random() - 0.5) * 0.4 : (Math.random() - 0.5) * 0.2,
-                    (Math.random() - 0.5) * 0.4
+                    (rng() - 0.5) * 0.4,
+                    burst ? (rng() - 0.5) * 0.4 : (rng() - 0.5) * 0.2,
+                    (rng() - 0.5) * 0.4
                 );
                 break;
             case OrbMode.ARCANE: {
-                const spiralAngle = Math.random() * Math.PI * 2;
+                const spiralAngle = rng() * Math.PI * 2;
                 p.velocity.set(
                     Math.cos(spiralAngle) * 0.3,
-                    burst ? (Math.random() - 0.2) * 0.4 : 0.05 + Math.random() * 0.1,
+                    burst ? (rng() - 0.2) * 0.4 : 0.05 + rng() * 0.1,
                     Math.sin(spiralAngle) * 0.3
                 );
                 break;

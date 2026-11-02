@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createProp, STATIC_MATERIAL } from './propKit.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
+import { createSeededRng } from '../core/SeededRng.js';
 
 /**
  * Creates a Wooden Dice Tray with a velvet interior and physics colliders
@@ -157,6 +158,7 @@ export function createDiceTray(
 }
 
 function generateVelvetTexture() {
+    const rng = createSeededRng(0x44695401);
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -167,12 +169,12 @@ function generateVelvetTexture() {
     ctx.fillRect(0, 0, size, size);
 
     for (let i = 0; i < 8000; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const r = Math.random() * 2 + 1;
+        const x = rng() * size;
+        const y = rng() * size;
+        const r = rng() * 2 + 1;
 
-        ctx.fillStyle = Math.random() > 0.5 ? '#A52A2A' : '#600000';
-        ctx.globalAlpha = Math.random() * 0.3 + 0.1;
+        ctx.fillStyle = rng() > 0.5 ? '#A52A2A' : '#600000';
+        ctx.globalAlpha = rng() * 0.3 + 0.1;
 
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -182,15 +184,10 @@ function generateVelvetTexture() {
     ctx.globalAlpha = 0.05;
     ctx.lineWidth = 4;
     for (let i = 0; i < 50; i++) {
-        const y = Math.random() * size;
+        const y = rng() * size;
         ctx.beginPath();
         ctx.moveTo(0, y);
-        ctx.quadraticCurveTo(
-            size / 2,
-            y + (Math.random() - 0.5) * 50,
-            size,
-            y + (Math.random() - 0.5) * 20
-        );
+        ctx.quadraticCurveTo(size / 2, y + (rng() - 0.5) * 50, size, y + (rng() - 0.5) * 20);
         ctx.strokeStyle = '#FFFFFF';
         ctx.stroke();
     }

@@ -14,13 +14,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { rollHeadless } from 'dice-core';
-import type { WorldFixture } from 'dice-core/wasm/WorldRecorder';
+import { parseWorldFixtureFile } from 'dice-core/wasm/WorldRecorder';
 import { describeWasm } from './wasmGate.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const world = JSON.parse(
+// Throws if the fixture's cited hash no longer names its world.
+const { world } = parseWorldFixtureFile(
     readFileSync(path.join(REPO_ROOT, 'tests/fixtures/tavern-world.json'), 'utf8')
-) as WorldFixture;
+);
 
 const SEEDS = Number(process.env.TAVERN_SEEDS) || 24;
 const MAX_SIM_SECONDS = 12;

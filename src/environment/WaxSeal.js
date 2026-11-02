@@ -13,7 +13,7 @@ export function createWaxSeal(
     const visualShift = totalHeight / 2;
 
     createProp(scene, physicsWorld, {
-        name: 'WaxSealStamp',
+        name: 'WaxSeal',
         position,
         rotation: rotationY,
         footOffsetY: visualShift,
@@ -24,7 +24,7 @@ export function createWaxSeal(
                 halfHeight: totalHeight / 2,
             },
         ],
-        build({ group }) {
+        build({ group, rng }) {
             const woodMat = new THREE.MeshStandardMaterial({
                 color: 0x3e2723,
                 roughness: 0.7,
@@ -86,7 +86,7 @@ export function createWaxSeal(
                         positions.setZ(i, z + (z / len) * offset);
                     }
                     if (y > 0) {
-                        positions.setY(i, y + Math.random() * 0.02);
+                        positions.setY(i, y + rng() * 0.02);
                     }
                 }
             }

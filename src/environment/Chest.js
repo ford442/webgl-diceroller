@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createProp } from './propKit.js';
 import { getWoodTextures } from '../core/TexturePipeline.js';
+import { createSeededRng } from '../core/SeededRng.js';
 
 /**
  * Enhanced Chest with:
@@ -60,7 +61,7 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
     });
 
     return createProp(scene, physicsWorld, {
-        name: 'EnhancedChest',
+        name: 'Chest',
         position,
         rotation: rotationY,
         colliders: [
@@ -201,6 +202,7 @@ export function createChest(scene, physicsWorld, position = { x: 0, y: 0, z: 0 }
 }
 
 function generateWoodTexture() {
+    const rng = createSeededRng(0x43686501);
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 256;
@@ -214,7 +216,7 @@ function generateWoodTexture() {
 
     for (let i = 0; i < 30; i++) {
         ctx.beginPath();
-        const x = Math.random() * 256;
+        const x = rng() * 256;
         ctx.moveTo(x, 0);
 
         for (let y = 0; y < 256; y += 10) {

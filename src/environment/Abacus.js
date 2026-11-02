@@ -49,7 +49,7 @@ export function createAbacus(
                 materialTag: STATIC_MATERIAL.WOOD,
             },
         ],
-        build({ group }) {
+        build({ group, rng }) {
             group.rotation.set(-Math.PI / 2, rotationY, 0, 'YXZ');
 
             const topBotGeo = new THREE.BoxGeometry(frameWidth, frameThickness, frameThickness);
@@ -88,7 +88,7 @@ export function createAbacus(
                 let currentY = -(railLength / 2) + beadOuterRadius;
 
                 for (let j = 0; j < beadCountPerRail; j++) {
-                    const extraSpace = (Math.random() * availableSpace) / beadCountPerRail;
+                    const extraSpace = (rng() * availableSpace) / beadCountPerRail;
                     currentY += extraSpace;
 
                     group.add(
@@ -96,8 +96,8 @@ export function createAbacus(
                             position: { x: railX, y: currentY, z: 0 },
                             rotation: {
                                 x: Math.PI / 2,
-                                y: (Math.random() - 0.5) * 0.2,
-                                z: (Math.random() - 0.5) * 0.2,
+                                y: (rng() - 0.5) * 0.2,
+                                z: (rng() - 0.5) * 0.2,
                             },
                         })
                     );

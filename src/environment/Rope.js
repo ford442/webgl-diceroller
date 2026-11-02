@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+import { createSeededRng } from '../core/SeededRng.js';
 import { createProp } from './propKit.js';
 
 function createRopeTexture() {
+    const rng = createSeededRng(0x526f7001);
     const canvas = document.createElement('canvas');
     canvas.width = 512;
     canvas.height = 128;
@@ -12,18 +14,18 @@ function createRopeTexture() {
 
     ctx.lineWidth = 2;
     for (let i = 0; i < 500; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const length = 20 + Math.random() * 40;
+        const x = rng() * canvas.width;
+        const y = rng() * canvas.height;
+        const length = 20 + rng() * 40;
 
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(x + length, y + length * 0.5);
 
-        if (Math.random() > 0.5) {
-            ctx.strokeStyle = `rgba(139, 115, 85, ${0.1 + Math.random() * 0.3})`;
+        if (rng() > 0.5) {
+            ctx.strokeStyle = `rgba(139, 115, 85, ${0.1 + rng() * 0.3})`;
         } else {
-            ctx.strokeStyle = `rgba(205, 186, 150, ${0.1 + Math.random() * 0.3})`;
+            ctx.strokeStyle = `rgba(205, 186, 150, ${0.1 + rng() * 0.3})`;
         }
         ctx.stroke();
     }
@@ -38,6 +40,7 @@ function createRopeTexture() {
 }
 
 function createRopeBumpTexture() {
+    const rng = createSeededRng(0x526f7002);
     const canvas = document.createElement('canvas');
     canvas.width = 512;
     canvas.height = 128;
@@ -48,14 +51,14 @@ function createRopeBumpTexture() {
 
     ctx.lineWidth = 2;
     for (let i = 0; i < 500; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const length = 20 + Math.random() * 40;
+        const x = rng() * canvas.width;
+        const y = rng() * canvas.height;
+        const length = 20 + rng() * 40;
 
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(x + length, y + length * 0.5);
-        ctx.strokeStyle = `rgba(0, 0, 0, ${0.2 + Math.random() * 0.4})`;
+        ctx.strokeStyle = `rgba(0, 0, 0, ${0.2 + rng() * 0.4})`;
         ctx.stroke();
     }
 
@@ -87,7 +90,7 @@ export function createRope(scene, physicsWorld, position = { x: 0, y: -2.75, z: 
                 offset: { y: totalHeight / 2 },
             },
         ],
-        build({ group }) {
+        build({ group, rng }) {
             const ropeTex = createRopeTexture();
             const bumpTex = createRopeBumpTexture();
 
@@ -100,16 +103,16 @@ export function createRope(scene, physicsWorld, position = { x: 0, y: -2.75, z: 
             });
 
             for (let i = 0; i < coils; i++) {
-                const r = coilRadius + (Math.random() * 0.1 - 0.05);
+                const r = coilRadius + (rng() * 0.1 - 0.05);
                 const currentRadius = i === coils - 1 ? r * 0.9 : r;
 
                 const torusGeo = new THREE.TorusGeometry(currentRadius, ropeThickness, 16, 64);
                 const torus = new THREE.Mesh(torusGeo, ropeMat);
                 torus.rotation.x = Math.PI / 2;
-                torus.rotation.y = (Math.random() - 0.5) * 0.1;
+                torus.rotation.y = (rng() - 0.5) * 0.1;
                 torus.position.y = ropeThickness + i * ropeThickness * 1.3;
-                torus.position.x = (Math.random() - 0.5) * 0.1;
-                torus.position.z = (Math.random() - 0.5) * 0.1;
+                torus.position.x = (rng() - 0.5) * 0.1;
+                torus.position.z = (rng() - 0.5) * 0.1;
                 torus.castShadow = true;
                 torus.receiveShadow = true;
                 group.add(torus);

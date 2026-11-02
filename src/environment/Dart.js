@@ -22,7 +22,6 @@ export function createDart(
     const totalHeight = tipHeight + barrelHeight + shaftHeight;
     const boxWidth = flightWidth * 2;
     const boxDepth = flightWidth * 2;
-    const dartRotationY = Math.random() * Math.PI * 2;
 
     return createProp(scene, physicsWorld, {
         name: 'Dart',
@@ -35,7 +34,8 @@ export function createDart(
                 materialTag: STATIC_MATERIAL.METAL,
             },
         ],
-        build({ group }) {
+        build({ group, rng }) {
+            const dartRotationY = rng() * Math.PI * 2;
             group.rotation.set(0, dartRotationY, rotationZ);
 
             const metalMaterial = new THREE.MeshStandardMaterial({

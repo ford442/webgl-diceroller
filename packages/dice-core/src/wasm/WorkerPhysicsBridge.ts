@@ -865,6 +865,9 @@ class WorkerEngineProxy implements PhysicsEngine {
         console.warn(
             '[WorkerPhysics] randomFloat() is unavailable synchronously in worker mode; use seededThrow() for deterministic rolls.'
         );
+        // Only reached by a caller that asked a worker engine for an unseeded
+        // float, which it was just warned it cannot get; no roll draws from it.
+        // eslint-disable-next-line no-restricted-properties
         return Math.random();
     }
     serializeState(): Uint8Array {
@@ -1016,6 +1019,8 @@ export const seedPhysicsRNG = (seed: number): void => {
 
 export const randomPhysicsFloat = (): number => {
     const engine = activeEngine();
+    // No engine means no simulation to keep in step with; nothing seeded reads this.
+    // eslint-disable-next-line no-restricted-properties
     if (!engine) return Math.random();
     return engine.randomFloat();
 };

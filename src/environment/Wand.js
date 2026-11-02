@@ -24,7 +24,7 @@ export function createWand(
     };
 
     const result = createProp(scene, physicsWorld, {
-        name: 'MagicWand',
+        name: 'Wand',
         position,
         rotation: rotationY,
         colliders: [

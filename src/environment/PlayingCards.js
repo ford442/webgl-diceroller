@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createProp } from './propKit.js';
+import { createProp, propRng } from './propKit.js';
 import { registerInteractable } from '../interactables/InteractableRegistry.js';
 import { tween } from '../interactables/tween.js';
 
@@ -17,6 +17,9 @@ export function createPlayingCards(
     position = { x: -8, y: -2.75, z: -8 },
     _rotationY = 0
 ) {
+    // Claimed up front so the click-to-draw faces (drawRandom) come from the same
+    // seeded stream createProp hands to build.
+    const rng = propRng('PlayingCards');
     const width = 1.0;
     const height = 1.4;
     const thickness = 0.01;
@@ -58,6 +61,7 @@ export function createPlayingCards(
 
     const result = createProp(scene, physicsWorld, {
         name: 'PlayingCards',
+        rng,
         colliders,
         dispose: () => {
             /* interactable handle is shared/overwritten across spawns */
@@ -185,8 +189,8 @@ export function createPlayingCards(
     const animating = new Set();
 
     const drawRandom = () => {
-        const s = SUITS[Math.floor(Math.random() * SUITS.length)];
-        const rank = RANKS[Math.floor(Math.random() * RANKS.length)];
+        const s = SUITS[Math.floor(rng() * SUITS.length)];
+        const rank = RANKS[Math.floor(rng() * RANKS.length)];
         return { rank, suit: s.suit, color: s.color };
     };
 

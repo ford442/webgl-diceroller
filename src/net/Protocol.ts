@@ -41,6 +41,8 @@ export interface HelloFields {
     role: string;
     name?: string | null;
     solverBuildId?: string | null;
+    /** `hashWorld` of the sender's collider world; see `RoomSessionDeps.getWorldHash`. */
+    worldHash?: string | null;
 }
 
 export interface WelcomeFields {
@@ -128,6 +130,7 @@ export interface HelloMessage extends ProtocolEnvelope {
     name: string | null;
     protocolVersion: number;
     solverBuildId?: string | null;
+    worldHash?: string | null;
 }
 
 export interface WelcomeMessage extends ProtocolEnvelope {
@@ -261,6 +264,7 @@ export function makeHello(fields: HelloFields, version: number = PROTOCOL_VERSIO
         name: fields.name ?? null,
         protocolVersion: version,
         solverBuildId: fields.solverBuildId ?? null,
+        worldHash: fields.worldHash ?? null,
     };
 }
 

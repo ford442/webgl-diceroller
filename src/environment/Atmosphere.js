@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+import { propRng } from './propRng.js';
 
 let dustParticles;
 
 export function createAtmosphere(scene) {
+    const rng = propRng('Atmosphere');
     const particleCount = 300;
     const geometry = new THREE.BufferGeometry();
     const positions = [];
@@ -14,13 +16,13 @@ export function createAtmosphere(scene) {
     // We want particles visible near the candle and table.
 
     for (let i = 0; i < particleCount; i++) {
-        const x = (Math.random() - 0.5) * 30;
-        const y = (Math.random() - 0.5) * 20; // -10 to 10
-        const z = (Math.random() - 0.5) * 30;
+        const x = (rng() - 0.5) * 30;
+        const y = (rng() - 0.5) * 20; // -10 to 10
+        const z = (rng() - 0.5) * 30;
         positions.push(x, y, z);
 
         // Random drift params (0-1)
-        velocities.push(Math.random(), Math.random(), Math.random());
+        velocities.push(rng(), rng(), rng());
     }
 
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));

@@ -32,7 +32,7 @@ export function createWritingSet(
                 rotation: { x: Math.PI / 2, y: Math.PI / 4 },
             },
         ],
-        build({ group }) {
+        build({ group, rng }) {
             const featherMat = new THREE.MeshStandardMaterial({
                 color: 0xf5f5f5,
                 roughness: 0.6,
@@ -218,7 +218,7 @@ export function createWritingSet(
             const usedSealGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.03, 16);
             const usedSeal = new THREE.Mesh(usedSealGeo, waxMat);
             usedSeal.position.set(-0.8, 0.015, 0.2);
-            usedSeal.rotation.y = Math.random() * Math.PI;
+            usedSeal.rotation.y = rng() * Math.PI;
             usedSeal.receiveShadow = true;
             group.add(usedSeal);
         },

@@ -21,7 +21,7 @@ export function createSkull(
     let rightLight;
 
     const result = createProp(scene, physicsWorld, {
-        name: 'SkullProp',
+        name: 'Skull',
         position,
         rotation: rotationY,
         colliders: [{ type: 'box', halfExtents: [0.4, 0.45, 0.4] }],
