@@ -10,6 +10,12 @@ export type AppEventHandler = (payload: unknown) => void;
 
 export const AppEvent = Object.freeze({
     ROLL_STARTED: 'roll:started',
+    /**
+     * A host published the commitment for a roll that has not started yet
+     * (`{ commit }`). Separate from ROLL_STARTED so the ack window does not
+     * count as a roll: the room session broadcasts it, nothing else listens.
+     */
+    ROLL_COMMITTED: 'roll:committed',
     ROLL_SETTLED: 'roll:settled',
     ROLL_EVALUATED: 'roll:evaluated',
     DICE_COLLISION: 'dice:collision',

@@ -78,7 +78,7 @@ export function createDiceTowerController(deps: any) {
      * a share link exactly like a thrown roll does. Unlike a cup pour (which
      * is deliberately local-only, `seed == null`), a drop is a seeded roll.
      *
-     * Async because under `?fair-commit` the host must broadcast its commit and
+     * Async because in a room the host must broadcast its commit and
      * reveal *before* any die moves — starting the drop first would let it see
      * the outcome and withhold the reveal. Off that path the await resolves
      * immediately.

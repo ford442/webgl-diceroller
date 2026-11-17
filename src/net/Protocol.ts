@@ -4,9 +4,21 @@
 
 export const PROTOCOL_VERSION_V1 = 1;
 export const PROTOCOL_VERSION_V2 = 2;
-/** Default encode version — v1 until fair-commit / v2 soak completes. */
-export const PROTOCOL_VERSION = PROTOCOL_VERSION_V1;
+/**
+ * The version every client speaks: commit-reveal (v2). A host publishes a
+ * hash of its seed before any die moves and reveals the seed afterwards, so
+ * no guest — and no relay — sees a cleartext seed it could act on first.
+ * There is no flag to fall back to v1: the signaling room is pinned to its
+ * host's version, so a v1 client is turned away at join with
+ * `protocol_version_mismatch` rather than handed a cleartext seed.
+ */
+export const PROTOCOL_VERSION = PROTOCOL_VERSION_V2;
 
+/**
+ * Versions `decodeMessage` accepts. v1 is still read for one release so a
+ * message that arrives from a v1 peer surfaces as a protocol error on the
+ * channel instead of being dropped as unreadable; drop it after that.
+ */
 export const SUPPORTED_PROTOCOL_VERSIONS = [PROTOCOL_VERSION_V1, PROTOCOL_VERSION_V2] as const;
 
 export const MsgType = Object.freeze({
@@ -76,8 +88,8 @@ export interface RollFields {
      * Table slots a partial throw moved (a game re-throwing the dice it did not
      * set aside). Absent means every die — what every roll before this field
      * meant, so old hosts and guests keep agreeing. Slots, not physics ids: the
-     * engine hands body ids out per session. Not part of the fair-commit
-     * preimage yet, so the host never sends it on that path.
+     * engine hands body ids out per session. On the commit-reveal path the
+     * same slots ride `commit` / `reveal` and are bound into the hash.
      */
     ids?: number[] | null;
 }
@@ -88,6 +100,8 @@ export interface CommitFields {
     dieCount: number;
     diceCounts?: Record<string, number> | null;
     throwAt?: number | null;
+    /** Table slots of a partial throw, bound into `hash`; absent = every die. */
+    ids?: number[] | null;
 }
 
 export interface CommitAckFields {
@@ -103,6 +117,8 @@ export interface RevealFields {
     throwAt?: number | null;
     /** See `RollFields.source`. */
     source?: string | null;
+    /** See `RollFields.ids`; must match the slots the commit bound. */
+    ids?: number[] | null;
 }
 
 export interface SessionSyncFields {
@@ -167,6 +183,8 @@ export interface CommitMessage extends ProtocolEnvelope {
     dieCount: number;
     diceCounts: Record<string, number> | null;
     throwAt: number | null;
+    /** See `CommitFields.ids`; omitted from the wire when the roll moves every die. */
+    ids?: number[];
 }
 
 export interface CommitAckMessage extends ProtocolEnvelope {
@@ -183,6 +201,8 @@ export interface RevealMessage extends ProtocolEnvelope {
     presence: unknown;
     throwAt: number | null;
     source: string | null;
+    /** See `RevealFields.ids`; omitted from the wire when the roll moved every die. */
+    ids?: number[];
 }
 
 export interface SessionSyncMessage extends ProtocolEnvelope {
@@ -317,6 +337,7 @@ export function makeCommit(
         dieCount: fields.dieCount,
         diceCounts: fields.diceCounts ?? null,
         throwAt: fields.throwAt ?? null,
+        ...(fields.ids?.length ? { ids: [...fields.ids] } : {}),
     };
 }
 
@@ -343,6 +364,7 @@ export function makeReveal(
         presence: fields.presence ?? null,
         throwAt: fields.throwAt ?? null,
         source: fields.source ?? null,
+        ...(fields.ids?.length ? { ids: [...fields.ids] } : {}),
     };
 }
 

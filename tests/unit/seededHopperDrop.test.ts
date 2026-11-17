@@ -150,7 +150,7 @@ describe('fair-commit ordering', () => {
         expect(callSites.length).toBeGreaterThanOrEqual(3);
         for (const { line, n } of callSites) {
             expect(line, `RollWiring.ts:${n} must await broadcastFairCommit`).toMatch(
-                /^await broadcastFairCommit\(/
+                /^(?:const \w+ = )?await broadcastFairCommit\(/
             );
         }
     });

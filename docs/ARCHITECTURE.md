@@ -42,7 +42,7 @@ Collision audio and the settled results overlay subscribe via events; the live p
 
 ### Multiplayer
 
-Host-authoritative WebRTC tables use deterministic WASM seeded replay. See [`MULTIPLAYER.md`](MULTIPLAYER.md) for signaling (Cloudflare Durable Object rooms), `?room=` deep links, `?fair-commit` (protocol v2), and COOP/COEP constraints.
+Host-authoritative WebRTC tables use deterministic WASM seeded replay. See [`MULTIPLAYER.md`](MULTIPLAYER.md) for signaling (Cloudflare Durable Object rooms), `?room=` deep links, commit-reveal (protocol v2, every room), and COOP/COEP constraints.
 
 ### Session layer
 
@@ -87,7 +87,7 @@ The rules never see the scene; four small pieces join them to it.
 
 `RollWiring.throwSubset(ids, seed)` is a seeded roll like a tower drop, with `source: 'game'`: it resolves on its own `ROLL_SETTLED` (flagging `superseded` if another roll started meanwhile), keeps the generic results overlay out of the game, and records only the dice that moved in roll history and fairness stats. While a game is active R / Roll All / the results re-roll are claimed by the game (`interceptRoll`): they mean "my throw", never "throw the free dice outside the rules".
 
-**Partial throws in share links and messages.** `?ids=1,4` (`v=3`) names the dice a throw moved as **table slots** — positions in the dice set, the order of `readAllDiceValues()` — never physics body ids, which the engine hands out per session. Absent means every die, and a link with no `ids` still writes `v=1`/`v=2`, so older links and clients are unaffected; an older client rejects a `v=3` link rather than replay a subset as a full throw. A replay (link, `roll` message, table sync) throws exactly those slots and first parks the dice it leaves out in the jail, so a fresh spawn's random resting places cannot disturb it. The `roll` message carries the same optional `ids`; it is deliberately not sent under `?fair-commit`, whose commitment does not bind a subset yet.
+**Partial throws in share links and messages.** `?ids=1,4` (`v=3`) names the dice a throw moved as **table slots** — positions in the dice set, the order of `readAllDiceValues()` — never physics body ids, which the engine hands out per session. Absent means every die, and a link with no `ids` still writes `v=1`/`v=2`, so older links and clients are unaffected; an older client rejects a `v=3` link rather than replay a subset as a full throw. A replay (link, `roll` message, table sync) throws exactly those slots and first parks the dice it leaves out in the jail, so a fresh spawn's random resting places cannot disturb it. The `commit` / `reveal` messages carry the same optional `ids`, bound into the commitment hash, so a host cannot pick the subset after the acks.
 
 Not yet: a second human seat or a room (the host broadcasts `{ action, seed, ids }` on the `roll` path; games refuse to start inside a room), Liar's Dice (needs hidden dice and protocol v2 as the default), and a parchment score sheet. Test hook: `window.__app.game` (`start`, `stop`, `getSnapshot`, `submit`, `rethrow`). Tests: `tests/unit/gameSession.test.ts`, `rollWiringPartial.test.ts`, `diceJailController.test.ts`, `farklePanel.test.ts` (no WASM); `npm run test:partial-throw` and `npm run test:game-farkle` (real engine).
 

@@ -89,7 +89,8 @@ const SIGNALING_ERROR_MESSAGES: Record<string, string> = {
         'Solver build mismatch — rebuild WASM on all clients (npm run build:wasm) and refresh.',
     world_hash_mismatch:
         "Table mismatch — this table's colliders differ from the host's. Open the host's link (same layout, same app version).",
-    protocol_version_mismatch: 'Protocol version mismatch — use the same app build on all clients.',
+    protocol_version_mismatch:
+        "Protocol version mismatch — this room's host runs a different app version. Reload so every player is on the same build.",
     host_already_present: 'Another host is already connected to this room.',
     room_not_found: 'Room not found.',
     room_full: 'Room is full (max 6 players).',
@@ -97,6 +98,25 @@ const SIGNALING_ERROR_MESSAGES: Record<string, string> = {
 
 function signalingErrorMessage(errorCode: string): string {
     return SIGNALING_ERROR_MESSAGES[errorCode] ?? errorCode;
+}
+
+/**
+ * A join the room refused for a reason retrying cannot fix (another build,
+ * another table, a full room). `code` is the Worker's error code; the message
+ * is the user-facing text.
+ */
+export class SignalingRejectedError extends Error {
+    readonly code: string;
+    constructor(code: string) {
+        super(signalingErrorMessage(code));
+        this.name = 'SignalingRejectedError';
+        this.code = code;
+    }
+}
+
+/** A user-facing join error for a Worker error code — what the panel shows. */
+export function signalingRejection(code: string): SignalingRejectedError {
+    return new SignalingRejectedError(code);
 }
 
 /**
@@ -186,6 +206,14 @@ export function createSignalingClient(signalingUrl: string): SignalingClient {
                 } catch {
                     return;
                 }
+                // Settle on a refusal before any listener runs: a listener
+                // that tears the session down closes the socket, and that
+                // close must not win the race and hide the reason.
+                if (!settled && msg?.error) {
+                    // The Worker refuses a join over an accepted socket (a
+                    // plain 403 on the upgrade never reaches page script).
+                    fail(signalingRejection(String(msg.error)));
+                }
                 emit(msg);
                 if (!settled && msg?.type === 'joined') {
                     settled = true;
@@ -194,9 +222,6 @@ export function createSignalingClient(signalingUrl: string): SignalingClient {
                         role: msg.role ?? opts.role,
                         peers: msg.peers ?? [],
                     });
-                }
-                if (!settled && msg?.error) {
-                    fail(new Error(signalingErrorMessage(String(msg.error))));
                 }
             });
 

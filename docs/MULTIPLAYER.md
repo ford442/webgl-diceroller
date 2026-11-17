@@ -27,17 +27,42 @@ Requires WASM on both clients (`npm run build:wasm` / artifacts in `public/wasm/
 
 Override signaling at runtime with `?signal=http://127.0.0.1:8787` (useful without rebuilding).
 
-### Commit-reveal fairness (`?fair-commit`)
+### Commit-reveal fairness (protocol v2, the default)
 
-Protocol v2 (`PROTOCOL_VERSION = 2`) uses commit-reveal instead of broadcasting the raw seed:
+Every room speaks protocol v2 (`PROTOCOL_VERSION = 2`): commit-reveal instead of broadcasting the raw seed. There is no flag — `?fair-commit` used to opt in and is now ignored.
 
-1. Host publishes `commit { hash: sha256(seed ‖ nonce), notation, dieCount }`.
+1. Host publishes `commit { hash: sha256(seed ‖ nonce ‖ source [‖ \0ids=slots]), notation, dieCount, ids? }`.
 2. Guests ack (`commit-ack`).
-3. Host publishes `reveal { seed, nonce }`.
+3. Host publishes `reveal { seed, nonce, source, ids? }`.
 4. Every client verifies the hash via Web Crypto, then runs `seededPhysicsThrow`.
 5. Face values come **only** from the WASM engine buffer (`getDieFaceValue`).
 
-Add `?fair-commit` to the URL until v2 is the default.
+The roll's `source` (throw vs tower drop) and, for a partial throw, its table
+slots are part of the preimage: the same seed lands differently through the
+tower or over a subset, so a commitment that left either out would let a host
+choose after the acks. A whole-table throw adds no slot bytes, so its hash is
+what it was before slots were bound.
+
+On the host, the commitment goes out on `AppEvent.ROLL_COMMITTED` and the roll
+then starts **once** on `ROLL_STARTED`, carrying the reveal
+(`RollWiring.broadcastFairCommit`). Outside a room, or on a guest, nothing is
+committed and the roll starts straight away.
+
+**Soak (2026-11-17).** `?fair-commit` never actually soaked: the room
+defaulted to v1 and compared _every_ join against it, so a v2 host was turned
+away from the room it had just created (`protocol_version_mismatch`), and a
+solo `?fair-commit` page never emitted `ROLL_STARTED`. Both are fixed in the
+change that made v2 the default. The soak since then is
+`npm run test:multiplayer-commit-reveal`: two headless Chromium clients
+(SwiftShader, WASM worker physics) in one room on a local `wrangler dev`
+Worker. A whole-table throw and a partial throw (one die held in the jail) both
+settled the same faces on host and guest in two consecutive runs (different
+seeds), and a client that
+announces v1 was refused with `protocol_version_mismatch`. That harness also
+found that `R` with a die in the jail was announced as a whole-table throw (on
+v1 as well), so a guest threw the held die too. `R` now names the dice it moves
+(`heldThrowSubset`). The harness is not in CI: the runners have no signaling
+Worker.
 
 **Every roll path awaits its own commit/reveal before a single die moves** —
 throws, notation rolls and tower drops alike. Starting the local simulation
@@ -48,12 +73,13 @@ test over `RollWiring.ts` (see `tests/unit/seededHopperDrop.test.ts`).
 
 ### What is and is not a seeded roll
 
-| Path                   | Seed        | On the share URL         | Broadcast to guests |
-| ---------------------- | ----------- | ------------------------ | ------------------- |
-| Roll button / `?seed=` | host-minted | yes (`v=1`)              | yes                 |
-| Notation roll          | host-minted | yes (`v=1`, `expr=`)     | yes                 |
-| **Dice tower drop**    | host-minted | yes (`v=2`, `src=tower`) | yes                 |
-| Dice cup pour          | `null`      | no                       | no                  |
+| Path                                       | Seed        | On the share URL         | Broadcast to guests   |
+| ------------------------------------------ | ----------- | ------------------------ | --------------------- |
+| Roll button / `?seed=`                     | host-minted | yes (`v=1`)              | yes                   |
+| Partial throw (`R` with a die in the jail) | host-minted | yes (`v=3`, `ids=`)      | yes (slots committed) |
+| Notation roll                              | host-minted | yes (`v=1`, `expr=`)     | yes                   |
+| **Dice tower drop**                        | host-minted | yes (`v=2`, `src=tower`) | yes                   |
+| Dice cup pour                              | `null`      | no                       | no                    |
 
 A **cup pour** is driven by where the player physically waves the cup, which no
 seed can reproduce, so it stays local by design.
@@ -104,18 +130,18 @@ Rebuild-required UX: any behavioural solver change bumps `SOLVER_REVISION` in `d
 
 ## Protocol (DataChannel JSON)
 
-Default wire version: `PROTOCOL_VERSION = 1` ([`src/net/Protocol.ts`](../src/net/Protocol.ts)). With `?fair-commit`, clients negotiate v2.
+Wire version: `PROTOCOL_VERSION = 2` ([`src/net/Protocol.ts`](../src/net/Protocol.ts)). `decodeMessage` still reads v1 for one release, only so a v1 peer that reaches a channel gets an `error` it displays (see Mismatch errors); remove `PROTOCOL_VERSION_V1` from `SUPPORTED_PROTOCOL_VERSIONS` after that.
 
-| type                               | direction     | purpose                                                   |
-| ---------------------------------- | ------------- | --------------------------------------------------------- |
-| `hello` / `welcome`                | both          | identity, `protocolVersion`, `solverBuildId`, `worldHash` |
-| `table-sync`                       | host → guest  | dice counts, presence, optional `lastRoll`                |
-| `roll`                             | host → guests | v1: cleartext `seed`, notation, diceCounts, `source`      |
-| `commit` / `commit-ack` / `reveal` | host ↔ guests | v2 commit-reveal (see above); `reveal` carries `source`   |
-| `session-sync`                     | host → guests | initiative seats, current actor, last expression          |
-| `presence`                         | host → guests | `buildDicePresencePayload` fields                         |
-| `ping` / `pong`                    | both          | liveness                                                  |
-| `error`                            | both          | `commit_mismatch`, version/build mismatch                 |
+| type                               | direction     | purpose                                                     |
+| ---------------------------------- | ------------- | ----------------------------------------------------------- |
+| `hello` / `welcome`                | both          | identity, `protocolVersion`, `solverBuildId`, `worldHash`   |
+| `table-sync`                       | host → guest  | dice counts, presence, optional `lastRoll`                  |
+| `roll`                             | host → guests | v1 only: cleartext `seed` — a v2 guest ignores it           |
+| `commit` / `commit-ack` / `reveal` | host ↔ guests | commit-reveal (see above); `reveal` carries `source`, `ids` |
+| `session-sync`                     | host → guests | initiative seats, current actor, last expression            |
+| `presence`                         | host → guests | `buildDicePresencePayload` fields                           |
+| `ping` / `pong`                    | both          | liveness                                                    |
+| `error`                            | both          | `commit_mismatch`, version/build mismatch                   |
 
 `source` on `roll` / `reveal` (and on the persisted `lastRoll`) names the
 gameplay path: absent or `null` for a throw, `'tower'` for a dice-tower drop.
@@ -132,9 +158,11 @@ partial throw moved — a game re-throwing the dice it did not set aside. Absent
 means every die, which is what every roll before the field meant, so an ordinary
 roll is byte-identical on the wire. A guest throws exactly those slots (after
 parking the others in its jail) with the same seed. Slots, not physics ids: the
-engine numbers bodies per session. The v2 commitment does not bind a subset yet,
-so a partial throw is not sent under `?fair-commit`; the table-game slice that
-puts a game in a room (`{ action, seed, ids }` on this path) will have to bind it.
+engine numbers bodies per session. Under commit-reveal the same `ids` ride
+`commit` and `reveal` and are bound into the hash, so a guest refuses a reveal
+that names a different subset (`commit_mismatch`). A game's own throws
+(`source: 'game'`) commit nothing and are not broadcast — games refuse to start
+inside a room until a table-game slice sends `{ action, seed, ids }`.
 
 Signaling Worker relays SDP/ICE (`signal`), peer join/leave, and `room-snapshot` on reconnect. Host pushes `room-state` over the signaling WebSocket for DO persistence.
 
@@ -144,7 +172,23 @@ Signaling Worker relays SDP/ICE (`signal`), peer join/leave, and `room-snapshot`
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `solver_build_mismatch`     | `solver_revision:wasm-hash` differs — rebuild WASM (`npm run build:wasm`) with the same toolchain on all clients                                                                    |
 | `world_hash_mismatch`       | The guest's collider-world hash (`hashWorld`, see ARCHITECTURE "Deterministic table") differs from the host's — open the host's link so the layout matches, on the same app version |
-| `protocol_version_mismatch` | Mixed v1/v2 or different app builds                                                                                                                                                 |
+| `protocol_version_mismatch` | The guest speaks another protocol version than the room's host — an older app build (v1) in a v2 room, or the reverse. Reload so everyone is on the same build                      |
+
+The room is pinned to its **host's** protocol version (recorded when the host
+connects; `null` until then, so a guest can wait in a room nobody has opened).
+A host on a newer version moves the room forward and parks any guest still on
+the old one. A refused guest gets the reason as an `{ type: 'error', error }`
+frame on an accepted socket, which the Worker then leaves parked (no `peerId`,
+so it is not a peer): a browser never shows page script the body of a refused
+upgrade, and closing the socket would send an older client straight into its
+reconnect loop, replacing the reason with "Reconnecting…". Current clients also
+read the room's version from `GET /rooms/:code` and refuse before opening a
+socket, stop on any refusal without reconnecting, and check `hello.protocolVersion`
+on the peer channel (a host answers a mismatched guest with an `error` message
+that v1 clients already show as their status).
+
+`solver_build_mismatch` / `world_hash_mismatch` are still a plain 403 on the
+upgrade; current guests check both up front from `GET /rooms/:code`.
 
 ## COOP / COEP
 
@@ -164,8 +208,8 @@ Implications:
 
 ## Fairness
 
-- **v1:** Host entropy (`generateRollSeed`) broadcast in cleartext — fine for friends.
-- **v2 (`?fair-commit`):** Commit-reveal with SHA-256 verification before throw.
+- **v2 (every room):** Commit-reveal with SHA-256 verification before throw; the seed is never on the wire before the dice move.
+- **v1 (retired):** Host entropy broadcast in cleartext. A v1 client is refused at join rather than handed a cleartext seed.
 
 Cup pours (`seed == null`) are not broadcast. Guests cannot roll (UI hint: “Only the host can roll”).
 
@@ -177,7 +221,7 @@ Cup pours (`seed == null`) are not broadcast. Guests cannot roll (UI hint: “On
 - [ ] `?room=CODE` auto-joins when `VITE_SIGNALING_URL` (or `?signal=`) is set
 - [ ] Without signaling URL, multiplayer panel is absent; single-player unchanged
 - [ ] Restart signaling Worker → refresh host + guest → dice counts + last roll replay from DO
-- [ ] `?fair-commit`: commit-reveal roll settles identically on two clients
+- [x] Commit-reveal roll settles identically on two clients, whole-table and partial (`npm run test:multiplayer-commit-reveal`, needs `npm run signal:dev`)
 
 ## Code map
 

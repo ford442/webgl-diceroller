@@ -76,3 +76,16 @@ export function diceIdsForSlots(
     }
     return ids;
 }
+
+/**
+ * The physics ids a default throw (`R`, no subset named) actually moves, when
+ * that is not every die: with a die held in the jail, `selectThrowDice` skips
+ * it, so the throw is a partial one and has to say so — otherwise its share
+ * link and its room broadcast claim "every die", and a replay on a table where
+ * that die is free throws it too. Null when nothing is held (a whole-table
+ * throw, unchanged on the wire).
+ */
+export function heldThrowSubset(dice: readonly ThrowCandidate[]): number[] | null {
+    if (!dice.some((die) => die.kinematic === true)) return null;
+    return selectThrowDice(dice).map((target) => target.id);
+}

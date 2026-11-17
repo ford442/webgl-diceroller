@@ -124,7 +124,7 @@ npm run format:check        # Prettier check (CI)
     - `?renderer-info` shows a small badge with the active renderer type.
     - `?debug` / `?debug-perf` shows render stats (incl. renderer type + fallback); `debug-perf` also logs slow frame systems.
     - `?audio-pan=stereo|hrtf` forces the audio pan mode; `?audio-fallback` forces the ScriptProcessor synth path; `?no-reverb` disables the generated room reverb.
-    - `?fair-commit` enables multiplayer protocol v2 (commit-reveal seeds before throw). Default v1 still broadcasts cleartext seeds.
+    - Multiplayer always speaks protocol v2 (commit-reveal: a hash before the throw, the seed after). `?fair-commit` used to opt in and is now ignored; a v1 client is refused at join with `protocol_version_mismatch`.
 
 ### Session layer
 
@@ -133,7 +133,7 @@ Initiative / turn tracking and durable multiplayer rooms are wired through **`Ap
 - [`src/session/SessionState.ts`](src/session/SessionState.ts) — seat list, current actor, last expression; `localStorage` per room code.
 - [`src/app/SessionWiring.js`](src/app/SessionWiring.js) + [`src/ui/SessionStrip.js`](src/ui/SessionStrip.js) — desktop strip (`session:initiative`, `session:turn`).
 - [`signaling/src/RoomDurableObject.js`](signaling/src/RoomDurableObject.js) — persisted room state + hibernating WebSockets; `solverBuildId` mismatch rejected at join.
-- [`packages/dice-core/src/net/CommitReveal.ts`](packages/dice-core/src/net/CommitReveal.ts) — SHA-256 commit-reveal when `?fair-commit` is set.
+- [`packages/dice-core/src/net/CommitReveal.ts`](packages/dice-core/src/net/CommitReveal.ts) — SHA-256 commit-reveal (every room; binds seed, source and partial-throw slots).
 - [`src/xr/XrResultsHud.js`](src/xr/XrResultsHud.js) — world-space totals on `xrWorld`; DOM HUD hidden while presenting.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md).
@@ -210,7 +210,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MU
 - **Dice jail (`DiceJail` prop):** the _kept set_. `hold(ids | 'nearby')` parks dice in stable slots around the cage and makes them kinematic (the click toggle holds nearby dice; a game holds exactly what its rules set aside); `release(ids?)` clears kinematic and leaves them where they lie; `getState().heldIds` names the held physics ids. `setLocked(reason)` makes the click toggle a no-op while a game owns the jail. No engine method beyond `setDieKinematic`. Test hook: `window.__app.interactables.diceJail`.
     - A share link for a tower drop carries `v=2`; plain throws still write `v=1`, so links shared before `src=` existed (and new throw links) keep replaying on older clients, while a tower link is rejected rather than silently replayed as a throw.
     - Share links also carry the table layout (`layout-seed`, `density`, `theme`): the clutter around the dice zone is part of the collider world, so a replay must rebuild the same table. All three are written, since a missing one falls back to the receiver's stored preference. Replays await `whenDiceRegistered()` (every spawned die visible in the engine) before throwing.
-- **A throw can name its dice:** `throwDice(scene, world, seed, { ids })` throws exactly those physics ids; with no `ids` it throws every die that is **not kinematic**, so a die held in the dice jail is never re-posed (R still throws every dynamic die). `setDieWasmKinematic` is the only writer of `SpawnedDie.kinematic`. Share links carry the subset as `?ids=` (table **slots**, `v=3`; absent = all dice, older links unchanged) and the `roll` message as `ids`; a replay parks the dice it leaves out in the jail first. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Table games).
+- **A throw can name its dice:** `throwDice(scene, world, seed, { ids })` throws exactly those physics ids; with no `ids` it throws every die that is **not kinematic**, so a die held in the dice jail is never re-posed (R still throws every dynamic die, and with any die held it names them as a partial throw via `heldThrowSubset`, so its share link and room commitment carry `ids`). `setDieWasmKinematic` is the only writer of `SpawnedDie.kinematic`. Share links carry the subset as `?ids=` (table **slots**, `v=3`; absent = all dice, older links unchanged) and the `commit` / `reveal` messages as `ids` (bound into the hash); a replay parks the dice it leaves out in the jail first. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Table games).
 - The WASM control primitives live in `src/dice.js`: `driveDieWasmTransform`, `setDieWasmVelocity`, `getDieWasmTransform` (alongside `applyWasmImpulseForDie`).
 - `getHoveredDie(camera, normX, normY)` — returns the die under the cursor for hover cursor changes.
 - `updateInteraction(deltaTime)` — drives the active WASM grab and updates levitation state each frame.
@@ -488,6 +488,7 @@ npm run test:share-roll-replay   # Two page loads of the same share URL settle t
 npm run test:roll-timeout     # forceNoSettle: a roll that never settles still ends (timedOut, HUD result, re-roll)
 npm run test:partial-throw    # R leaves a held die alone; a partial-throw share link (?ids=, v=3) settles the same faces twice
 npm run test:game-farkle      # Solo Farkle vs the bot played to an outcome on the real table (needs WASM)
+npm run test:multiplayer-commit-reveal  # Host + guest through `npm run signal:dev`: commit-reveal throws match (needs WASM; not in CI)
 npm run test:default-route    # `/` without ?webgl reaches ready on SwiftShader (classic WebGL); ?overlay has real alpha (no WASM needed)
 npm run test:a11y             # axe accessibility scan
 npm run test:audio-worklet    # AudioWorklet graph: fixed size, no main-thread oscillators, audible (no WASM needed)

@@ -19,10 +19,15 @@ import {
     makePresence,
     makePing,
     makePong,
+    makeError,
     type CommitFields,
     type ProtocolMessage,
 } from './Protocol.js';
-import { createSignalingClient } from './SignalingClient.js';
+import {
+    createSignalingClient,
+    signalingRejection,
+    SignalingRejectedError,
+} from './SignalingClient.js';
 import type { SignalingMessage } from './SignalingClient.js';
 import { createPeerMesh } from './PeerMesh.js';
 import type { AppEvents } from '../types/app';
@@ -67,6 +72,8 @@ export interface RemoteRevealMessage {
     diceCounts?: Record<string, number> | null;
     /** See `RemoteRollMessage.source`. */
     source?: string | null;
+    /** See `RemoteRollMessage.ids`; bound into the commitment. */
+    ids?: number[] | null;
 }
 
 export interface RemoteTableSyncMessage {
@@ -105,6 +112,7 @@ export interface RoomSessionDeps {
     getSessionSnapshot?: () => SessionSnapshot | null;
     applyPresencePayload: (payload: unknown) => void;
     isWasmAvailable: () => boolean;
+    /** Defaults to `protocolVersion >= 2`; a test may force it. */
     useFairCommit?: boolean;
     onRemoteRoll: (msg: RemoteRollMessage) => void | Promise<void>;
     onRemoteTableSync?: (msg: RemoteTableSyncMessage) => void | Promise<void>;
@@ -159,6 +167,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
     let mesh: ReturnType<typeof createPeerMesh> | null = null;
     let unsubSignal: (() => void) | null = null;
     let unsubRollStarted: (() => void) | null = null;
+    let unsubRollCommitted: (() => void) | null = null;
     let pingTimer: ReturnType<typeof setInterval> | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let reconnectAttempts = 0;
@@ -283,6 +292,33 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
         lastReveal = msg.lastReveal ?? lastReveal;
     }
 
+    /**
+     * The room already refuses a guest on another protocol version at join;
+     * this is the same check on the peer channel, for a peer that got past
+     * it (a Worker deployed before the check, a host that changed version
+     * under a live room). v1 messages still decode for exactly this: the
+     * `error` reply is one every v1 client shows as its status, so an older
+     * guest learns why instead of sitting on a table that never rolls.
+     *
+     * @returns true when the peer was refused
+     */
+    function refuseOtherProtocol(fromPeerId: string, version: unknown): boolean {
+        const peerVersion = Number(version);
+        if (!Number.isFinite(peerVersion) || peerVersion === protocolVersion) return false;
+        const message = signalingRejection('protocol_version_mismatch').message;
+        if (role === 'host') {
+            sendEncoded(
+                fromPeerId,
+                makeError({ code: 'protocol_version_mismatch', detail: message }, protocolVersion)
+            );
+            // Give the error a moment on the channel before dropping it.
+            setTimeout(() => mesh?.teardownPeer(fromPeerId, true), 1000);
+        } else {
+            setStatus('error', message);
+        }
+        return true;
+    }
+
     async function onChannelMessage(fromPeerId: string, raw: string): Promise<void> {
         const decoded = decodeMessage(raw);
         if (decoded.ok === false) {
@@ -295,6 +331,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
 
         switch (msg.type) {
             case MsgType.HELLO:
+                if (refuseOtherProtocol(fromPeerId, msg.protocolVersion ?? msg.v)) break;
                 sendEncoded(
                     fromPeerId,
                     makeWelcome(
@@ -406,6 +443,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                         notation: msg.notation ?? null,
                         diceCounts: msg.diceCounts ?? deps.getDiceCounts(),
                         source: msg.source ?? null,
+                        ids: msg.ids ?? null,
                     };
                     pushPersistedRoomState();
                 } catch (err) {
@@ -516,6 +554,12 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                 mesh?.teardownPeer(msg.peerId, true);
                 return;
             }
+            // The room turned this peer away after it joined (the host
+            // reconnected on another protocol version).
+            if (msg.type === 'error' && msg.error && role) {
+                failJoin(signalingRejection(String(msg.error)));
+                return;
+            }
             if (msg.type === 'signaling-closed') {
                 if (status === 'hosting' || status === 'connected' || status === 'joining') {
                     scheduleReconnect();
@@ -559,7 +603,17 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
         signaling.disconnect();
         attachMesh();
         wireSignalingHandlers();
-        await connectSignaling(roomCode, role);
+        try {
+            await connectSignaling(roomCode, role);
+        } catch (err) {
+            // A refusal (the host moved to another build, the room filled)
+            // ends the session: retrying would only show "Reconnecting…".
+            if (err instanceof SignalingRejectedError) {
+                failJoin(err);
+                return;
+            }
+            throw err;
+        }
         if (role === 'host') {
             // Peers re-offer via peer-joined after reconnect.
             setStatus('connected', `Host · ${mesh?.getConnectedPeerIds().length ?? 0} connected`);
@@ -567,6 +621,32 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
             setStatus('joining', `Guest · waiting for host`);
         }
         startPing();
+    }
+
+    /**
+     * Stop on a join the room refused: show why, drop the socket the Worker
+     * parked us on, and do not reconnect (status `error` is not one the
+     * `signaling-closed` handler retries from).
+     */
+    function failJoin(err: SignalingRejectedError): void {
+        stopPing();
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+        setStatus('error', err.message);
+        mesh?.close();
+        mesh = null;
+        signaling.disconnect();
+    }
+
+    async function connectSignalingOrFail(code: string, connectRole: SessionRole): Promise<void> {
+        try {
+            await connectSignaling(code, connectRole);
+        } catch (err) {
+            if (err instanceof SignalingRejectedError) failJoin(err);
+            throw err;
+        }
     }
 
     async function connectSignaling(code: string, connectRole: SessionRole): Promise<void> {
@@ -580,6 +660,15 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
     }
 
     function bindHostRollBroadcast(): void {
+        unsubRollCommitted?.();
+        unsubRollCommitted = deps.events.on(AppEvent.ROLL_COMMITTED, (payload) => {
+            if (role !== 'host' || suppressBroadcast || !useFairCommit) return;
+            const commit = (payload as { commit?: CommitFields } | undefined)?.commit;
+            if (!commit || !deps.isWasmAvailable()) return;
+            pendingCommit = commit;
+            broadcastEncoded(makeCommit(commit, protocolVersion));
+            pushPersistedRoomState();
+        });
         unsubRollStarted?.();
         unsubRollStarted = deps.events.on(AppEvent.ROLL_STARTED, (payload) => {
             if (role !== 'host' || suppressBroadcast) return;
@@ -590,12 +679,12 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                 source?: string;
                 /** Table slots of a partial throw (absent = every die). */
                 ids?: number[];
-                commit?: CommitFields;
                 reveal?: {
                     seed: number;
                     nonce: string;
                     notation?: string | null;
                     throwAt?: number;
+                    ids?: number[];
                 };
             };
             if (p.seed == null) return;
@@ -603,11 +692,9 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
 
             const diceCounts = p.diceSet ?? deps.getDiceCounts();
             if (useFairCommit) {
-                if (p.commit) {
-                    pendingCommit = p.commit;
-                    broadcastEncoded(makeCommit(p.commit, protocolVersion));
-                    pushPersistedRoomState();
-                }
+                // Only a roll that committed first is sent. A game throw
+                // carries no reveal and stays local (games refuse to start
+                // inside a room); a cleartext `roll` is never the fallback.
                 if (p.reveal) {
                     lastReveal = p.reveal;
                     pendingCommit = null;
@@ -621,6 +708,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                                 presence: deps.getPresencePayload(),
                                 throwAt: p.reveal.throwAt ?? performance.now(),
                                 source: p.source ?? null,
+                                ids: p.reveal.ids ?? null,
                             },
                             protocolVersion
                         )
@@ -630,6 +718,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
                         notation: p.reveal.notation ?? p.expression ?? null,
                         diceCounts,
                         source: p.source ?? null,
+                        ids: p.reveal.ids ?? null,
                     };
                     pushPersistedRoomState();
                     broadcastEncoded(buildPresenceMsg());
@@ -670,7 +759,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
         roomCode = code;
         attachMesh();
         wireSignalingHandlers();
-        await connectSignaling(code, 'host');
+        await connectSignalingOrFail(code, 'host');
         bindHostRollBroadcast();
         startPing();
         pushPersistedRoomState();
@@ -700,6 +789,14 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
             setStatus('error', 'Room not found');
             throw new Error('room_not_found');
         }
+        // `protocolVersion` is the host's, recorded when it connected (null
+        // for a room no host has joined yet). A different one means the host
+        // runs another app version, and the room would turn us away anyway.
+        if (info.protocolVersion != null && info.protocolVersion !== protocolVersion) {
+            const err = signalingRejection('protocol_version_mismatch');
+            setStatus('error', err.message);
+            throw err;
+        }
         if (
             info.solverBuildId &&
             info.solverBuildId !== deps.solverBuildId &&
@@ -716,7 +813,7 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
 
         attachMesh();
         wireSignalingHandlers();
-        await connectSignaling(normalized, 'guest');
+        await connectSignalingOrFail(normalized, 'guest');
         startPing();
         syncRoomToUrl(normalized);
         setStatus('joining', `Guest · waiting for host`);
@@ -768,6 +865,8 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
         }
         unsubRollStarted?.();
         unsubRollStarted = null;
+        unsubRollCommitted?.();
+        unsubRollCommitted = null;
         unsubSignal?.();
         unsubSignal = null;
         mesh?.close();

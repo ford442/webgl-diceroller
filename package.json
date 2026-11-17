@@ -70,6 +70,7 @@
         "test:roll-timeout": "node tests/roll-timeout.js",
         "test:partial-throw": "node tests/partial-throw.js",
         "test:game-farkle": "node tests/game-farkle.js",
+        "test:multiplayer-commit-reveal": "node tests/multiplayer-commit-reveal.js",
         "test:default-route": "node tests/default-route.js",
         "test:wasm-authoritative": "node tests/wasm-authoritative.js",
         "test:wasm-gameplay-loop": "node tests/wasm-gameplay-loop.mjs",
