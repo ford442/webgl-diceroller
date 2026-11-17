@@ -16,8 +16,11 @@ export {
 
 export { TIER_PROP_DEFINITIONS, DECORATIVE_TIER_ENTRIES } from './propRegistry/tierDefinitions.js';
 
+export { compileScene } from './propRegistry/sceneCompile';
+
 export {
     PROP_INDEX,
+    describeEntry,
     getPropDescriptor,
     getPropsByTag,
     getPropsByCategory,

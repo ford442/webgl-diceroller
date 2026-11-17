@@ -99,6 +99,8 @@ export interface TierLoadCallbacks {
 export interface AppOrchestrator {
     scheduler: ReturnType<typeof import('../core/FrameScheduler.js').createFrameScheduler>;
     cullingSystem: ReturnType<typeof import('../core/CullingSystem.js').createCullingSystem>;
+    /** The scene to build; omitted means the tavern. */
+    sceneDocument?: import('../scenes/SceneDocument').SceneDocument;
 }
 
 export interface AdaptiveQualityState {
@@ -288,6 +290,8 @@ export interface AppContext {
     events: AppEvents;
     ready: boolean;
     scene: import('three').Scene | null;
+    /** The place being loaded (`?scene=`): physics bounds, lighting preset, prop list. */
+    sceneDocument: import('../scenes/SceneDocument').SceneDocument;
     camera: import('three').PerspectiveCamera | null;
     renderer: import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer | null;
     THREE: typeof import('three') | null;

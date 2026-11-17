@@ -109,7 +109,8 @@ export async function spawnProp(entry, context, options = {}) {
                 context.scene,
                 context.physicsWorld,
                 resolveEntryPosition(entry),
-                entry.rotation ?? 0
+                entry.rotation ?? 0,
+                entry.scale !== undefined ? { scale: entry.scale } : undefined
             )
         );
     } else {

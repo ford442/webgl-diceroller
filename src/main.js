@@ -38,6 +38,7 @@ import { createDiceCollisionAudio } from './audio/DiceCollisionAudio.js';
 import { setupScene } from './core/SceneSetup.js';
 import { getDeviceSession } from './core/DeviceSession.js';
 import { createAppContext } from './core/AppContext.js';
+import { resolveSceneDocument } from './scenes/index';
 import { createAppEvents, AppEvent } from './core/AppEvents.js';
 import { installAppTestHooks } from './core/AppTestHooks.js';
 import { applyRendererSize, syncComposerPixelRatio } from './core/RendererFactory.js';
@@ -113,7 +114,10 @@ const scheduler = createFrameScheduler({
 const cullingSystem = createCullingSystem({ enabled: !searchParams.has('no-cull') });
 
 const appEvents = createAppEvents();
-const app = createAppContext({ events: appEvents });
+// `?scene=<id>`: which place to build. Physics bounds, lighting and the prop
+// list all come from this one document; unknown ids fall back to the tavern.
+const sceneDocument = resolveSceneDocument(searchParams);
+const app = createAppContext({ events: appEvents, sceneDocument });
 app.scheduler = scheduler;
 app.THREE = THREE;
 app.stats = scheduler.stats;
@@ -199,7 +203,7 @@ async function init() {
     const container = document.getElementById('canvas-container');
 
     // Scene, camera, renderer, lights, post-processing, environment map
-    const sceneSetup = await setupScene(container);
+    const sceneSetup = await setupScene(container, { lighting: sceneDocument.lighting });
     app.scene = sceneSetup.scene;
     app.camera = sceneSetup.camera;
     app.renderer = sceneSetup.renderer;
@@ -358,7 +362,7 @@ async function init() {
     // so the browser paints every frame while WASM compiles/allocates. A failed
     // load does not abort init(): the tavern environment still loads below,
     // just without dice (see PhysicsBootstrap.js).
-    const physicsBoot = await bootstrapPhysics(app);
+    const physicsBoot = await bootstrapPhysics(app, sceneDocument);
     if (physicsBoot.wasmAvailable) {
         syncAllDiceToWasm();
     }
@@ -373,7 +377,7 @@ async function init() {
             app.scene,
             app.camera,
             app.physicsWorld,
-            { scheduler, cullingSystem },
+            { scheduler, cullingSystem, sceneDocument },
             buildTierLoadOptions(app, {
                 collisionAudio,
                 qualityProfile: postConfig?.adaptiveProfile ?? app.qualityProfile ?? null,

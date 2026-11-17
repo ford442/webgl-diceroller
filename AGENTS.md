@@ -31,6 +31,7 @@ webgl-diceroller/
 │   ├── interaction/            # Dice cup / tower / tray / jail + shared WasmDieGrab helper
 │   ├── xr/                     # WebXR seated-table spike (?xr)
 │   ├── ui.js                   # DOM-based UI controls and crosshair
+│   ├── scenes/                 # Scene documents (data): tavern, chart-room; ?scene= picks one
 │   ├── shaders/                # Shader graphs, built as GLSL (WebGL) and TSL (WebGPU)
 │   │   ├── graph/ShaderKit.js  # One op vocabulary, GLSL-string + TSL-node backends
 │   │   ├── GodRayGraph.js      # Moonlight beam graph + GOD_RAY_PARAMS
@@ -106,6 +107,7 @@ npm run format:check        # Prettier check (CI)
 - `?worker-physics` (no value) is an explicit opt-in for the (already-default) worker backend; `?no-worker` / `?worker-physics=off` forces the main-thread WASM bridge instead.
 - `?no-drag` disables quadratic air resistance.
 - `?fair-dice` disables the pipping COM bias.
+- `?scene=<id>` picks the place the table is set in (`tavern`, the default, or `chart-room`); an unknown id logs and loads the tavern. See [Scenes](#scenes-where-the-table-is-set).
 - Render/perf flags:
     - WebGPU is the default; `?webgpu` / `?wgpu` are redundant but still force it explicitly.
     - `?webgl` forces the stable WebGL baseline path (escape hatch / older browsers). It is no longer needed to get a working boot: a missing or software/fallback WebGPU adapter routes to the classic `WebGLRenderer` on its own (`?webgpu` keeps a software adapter for testing).
@@ -145,6 +147,17 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MU
 - New games go next to `Farkle.ts` with `fast-check` property tests under `packages/dice-core/test/`. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Table games).
 
 ## Architecture Details
+
+### Scenes (where the table is set)
+
+A scene is a **document**, not code: [`src/scenes/SceneDocument.ts`](src/scenes/SceneDocument.ts) (`id`, `gravity`, `table`, `lighting`, `props[]` of `{ factory, tier, position?, rotationY?, scale?, randomPool?, cull?, id? }`). [`tavern.ts`](src/scenes/tavern.ts) and [`chartRoom.ts`](src/scenes/chartRoom.ts) are the two shipped; [`index.ts`](src/scenes/index.ts) registers them and resolves `?scene=`. The old hand-written tier arrays are gone — `tierDefinitions.js` just compiles the tavern document, and `LoadingTiers` compiles whichever one `main.js` resolved (`app.sceneDocument`).
+
+- **To add a prop to a room:** add a line to that scene's `props`, using an existing factory. Do not edit `main.js`, and do not fork a factory per scene. Array order is slot order for the decor list (tiers 2 + 3) and feeds each prop's seeded RNG, so **append** unless you mean to move scatter and the collider-world hash (`tests/golden/tavern-entries.json` pins the tavern's order).
+- **Behaviour is a named hook, not a branch in the document:** anything beyond "a factory at a pose" (`update`, click handlers, `interactables`, the dice cup/tower/tray/jail controllers, the table's WASM bounds, the lamp's ceiling hang) lives in [`propHooks.js`](src/environment/propRegistry/propHooks.js), keyed by factory name, as `create(ctx, entry)` / `afterCreate(result, ctx, entry)`.
+- **To add a room:** a new `src/scenes/<id>.ts` + one line in `SCENES`; `validateSceneDocument` (run by `compileScene`) rejects unknown factories / lighting ids, duplicate ids, a missing `Table`, and `randomPool` outside tiers 2/3. Physics numbers come from the document (`bootstrapPhysics(app, sceneDocument)`); the tavern and chart-room use `dice-core`'s `PHYSICS_*` constants, which `rollHeadless` and seeded throws also assume — a scene with different numbers is a different simulation from the headless core's.
+- **Lighting is a preset id** ([`LightingPresets.ts`](src/core/LightingPresets.ts)): numbers for the rig `setupScene` builds. A preset retunes lights or hides the moon; it never duplicates the candle flicker or the god-ray beam (the beam belongs to `TavernWalls`, so a scene without it has none).
+- A share link starts from the current URL, so it carries `scene=`; the `w=` world hash differs between scenes.
+- Tests: `tests/unit/scenes.test.js` (in `npm run test:unit`) and `npm run test:scene-select` (browser, needs WASM).
 
 ### Audio system
 
@@ -233,7 +246,7 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 ```
 
 - Props that need per-frame animation provide an `update(deltaTime, elapsedTime)` function.
-- `LoadingTiers.js` wires these into `FrameScheduler` through the prop registry; do not add ad-hoc per-frame calls in `main.js`.
+- `LoadingTiers.js` wires these into `FrameScheduler` through the prop registry; do not add ad-hoc per-frame calls in `main.js`. Which props a room has, and where, is its scene document (above), not `LoadingTiers`.
 - Interactive props return callbacks (e.g., `interact`, `toggleGlow`) that are registered in the prop entry’s `afterCreate` hook.
 - Registered props use `createProp` + declarative `colliders` via [`StaticColliderBridge.ts`](src/core/StaticColliderBridge.ts), which registers every collider type (box, plane, cylinder/openCylinder, convexHull, compound) directly on the WASM engine — there is no other collider backend.
 - Shadows are aggressively optimized: small decorative props are listed in `SHADOW_DISABLED_PROP_NAMES` in `src/environment/PropRegistry.js`.
@@ -343,11 +356,11 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 3. Build geometry inside the `build({ group, materials, mesh, rng })` callback; use `materials.*` from the kit (backed by [`MaterialPalette.js`](src/core/MaterialPalette.js)) instead of inline `MeshStandardMaterial`.
 4. Declare colliders as a spec array — routed through [`StaticColliderBridge.ts`](src/core/StaticColliderBridge.ts). `colliders` may also be a function `({ group, rng }) => spec[]` when the layout depends on random numbers.
 5. Return `{ group }` plus optional `update`, `interact`, `body`, etc.
-6. Register in the appropriate tier in [`PropRegistry.js`](src/environment/PropRegistry.js).
-7. Wire `afterCreate` for per-frame updates or click handlers.
+6. Place it with a line in a scene document under [`src/scenes/`](src/scenes/) (tier + pose).
+7. Wire per-frame updates or click handlers as a named hook in [`propHooks.js`](src/environment/propRegistry/propHooks.js), keyed by the factory name.
 8. For small/decorative props, add the factory name to `SHADOW_DISABLED_PROP_NAMES` in `PropRegistry.js` (shadow policy lives in the registry, not in the prop module).
 
-Tabletop positions in tier entries may still use legacy `y: -2.75`; `PropRegistry.resolveEntryPosition` applies `toCurrentTabletopY` at spawn. Use `footOffsetY` in `createProp` when the mesh origin is not at the resting foot (e.g. a cylinder whose center is mid-height).
+Tabletop positions in tier entries may still use legacy `y: -2.75`; `resolveEntryPosition` applies `toCurrentTabletopY` at spawn. Use `footOffsetY` in `createProp` when the mesh origin is not at the resting foot (e.g. a cylinder whose center is mid-height).
 
 #### No `Math.random` — draw from the kit's `rng`
 
@@ -446,11 +459,11 @@ export function createHorseshoe(
 - **Existing props:** convert when you edit them for other reasons; no mass migration pass.
 - **Do not** hand-build collision shapes in a prop module — declare them as a spec array through `StaticColliderBridge`; there is no ammo/`physics.js` seam left to bypass it with.
 
-#### Registry checklist (unchanged)
+#### Registry checklist
 
-1. Add the prop to the appropriate tier in `PropRegistry.js`.
-2. If it has per-frame behavior, register `result.update` in the entry’s `afterCreate` hook.
-3. If it is interactive, register the callback in the entry’s `afterCreate` hook.
+1. Add a line for the prop to the scene document(s) that should have it (`src/scenes/*.ts`), in the right tier.
+2. If it has per-frame behavior, add an `afterCreate` hook in `propHooks.js` that registers `result.update`.
+3. If it is interactive, register the callback in that same hook.
 4. If it is small/decorative, add its name to `SHADOW_DISABLED_PROP_NAMES`.
 
 ### Memory Management
@@ -490,6 +503,7 @@ npm run test:partial-throw    # R leaves a held die alone; a partial-throw share
 npm run test:game-farkle      # Solo Farkle vs the bot played to an outcome on the real table (needs WASM)
 npm run test:multiplayer-commit-reveal  # Host + guest through `npm run signal:dev`: commit-reveal throws match (needs WASM; not in CI)
 npm run test:default-route    # `/` without ?webgl reaches ready on SwiftShader (classic WebGL); ?overlay has real alpha (no WASM needed)
+npm run test:scene-select     # ?scene=chart-room builds its own props, inits physics from its document, replays a seeded throw; an unknown id falls back to the tavern (needs WASM)
 npm run test:a11y             # axe accessibility scan
 npm run test:audio-worklet    # AudioWorklet graph: fixed size, no main-thread oscillators, audible (no WASM needed)
 npm run test:unit             # vitest: `dice-core` project (node env) + `app` project (happy-dom)

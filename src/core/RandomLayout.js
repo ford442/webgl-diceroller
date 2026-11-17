@@ -1,10 +1,6 @@
 import { clearDice } from '../dice.js';
 import { hideResults } from '../results.js';
-import {
-    DECORATIVE_TIER_ENTRIES,
-    despawnProp,
-    spawnTierWithRandomPool,
-} from '../environment/PropRegistry.js';
+import { despawnProp, spawnTierWithRandomPool } from '../environment/PropRegistry.js';
 import { createRandomClutter, despawnRandomClutter } from '../environment/RandomClutter.js';
 import {
     DENSITY_PRESETS,
@@ -33,6 +29,7 @@ export function createLayoutManager({
     callbacks,
     registerUpdate,
     cullingSystem = null,
+    decorEntries,
 }) {
     let config = resolveTableLayoutConfig();
     let clutterHandles = [];
@@ -72,12 +69,10 @@ export function createLayoutManager({
     }
 
     async function spawnDecor() {
-        decorRecords = await spawnTierWithRandomPool(
-            DECORATIVE_TIER_ENTRIES,
-            config.decorCount,
-            context,
-            { seed: config.seed + 0xdec0, theme: config.theme }
-        );
+        decorRecords = await spawnTierWithRandomPool(decorEntries, config.decorCount, context, {
+            seed: config.seed + 0xdec0,
+            theme: config.theme,
+        });
     }
 
     function despawnDecor() {

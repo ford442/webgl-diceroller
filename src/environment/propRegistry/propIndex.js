@@ -119,21 +119,31 @@ const indexByEntry = new Map(); // entry object -> descriptor
 const indexByTag = new Map(); // tag -> descriptor[]
 const indexByCategory = new Map(); // category -> descriptor[]
 
+/**
+ * Descriptor for one tier entry (`tier` is 'tier0'..'tier3'; defaults to the
+ * `tier` a compiled scene entry carries). Pure, so the layout system can
+ * describe the decor list of whichever scene is loaded, not just the tavern's.
+ */
+export function describeEntry(entry, tier = entry.tier) {
+    const factoryName = entry.factoryName || entry.name;
+    const category = deriveCategory(entry, tier);
+    const tags = deriveTags(entry, tier, category);
+    return {
+        entry,
+        name: entry.name,
+        factoryName,
+        tier,
+        category,
+        tags,
+        randomPool: !!entry.randomPool,
+        position: entry.position ?? null,
+    };
+}
+
 for (const [tier, entries] of Object.entries(TIER_PROP_DEFINITIONS)) {
     for (const entry of entries) {
-        const factoryName = entry.factoryName || entry.name;
-        const category = deriveCategory(entry, tier);
-        const tags = deriveTags(entry, tier, category);
-        const descriptor = {
-            entry,
-            name: entry.name,
-            factoryName,
-            tier,
-            category,
-            tags,
-            randomPool: !!entry.randomPool,
-            position: entry.position ?? null,
-        };
+        const descriptor = describeEntry(entry, tier);
+        const { category, tags } = descriptor;
         PROP_INDEX.push(descriptor);
         indexByName.set(entry.name, descriptor);
         indexByEntry.set(entry, descriptor);

@@ -11,8 +11,9 @@ async function staticChecks() {
     console.log('=== Lamp Static Verification (no browser) ===');
     const lampSrc = fs.readFileSync('src/environment/Lamp.js', 'utf8');
     const metricsSrc = fs.readFileSync('src/core/SceneMetrics.js', 'utf8');
-    const registrySrc = fs.readFileSync('src/environment/propRegistry/tierDefinitions.js', 'utf8');
-    const entryHelpersSrc = fs.readFileSync('src/environment/propRegistry/entryHelpers.js', 'utf8');
+    // The lamp's pose is a line in the tavern document; its wiring is a named hook.
+    const tavernSrc = fs.readFileSync('src/scenes/tavern.ts', 'utf8');
+    const hooksSrc = fs.readFileSync('src/environment/propRegistry/propHooks.js', 'utf8');
 
     const checks = [
         {
@@ -55,15 +56,15 @@ async function staticChecks() {
         },
         {
             name: 'lamp tier uses shared hang metric',
-            pass: entryHelpersSrc.includes('LAMP_HANG_Y') && registrySrc.includes('tier1Position'),
+            pass: tavernSrc.includes('LAMP_HANG_Y') && tavernSrc.includes("factory: 'Lamp'"),
         },
         {
             name: 'scene.add for lamp in caller',
-            pass: registrySrc.includes('ctx.scene.add(result.group)'),
+            pass: hooksSrc.includes('ctx.scene.add(result.group)'),
         },
         {
             name: 'lamp interaction registered by prop registry',
-            pass: registrySrc.includes("registerInteractable('lamp'"),
+            pass: hooksSrc.includes("registerInteractable('lamp'"),
         },
     ];
 

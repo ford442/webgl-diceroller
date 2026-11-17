@@ -50,6 +50,8 @@ const INFRASTRUCTURE = new Set([
     'src/environment/propRegistry/propIndex.js',
     'src/environment/propRegistry/randomPool.js',
     'src/environment/propRegistry/shadowPolicy.js',
+    'src/environment/propRegistry/propHooks.js',
+    'src/environment/propRegistry/sceneCompile.ts',
     'src/environment/propRegistry/spawn.js',
     'src/environment/propRegistry/tierDefinitions.js',
     'src/environment/clutter/ClutterPlacement.js',

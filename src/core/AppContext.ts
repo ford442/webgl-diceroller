@@ -5,9 +5,13 @@
 
 import { createAppEvents } from './AppEvents.js';
 import type { AppContext, AppEvents } from '../types/app';
+import { DEFAULT_SCENE } from '../scenes/index';
+import type { SceneDocument } from '../scenes/SceneDocument';
 
 export interface CreateAppContextOptions {
     events?: AppEvents;
+    /** The scene to load; defaults to the tavern. */
+    sceneDocument?: SceneDocument;
 }
 
 export function createAppContext(options: CreateAppContextOptions = {}): AppContext {
@@ -17,6 +21,7 @@ export function createAppContext(options: CreateAppContextOptions = {}): AppCont
         events,
         ready: false,
         scene: null,
+        sceneDocument: options.sceneDocument ?? DEFAULT_SCENE,
         camera: null,
         renderer: null,
         THREE: null,
