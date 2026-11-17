@@ -25,3 +25,6 @@ a.out
 # src/wasm/generate-clangd-db.sh)
 src/wasm/build-emcc/
 src/wasm/compile_commands.json
+
+# `npm run signal:dev` (wrangler) local state
+signaling/.wrangler/

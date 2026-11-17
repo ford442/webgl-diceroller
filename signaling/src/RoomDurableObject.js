@@ -12,11 +12,42 @@ import {
 
 const STORAGE_KEY = 'room';
 
+/** What a client that sends no `protocolVersion` speaks (every build before it was sent). */
+const LEGACY_PROTOCOL_VERSION = 1;
+
+/**
+ * Refuse a join over an accepted WebSocket instead of a 403 on the upgrade.
+ *
+ * A browser never shows page script the body of a refused upgrade, only a
+ * bare `error` / `close`, so a 403 reaches the client as `signaling_ws_error`
+ * and a reconnect loop. Every client build already fails its join on a
+ * `{ error }` frame that arrives before `joined`, with a readable message.
+ *
+ * The socket is parked (hibernating, no `peerId` in its attachment, so the
+ * peer lists, broadcasts and message handlers all skip it) rather than closed:
+ * closing would send an older client straight into its reconnect loop, which
+ * replaces the error with "Reconnecting…". The client drops it on leave.
+ *
+ * @param {DurableObjectState} state
+ * @param {string} error
+ * @param {Record<string, unknown>} [extra]
+ * @returns {Response}
+ */
+function refuseOverSocket(state, error, extra = {}) {
+    const pair = new WebSocketPair();
+    const client = pair[0];
+    const server = pair[1];
+    state.acceptWebSocket(server, ['refused']);
+    server.serializeAttachment({ refused: error });
+    server.send(JSON.stringify({ type: 'error', error, ...extra }));
+    return new Response(null, { status: 101, webSocket: client, headers: corsHeaders() });
+}
+
 /**
  * @typedef {{
  *   code: string,
  *   createdAt: number,
- *   protocolVersion: number,
+ *   protocolVersion: number | null,
  *   solverBuildId: string | null,
  *   worldHash: string | null,
  *   hostPeerId: string | null,
@@ -54,7 +85,9 @@ export class RoomDurableObject {
         this.room = {
             code: '',
             createdAt: Date.now(),
-            protocolVersion: 1,
+            // Set by the first host to connect; until then there is nothing
+            // for a guest to match against.
+            protocolVersion: null,
             solverBuildId: null,
             worldHash: null,
             hostPeerId: null,
@@ -140,7 +173,9 @@ export class RoomDurableObject {
         const role = url.searchParams.get('role') === 'host' ? 'host' : 'guest';
         const solverBuildId = String(url.searchParams.get('solverBuildId') || '').trim();
         const worldHash = String(url.searchParams.get('worldHash') || '').trim();
-        const protocolVersion = Number(url.searchParams.get('protocolVersion') || 1);
+        const protocolVersion = Number(
+            url.searchParams.get('protocolVersion') || LEGACY_PROTOCOL_VERSION
+        );
 
         const room = await this.loadRoom();
         if (!room.code) {
@@ -150,14 +185,21 @@ export class RoomDurableObject {
             });
         }
 
-        if (room.protocolVersion && protocolVersion !== room.protocolVersion) {
-            return new Response(
-                JSON.stringify({
-                    error: 'protocol_version_mismatch',
-                    expected: room.protocolVersion,
-                }),
-                { status: 403, headers: corsHeaders() }
-            );
+        // The host's version is the room's (persisted below when it
+        // connects). A guest on another one is refused: a v1 guest in a v2
+        // room would ignore every commit/reveal and never see a roll, and a
+        // v2 guest would wait on a commit a v1 host never sends. Only a guest
+        // is checked — a host speaking a newer version than the room last
+        // recorded is the room moving forward, not a mismatch.
+        if (
+            role === 'guest' &&
+            room.protocolVersion != null &&
+            protocolVersion !== room.protocolVersion
+        ) {
+            return refuseOverSocket(this.state, 'protocol_version_mismatch', {
+                expected: room.protocolVersion,
+                received: protocolVersion,
+            });
         }
 
         if (
@@ -212,6 +254,7 @@ export class RoomDurableObject {
                 protocolVersion,
                 ...(worldHash ? { worldHash } : {}),
             });
+            this.refuseMismatchedGuests(protocolVersion);
         }
 
         const peers = listConnectedPeers(this.state);
@@ -226,7 +269,7 @@ export class RoomDurableObject {
         const client = pair[0];
         const server = pair[1];
         this.state.acceptWebSocket(server);
-        server.serializeAttachment({ peerId, role });
+        server.serializeAttachment({ peerId, role, protocolVersion });
 
         const peerList = listConnectedPeers(this.state)
             .filter((p) => p.peerId !== peerId)
@@ -251,6 +294,38 @@ export class RoomDurableObject {
             webSocket: client,
             headers: corsHeaders(),
         });
+    }
+
+    /**
+     * A host that reconnected on another protocol version leaves any guest
+     * still on the old one unable to follow its rolls. Tell those guests why
+     * and park their sockets exactly as a refused join would (see
+     * `refuseOverSocket`), so they stop counting as peers. Runs before the
+     * host's own `joined` peer list is built, so the host never offers them
+     * a channel (its reconnect already closed the old ones).
+     *
+     * @param {number} protocolVersion the host's
+     */
+    refuseMismatchedGuests(protocolVersion) {
+        for (const ws of this.state.getWebSockets()) {
+            const att = ws.deserializeAttachment();
+            if (!att?.peerId || att.role === 'host') continue;
+            // A socket accepted before versions were recorded has nothing to compare.
+            if (att.protocolVersion == null || att.protocolVersion === protocolVersion) continue;
+            try {
+                ws.send(
+                    JSON.stringify({
+                        type: 'error',
+                        error: 'protocol_version_mismatch',
+                        expected: protocolVersion,
+                        received: att.protocolVersion,
+                    })
+                );
+            } catch {
+                /* ignore closed sockets */
+            }
+            ws.serializeAttachment({ refused: 'protocol_version_mismatch' });
+        }
     }
 
     /**

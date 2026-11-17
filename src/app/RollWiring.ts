@@ -17,7 +17,7 @@ import {
 } from '../dice.js';
 import { createSettleWatch } from 'dice-core/roll/SettleWatch';
 import type { ThrowDiceOptions } from '../dice/DiceThrow.js';
-import { diceIdsForSlots, slotsForDiceIds } from '../dice/DiceThrowSelection.js';
+import { diceIdsForSlots, heldThrowSubset, slotsForDiceIds } from '../dice/DiceThrowSelection.js';
 import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
 import { DiceFocusState } from '../core/CameraController.js';
 import { showResults, hideResults, showNotationResults } from '../results.js';
@@ -52,6 +52,16 @@ import type {
 } from '../net/RoomSession.js';
 
 const FAIR_COMMIT_ACK_MS = 300;
+
+/** What a commit-reveal host's ROLL_STARTED carries for RoomSession to broadcast. */
+interface FairReveal {
+    seed: number;
+    nonce: string;
+    notation: string | null;
+    throwAt: number;
+    source: string;
+    ids?: number[];
+}
 
 interface ShadowControllerLike {
     pulse: (kind: string) => void;
@@ -116,7 +126,6 @@ export interface RollWiringDeps {
     getRollHistoryPanel: () => RollHistoryPanelLike | null | undefined;
     getCollisionAudio: () => CollisionAudioLike | null | undefined;
     multiplayerRef: { current: RoomSession | null };
-    useFairCommit?: boolean;
     /**
      * Replaying a `?src=tower` link needs the tower itself — it lives on a
      * tier that loads well after the wiring is built, so this is a getter and
@@ -202,7 +211,6 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         getFairnessMonitor,
         getRollHistoryPanel,
         multiplayerRef,
-        useFairCommit = false,
     } = deps;
 
     let pendingRollMeta: PendingRollMeta = { seed: null, expression: null, diceSet: {} };
@@ -287,12 +295,10 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         // commit off and dropping immediately would hand a host the outcome
         // during the ack window, leaving it free to withhold the reveal and
         // re-roll — which is the abort the commit-reveal scheme exists to
-        // prevent. Costs nothing off the fair-commit path or on a guest,
-        // where broadcastFairCommit returns straight away.
-        await broadcastFairCommit(seed, null, diceSet, 'tower');
-        if (!useFairCommit) {
-            emitRollStarted({ source: 'tower', seed });
-        }
+        // prevent. Costs nothing outside a room or on a guest, where
+        // broadcastFairCommit returns straight away.
+        const reveal = await broadcastFairCommit(seed, null, diceSet, 'tower');
+        emitRollStarted({ source: 'tower', seed, ...(reveal ? { reveal } : {}) });
         return seed;
     }
 
@@ -378,13 +384,26 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         return settled;
     }
 
+    /**
+     * As a commit-reveal host, publish the commitment for a roll about to
+     * start and wait out the ack window; resolve with the reveal the roll's
+     * own ROLL_STARTED must carry. Null (straight away) outside a room, on a
+     * guest, or in a room that is not on commit-reveal — the caller then
+     * emits a plain ROLL_STARTED.
+     *
+     * The commitment goes out on ROLL_COMMITTED, not ROLL_STARTED: the roll
+     * has not started yet, and counting the commit as a start would move
+     * `getRollState().startedCount` twice for one throw.
+     */
     async function broadcastFairCommit(
         seed: number,
         expression: string | null,
         diceSet: Record<string, number>,
-        source: string
-    ): Promise<void> {
-        if (!useFairCommit || !multiplayerRef.current?.isHost?.()) return;
+        source: string,
+        slots: number[] | null = null
+    ): Promise<FairReveal | null> {
+        const room = multiplayerRef.current;
+        if (!room?.useFairCommit || !room.isHost?.()) return null;
         const nonce = generateNonce();
         const dieCount = Object.values(diceSet).reduce((sum, n) => sum + (Number(n) || 0), 0);
         const commit = await createCommit(seed, nonce, {
@@ -393,25 +412,22 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             diceCounts: diceSet,
             throwAt: performance.now(),
             // Bound into the hash: a seed alone does not pin the trajectory,
-            // so without this a host could publish the commitment, collect
-            // acks, and only then decide between a throw and a tower drop.
+            // so without these a host could publish the commitment, collect
+            // acks, and only then decide between a throw and a tower drop —
+            // or which dice a partial throw moves.
             source,
+            ids: slots,
         });
-        emitRollStarted({ source, seed, expression, diceSet, commit });
+        appEvents.emit(AppEvent.ROLL_COMMITTED, { source, seed, expression, diceSet, commit });
         await new Promise((resolve) => setTimeout(resolve, FAIR_COMMIT_ACK_MS));
-        emitRollStarted({
-            source,
+        return {
             seed,
-            expression,
-            diceSet,
-            reveal: {
-                seed,
-                nonce,
-                notation: expression,
-                throwAt: performance.now(),
-                source,
-            },
-        });
+            nonce,
+            notation: expression,
+            throwAt: performance.now(),
+            source,
+            ...(slots?.length ? { ids: slots } : {}),
+        };
     }
 
     function beginRoll(
@@ -626,7 +642,14 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             if (deps.interceptRoll?.()) return;
             const seed = explicitSeed ?? generateRollSeed();
             const diceSet = captureDiceSet();
-            const ids = options.slots?.length ? diceIdsForSlots(spawnedDice, options.slots) : null;
+            // No subset named, but a die held in the jail: the throw skips it,
+            // so name the dice it does move (share link `ids=`, the commitment).
+            const ids = options.slots?.length
+                ? diceIdsForSlots(spawnedDice, options.slots)
+                : heldThrowSubset(spawnedDice);
+            // Every die held (or the named slots are empty): nothing to throw,
+            // and an empty subset would commit as "every die".
+            if (ids && ids.length === 0) return undefined;
             const slots = ids ? slotsForDiceIds(spawnedDice, ids) : null;
             if (ids) parkUnthrown(ids);
             rollHandlerRef.lastRoll = {
@@ -647,17 +670,13 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             hideResults();
             const lampData = getLampData();
             if (lampData) lampData.setRolling(true);
-            // The commitment does not bind a subset yet, so a partial throw
-            // skips the commit-reveal broadcast (and so is not sent at all
-            // under ?fair-commit) rather than let a host pick ids afterwards.
-            if (!ids) {
-                await broadcastFairCommit(seed, null, diceSet, 'ui');
-            }
+            // The slots are bound into the commitment, so a partial throw (a
+            // die held in the jail) commits like any other: the host cannot
+            // pick which dice move after the acks are in.
+            const reveal = await broadcastFairCommit(seed, null, diceSet, 'ui', slots);
             throwDice(getScene(), getPhysicsWorld(), seed, ids ? { ids } : {});
             getCameraController()!.setState(DiceFocusState.WAITING_FOR_STOP);
-            if (!useFairCommit || ids) {
-                emitRollStarted({ source: 'ui', seed: seed >>> 0 });
-            }
+            emitRollStarted({ source: 'ui', seed: seed >>> 0, ...(reveal ? { reveal } : {}) });
             return seed;
         };
     }
@@ -694,10 +713,13 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
                 getCameraController()!.setState(DiceFocusState.WAITING_FOR_STOP);
                 const lampData = getLampData();
                 if (lampData) lampData.setRolling(true);
-                await broadcastFairCommit(seed, expression, diceSet, 'notation');
-                if (!useFairCommit) {
-                    emitRollStarted({ source: 'notation', expression, seed });
-                }
+                const reveal = await broadcastFairCommit(seed, expression, diceSet, 'notation');
+                emitRollStarted({
+                    source: 'notation',
+                    expression,
+                    seed,
+                    ...(reveal ? { reveal } : {}),
+                });
                 await rollSessionRef.current.roll(expression, seed, { system });
             },
         };
@@ -762,10 +784,17 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         if (!expectedHash) {
             throw new Error('commit_missing');
         }
-        // The source is part of the preimage, so a host that committed to a
-        // throw and then revealed a tower drop (or the reverse) fails here
-        // rather than getting every guest to replay its late choice.
-        const ok = await verifyReveal(expectedHash, msg.seed >>> 0, msg.nonce, msg.source ?? null);
+        // The source and the thrown slots are part of the preimage, so a host
+        // that committed to a throw and then revealed a tower drop, or a
+        // different subset, fails here rather than getting every guest to
+        // replay its late choice.
+        const ok = await verifyReveal(
+            expectedHash,
+            msg.seed >>> 0,
+            msg.nonce,
+            msg.source ?? null,
+            msg.ids ?? null
+        );
         if (!ok) {
             throw new Error('commit_mismatch');
         }
@@ -775,6 +804,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
             notation: msg.notation ?? null,
             diceCounts: msg.diceCounts ?? null,
             source: msg.source ?? null,
+            ids: msg.ids ?? null,
         });
     }
 

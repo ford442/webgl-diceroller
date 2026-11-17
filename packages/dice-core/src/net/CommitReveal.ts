@@ -31,6 +31,8 @@ export interface CommitPayload {
     throwAt?: number | null;
     /** Announced alongside the hash, and bound into it. */
     source?: CommitRollSource;
+    /** Table slots of a partial throw; announced alongside the hash, and bound into it. */
+    ids?: number[];
 }
 
 export interface RevealPayload {
@@ -39,6 +41,25 @@ export interface RevealPayload {
     notation?: string | null;
     diceCounts?: Record<string, number> | null;
     source?: string | null;
+    ids?: readonly number[] | null;
+}
+
+/**
+ * The table slots a partial throw moves, as they enter the preimage.
+ *
+ * Same reasoning as the source: a seed over dice 1 and 4 lands differently
+ * from the same seed over every die, so a commitment that left the subset out
+ * would let a host pick which dice to throw after the acks came in. `null`
+ * (every die) adds no bytes, so a whole-table commitment hashes exactly as it
+ * did before slots were bound. Order is kept as given — it is the order the
+ * throw poses the dice in.
+ */
+export function canonicalCommitSlots(ids: readonly number[] | null | undefined): number[] | null {
+    if (!ids?.length) return null;
+    return ids.map((slot) => {
+        if (!Number.isInteger(slot) || slot < 0) throw new Error('invalid_slot');
+        return slot;
+    });
 }
 
 function seedToBytes(seed: number): Uint8Array {
@@ -75,22 +96,31 @@ export function generateNonce(): string {
 }
 
 /**
- * SHA-256 over `seed ‖ nonce ‖ source`.
+ * SHA-256 over `seed ‖ nonce ‖ source [‖ NUL "ids=" slots]`.
+ *
+ * The slot suffix is present only for a partial throw (see
+ * `canonicalCommitSlots`); its leading NUL cannot appear in either source
+ * string, so no two (source, slots) pairs share a preimage.
  *
  * @param {number} seed
  * @param {string} nonceBase64
  * @param {string | null} [source] see `CommitRollSource`; absent means `throw`
+ * @param {readonly number[] | null} [ids] table slots; absent means every die
  * @returns {Promise<string>} hex SHA-256
  */
 export async function commitHash(
     seed: number,
     nonceBase64: string,
-    source?: string | null
+    source?: string | null,
+    ids?: readonly number[] | null
 ): Promise<string> {
     const nonceBytes = base64ToBytes(nonceBase64);
     if (!nonceBytes) throw new Error('invalid_nonce');
     const seedBytes = seedToBytes(seed);
-    const sourceBytes = new TextEncoder().encode(canonicalRollSource(source));
+    const slots = canonicalCommitSlots(ids);
+    const sourceBytes = new TextEncoder().encode(
+        canonicalRollSource(source) + (slots ? `\0ids=${slots.join(',')}` : '')
+    );
     const payload = new Uint8Array(seedBytes.length + nonceBytes.length + sourceBytes.length);
     payload.set(seedBytes, 0);
     payload.set(nonceBytes, seedBytes.length);
@@ -108,9 +138,16 @@ export async function verifyReveal(
     expectedHash: string,
     seed: number,
     nonceBase64: string,
-    source?: string | null
+    source?: string | null,
+    ids?: readonly number[] | null
 ): Promise<boolean> {
-    const actual = await commitHash(seed, nonceBase64, source);
+    let actual: string;
+    try {
+        actual = await commitHash(seed, nonceBase64, source, ids);
+    } catch {
+        // A malformed nonce or slot list in a reveal is a failed reveal, not a crash.
+        return false;
+    }
     return actual === expectedHash;
 }
 
@@ -123,10 +160,13 @@ export async function createCommit(
         diceCounts?: Record<string, number> | null;
         throwAt?: number | null;
         source?: string | null;
+        /** Table slots of a partial throw; absent / empty = every die. */
+        ids?: readonly number[] | null;
     }
 ): Promise<CommitPayload> {
     const source = canonicalRollSource(fields.source);
-    const hash = await commitHash(seed, nonce, source);
+    const slots = canonicalCommitSlots(fields.ids);
+    const hash = await commitHash(seed, nonce, source, slots);
     return {
         hash,
         notation: fields.notation ?? null,
@@ -134,5 +174,6 @@ export async function createCommit(
         diceCounts: fields.diceCounts ?? null,
         throwAt: fields.throwAt ?? null,
         source,
+        ...(slots ? { ids: slots } : {}),
     };
 }

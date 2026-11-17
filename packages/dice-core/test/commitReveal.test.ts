@@ -184,4 +184,49 @@ describe('CommitReveal', () => {
             );
         });
     });
+
+    describe('the thrown slots are bound into the commitment', () => {
+        // Same attack as the source, one level down: a seed over slots 1 and 4
+        // lands differently from the same seed over every die, so a host that
+        // committed to a full throw must not be able to reveal a subset.
+        it('rejects a reveal that names a different subset', async () => {
+            const nonce = generateNonce();
+            const commit = await createCommit(42, nonce, { dieCount: 5, ids: [1, 4] });
+
+            expect(commit.ids).toEqual([1, 4]);
+            expect(await verifyReveal(commit.hash, 42, nonce, 'throw', [1, 4])).toBe(true);
+            expect(await verifyReveal(commit.hash, 42, nonce, 'throw', [1])).toBe(false);
+            expect(await verifyReveal(commit.hash, 42, nonce, 'throw', [4, 1])).toBe(false);
+            expect(await verifyReveal(commit.hash, 42, nonce, 'throw')).toBe(false);
+        });
+
+        it('rejects a subset revealed against a whole-table commitment', async () => {
+            const nonce = generateNonce();
+            const commit = await createCommit(42, nonce, { dieCount: 5 });
+
+            expect(commit.ids).toBeUndefined();
+            expect(await verifyReveal(commit.hash, 42, nonce, 'throw', [0, 1])).toBe(false);
+        });
+
+        it('leaves a whole-table commitment hashing as it did before slots existed', async () => {
+            const nonce = generateNonce();
+            const base = await commitHash(9, nonce, 'throw');
+            expect(await commitHash(9, nonce, 'throw', null)).toBe(base);
+            expect(await commitHash(9, nonce, 'throw', [])).toBe(base);
+        });
+
+        it('keeps the source and the slots apart', async () => {
+            const nonce = generateNonce();
+            expect(await commitHash(3, nonce, 'tower', [0])).not.toBe(
+                await commitHash(3, nonce, 'throw', [0])
+            );
+        });
+
+        it('treats a malformed slot list as a failed reveal', async () => {
+            const nonce = generateNonce();
+            const commit = await createCommit(1, nonce, { dieCount: 2, ids: [0] });
+            expect(await verifyReveal(commit.hash, 1, nonce, 'throw', [-1])).toBe(false);
+            expect(await verifyReveal(commit.hash, 1, nonce, 'throw', [0.5])).toBe(false);
+        });
+    });
 });

@@ -69,7 +69,6 @@ import { installDebugGlobals } from './app/DebugGlobals.js';
 import { setupMultiplayer } from './app/MultiplayerWiring.js';
 import { setupSessionWiring } from './app/SessionWiring.js';
 import { setupGameWiring } from './app/GameWiring.js';
-import { isFairCommitEnabled } from './net/protocolFlags.js';
 import { bootstrapPhysics, showLoadFailure } from './app/PhysicsBootstrap.js';
 import { startPostLoadAdaptiveProbe } from './core/AdaptiveQuality.js';
 import { bootstrapRendererExtras } from './app/RendererBootstrap.js';
@@ -248,7 +247,6 @@ async function init() {
         getRollHistoryPanel: () => rollHistoryPanel,
         multiplayerRef,
         getCollisionAudio: () => collisionAudio,
-        useFairCommit: isFairCommitEnabled(searchParams),
         getDiceTowerController: () => diceTowerController,
         getDiceJailController: () => diceJailController,
         interceptRoll: () => gameRef.current?.interceptRoll() ?? false,

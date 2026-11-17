@@ -15,7 +15,7 @@ import type { RoomSession } from '../net/RoomSession.js';
 import { createMultiplayerPanel } from '../ui/MultiplayerPanel.js';
 import { isTouchPrimaryDevice } from '../core/DeviceCapabilities.js';
 import { loadSolverBuildId } from 'dice-core/wasm/SolverBuildId';
-import { resolveNegotiatedProtocolVersion, isFairCommitEnabled } from '../net/protocolFlags.js';
+import { PROTOCOL_VERSION } from '../net/Protocol.js';
 import type { AppContext, AppEvents } from '../types/app';
 import type { createRollWiring } from './RollWiring.js';
 
@@ -37,16 +37,14 @@ export async function setupMultiplayer(
     if (!signalingUrl) return { roomParam };
 
     const solverBuildId = await loadSolverBuildId(searchParams);
-    const protocolVersion = resolveNegotiatedProtocolVersion(searchParams);
-    const useFairCommit = isFairCommitEnabled(searchParams);
 
     const session = createRoomSession({
         signalingUrl,
         events: appEvents,
-        protocolVersion,
+        // Commit-reveal (v2) for every room; there is no cleartext-seed mode.
+        protocolVersion: PROTOCOL_VERSION,
         solverBuildId,
         getWorldHash,
-        useFairCommit,
         getDiceCounts: () => getSpawnedDiceCounts(),
         getPresencePayload: () => buildDicePresencePayload(),
         getSessionSnapshot: () => app.session?.getSnapshot?.() ?? null,

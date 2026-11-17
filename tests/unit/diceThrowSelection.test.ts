@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     diceIdsForSlots,
+    heldThrowSubset,
     selectThrowDice,
     slotsForDiceIds,
 } from '../../src/dice/DiceThrowSelection.js';
@@ -84,5 +85,19 @@ describe('slot <-> id mapping', () => {
 
     it('drops slots with no die', () => {
         expect(diceIdsForSlots(table, [0, 9])).toEqual([40]);
+    });
+});
+
+describe('heldThrowSubset (R with a die in the jail)', () => {
+    it('names the free dice when any die is held', () => {
+        expect(heldThrowSubset(dice([70], [71, true], [72]))).toEqual([70, 72]);
+    });
+
+    it('is null when nothing is held, so a whole-table throw stays one', () => {
+        expect(heldThrowSubset(dice([70], [71], [72]))).toBeNull();
+    });
+
+    it('is empty when every die is held', () => {
+        expect(heldThrowSubset(dice([70, true], [71, true]))).toEqual([]);
     });
 });

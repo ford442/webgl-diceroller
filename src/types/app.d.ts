@@ -187,6 +187,7 @@ export interface MainDebugHooks {
 /** Event names emitted by AppEvents (see src/core/AppEvents.js). */
 export type AppEventName =
     | 'roll:started'
+    | 'roll:committed'
     | 'roll:settled'
     | 'roll:evaluated'
     | 'dice:collision'
@@ -204,6 +205,7 @@ export interface AppEvents {
     clear(): void;
     AppEvent: {
         ROLL_STARTED: 'roll:started';
+        ROLL_COMMITTED: 'roll:committed';
         ROLL_SETTLED: 'roll:settled';
         ROLL_EVALUATED: 'roll:evaluated';
         DICE_COLLISION: 'dice:collision';
