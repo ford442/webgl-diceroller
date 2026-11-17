@@ -60,6 +60,8 @@ import { createFrameScheduler } from './core/FrameScheduler.js';
 import { createRollHistory } from 'dice-core/roll/RollHistory';
 import { createRollStats } from 'dice-core/roll/RollStats';
 import { createRollHistoryPanel } from './ui/RollHistoryPanel.js';
+import { createRollTimelinePanel } from './ui/RollTimelinePanel.js';
+import { createRollTheatre } from './app/RollTheatre.js';
 import { createCullingSystem } from './core/CullingSystem.js';
 import { applyViewportToCamera } from './core/SceneMetrics.js';
 import { isTouchPrimaryDevice } from './core/DeviceCapabilities.js';
@@ -529,10 +531,29 @@ async function init() {
         readAllDiceValues,
     });
 
+    // Created before the share-link replay below, so that roll is scrubbable too.
+    const rollTheatre = createRollTheatre({
+        appEvents,
+        isRolling: () => rollWiring.getRollState().phase === 'rolling',
+    });
+    scheduler.register('preStep', 'rollTheatre', ({ deltaTime }) => rollTheatre.update(deltaTime));
+    cameraController.setCritCam(rollTheatre);
+    const rollTimelinePanel = createRollTimelinePanel({ theatre: rollTheatre });
+
     rollHistoryPanel = createRollHistoryPanel({
         rollHistory,
         rollStats,
         onReplay: (seed) => rollWiring.beginRoll(seed),
+        onScrubLatest: () => rollTimelinePanel.open(),
+        canScrubLatest: () => rollTheatre.getState().available,
+    });
+    // RollWiring refreshes the history before the theatre has taken the settle,
+    // so re-render when scrubbing becomes (un)available.
+    let scrubAvailable = false;
+    rollTheatre.subscribe((state) => {
+        if (state.available === scrubAvailable) return;
+        scrubAvailable = state.available;
+        rollHistoryPanel?.refresh();
     });
 
     installDebugGlobals(app, {
@@ -552,6 +573,7 @@ async function init() {
         applyDicePresencePayload,
         refreshDiceAppearance,
         multiplayerRef,
+        getRollTheatre: () => rollTheatre,
     });
 
     setupSessionWiring(app, {

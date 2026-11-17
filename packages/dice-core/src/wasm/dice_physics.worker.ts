@@ -56,8 +56,7 @@ import {
     dynIdsOffset,
     dynXfOffset,
 } from './workerLayout.js';
-import { computeSeededThrowParams, applyThrowParams } from './seededThrowParams.js';
-import { computeSeededHopperDropParams, applyDropParams } from './seededHopperDrop.js';
+import { applyReplayThrow, clampReplayTicks, type ReplayThrowSpec } from './replayThrow.js';
 import { dispatchLinear, drainRing } from './workerCommands.js';
 import { toRngSeedBigInt } from './seedUtil.js';
 import type { DicePhysicsModule, EmbindPhysicsEngine } from './physicsTypes.js';
@@ -111,6 +110,12 @@ let clock: SimClock | null = null;
 // throttled or overloaded device. Sim speed must not change with it.
 let timerScale = 1;
 let hidden = false; // main thread reported document.hidden
+// Roll replay (scrubber): while active the self-paced loop is parked and the
+// world only moves on replaySeek / replayStep; `replayLive` is the table as it
+// was on replayEnter, restored on replayExit.
+let replayActive = false;
+let replayLive: Uint8Array | null = null;
+let replayTick = 0;
 let asleepTicks = 0;
 
 /**
@@ -418,13 +423,84 @@ function maybeParkLoop(eng: EmbindPhysicsEngine): void {
  */
 function wakeLoop(): void {
     asleepTicks = 0;
-    if (!running || hidden) return;
+    if (!running || hidden || replayActive) return;
     startLoop();
 }
 
 // ---------------------------------------------------------------------------
 // Command handling
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Roll replay helpers
+// ---------------------------------------------------------------------------
+
+function seedEngine(seed: number): void {
+    requireEngine().seedRNG(toRngSeedBigInt(seed));
+}
+
+function serializeBytes(eng: EmbindPhysicsEngine): Uint8Array<ArrayBuffer> {
+    const vec = eng.serializeState();
+    const arr = new Uint8Array(new ArrayBuffer(vec.size()));
+    for (let i = 0; i < vec.size(); i++) arr[i] = vec.get(i);
+    vec.delete?.();
+    return arr;
+}
+
+function restoreBytes(eng: EmbindPhysicsEngine, bytes: Uint8Array): boolean {
+    const vec = new (requireModule().VectorU8)();
+    for (let i = 0; i < bytes.length; i++) vec.push_back(bytes[i] ?? 0);
+    const ok = eng.restoreMotionState(vec);
+    vec.delete?.();
+    return ok;
+}
+
+/**
+ * Step the replay world exactly `n` fixed ticks on the same clock that runs
+ * the table. Collision events are dropped: a scrub is not a second roll, and
+ * the audio/game-feel subscribers must not hear it as one.
+ */
+function replayStepTicks(n: number): void {
+    const eng = requireEngine();
+    if (n > 0) clock?.stepN(n);
+    replayTick += n;
+    eng.getCollisionEvents();
+    publish();
+}
+
+function respond(
+    reqId: number,
+    data: ArrayBuffer,
+    extra: Record<string, unknown> = {},
+    transfer: Transferable[] = []
+): void {
+    if (reqId == null) return;
+    self.postMessage(
+        { type: 'response', payload: { reqId, byteLength: data.byteLength, data, ...extra } },
+        transfer
+    );
+}
+
+function respondFrame(reqId: number): void {
+    const eng = requireEngine();
+    const ids = new Float32Array(eng.getDieIds());
+    const transforms = new Float32Array(eng.getTransforms());
+    self.postMessage(
+        {
+            type: 'response',
+            payload: {
+                reqId,
+                byteLength: 0,
+                data: new ArrayBuffer(0),
+                ok: true,
+                tick: replayTick,
+                ids,
+                transforms,
+            },
+        },
+        [ids.buffer, transforms.buffer]
+    );
+}
 
 function handleInit(payload: CommandPayload): void {
     ensureEngine();
@@ -734,33 +810,83 @@ function handleCommand(type: string, payload: CommandPayload): void {
             );
             break;
         }
-        case 'seededThrow': {
+        case 'seededThrow':
             // Queued die transforms/velocities from the command ring would
             // otherwise land on the next tick, after (and over) the throw pose.
             drainCommandQueue();
-            eng.seedRNG(toRngSeedBigInt(payload.seed));
-            const params = computeSeededThrowParams(
-                () => eng.randomFloat(),
-                payload.dice,
-                payload.tableSurfaceY
-            );
-            applyThrowParams(eng, params);
+            applyReplayThrow(eng, seedEngine, {
+                kind: 'throw',
+                seed: payload.seed,
+                dice: payload.dice,
+                tableSurfaceY: payload.tableSurfaceY,
+            });
             publish();
             break;
-        }
-        case 'seededHopperDrop': {
+        case 'seededHopperDrop':
             // Same contract as seededThrow: seed, draw, apply — all on the
             // worker, so the RNG draw order can't interleave with anything
             // the main thread does while the message is in flight.
             drainCommandQueue();
-            eng.seedRNG(toRngSeedBigInt(payload.seed));
-            const params = computeSeededHopperDropParams(
-                () => eng.randomFloat(),
-                payload.dice,
-                payload.frame
-            );
-            applyDropParams(eng, params);
+            applyReplayThrow(eng, seedEngine, {
+                kind: 'hopper',
+                seed: payload.seed,
+                dice: payload.dice,
+                frame: payload.frame,
+            });
             publish();
+            break;
+        case 'recordedThrow': {
+            // A seeded throw that also hands back the world it started from.
+            // Snapshot and throw run in one handler, so no tick can fall
+            // between them — that gap is what would make a seek diverge.
+            drainCommandQueue();
+            const snapshot = serializeBytes(eng);
+            const startTick = eng.getFixedTickCount();
+            applyReplayThrow(eng, seedEngine, payload.spec as ReplayThrowSpec);
+            publish();
+            respond(payload.reqId, snapshot.buffer, { startTick }, [snapshot.buffer]);
+            break;
+        }
+        case 'replayEnter':
+            drainCommandQueue();
+            if (!replayActive) {
+                replayLive = serializeBytes(eng);
+                replayActive = true;
+                replayTick = 0;
+                stopLoop();
+            }
+            respond(payload.reqId, new ArrayBuffer(0), { ok: true });
+            break;
+        case 'replaySeek': {
+            drainCommandQueue();
+            const base = new Uint8Array(payload.snapshot as ArrayBuffer);
+            if (!replayActive || !restoreBytes(eng, base)) {
+                respond(payload.reqId, new ArrayBuffer(0), { ok: false });
+                break;
+            }
+            applyReplayThrow(eng, seedEngine, payload.spec as ReplayThrowSpec);
+            replayTick = 0;
+            replayStepTicks(clampReplayTicks(payload.ticks));
+            respondFrame(payload.reqId);
+            break;
+        }
+        case 'replayStep':
+            drainCommandQueue();
+            if (!replayActive) {
+                respond(payload.reqId, new ArrayBuffer(0), { ok: false });
+                break;
+            }
+            replayStepTicks(clampReplayTicks(payload.ticks));
+            respondFrame(payload.reqId);
+            break;
+        case 'replayExit': {
+            drainCommandQueue();
+            const restored = replayLive ? restoreBytes(eng, replayLive) : false;
+            replayLive = null;
+            replayActive = false;
+            publish();
+            respond(payload.reqId, new ArrayBuffer(0), { ok: restored });
+            // handle() restarts the loop after this command.
             break;
         }
         case 'deserializeState': {

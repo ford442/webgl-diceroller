@@ -15,6 +15,7 @@ import {
 } from './interaction/WasmDieGrab.js';
 import { spawnedProps } from './environment/DynamicPropState.js';
 import { propWasmGrabDriver } from './environment/DynamicPropSync.js';
+import { returnTableToLive } from './dice/ThrowRecord.js';
 import type { InteractionHooks } from './types/interaction.js';
 import type { SpawnedDie } from './types/dice.js';
 
@@ -151,6 +152,8 @@ export const unregisterInteractiveObject = (mesh: any) => {
  * @param {InteractionHooks} [hooks]
  */
 function onPointerDown(x: any, y: any, camera: any, scene: any, hooks: any = {}) {
+    // A click into the scene is live input: the roll theatre lets go first.
+    returnTableToLive();
     updateMouse(x, y);
 
     raycaster.setFromCamera(mouse, camera);

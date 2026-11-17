@@ -91,6 +91,18 @@ The rules never see the scene; four small pieces join them to it.
 
 Not yet: a second human seat or a room (the host broadcasts `{ action, seed, ids }` on the `roll` path; games refuse to start inside a room), Liar's Dice (needs hidden dice and protocol v2 as the default), and a parchment score sheet. Test hook: `window.__app.game` (`start`, `stop`, `getSnapshot`, `submit`, `rethrow`). Tests: `tests/unit/gameSession.test.ts`, `rollWiringPartial.test.ts`, `diceJailController.test.ts`, `farklePanel.test.ts` (no WASM); `npm run test:partial-throw` and `npm run test:game-farkle` (real engine).
 
+### Roll theatre: seek, slow replay, crit cam
+
+The replay of a roll is the throw, not its pixels: `(seed, dice, kind)` plus the world the throw started from. Seeking re-simulates it on the engine that runs the table — no second engine, no second integrator, no transform buffer per tick.
+
+- **Recording.** Every seeded throw (R / Roll All, notation, share replays, game throws, tower drops) goes through [`throwAndRecord`](../src/dice/ThrowRecord.ts), which asks the engine to apply the throw (`recordSeededThrow`) and to hand back a `serializeState()` snapshot taken **in the same handler, before the throw** — no tick can fall between them. The throw draws through [`applyReplayThrow`](../packages/dice-core/src/wasm/replayThrow.ts), the one function the live throw, the worker and a seek all call. A cup pour or a flick clears the record (no seed reproduces a hand).
+- **Seeking.** `replaySeek(base, spec, N)` = `restoreMotionState(base)` → `applyReplayThrow(spec)` → step exactly N fixed ticks. [`restoreMotionState`](../src/wasm/dice_physics/dice_engine_step.cpp) rewinds poses, velocities, sleep and contact manifolds in place and keeps hulls, face tables, materials and kinematic flags; `deserializeState` would drop every hull, so it cannot rewind a live table. It refuses (and changes nothing) when the snapshot names a different dice set. `replayEnter` parks the worker's step loop and stashes the live world; `replayStep(n)` plays on; `replayExit` restores the stash byte for byte and resumes the loop. Collision events raised during a scrub are dropped (the audio must not hear a second roll). The in-process bridge implements the same five calls, and `SchedulerSetup` stops stepping while a replay holds the table.
+- **One writer.** A seek is refused while a roll is in flight (`getRollState().phase === 'rolling'`) or when the dice / held set changed since the throw. Any live input — a throw, a click into the scene, a pour — calls `returnTableToLive()` first; the exit is posted before the input, so the worker restores the live world before it sees it.
+- **The controller and the UI.** [`RollTheatre.ts`](../src/app/RollTheatre.ts) owns seek / play (1× and ¼×, frame-driven fixed ticks) / live for the last settled roll; [`rollTheatreModel.ts`](../src/app/rollTheatreModel.ts) holds the pure rules. [`RollTimelinePanel.ts`](../src/ui/RollTimelinePanel.ts) is a `createHudPanel` strip at the top centre (slider in ticks, ▶, ¼×, Live); the roll history's latest entry offers "⏪ Scrub this roll".
+- **Crit cam.** When a settled roll has a natural max or min on a die it moved (not cocked, not a percentile digit), `CameraController` enters `CRIT_REPLAY` after its focus fly-to: the theatre seeks to 1.5 s before the settle and plays to the settle at ¼× while the camera sits low beside the die and tracks it, then the existing `HOLDING → RETURNING` path finishes. Skip with the panel's Skip button, Esc, or a click into the scene; the results HUD is already up. Reduced motion and XR skip it with the rest of the fly-to.
+- **Not yet:** clip export (WebCodecs + a lazily imported `mediabunny` muxer, rendering offscreen frames rather than recording the live canvas) and a timeline over a whole Farkle hand. Both are consumers of `seek`.
+- Test hook: `window.__app.theatre` (`getState`, `seek`, `play`, `pause`, `live`, `skip`) and `__app.seekRoll(tick)` → `{ tick, ids, transforms }` or null. Tests: `packages/dice-core/test/replaySeek.test.ts` (seek twice is identical, a seek to the settle is the live roll, exit restores the world; WASM), the native `restoreMotionState` cases in `solver_tests.cpp`, `tests/unit/rollTheatre.test.ts`, and `npm run test:roll-theatre` (browser: crit cam + skip, seek twice, play then live, refused mid-roll).
+
 ### Test / debug hooks
 
 Under `?test`, `?debug`, or `?debug-perf`, [`AppTestHooks.js`](../src/core/AppTestHooks.js) installs **`window.__app`** — the stable documented API for Playwright and manual debugging.
@@ -112,6 +124,7 @@ Minimum `__app` surface:
 | `physics.worldHash()`                                                               | Hash of the recorded collider world (#369)   |
 | `events`                                                                            | Subscribe to `AppEvent` names                |
 | `game`                                                                              | Table game (Farkle) controls; null w/o WASM  |
+| `theatre`, `seekRoll(tick)`                                                         | Roll theatre: seek / play / live (see above) |
 
 Playwright URLs should include `&test`, e.g. `?webgl&no-post&fair-dice&test`.
 

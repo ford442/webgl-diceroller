@@ -16,12 +16,16 @@ const EXPECTED = '#6486ff';
  * @param {{ getEntries: () => RollHistoryEntry[]; exportAsText: () => string; exportAsCsv: () => string; clear: () => void }} config.rollHistory
  * @param {{ getStats: () => import('dice-core/types/roll').RollDieStats[]; minSampleSize?: number; reset: () => void }} config.rollStats
  * @param {(seed: number) => void} [config.onReplay]
+ * @param {() => void} [config.onScrubLatest] open the replay timeline on the roll just settled
+ * @param {() => boolean} [config.canScrubLatest]
  * @param {HTMLElement} [config.container]
  */
 export function createRollHistoryPanel({
     rollHistory,
     rollStats,
     onReplay = null,
+    onScrubLatest = null,
+    canScrubLatest = () => false,
     container = null,
 }) {
     if (!rollHistory || !rollStats) {
@@ -212,6 +216,18 @@ export function createRollHistoryPanel({
                     seedLabel.className = 'hud-panel--history__meta-line';
                     seedLabel.textContent = `Seed: ${entry.seed}`;
                     details.appendChild(seedLabel);
+                }
+
+                // Scrubbing re-simulates the throw on this table, so only the
+                // roll that just settled (still lying there) can be scrubbed.
+                if (index === 0 && typeof onScrubLatest === 'function' && canScrubLatest()) {
+                    const scrubBtn = hudButton('⏪ Scrub this roll', 'hud-mt-xs');
+                    scrubBtn.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onScrubLatest();
+                    });
+                    details.appendChild(scrubBtn);
                 }
 
                 row.appendChild(details);

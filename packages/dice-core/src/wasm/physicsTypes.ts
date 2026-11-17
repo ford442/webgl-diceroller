@@ -184,6 +184,12 @@ export interface PhysicsEngine {
     getCollisionEvents(): Float32Array;
     serializeState(): Uint8Array;
     deserializeState(data: unknown): void;
+    /**
+     * Rewind poses, velocities, sleep and contacts to a snapshot of this same
+     * world, keeping hulls / face tables / materials. False (and no change)
+     * when the snapshot names other dice. In-process engines only.
+     */
+    restoreMotionState?(data: Uint8Array): boolean;
 }
 
 /**
@@ -372,6 +378,7 @@ export interface EmbindPhysicsEngine {
     getCollisionEvents(): Float32Array;
     serializeState(): EmbindVector<number>;
     deserializeState(data: EmbindVector<number>): void;
+    restoreMotionState(data: EmbindVector<number>): boolean;
 }
 
 /** The instantiated Emscripten module produced by `dice_physics.js`. */
@@ -416,6 +423,26 @@ export interface PhysicsBridgeModule {
         frame: import('./seededHopperDrop.js').SeededHopperFrame
     ): void;
     deserializePhysicsState(data: Uint8Array): void;
+    /**
+     * Apply a seeded throw and resolve with the world it started from (see
+     * replayThrow.ts). Null without an engine.
+     */
+    recordSeededThrow(
+        spec: import('./replayThrow.js').ReplayThrowSpec
+    ): Promise<import('./replayThrow.js').ReplayBase | null>;
+    /** Park the live table for scrubbing; the live step stops until replayExit. */
+    replayEnter(): Promise<boolean>;
+    /** Rewind to `base`, apply `spec`, step `ticks`. Null if the base no longer fits. */
+    replaySeek(
+        base: import('./replayThrow.js').ReplayBase,
+        spec: import('./replayThrow.js').ReplayThrowSpec,
+        ticks: number
+    ): Promise<import('./replayThrow.js').ReplayFrame | null>;
+    /** Step the replay world on from where the last seek/step left it. */
+    replayStep(ticks: number): Promise<import('./replayThrow.js').ReplayFrame | null>;
+    /** Put the live table back exactly as replayEnter found it and resume stepping. */
+    replayExit(): Promise<boolean>;
+    isReplayActive(): boolean;
     setContainerActive(isActive: boolean): void;
     setContainerPlanes(planes: Float32Array | number[]): void;
     flushWorkerCommandBatch?(): void;

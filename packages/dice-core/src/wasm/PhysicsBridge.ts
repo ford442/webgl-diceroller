@@ -9,6 +9,7 @@
 import type { CollisionEvent, PhysicsBridgeModule, PhysicsEngine } from './physicsTypes.js';
 import type { SeededDieRef } from './seededThrowParams.js';
 import type { SeededHopperFrame } from './seededHopperDrop.js';
+import type { ReplayBase, ReplayFrame, ReplayThrowSpec } from './replayThrow.js';
 import { getPhysicsSearchParams } from './wasmArtifact.js';
 import * as mainBridge from './WasmPhysicsBridge.js';
 import * as workerBridge from './WorkerPhysicsBridge.js';
@@ -84,6 +85,17 @@ export const seededPhysicsHopperDrop = (
 ): void => active.seededPhysicsHopperDrop(seed, dice, frame);
 export const deserializePhysicsState = (data: Uint8Array): void =>
     active.deserializePhysicsState(data);
+export const recordSeededThrow = (spec: ReplayThrowSpec): Promise<ReplayBase | null> =>
+    active.recordSeededThrow(spec);
+export const replayEnter = (): Promise<boolean> => active.replayEnter();
+export const replaySeek = (
+    base: ReplayBase,
+    spec: ReplayThrowSpec,
+    ticks: number
+): Promise<ReplayFrame | null> => active.replaySeek(base, spec, ticks);
+export const replayStep = (ticks: number): Promise<ReplayFrame | null> => active.replayStep(ticks);
+export const replayExit = (): Promise<boolean> => active.replayExit();
+export const isReplayActive = (): boolean => active.isReplayActive();
 export const setContainerActive = (isActive: boolean): void => active.setContainerActive(isActive);
 export const setContainerPlanes = (planes: Float32Array | number[]): void =>
     active.setContainerPlanes(planes);

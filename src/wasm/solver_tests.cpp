@@ -522,6 +522,56 @@ TEST_CASE("Serialize round-trip preserves state") {
     CHECK(engine.serializeState() == restored.serializeState());
 }
 
+TEST_CASE("restoreMotionState: seeking a throw twice from its snapshot is identical") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    const auto cubeFlat = flattenHull(makeUnitCubeHull());
+    const int a = engine.addDie(6, -1.0f, -1.5f, 0.0f);
+    const int b = engine.addDie(6, 1.5f, -1.5f, 0.5f);
+    engine.setDieHull(a, cubeFlat);
+    engine.setDieHull(b, cubeFlat);
+    uploadD6FaceTable(engine, a);
+    uploadD6FaceTable(engine, b);
+    for (int i = 0; i < 240; ++i) engine.step(FIXED_DT);
+    const auto preThrow = engine.serializeState();
+
+    auto throwAndStep = [&](int ticks) {
+        engine.setDieTransform(a, 0.0f, 3.0f, 0.0f, 0.2f, 0.1f, 0.0f, 0.97f);
+        engine.setDieTransform(b, 1.0f, 4.0f, -1.0f, 0.0f, 0.3f, 0.1f, 0.94f);
+        engine.applyImpulse(a, 8.0f, 2.0f, -5.0f);
+        engine.applyTorqueImpulse(b, 3.0f, 9.0f, -4.0f);
+        for (int i = 0; i < ticks; ++i) engine.step(FIXED_DT);
+        return engine.serializeState();
+    };
+
+    const auto live = throwAndStep(300);
+    REQUIRE(engine.restoreMotionState(preThrow));
+    CHECK(engine.serializeState() == preThrow);
+    const auto seeked = throwAndStep(300);
+    // Hulls and face tables survived the rewind (deserializeState drops them,
+    // so the same rewind through it would collide as spheres and diverge).
+    CHECK(seeked == live);
+
+    REQUIRE(engine.restoreMotionState(preThrow));
+    const auto at97 = throwAndStep(97);
+    REQUIRE(engine.restoreMotionState(preThrow));
+    CHECK(throwAndStep(97) == at97);
+}
+
+TEST_CASE("restoreMotionState: a snapshot of a different dice set changes nothing") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    engine.addDie(6, 0.0f, 0.0f, 0.0f);
+    const auto oneDie = engine.serializeState();
+    engine.addDie(20, 2.0f, 0.0f, 0.0f);
+    engine.applyImpulse(0, 1.0f, 0.0f, 0.0f);
+    const auto before = engine.serializeState();
+    CHECK_FALSE(engine.restoreMotionState(oneDie));
+    CHECK(engine.serializeState() == before);
+    CHECK_FALSE(engine.restoreMotionState({}));
+    CHECK(engine.serializeState() == before);
+}
+
 TEST_CASE("Dynamic box: a thrown die knocks it") {
     DicePhysicsEngine engine;
     engine.init(-15.0f, -2.75f, 18.0f, 18.0f);

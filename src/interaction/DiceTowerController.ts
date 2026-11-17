@@ -1,18 +1,8 @@
 import * as THREE from 'three';
 import { spawnedDice, setDieWasmKinematic } from '../dice.js';
-import {
-    getWasmEngine,
-    isWasmAvailable,
-    isUsingWorkerPhysics,
-    randomPhysicsFloat,
-    seedPhysicsRNG,
-    seededPhysicsHopperDrop,
-} from '../wasm/PhysicsBridge.js';
-import {
-    applyDropParams,
-    computeSeededHopperDropParams,
-    type SeededHopperFrame,
-} from 'dice-core/wasm/seededHopperDrop';
+import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
+import { throwAndRecord } from '../dice/ThrowRecord.js';
+import type { SeededHopperFrame } from 'dice-core/wasm/seededHopperDrop';
 import { generateRollSeed } from 'dice-core/roll/ShareableRoll';
 import type { SeededDieRef } from 'dice-core/wasm/seededThrowParams';
 
@@ -125,17 +115,9 @@ export function createDiceTowerController(deps: any) {
         // to the solver before posing it, or the poses never integrate.
         targets.forEach((die: any) => setDieWasmKinematic(die.mesh, false));
 
-        if (isUsingWorkerPhysics()) {
-            // RNG draws stay ordered on the worker — `randomFloat()` is not
-            // synchronous across the boundary (see docs/WASM_ENGINE.md).
-            seededPhysicsHopperDrop(seed, dice, frame);
-        } else {
-            seedPhysicsRNG(seed);
-            applyDropParams(
-                getWasmEngine(),
-                computeSeededHopperDropParams(() => randomPhysicsFloat(), dice, frame)
-            );
-        }
+        // The engine seeds, draws and applies the drop (worker or in-process)
+        // and keeps the world it started from, so the drop can be scrubbed.
+        throwAndRecord({ kind: 'hopper', seed, dice, frame });
 
         return dice.map((d) => d.id);
     };

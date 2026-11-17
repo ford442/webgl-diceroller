@@ -715,12 +715,13 @@ const engine = getWasmEngine();
 
 #### Determinism & replay
 
-| Method             | Signature                | Description                                 |
-| ------------------ | ------------------------ | ------------------------------------------- |
-| `seedRNG`          | `(seed: u64): void`      | Seed the internal xorshift64\* generator.   |
-| `randomFloat`      | `(): f32`                | Return next deterministic float in `[0,1)`. |
-| `serializeState`   | `(): VectorU8`           | Snapshot all body states to a byte vector.  |
-| `deserializeState` | `(data: VectorU8): void` | Restore a snapshot.                         |
+| Method               | Signature                | Description                                                                                                                                                                                        |
+| -------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `seedRNG`            | `(seed: u64): void`      | Seed the internal xorshift64\* generator.                                                                                                                                                          |
+| `randomFloat`        | `(): f32`                | Return next deterministic float in `[0,1)`.                                                                                                                                                        |
+| `serializeState`     | `(): VectorU8`           | Snapshot all body states to a byte vector.                                                                                                                                                         |
+| `deserializeState`   | `(data: VectorU8): void` | Restore a snapshot.                                                                                                                                                                                |
+| `restoreMotionState` | `(data: VectorU8): bool` | Rewind a live world to its own snapshot (poses, velocities, sleep, manifolds); keeps hulls / face tables / materials. False and no change on a dice-set mismatch. Used by the roll theatre's seek. |
 
 Both seeded gameplay paths draw through `randomFloat()` in a fixed order, and
 both compute their parameters in shared TypeScript so the worker and the
@@ -1103,8 +1104,11 @@ const t2 = window.__app.getWasmEngine().getTransforms();
   so RNG draws and the poses/impulses they feed stay ordered in the worker. `serializePhysicsState()`
   is async on the worker path (request/response with a transferred `ArrayBuffer`).
 - `serializeState()` / `randomFloat()` are not available synchronously across the
-  worker boundary, so deterministic `replayRoll()` falls back to the in-process
-  path. A request/response round-trip could restore them if needed.
+  worker boundary. Seeded throws go through the `recordedThrow` command
+  (snapshot + throw in one handler, reply carries the snapshot), and the roll
+  theatre's `replayEnter` / `replaySeek` / `replayStep` / `replayExit` are
+  request/response commands that park and drive the worker's own loop (see
+  ARCHITECTURE.md, Roll theatre).
 - URL-driven engine flags (`?no-drag`, `?fair-dice`, `?bias-ratio=`) are parsed
   on the main thread in `physicsFlags.ts` and forwarded into WASM via
   `DicePhysicsEngine.setFlags()` / `setMassBiasRatio()`

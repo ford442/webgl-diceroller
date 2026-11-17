@@ -9,6 +9,7 @@ import { SimClock } from 'dice-core/wasm/SimClock';
 import {
     getWasmEngine,
     isUsingWorkerPhysics,
+    isReplayActive,
     isWasmAvailable,
     flushWorkerCommandBatch,
 } from '../wasm/PhysicsBridge.js';
@@ -86,7 +87,9 @@ export function registerFrameCallbacks(scheduler, deps) {
         // In-process (?no-worker) only: hand the frame's elapsed time to the
         // same SimClock the worker and rollHeadless() use, which feeds the
         // engine's fixed 1/120 s ticks. The worker self-paces on its own clock.
-        if (isWasmAvailable() && !isUsingWorkerPhysics()) {
+        // The roll theatre parks the table while it scrubs; it steps the
+        // engine itself (replaySeek / replayStep), so the frame must not.
+        if (isWasmAvailable() && !isUsingWorkerPhysics() && !isReplayActive()) {
             simClock ??= new SimClock(getWasmEngine());
             simClock.advanceBy(deltaTime);
         }

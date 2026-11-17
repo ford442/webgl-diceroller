@@ -382,6 +382,9 @@ jobs:
                     # A throw that names its dice: R skips a held die, and a
                     # partial-throw share link replays the same faces twice.
                     - test:partial-throw
+                    # Roll theatre: crit cam, seek twice to identical
+                    # transforms, play then "live", refused mid-roll.
+                    - test:roll-theatre
                     # Solo Farkle against the bot, played to an outcome.
                     - test:game-farkle
                     # Default route (no ?webgl) on SwiftShader must reach

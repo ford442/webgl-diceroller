@@ -429,6 +429,53 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
     reserveContactStorage();
 }
 
+bool DicePhysicsEngine::restoreMotionState(const std::vector<uint8_t>& data) {
+    // Parse into a scratch engine first, so a snapshot that does not match
+    // this world leaves it untouched.
+    DicePhysicsEngine snap;
+    snap.deserializeState(data);
+    if (snap.bodies_.size() != bodies_.size() || snap.dynamics_.size() != dynamics_.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < bodies_.size(); ++i) {
+        if (snap.bodies_[i].id != bodies_[i].id || snap.bodies_[i].sides != bodies_[i].sides) {
+            return false;
+        }
+    }
+    for (size_t i = 0; i < dynamics_.size(); ++i) {
+        if (snap.dynamics_[i].userId != dynamics_[i].userId) return false;
+    }
+
+    for (size_t i = 0; i < bodies_.size(); ++i) {
+        RigidBody& b = bodies_[i];
+        const RigidBody& s = snap.bodies_[i];
+        b.position = s.position;
+        b.velocity = s.velocity;
+        b.rotation = s.rotation;
+        b.angularVelocity = s.angularVelocity;
+        b.sleeping = s.sleeping;
+        b.sleepTimer = s.sleepTimer;
+        refreshDieDerived(b);
+    }
+    for (size_t i = 0; i < dynamics_.size(); ++i) {
+        DynamicBody& d = dynamics_[i];
+        const DynamicBody& s = snap.dynamics_[i];
+        d.position = s.position;
+        d.velocity = s.velocity;
+        d.rotation = s.rotation;
+        d.angularVelocity = s.angularVelocity;
+        d.sleeping = s.sleeping;
+        d.sleepTimer = s.sleepTimer;
+        refreshDynamicDerived(d);
+    }
+    // Same body order as the snapshot, so its manifold indices bind here too.
+    manifolds_ = std::move(snap.manifolds_);
+    accumulator_ = 0.0;
+    events_.clear();
+    reserveContactStorage();
+    return true;
+}
+
 uint64_t DicePhysicsEngine::hashSerializedState() const {
     const auto bytes = serializeState();
     return fnv1a64(bytes.data(), bytes.size());

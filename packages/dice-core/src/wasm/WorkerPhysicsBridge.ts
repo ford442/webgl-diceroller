@@ -53,6 +53,7 @@ import { parseCollisionEventBuffer } from './collisionEvents.js';
 import type { CollisionEvent, PhysicsEngine } from './physicsTypes.js';
 import type { SeededDieRef } from './seededThrowParams.js';
 import type { SeededHopperFrame } from './seededHopperDrop.js';
+import type { ReplayBase, ReplayFrame, ReplayThrowSpec } from './replayThrow.js';
 
 export interface StepStats {
     pairCandidates: number;
@@ -73,6 +74,12 @@ interface ResponsePayload {
     error?: string;
     data: ArrayBuffer;
     byteLength: number;
+    /** Replay responses (recordedThrow / replay*). */
+    ok?: boolean;
+    startTick?: number;
+    tick?: number;
+    ids?: Float32Array;
+    transforms?: Float32Array;
 }
 
 type CommandPayload = Record<string, unknown>;
@@ -879,6 +886,47 @@ class WorkerEngineProxy implements PhysicsEngine {
     deserializeState(data: Uint8Array): void {
         this._send('deserializeState', { data: Array.from(data) });
     }
+
+    // --- roll replay ---------------------------------------------------------
+    replayActive = false;
+
+    async recordSeededThrow(spec: ReplayThrowSpec): Promise<ReplayBase> {
+        const res = await this._request('recordedThrow', { spec });
+        return { snapshot: new Uint8Array(res.data), startTick: res.startTick ?? 0 };
+    }
+
+    async replayEnter(): Promise<boolean> {
+        this.replayActive = true;
+        const res = await this._request('replayEnter');
+        return res.ok === true;
+    }
+
+    async replaySeek(
+        base: ReplayBase,
+        spec: ReplayThrowSpec,
+        ticks: number
+    ): Promise<ReplayFrame | null> {
+        // Copied, not transferred: the caller keeps the base for the next seek.
+        const snapshot = base.snapshot.slice().buffer;
+        return toFrame(await this._request('replaySeek', { snapshot, spec, ticks }, [snapshot]));
+    }
+
+    async replayStep(ticks: number): Promise<ReplayFrame | null> {
+        return toFrame(await this._request('replayStep', { ticks }));
+    }
+
+    async replayExit(): Promise<boolean> {
+        // Cleared before the request goes out: anything the page posts after
+        // this call is live input, and the worker handles it after the exit.
+        this.replayActive = false;
+        const res = await this._request('replayExit');
+        return res.ok === true;
+    }
+}
+
+function toFrame(res: ResponsePayload): ReplayFrame | null {
+    if (res.ok !== true || !res.ids || !res.transforms) return null;
+    return { tick: res.tick ?? 0, ids: res.ids, transforms: res.transforms };
 }
 
 // ---------------------------------------------------------------------------
@@ -1056,6 +1104,26 @@ export const seededPhysicsHopperDrop = (
 export const deserializePhysicsState = (data: Uint8Array): void => {
     activeEngine()?.deserializeState(data);
 };
+
+export const recordSeededThrow = async (spec: ReplayThrowSpec): Promise<ReplayBase | null> =>
+    activeEngine()?.recordSeededThrow(spec) ?? null;
+
+export const replayEnter = async (): Promise<boolean> =>
+    (await activeEngine()?.replayEnter()) ?? false;
+
+export const replaySeek = async (
+    base: ReplayBase,
+    spec: ReplayThrowSpec,
+    ticks: number
+): Promise<ReplayFrame | null> => (await activeEngine()?.replaySeek(base, spec, ticks)) ?? null;
+
+export const replayStep = async (ticks: number): Promise<ReplayFrame | null> =>
+    (await activeEngine()?.replayStep(ticks)) ?? null;
+
+export const replayExit = async (): Promise<boolean> =>
+    (await activeEngine()?.replayExit()) ?? false;
+
+export const isReplayActive = (): boolean => activeEngine()?.replayActive === true;
 
 export const setContainerActive = (active: boolean): void => {
     activeEngine()?.setContainerActive(active);

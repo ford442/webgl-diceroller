@@ -21,6 +21,14 @@ import type {
 import type { SeededDieRef } from './seededThrowParams.js';
 import type { SeededHopperFrame } from './seededHopperDrop.js';
 import {
+    applyReplayThrow,
+    clampReplayTicks,
+    copyReplayFrame,
+    type ReplayBase,
+    type ReplayFrame,
+    type ReplayThrowSpec,
+} from './replayThrow.js';
+import {
     instantiateDicePhysicsModule,
     WASM_SCALAR_DIR,
     getPhysicsSearchParams,
@@ -89,6 +97,7 @@ const STUB_ENGINE = {
     getCollisionEvents: () => new Float32Array(0),
     serializeState: () => new Uint8Array(0),
     deserializeState: () => {},
+    restoreMotionState: () => false,
 } satisfies PhysicsEngine;
 
 /**
@@ -145,6 +154,15 @@ function wrapEngine(raw: EmbindPhysicsEngine, Module: DicePhysicsModule): Physic
         for (let i = 0; i < bytes.length; i++) vec.push_back(bytes[i] ?? 0);
         originalDeserialize(vec);
         vec.delete?.();
+    };
+    const originalRestore = raw.restoreMotionState?.bind(raw);
+    engine.restoreMotionState = (data: Uint8Array) => {
+        if (!originalRestore) return false;
+        const vec = new Module.VectorU8();
+        for (let i = 0; i < data.length; i++) vec.push_back(data[i] ?? 0);
+        const ok = originalRestore(vec);
+        vec.delete?.();
+        return ok;
     };
     const originalSeedRNG = raw.seedRNG.bind(raw);
     engine.seedRNG = (seed: number) => {
@@ -343,6 +361,75 @@ export const seededPhysicsHopperDrop = (
 export const deserializePhysicsState = (data: Uint8Array): void => {
     if (!_session?.available) return;
     _session.engine.deserializeState(data);
+};
+
+// --- roll replay (same contract as the worker's replay* commands) -----------
+
+let _replayLive: Uint8Array | null = null;
+let _replayTick = 0;
+
+function replayEngine(): PhysicsEngine | null {
+    return _session?.available ? _session.engine : null;
+}
+
+function replayFrame(engine: PhysicsEngine): ReplayFrame {
+    return copyReplayFrame(_replayTick, engine.getDieIds(), engine.getTransforms());
+}
+
+function replayStepTicks(engine: PhysicsEngine, n: number): void {
+    // Exactly n fixed ticks: the accumulator is empty after a restore, and one
+    // FIXED_DT banks one tick. Events are dropped (a scrub is not a roll).
+    for (let i = 0; i < n; i++) engine.step(1 / 120);
+    _replayTick += n;
+    engine.getCollisionEvents();
+}
+
+export const recordSeededThrow = async (spec: ReplayThrowSpec): Promise<ReplayBase | null> => {
+    const engine = replayEngine();
+    if (!engine) return null;
+    const snapshot = engine.serializeState();
+    const startTick = engine.getFixedTickCount?.() ?? 0;
+    applyReplayThrow(engine, (seed) => engine.seedRNG(seed), spec);
+    return { snapshot, startTick };
+};
+
+/** True while the table is parked for scrubbing (the frame loop must not step it). */
+export const isReplayActive = (): boolean => _replayLive !== null;
+
+export const replayEnter = async (): Promise<boolean> => {
+    const engine = replayEngine();
+    if (!engine) return false;
+    if (!_replayLive) _replayLive = engine.serializeState();
+    _replayTick = 0;
+    return true;
+};
+
+export const replaySeek = async (
+    base: ReplayBase,
+    spec: ReplayThrowSpec,
+    ticks: number
+): Promise<ReplayFrame | null> => {
+    const engine = replayEngine();
+    if (!engine || !_replayLive || !engine.restoreMotionState?.(base.snapshot)) return null;
+    applyReplayThrow(engine, (seed) => engine.seedRNG(seed), spec);
+    _replayTick = 0;
+    replayStepTicks(engine, clampReplayTicks(ticks));
+    return replayFrame(engine);
+};
+
+export const replayStep = async (ticks: number): Promise<ReplayFrame | null> => {
+    const engine = replayEngine();
+    if (!engine || !_replayLive) return null;
+    replayStepTicks(engine, clampReplayTicks(ticks));
+    return replayFrame(engine);
+};
+
+export const replayExit = async (): Promise<boolean> => {
+    const engine = replayEngine();
+    const live = _replayLive;
+    _replayLive = null;
+    if (!engine || !live) return false;
+    return engine.restoreMotionState?.(live) ?? false;
 };
 
 export const setContainerActive = (active: boolean): void => {

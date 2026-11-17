@@ -1,21 +1,11 @@
 import * as THREE from 'three';
-import {
-    getWasmEngine,
-    seedPhysicsRNG,
-    randomPhysicsFloat,
-    seededPhysicsThrow,
-    isUsingWorkerPhysics,
-} from '../wasm/PhysicsBridge.js';
-import {
-    computeSeededThrowParams,
-    applyThrowParams,
-    createSeededRng,
-} from 'dice-core/wasm/seededThrowParams';
+import { getWasmEngine } from '../wasm/PhysicsBridge.js';
 import { TABLE_SURFACE_Y } from '../core/SceneMetrics.js';
 import { spawnedDice } from './DiceState.js';
 import { isUsingWasmPhysics, getSecureRandom } from './DicePhysicsPresets.js';
 import { applyWasmImpulseForDie } from './DiceSync.js';
 import { selectThrowDice, type ThrowSelectionOptions } from './DiceThrowSelection.js';
+import { forgetLastThrow, throwAndRecord } from './ThrowRecord.js';
 
 const _flickForward = new THREE.Vector3();
 const _flickRight = new THREE.Vector3();
@@ -49,85 +39,47 @@ export const throwDice = (
 
     const useDeterministic = seed !== null;
     const targets = selectThrowDice(spawnedDice, options);
-    const throwDiceList = targets.map(({ id, index }) => ({ id, index }));
     const wasmDice = engine
         ? targets.filter(({ die }) => die.wasmId != null).map(({ id, index }) => ({ id, index }))
         : [];
 
-    let paramsById = null;
-    const workerThrow = useDeterministic && isUsingWorkerPhysics() && wasmDice.length > 0;
-
-    if (workerThrow) {
-        seededPhysicsThrow(seed, wasmDice, TABLE_SURFACE_Y);
-        paramsById = new Map(
-            computeSeededThrowParams(createSeededRng(seed), wasmDice, TABLE_SURFACE_Y).map((p) => [
-                p.id,
-                p,
-            ])
-        );
-    } else if (useDeterministic && engine) {
-        seedPhysicsRNG(seed);
-        const params = computeSeededThrowParams(
-            () => randomPhysicsFloat(),
-            wasmDice,
-            TABLE_SURFACE_Y
-        );
-        applyThrowParams(engine, params);
-        paramsById = new Map(params.map((p) => [p.id, p]));
-    } else if (useDeterministic) {
-        const params = computeSeededThrowParams(
-            createSeededRng(seed),
-            throwDiceList,
-            TABLE_SURFACE_Y
-        );
-        paramsById = new Map(params.map((p) => [p.id, p]));
-    }
-
-    const rand = () => {
-        if (!useDeterministic) return getSecureRandom();
-        if (engine) return randomPhysicsFloat();
-        return getSecureRandom();
-    };
-
-    targets.forEach(({ die, id, index }) => {
-        let x;
-        let y;
-        let z;
-        let q;
-        let forceX;
-        let forceY;
-        let forceZ;
-        let spinX;
-        let spinY;
-        let spinZ;
-
-        const preset = paramsById?.get(id);
-        if (paramsById) {
-            if (!preset) return;
-            ({ x, y, z, forceX, forceY, forceZ, spinX, spinY, spinZ } = preset);
-            q = new THREE.Quaternion(preset.qx, preset.qy, preset.qz, preset.qw);
+    if (useDeterministic) {
+        // One path for the worker and the in-process engine: the engine seeds,
+        // draws and applies the throw, and captures the world it started from
+        // so the roll theatre can seek it (ThrowRecord / replayThrow.ts).
+        if (wasmDice.length > 0) {
+            throwAndRecord({
+                kind: 'throw',
+                seed,
+                dice: wasmDice,
+                tableSurfaceY: TABLE_SURFACE_Y,
+            });
         } else {
-            x = (rand() - 0.5) * 4;
-            y = TABLE_SURFACE_Y + 6.75 + index * 0.5;
-            z = (rand() - 0.5) * 4;
-            q = new THREE.Quaternion();
-            q.setFromEuler(
-                new THREE.Euler(rand() * Math.PI * 2, rand() * Math.PI * 2, rand() * Math.PI * 2)
-            );
-            forceX = (rand() - 0.5) * 25;
-            forceY = rand() * 10 - 5;
-            forceZ = (rand() - 0.5) * 25;
-            spinX = (rand() - 0.5) * 100;
-            spinY = (rand() - 0.5) * 100;
-            spinZ = (rand() - 0.5) * 100;
-
-            if (engine && die.wasmId != null) {
-                engine.setDieTransform(die.wasmId, x, y, z, q.x, q.y, q.z, q.w);
-                engine.setDieVelocity(die.wasmId, 0, 0, 0, 0, 0, 0);
-                engine.applyImpulse(die.wasmId, forceX, forceY, forceZ);
-                engine.applyTorqueImpulse(die.wasmId, spinX, spinY, spinZ);
-            }
+            forgetLastThrow();
         }
+        return targets.map(({ id }) => id);
+    }
+    forgetLastThrow();
+
+    const rand = getSecureRandom;
+    targets.forEach(({ die, index }) => {
+        if (!engine || die.wasmId == null) return;
+        const x = (rand() - 0.5) * 4;
+        const y = TABLE_SURFACE_Y + 6.75 + index * 0.5;
+        const z = (rand() - 0.5) * 4;
+        const q = new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(rand() * Math.PI * 2, rand() * Math.PI * 2, rand() * Math.PI * 2)
+        );
+        const forceX = (rand() - 0.5) * 25;
+        const forceY = rand() * 10 - 5;
+        const forceZ = (rand() - 0.5) * 25;
+        const spinX = (rand() - 0.5) * 100;
+        const spinY = (rand() - 0.5) * 100;
+        const spinZ = (rand() - 0.5) * 100;
+        engine.setDieTransform(die.wasmId, x, y, z, q.x, q.y, q.z, q.w);
+        engine.setDieVelocity(die.wasmId, 0, 0, 0, 0, 0, 0);
+        engine.applyImpulse(die.wasmId, forceX, forceY, forceZ);
+        engine.applyTorqueImpulse(die.wasmId, spinX, spinY, spinZ);
     });
 
     return targets.map(({ id }) => id);
@@ -163,6 +115,7 @@ export function applyFlickImpulseToDice(
         -normOriginX * strength * 0.08
     );
 
+    forgetLastThrow();
     spawnedDice.forEach((die) => {
         if (isUsingWasmPhysics() && die.wasmId != null) {
             applyWasmImpulseForDie(die.mesh, _flickImpulse, _flickTorque);
