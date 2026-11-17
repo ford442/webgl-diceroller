@@ -11,7 +11,10 @@
 
 /** @typedef {import('./types/dice').DiceReadValue} DiceReadValue */
 
-import { formatDieLabel } from 'dice-core/roll/Notation';
+import { formatDieLabel, formatFaceValue } from 'dice-core/roll/Notation';
+
+/** What the face shows (dF → -1/0/+1); `value` is which face it is. */
+const _shown = (r) => r.displayValue ?? r.value;
 import {
     prefersReducedMotion,
     resultCardStaggerMs,
@@ -65,7 +68,7 @@ export function updateDiceHud(diceResults, options = {}) {
     const valid = diceResults.filter(
         (r) => r.value !== null && r.value !== undefined && r.value > 0
     );
-    const total = valid.reduce((s, r) => s + r.value, 0);
+    const total = valid.reduce((s, r) => s + _shown(r), 0);
 
     diceResults.forEach((result, index) => {
         const card = _makeResultCard(result, {
@@ -107,7 +110,7 @@ export function showResults(diceResults, { timedOut = false, onReroll = null } =
     const valid = diceResults.filter((r) => r.value !== null && r.value !== undefined);
     if (valid.length === 0) return;
 
-    const total = valid.reduce((s, r) => s + r.value, 0);
+    const total = valid.reduce((s, r) => s + _shown(r), 0);
     const cockedCount = valid.filter((r) => r.cocked).length;
     const reducedMotion = prefersReducedMotion();
     const staggerMs = resultCardStaggerMs();
@@ -298,7 +301,7 @@ export function showNotationResults(evaluated) {
     }
 
     const diceList = displayDice
-        .map((d) => `${formatDieLabel(d.type, d.role)} = ${d.displayValue ?? d.value}`)
+        .map((d) => `${formatDieLabel(d.type, d.role)} = ${formatFaceValue(d.type, _shown(d))}`)
         .join(', ');
     let announce = `Rolled ${evaluated.expression}: ${diceList}. Total ${evaluated.total}.`;
     if (evaluated.opposed) {
@@ -369,7 +372,7 @@ function _createScrim() {
 }
 
 function _formatDiceList(diceResults) {
-    return diceResults.map((r) => `${r.type} = ${r.value}`).join(', ');
+    return diceResults.map((r) => `${r.type} = ${formatFaceValue(r.type, _shown(r))}`).join(', ');
 }
 
 function _formatDiceSummary(diceResults, total) {
@@ -397,11 +400,7 @@ function _makeResultCard(
     typeEl.textContent = result.type;
 
     const valueEl = document.createElement('div');
-    const displayValue = rolling
-        ? '…'
-        : result.value !== null && result.value !== undefined
-          ? result.value
-          : '—';
+    const displayValue = rolling ? '…' : formatFaceValue(result.type, _shown(result));
     valueEl.className = 'hud-result-card__value';
     if (dropped) valueEl.classList.add('hud-result-card__value--dropped');
     else if (rolling) valueEl.classList.add('hud-result-card__value--rolling');

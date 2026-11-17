@@ -554,6 +554,7 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
         readAllDiceValues: () => Array<{
             type: string;
             value: number | null;
+            displayValue?: number | null;
             role?: 'tens' | 'ones' | null;
             groupIndex?: number;
         }>;

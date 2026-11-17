@@ -133,7 +133,13 @@ export interface RollSessionDeps {
     /** `allowCocked`: read awake dice from their mesh after a settle timeout. */
     readAllDiceValues: (options?: { allowCocked?: boolean }) => Array<{
         type: string;
+        /** The natural face (1..faces) the hull landed on. */
         value: number | null;
+        /**
+         * What the die's numbering says that face shows (dF → -1/0/+1, d2 → 1/2).
+         * Scoring reads this when present; absent means "same as value".
+         */
+        displayValue?: number | null;
         role?: 'tens' | 'ones' | null;
         groupIndex?: number;
         cocked?: boolean;

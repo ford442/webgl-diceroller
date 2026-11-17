@@ -138,7 +138,9 @@ async function resolveSide(
             groupIndex: specs[i]?.groupIndex ?? 0,
             dieIndex: specs[i]?.dieIndex ?? i,
             type: r.type,
-            value: r.value,
+            // Score what the face shows, not which face it is: a dF's natural
+            // 1..6 means nothing to `4dF`, its -1/0/+1 does.
+            value: r.displayValue ?? r.value,
             role: specs[i]?.role ?? (r.role as DieOutcome['role']) ?? null,
             exploded: Boolean(specs[i]?.replacesDieIndex != null && !specs[i]?.isReroll),
             rerolled: Boolean(specs[i]?.isReroll),
