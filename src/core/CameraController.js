@@ -15,6 +15,8 @@ const DiceFocusState = {
     FOCUSING: 'FOCUSING',
     HOLDING: 'HOLDING',
     RETURNING: 'RETURNING',
+    /** Crit cam: a natural max/min replays its last 1.5 s at ¼× from a low angle. */
+    CRIT_REPLAY: 'CRIT_REPLAY',
 };
 
 export { DiceFocusState };
@@ -45,6 +47,48 @@ export function createCameraController(camera) {
     const focusStartRot = new THREE.Quaternion();
     const focusEndRot = new THREE.Quaternion();
     let focusProgress = 0;
+
+    // Crit cam (src/app/RollTheatre.ts). Same rig: it slots in between the
+    // focus fly-to and the existing HOLDING → RETURNING path.
+    /** @type {{ beginCrit: () => ({ crit: { slot: number }, done: Promise<void> } | null) } | null} */
+    let critCam = null;
+    /** @type {THREE.Object3D | null} */
+    let critTarget = null;
+    let critFinished = false;
+    const critShotPos = new THREE.Vector3();
+    const critLookAt = new THREE.Vector3();
+    const _critOffset = new THREE.Vector3();
+    const _critLook = new THREE.Quaternion();
+    // A camera, not an Object3D: lookAt points a camera's -Z at the target.
+    const _critDummy = new THREE.PerspectiveCamera();
+    let critToken = 0;
+
+    function setCritCam(hook) {
+        critCam = hook ?? null;
+    }
+
+    /** Low and close, on the side of the die the camera already looks from. */
+    function beginCritShot() {
+        const run = critCam?.beginCrit?.() ?? null;
+        const die = run ? spawnedDice[run.crit.slot] : null;
+        if (!run || !die?.mesh) return false;
+        critTarget = die.mesh;
+        critFinished = false;
+        _critOffset.copy(camera.position).sub(critTarget.position);
+        _critOffset.y = 0;
+        if (_critOffset.lengthSq() < 1e-6) _critOffset.set(0, 0, 1);
+        _critOffset.setLength(5.5);
+        critShotPos.copy(critTarget.position).add(_critOffset);
+        critShotPos.y = critTarget.position.y + 1.4;
+        focusStartPos.copy(camera.position);
+        focusStartRot.copy(camera.quaternion);
+        focusProgress = 0;
+        const token = ++critToken;
+        run.done.then(() => {
+            if (token === critToken) critFinished = true;
+        });
+        return true;
+    }
 
     function _syncOrbitFromCamera() {
         const offset = camera.position.clone().sub(orbitLookAt);
@@ -107,6 +151,8 @@ export function createCameraController(camera) {
 
     function setState(newState) {
         if (newState === DiceFocusState.WAITING_FOR_STOP) {
+            critToken += 1;
+            critTarget = null;
             settleWatch.begin();
             settleOutcome = null;
         }
@@ -223,9 +269,29 @@ export function createCameraController(camera) {
             camera.quaternion.slerpQuaternions(focusStartRot, focusEndRot, focusProgress);
 
             if (focusProgress === 1) {
-                diceFocusState = DiceFocusState.HOLDING;
-                focusTimer = 2.0; // Hold for 2s
                 finishRollResults(settled);
+                if (beginCritShot()) {
+                    diceFocusState = DiceFocusState.CRIT_REPLAY;
+                } else {
+                    diceFocusState = DiceFocusState.HOLDING;
+                    focusTimer = 2.0; // Hold for 2s
+                }
+            }
+        } else if (diceFocusState === DiceFocusState.CRIT_REPLAY) {
+            focusProgress = Math.min(1, focusProgress + deltaTime * 1.6);
+            const ease = focusProgress * focusProgress * (3 - 2 * focusProgress);
+            camera.position.lerpVectors(focusStartPos, critShotPos, ease);
+            // Track the die as the replay moves it.
+            if (critTarget) critLookAt.copy(critTarget.position);
+            _critDummy.position.copy(camera.position);
+            _critDummy.lookAt(critLookAt);
+            _critLook.copy(_critDummy.quaternion);
+            camera.quaternion.slerpQuaternions(focusStartRot, _critLook, ease);
+            if (critFinished) {
+                critTarget = null;
+                critFinished = false;
+                diceFocusState = DiceFocusState.HOLDING;
+                focusTimer = 1.0;
             }
         } else if (diceFocusState === DiceFocusState.HOLDING) {
             focusTimer -= deltaTime;
@@ -329,6 +395,7 @@ export function createCameraController(camera) {
     return {
         getState,
         setState,
+        setCritCam,
         update,
         applyTouchOrbit,
         applyTouchZoom,

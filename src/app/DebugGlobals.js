@@ -37,6 +37,7 @@ export function installDebugGlobals(app, deps) {
         applyDicePresencePayload,
         refreshDiceAppearance,
         multiplayerRef,
+        getRollTheatre,
     } = deps;
 
     app.dice.replayRoll = (seed) => rollWiring.beginRoll(seed);
@@ -105,4 +106,26 @@ export function installDebugGlobals(app, deps) {
         multiplayerRef.current?.broadcastPresence?.();
     };
     app.REPLAY_VERSION = rollWiring.REPLAY_VERSION;
+
+    const theatre = getRollTheatre?.() ?? null;
+    if (theatre) {
+        app.theatre = {
+            getState: () => theatre.getState(),
+            // Plain arrays: a Playwright script compares two seeks with deepEqual.
+            seek: async (tick) => {
+                const frame = await theatre.seek(tick);
+                if (!frame) return null;
+                return {
+                    tick: frame.tick,
+                    ids: Array.from(frame.ids),
+                    transforms: Array.from(frame.transforms),
+                };
+            },
+            play: (rate, options) => theatre.play(rate, options),
+            pause: () => theatre.pause(),
+            live: () => theatre.live(),
+            skip: () => theatre.skip(),
+        };
+        app.seekRoll = app.theatre.seek;
+    }
 }

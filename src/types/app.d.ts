@@ -286,6 +286,15 @@ export interface AppContextInteractable {
  * Mutable bag created in main.js and filled as systems come online.
  * Exposed as `window.__app` only under `?test` / `?debug` / `?debug-perf`.
  */
+export interface AppContextTheatre {
+    getState: () => import('../app/RollTheatre').TheatreState;
+    seek: (tick: number) => Promise<{ tick: number; ids: number[]; transforms: number[] } | null>;
+    play: (rate?: number, options?: { from?: number }) => Promise<boolean>;
+    pause: () => void;
+    live: () => Promise<void>;
+    skip: () => Promise<void>;
+}
+
 export interface AppContext {
     events: AppEvents;
     ready: boolean;
@@ -332,6 +341,14 @@ export interface AppContext {
         lastTimeoutReason: string | null;
         lastResults: unknown;
     };
+    /**
+     * Roll theatre (scrub / slow replay / crit cam) for the last settled roll.
+     * `seek` resolves with the die poses at that tick, or null when refused
+     * (mid-roll, unseeded, table changed). See src/app/RollTheatre.ts.
+     */
+    theatre?: AppContextTheatre | null;
+    /** Alias of `theatre.seek` for automation. */
+    seekRoll?: AppContextTheatre['seek'];
     getActiveDiceSet: (() => unknown) | null;
     setDieAppearance: ((dieKey: string, patch: unknown) => unknown) | null;
     getDicePresencePayload: (() => unknown) | null;

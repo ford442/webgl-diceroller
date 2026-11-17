@@ -69,6 +69,7 @@
         "test:share-roll-replay": "node tests/share-roll-replay.js",
         "test:roll-timeout": "node tests/roll-timeout.js",
         "test:partial-throw": "node tests/partial-throw.js",
+        "test:roll-theatre": "node tests/roll-theatre.js",
         "test:game-farkle": "node tests/game-farkle.js",
         "test:multiplayer-commit-reveal": "node tests/multiplayer-commit-reveal.js",
         "test:default-route": "node tests/default-route.js",

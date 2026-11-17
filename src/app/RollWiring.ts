@@ -16,6 +16,7 @@ import {
     readDiceValueAllowingCocked,
 } from '../dice.js';
 import { createSettleWatch } from 'dice-core/roll/SettleWatch';
+import { forgetLastThrow } from '../dice/ThrowRecord.js';
 import type { ThrowDiceOptions } from '../dice/DiceThrow.js';
 import { diceIdsForSlots, heldThrowSubset, slotsForDiceIds } from '../dice/DiceThrowSelection.js';
 import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
@@ -232,6 +233,8 @@ export function createRollWiring(app: AppContext, deps: RollWiringDeps) {
     }
 
     function beginPhysicalReroll(source: string): void {
+        // A pour is driven by the player's hand; no seed replays it.
+        forgetLastThrow();
         pendingRollMeta = {
             seed: null,
             expression: null,

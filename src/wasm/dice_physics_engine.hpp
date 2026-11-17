@@ -307,6 +307,20 @@ public:
 
     void deserializeState(const std::vector<uint8_t>& data);
 
+    /**
+     * Rewind a live world to a `serializeState()` snapshot taken from it:
+     * pose, velocity, sleep state and contact manifolds come from the
+     * snapshot; everything the snapshot does not carry (hulls, face tables,
+     * materials, drag, kinematic flags, statics) stays as it is. That is what
+     * makes it usable on the table the player is looking at, where
+     * `deserializeState` would drop every hull. The roll scrubber seeks with
+     * it: restore the pre-throw snapshot, apply the seeded throw, step N.
+     *
+     * Returns false and changes nothing when the snapshot names a different
+     * set of dice or dynamic props (in order) than the world now holds.
+     */
+    bool restoreMotionState(const std::vector<uint8_t>& data);
+
     uint64_t hashSerializedState() const;
 
     float maxTablePenetration() const;

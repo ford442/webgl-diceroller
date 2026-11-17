@@ -889,3 +889,44 @@
 .hud-game__primary {
     font-weight: bold;
 }
+
+/* Roll replay timeline (RollTimelinePanel): top-centre, clear of the history
+   toggle on the left and the dice controls on the right. */
+.hud-panel--timeline {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: var(--hud-z-panel);
+    max-width: calc(100vw - 120px);
+    padding: 4px 8px;
+}
+
+.hud-panel--timeline__controls {
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+
+.hud-panel--timeline__label {
+    color: var(--hud-fg-strong);
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.hud-panel--timeline__slider {
+    width: min(280px, 40vw);
+    accent-color: var(--hud-accent);
+}
+
+.hud-panel--timeline__time {
+    font-family: var(--hud-font);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    color: var(--hud-fg-muted);
+    white-space: nowrap;
+}
+
+.hud-panel--timeline[data-state='crit'] {
+    border-color: var(--hud-fg-strong);
+}
