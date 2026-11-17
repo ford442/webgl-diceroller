@@ -12,12 +12,8 @@ import { initUI, createCrosshair } from '../ui.js';
 import { createDiceCasePanel } from '../ui/DiceCasePanel.js';
 import { initResultsUI } from '../results.js';
 import { initInteraction } from '../interaction.js';
-import {
-    TIER_PROP_DEFINITIONS,
-    DECORATIVE_TIER_ENTRIES,
-    spawnProp,
-    spawnTierWithRandomPool,
-} from '../environment/PropRegistry.js';
+import { compileScene, spawnProp, spawnTierWithRandomPool } from '../environment/PropRegistry.js';
+import { DEFAULT_SCENE } from '../scenes/index';
 import { resolveTableLayoutConfig, persistTableLayoutConfig } from './TableLayoutConfig.js';
 import { createLayoutManager } from './RandomLayout.js';
 import { preloadSharedTextures } from './TexturePipeline.js';
@@ -57,11 +53,13 @@ async function spawnTier(entries, context) {
  * @param {import('three').Scene} scene
  * @param {import('three').Camera} camera
  * @param {null} physicsWorld ammo.js was retired; this legacy param is always null now
- * @param {import('../types/app').AppOrchestrator} orchestrator
+ * @param {import('../types/app').AppOrchestrator} orchestrator `sceneDocument` is the scene to build (default: the tavern)
  * @param {import('../types/app').TierLoadCallbacks} callbacks
  * @param {import('three').WebGLRenderer | import('three/webgpu').WebGPURenderer} renderer
  */
 export async function loadTiers(scene, camera, physicsWorld, orchestrator, callbacks, renderer) {
+    const sceneDocument = orchestrator.sceneDocument ?? DEFAULT_SCENE;
+    const sceneTiers = compileScene(sceneDocument);
     const layoutConfig = resolveTableLayoutConfig();
     const registerUpdateFn = (name, update, priority = 0) =>
         registerUpdate(orchestrator, name, update, priority);
@@ -75,12 +73,14 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         callbacks,
         registerUpdate: registerUpdateFn,
         cullingSystem,
+        decorEntries: sceneTiers.decorative,
     });
 
     const context = {
         scene,
         camera,
         physicsWorld,
+        sceneDocument,
         callbacks,
         state: {},
         scheduler: orchestrator.scheduler,
@@ -105,10 +105,10 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
         await preloadSharedTextures(renderer);
     }
 
-    updateLoadingText('Building tavern environment...');
+    updateLoadingText(`Building ${sceneDocument.label} environment...`);
     updateLoadingBar(20);
     context.tierRenderStats.snapshotBefore('tier0');
-    await spawnTier(TIER_PROP_DEFINITIONS.tier0, context);
+    await spawnTier(sceneTiers.tier0, context);
     context.tierRenderStats.snapshotAfter('tier0');
     if (context.state.clutterResult) {
         layoutManager.setInitialClutter(context.state.clutterResult);
@@ -188,7 +188,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
     await yieldToMain();
     updateLoadingBar(55);
     context.tierRenderStats.snapshotBefore('tier1');
-    await spawnTier(TIER_PROP_DEFINITIONS.tier1, context);
+    await spawnTier(sceneTiers.tier1, context);
     context.tierRenderStats.snapshotAfter('tier1');
     updateLoadingBar(70);
 
@@ -196,7 +196,7 @@ export async function loadTiers(scene, camera, physicsWorld, orchestrator, callb
     await yieldToMain();
     context.tierRenderStats.snapshotBefore('tierDecor');
     const decorRecords = await spawnTierWithRandomPool(
-        DECORATIVE_TIER_ENTRIES,
+        sceneTiers.decorative,
         layoutConfig.decorCount,
         context,
         { seed: layoutConfig.seed + 0xdec0, theme: layoutConfig.theme }

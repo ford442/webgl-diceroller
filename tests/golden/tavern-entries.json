@@ -1,0 +1,2785 @@
+{
+    "entries": [
+        {
+            "tier": "tier0",
+            "index": 0,
+            "name": "TavernWalls",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": null,
+            "cull": false,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier0",
+            "index": 1,
+            "name": "Room",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": null,
+            "cull": false,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier0",
+            "index": 2,
+            "name": "Table",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": true,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier0",
+            "index": 3,
+            "name": "Clutter",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": true,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier0",
+            "index": 4,
+            "name": "TarotDeck",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier1",
+            "index": 0,
+            "name": "Bookshelf",
+            "factoryName": null,
+            "position": {
+                "x": -18,
+                "y": -10,
+                "z": 0
+            },
+            "rotation": 1.5707963267948966,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier1",
+            "index": 1,
+            "name": "DecorativeWalls",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": null,
+            "cull": false,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier1",
+            "index": 2,
+            "name": "Chair",
+            "factoryName": null,
+            "position": {
+                "x": -14,
+                "y": -9.5,
+                "z": 6
+            },
+            "rotation": 1.0471975511965976,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier1",
+            "index": 3,
+            "name": "ChairRight",
+            "factoryName": "Chair",
+            "position": {
+                "x": 14,
+                "y": -9.5,
+                "z": -6
+            },
+            "rotation": -1.0471975511965976,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier1",
+            "index": 4,
+            "name": "Chest",
+            "factoryName": null,
+            "position": {
+                "x": -10,
+                "y": -9.5,
+                "z": -18
+            },
+            "rotation": 0.39269908169872414,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier1",
+            "index": 5,
+            "name": "Rug",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": null,
+            "cull": false,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier1",
+            "index": 6,
+            "name": "Atmosphere",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": null,
+            "cull": false,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier1",
+            "index": 7,
+            "name": "Lamp",
+            "factoryName": null,
+            "position": {
+                "x": 0,
+                "y": 38,
+                "z": 0
+            },
+            "rotation": null,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": true,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier1",
+            "index": 8,
+            "name": "FloatingCandles",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier1",
+            "index": 9,
+            "name": "Runecircle",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 0,
+            "name": "Horseshoe",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 1,
+            "name": "DiceTower",
+            "factoryName": null,
+            "position": {
+                "x": 0,
+                "y": -3,
+                "z": -14
+            },
+            "rotation": 0,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 2,
+            "name": "DiceTray",
+            "factoryName": null,
+            "position": {
+                "x": 12,
+                "y": -2.75,
+                "z": 10
+            },
+            "rotation": 0.5235987755982988,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 3,
+            "name": "DiceJail",
+            "factoryName": null,
+            "position": {
+                "x": -13,
+                "y": -2.75,
+                "z": -13
+            },
+            "rotation": -0.7853981633974483,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 4,
+            "name": "DiceBag",
+            "factoryName": null,
+            "position": {
+                "x": -10,
+                "y": -1.95,
+                "z": 12
+            },
+            "rotation": 0.39269908169872414,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 5,
+            "name": "DiceCup",
+            "factoryName": null,
+            "position": {
+                "x": 5,
+                "y": -2.75,
+                "z": 2
+            },
+            "rotation": -0.39269908169872414,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 6,
+            "name": "Bell",
+            "factoryName": null,
+            "position": {
+                "x": 0,
+                "y": -2.75,
+                "z": 15
+            },
+            "rotation": null,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": true,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 7,
+            "name": "TavernMeal",
+            "factoryName": null,
+            "position": {
+                "x": 14,
+                "y": -2.75,
+                "z": 5
+            },
+            "rotation": -0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 8,
+            "name": "Hourglass",
+            "factoryName": null,
+            "position": {
+                "x": 11,
+                "y": -1.75,
+                "z": -11
+            },
+            "rotation": 0.2617993877991494,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 9,
+            "name": "Map",
+            "factoryName": null,
+            "position": {
+                "x": -14,
+                "y": -2.75,
+                "z": 0
+            },
+            "rotation": 1.0471975511965976,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 10,
+            "name": "Scroll",
+            "factoryName": null,
+            "position": {
+                "x": 10,
+                "y": -2.4,
+                "z": 13
+            },
+            "rotation": -0.39269908169872414,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 11,
+            "name": "CrystalBall",
+            "factoryName": null,
+            "position": {
+                "x": 13,
+                "y": -2.75,
+                "z": -13
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 12,
+            "name": "PotionSet",
+            "factoryName": null,
+            "position": {
+                "x": -13,
+                "y": -2.75,
+                "z": -6
+            },
+            "rotation": 0.6283185307179586,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 13,
+            "name": "Skull",
+            "factoryName": null,
+            "position": {
+                "x": -11,
+                "y": -2.4,
+                "z": 11
+            },
+            "rotation": 0.5235987755982988,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 14,
+            "name": "MerchantScale",
+            "factoryName": null,
+            "position": {
+                "x": 14,
+                "y": -2.75,
+                "z": -3
+            },
+            "rotation": -0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 15,
+            "name": "Lantern",
+            "factoryName": null,
+            "position": {
+                "x": -6,
+                "y": -2.75,
+                "z": -14
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 16,
+            "name": "Spellbook",
+            "factoryName": null,
+            "position": {
+                "x": -14,
+                "y": -2.35,
+                "z": 7
+            },
+            "rotation": 1.5707963267948966,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 17,
+            "name": "Mug",
+            "factoryName": null,
+            "position": {
+                "x": -5,
+                "y": -2.75,
+                "z": 14
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 18,
+            "name": "MeltingCandle",
+            "factoryName": null,
+            "position": {
+                "x": 5,
+                "y": -2.75,
+                "z": 8
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 19,
+            "name": "CandleStub",
+            "factoryName": null,
+            "position": {
+                "x": 4,
+                "y": -2.75,
+                "z": -3
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier2",
+            "index": 20,
+            "name": "Tankard",
+            "factoryName": null,
+            "position": {
+                "x": 12,
+                "y": -2.75,
+                "z": 9
+            },
+            "rotation": -0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 0,
+            "name": "WineBottle",
+            "factoryName": null,
+            "position": {
+                "x": -4,
+                "y": -2.75,
+                "z": -8
+            },
+            "rotation": null,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 1,
+            "name": "Quill",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 2,
+            "name": "Dagger",
+            "factoryName": null,
+            "position": {
+                "x": 13,
+                "y": -2.45,
+                "z": 11
+            },
+            "rotation": 1.0471975511965976,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 3,
+            "name": "Sword",
+            "factoryName": null,
+            "position": {
+                "x": -14,
+                "y": -2.45,
+                "z": 12
+            },
+            "rotation": -0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 4,
+            "name": "Shield",
+            "factoryName": null,
+            "position": {
+                "x": 0,
+                "y": 2,
+                "z": -24
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 5,
+            "name": "BattleAxe",
+            "factoryName": null,
+            "position": {
+                "x": -16,
+                "y": -6,
+                "z": -16
+            },
+            "rotation": -1.0471975511965976,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 6,
+            "name": "PocketWatch",
+            "factoryName": null,
+            "position": {
+                "x": 14,
+                "y": -2.65,
+                "z": 3
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 7,
+            "name": "Compass",
+            "factoryName": null,
+            "position": {
+                "x": 7,
+                "y": -2.65,
+                "z": 14
+            },
+            "rotation": 0.39269908169872414,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 8,
+            "name": "Chalice",
+            "factoryName": null,
+            "position": {
+                "x": 6,
+                "y": -2.75,
+                "z": -13
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 9,
+            "name": "Miniature",
+            "factoryName": null,
+            "position": {
+                "x": -13,
+                "y": -2.75,
+                "z": -8
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 10,
+            "name": "CharacterSheet",
+            "factoryName": null,
+            "position": {
+                "x": 14,
+                "y": -2.75,
+                "z": 8
+            },
+            "rotation": -0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 11,
+            "name": "BountyPoster",
+            "factoryName": null,
+            "position": {
+                "x": -20,
+                "y": 4,
+                "z": -20
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 12,
+            "name": "Pencil",
+            "factoryName": null,
+            "position": {
+                "x": -8,
+                "y": -2.75,
+                "z": 14
+            },
+            "rotation": 0.6283185307179586,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 13,
+            "name": "BreadLoaf",
+            "factoryName": null,
+            "position": {
+                "x": 8,
+                "y": -2.75,
+                "z": 4
+            },
+            "rotation": 0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 14,
+            "name": "Chalk",
+            "factoryName": null,
+            "position": {
+                "x": -6,
+                "y": -2.75,
+                "z": 4
+            },
+            "rotation": -0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 15,
+            "name": "Bone",
+            "factoryName": null,
+            "position": {
+                "x": 5,
+                "y": -2.75,
+                "z": 5
+            },
+            "rotation": 1.0471975511965976,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 16,
+            "name": "CoinPouch",
+            "factoryName": null,
+            "position": {
+                "x": 9,
+                "y": -2.75,
+                "z": 13
+            },
+            "rotation": -0.39269908169872414,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 17,
+            "name": "Lute",
+            "factoryName": null,
+            "position": {
+                "x": -14,
+                "y": -1.85,
+                "z": -10
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 18,
+            "name": "Runestones",
+            "factoryName": null,
+            "position": {
+                "x": 12,
+                "y": -2.75,
+                "z": -12
+            },
+            "rotation": -0.2617993877991494,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 19,
+            "name": "Candelabra",
+            "factoryName": null,
+            "position": {
+                "x": 6,
+                "y": -2.75,
+                "z": -10
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 20,
+            "name": "SmokingPipe",
+            "factoryName": null,
+            "position": {
+                "x": -4,
+                "y": -2.73,
+                "z": 14
+            },
+            "rotation": 0.39269908169872414,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 21,
+            "name": "Gemstones",
+            "factoryName": null,
+            "position": {
+                "x": 14,
+                "y": -2.73,
+                "z": -8
+            },
+            "rotation": -0.2617993877991494,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 22,
+            "name": "WritingSet",
+            "factoryName": null,
+            "position": {
+                "x": -10,
+                "y": -2.73,
+                "z": -14
+            },
+            "rotation": 0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 23,
+            "name": "CheeseWheel",
+            "factoryName": null,
+            "position": {
+                "x": -12,
+                "y": -2.75,
+                "z": 11
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 24,
+            "name": "WaxSeal",
+            "factoryName": null,
+            "position": {
+                "x": 4,
+                "y": -2.75,
+                "z": 14
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 25,
+            "name": "Crown",
+            "factoryName": null,
+            "position": {
+                "x": 0,
+                "y": -2.75,
+                "z": -13
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 26,
+            "name": "Helmet",
+            "factoryName": null,
+            "position": {
+                "x": -15,
+                "y": -2.75,
+                "z": 8
+            },
+            "rotation": 0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 27,
+            "name": "Gong",
+            "factoryName": null,
+            "position": {
+                "x": 0,
+                "y": 0,
+                "z": -24
+            },
+            "rotation": 0,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 28,
+            "name": "MysticOrb",
+            "factoryName": null,
+            "position": {
+                "x": 15,
+                "y": -2.75,
+                "z": -15
+            },
+            "rotation": 0,
+            "randomPool": null,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 29,
+            "name": "DMScreen",
+            "factoryName": null,
+            "position": {
+                "x": 0,
+                "y": -2.75,
+                "z": -16
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 30,
+            "name": "DragonScale",
+            "factoryName": null,
+            "position": {
+                "x": -14,
+                "y": -2.75,
+                "z": 0
+            },
+            "rotation": 1.0471975511965976,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 31,
+            "name": "Spyglass",
+            "factoryName": null,
+            "position": {
+                "x": 14,
+                "y": -2.75,
+                "z": 6
+            },
+            "rotation": -0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 32,
+            "name": "PlayingCards",
+            "factoryName": null,
+            "position": {
+                "x": -2,
+                "y": -2.75,
+                "z": 13
+            },
+            "rotation": 0.39269908169872414,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 33,
+            "name": "Key",
+            "factoryName": null,
+            "position": {
+                "x": 10,
+                "y": -2.75,
+                "z": 13
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 34,
+            "name": "Padlock",
+            "factoryName": null,
+            "position": {
+                "x": -14,
+                "y": -2.75,
+                "z": -4
+            },
+            "rotation": 0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 35,
+            "name": "Lockpicks",
+            "factoryName": null,
+            "position": {
+                "x": -13,
+                "y": -2.75,
+                "z": -3
+            },
+            "rotation": 0.39269908169872414,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 36,
+            "name": "Spectacles",
+            "factoryName": null,
+            "position": {
+                "x": 3,
+                "y": -2.75,
+                "z": 14
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 37,
+            "name": "Warhammer",
+            "factoryName": null,
+            "position": {
+                "x": 5,
+                "y": -2.75,
+                "z": 2
+            },
+            "rotation": 1.0471975511965976,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 38,
+            "name": "LeatherJournal",
+            "factoryName": null,
+            "position": {
+                "x": 12,
+                "y": -2.5,
+                "z": -13
+            },
+            "rotation": 0.6283185307179586,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 39,
+            "name": "Rulebook",
+            "factoryName": null,
+            "position": {
+                "x": -8,
+                "y": -2.75,
+                "z": -8
+            },
+            "rotation": 0.6283185307179586,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 40,
+            "name": "DrinkingHorn",
+            "factoryName": null,
+            "position": {
+                "x": 14,
+                "y": -2.75,
+                "z": 2
+            },
+            "rotation": -0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 41,
+            "name": "Wand",
+            "factoryName": null,
+            "position": {
+                "x": -14,
+                "y": -2.7,
+                "z": 9
+            },
+            "rotation": 1.0471975511965976,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 42,
+            "name": "Coin",
+            "factoryName": null,
+            "position": {
+                "x": 11,
+                "y": -2.75,
+                "z": 11
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 43,
+            "name": "Amulet",
+            "factoryName": null,
+            "position": {
+                "x": -8,
+                "y": -2.74,
+                "z": -14
+            },
+            "rotation": 0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 44,
+            "name": "Abacus",
+            "factoryName": null,
+            "position": {
+                "x": 13,
+                "y": -2.75,
+                "z": -10
+            },
+            "rotation": -0.39269908169872414,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 45,
+            "name": "Dart",
+            "factoryName": null,
+            "position": {
+                "x": 8,
+                "y": -2.75,
+                "z": 14
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 46,
+            "name": "ScrollCase",
+            "factoryName": null,
+            "position": {
+                "x": 1,
+                "y": -2.43,
+                "z": 10
+            },
+            "rotation": 0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 47,
+            "name": "MagnifyingGlass",
+            "factoryName": null,
+            "position": {
+                "x": 9,
+                "y": -2.75,
+                "z": -14
+            },
+            "rotation": 1.0471975511965976,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 48,
+            "name": "Rope",
+            "factoryName": null,
+            "position": {
+                "x": 6,
+                "y": -2.75,
+                "z": -15
+            },
+            "rotation": 0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 49,
+            "name": "CandelabraFront",
+            "factoryName": "Candelabra",
+            "position": {
+                "x": -8,
+                "y": -2.75,
+                "z": 12
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 50,
+            "name": "Goblet",
+            "factoryName": null,
+            "position": {
+                "x": 5,
+                "y": -2.75,
+                "z": 12
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 51,
+            "name": "Crossbow",
+            "factoryName": null,
+            "position": {
+                "x": -8,
+                "y": -2.75,
+                "z": -2
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 52,
+            "name": "Waterskin",
+            "factoryName": null,
+            "position": {
+                "x": 7,
+                "y": -2.75,
+                "z": 2
+            },
+            "rotation": 0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 53,
+            "name": "Astrolabe",
+            "factoryName": null,
+            "position": {
+                "x": 10,
+                "y": -2.75,
+                "z": -8
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 54,
+            "name": "Sundial",
+            "factoryName": null,
+            "position": {
+                "x": 8,
+                "y": -2.75,
+                "z": 8
+            },
+            "rotation": -0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 55,
+            "name": "AleKeg",
+            "factoryName": null,
+            "position": {
+                "x": -16,
+                "y": -2.75,
+                "z": -10
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 56,
+            "name": "FluteBack",
+            "factoryName": "Flute",
+            "position": {
+                "x": -16,
+                "y": -2.75,
+                "z": -10
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 57,
+            "name": "FluteFront",
+            "factoryName": "Flute",
+            "position": {
+                "x": 2,
+                "y": -2.75,
+                "z": 14
+            },
+            "rotation": -0.39269908169872414,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 58,
+            "name": "Apple",
+            "factoryName": null,
+            "position": {
+                "x": 13,
+                "y": -2.75,
+                "z": 7
+            },
+            "rotation": 0.5235987755982988,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 59,
+            "name": "PocketFlask",
+            "factoryName": null,
+            "position": {
+                "x": -4,
+                "y": -2.75,
+                "z": 2
+            },
+            "rotation": 0.7853981633974483,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 60,
+            "name": "WoodenSpoon",
+            "factoryName": null,
+            "position": {
+                "x": 10,
+                "y": -2.75,
+                "z": 12
+            },
+            "rotation": 1.0471975511965976,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 61,
+            "name": "Cauldron",
+            "factoryName": null,
+            "position": {
+                "x": 12,
+                "y": -2.75,
+                "z": -4
+            },
+            "rotation": 0,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": true,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 62,
+            "name": "MysticTome",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 63,
+            "name": "GoblinSkull",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 64,
+            "name": "TavernCoaster",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        },
+        {
+            "tier": "tier3",
+            "index": 65,
+            "name": "Inkwell",
+            "factoryName": null,
+            "position": null,
+            "rotation": null,
+            "randomPool": true,
+            "cull": null,
+            "important": null,
+            "shadow": null,
+            "staticMerge": null,
+            "tabletop": null,
+            "hasCall": false,
+            "hasAfterCreate": false,
+            "other": []
+        }
+    ],
+    "decorativeOrder": [
+        "Horseshoe",
+        "DiceTower",
+        "DiceTray",
+        "DiceJail",
+        "DiceBag",
+        "DiceCup",
+        "Bell",
+        "TavernMeal",
+        "Hourglass",
+        "Map",
+        "Scroll",
+        "CrystalBall",
+        "PotionSet",
+        "Skull",
+        "MerchantScale",
+        "Lantern",
+        "Spellbook",
+        "Mug",
+        "MeltingCandle",
+        "CandleStub",
+        "Tankard",
+        "WineBottle",
+        "Quill",
+        "Dagger",
+        "Sword",
+        "Shield",
+        "BattleAxe",
+        "PocketWatch",
+        "Compass",
+        "Chalice",
+        "Miniature",
+        "CharacterSheet",
+        "BountyPoster",
+        "Pencil",
+        "BreadLoaf",
+        "Chalk",
+        "Bone",
+        "CoinPouch",
+        "Lute",
+        "Runestones",
+        "Candelabra",
+        "SmokingPipe",
+        "Gemstones",
+        "WritingSet",
+        "CheeseWheel",
+        "WaxSeal",
+        "Crown",
+        "Helmet",
+        "Gong",
+        "MysticOrb",
+        "DMScreen",
+        "DragonScale",
+        "Spyglass",
+        "PlayingCards",
+        "Key",
+        "Padlock",
+        "Lockpicks",
+        "Spectacles",
+        "Warhammer",
+        "LeatherJournal",
+        "Rulebook",
+        "DrinkingHorn",
+        "Wand",
+        "Coin",
+        "Amulet",
+        "Abacus",
+        "Dart",
+        "ScrollCase",
+        "MagnifyingGlass",
+        "Rope",
+        "CandelabraFront",
+        "Goblet",
+        "Crossbow",
+        "Waterskin",
+        "Astrolabe",
+        "Sundial",
+        "AleKeg",
+        "FluteBack",
+        "FluteFront",
+        "Apple",
+        "PocketFlask",
+        "WoodenSpoon",
+        "Cauldron",
+        "MysticTome",
+        "GoblinSkull",
+        "TavernCoaster",
+        "Inkwell"
+    ],
+    "index": [
+        {
+            "name": "TavernWalls",
+            "tier": "tier0",
+            "category": "core",
+            "tags": ["core"]
+        },
+        {
+            "name": "Room",
+            "tier": "tier0",
+            "category": "core",
+            "tags": ["core"]
+        },
+        {
+            "name": "Table",
+            "tier": "tier0",
+            "category": "core",
+            "tags": ["core"]
+        },
+        {
+            "name": "Clutter",
+            "tier": "tier0",
+            "category": "core",
+            "tags": ["core"]
+        },
+        {
+            "name": "TarotDeck",
+            "tier": "tier0",
+            "category": "core",
+            "tags": ["core", "game"]
+        },
+        {
+            "name": "Bookshelf",
+            "tier": "tier1",
+            "category": "furniture",
+            "tags": ["furniture"]
+        },
+        {
+            "name": "DecorativeWalls",
+            "tier": "tier1",
+            "category": "wallDecor",
+            "tags": ["wallDecor"]
+        },
+        {
+            "name": "Chair",
+            "tier": "tier1",
+            "category": "furniture",
+            "tags": ["furniture"]
+        },
+        {
+            "name": "ChairRight",
+            "tier": "tier1",
+            "category": "furniture",
+            "tags": ["furniture"]
+        },
+        {
+            "name": "Chest",
+            "tier": "tier1",
+            "category": "furniture",
+            "tags": ["furniture"]
+        },
+        {
+            "name": "Rug",
+            "tier": "tier1",
+            "category": "furniture",
+            "tags": ["furniture"]
+        },
+        {
+            "name": "Atmosphere",
+            "tier": "tier1",
+            "category": "ambiance",
+            "tags": ["ambiance"]
+        },
+        {
+            "name": "Lamp",
+            "tier": "tier1",
+            "category": "interactive",
+            "tags": ["interactive"]
+        },
+        {
+            "name": "FloatingCandles",
+            "tier": "tier1",
+            "category": "ambiance",
+            "tags": ["ambiance", "light"]
+        },
+        {
+            "name": "Runecircle",
+            "tier": "tier1",
+            "category": "ambiance",
+            "tags": ["ambiance"]
+        },
+        {
+            "name": "Horseshoe",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["randomPool", "tableClutter"]
+        },
+        {
+            "name": "DiceTower",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["game", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "DiceTray",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["game", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "DiceJail",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["game", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "DiceBag",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["game", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "DiceCup",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["game", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Bell",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "TavernMeal",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["food", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Hourglass",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Map",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["paper", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Scroll",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["paper", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "CrystalBall",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["magic", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "PotionSet",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["magic", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Skull",
+            "tier": "tier2",
+            "category": "interactive",
+            "tags": ["interactive", "tabletop"]
+        },
+        {
+            "name": "MerchantScale",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Lantern",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["light", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Spellbook",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["magic", "paper", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Mug",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["drinkware", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "MeltingCandle",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["light", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "CandleStub",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["light", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Tankard",
+            "tier": "tier2",
+            "category": "tableClutter",
+            "tags": ["drinkware", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "WineBottle",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["drinkware", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Quill",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter"]
+        },
+        {
+            "name": "Dagger",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "weapon"]
+        },
+        {
+            "name": "Sword",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "tableClutter", "tabletop", "weapon"]
+        },
+        {
+            "name": "Shield",
+            "tier": "tier3",
+            "category": "wallDecor",
+            "tags": ["randomPool", "wallDecor", "weapon"]
+        },
+        {
+            "name": "BattleAxe",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "tableClutter", "weapon"]
+        },
+        {
+            "name": "PocketWatch",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "tool"]
+        },
+        {
+            "name": "Compass",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "tool"]
+        },
+        {
+            "name": "Chalice",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["drinkware", "randomPool", "small", "tableClutter", "tabletop", "treasure"]
+        },
+        {
+            "name": "Miniature",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "CharacterSheet",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["paper", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "BountyPoster",
+            "tier": "tier3",
+            "category": "wallDecor",
+            "tags": ["paper", "randomPool", "small", "wallDecor"]
+        },
+        {
+            "name": "Pencil",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "BreadLoaf",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Chalk",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Bone",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "treasure"]
+        },
+        {
+            "name": "CoinPouch",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "treasure"]
+        },
+        {
+            "name": "Lute",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Runestones",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["magic", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Candelabra",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["light", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "SmokingPipe",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Gemstones",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "treasure"]
+        },
+        {
+            "name": "WritingSet",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["paper", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "CheeseWheel",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["food", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "WaxSeal",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Crown",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "treasure"]
+        },
+        {
+            "name": "Helmet",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "tableClutter", "tabletop", "weapon"]
+        },
+        {
+            "name": "Gong",
+            "tier": "tier3",
+            "category": "interactive",
+            "tags": ["interactive"]
+        },
+        {
+            "name": "MysticOrb",
+            "tier": "tier3",
+            "category": "interactive",
+            "tags": ["interactive", "magic", "tabletop"]
+        },
+        {
+            "name": "DMScreen",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["paper", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "DragonScale",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["magic", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Spyglass",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "tableClutter", "tabletop", "tool"]
+        },
+        {
+            "name": "PlayingCards",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["game", "paper", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Key",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "tool"]
+        },
+        {
+            "name": "Padlock",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "tool"]
+        },
+        {
+            "name": "Lockpicks",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "tool"]
+        },
+        {
+            "name": "Spectacles",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "tool"]
+        },
+        {
+            "name": "Warhammer",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "weapon"]
+        },
+        {
+            "name": "LeatherJournal",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["paper", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Rulebook",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["paper", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "DrinkingHorn",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["drinkware", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Wand",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["magic", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Coin",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "treasure"]
+        },
+        {
+            "name": "Amulet",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["magic", "randomPool", "small", "tableClutter", "tabletop", "treasure"]
+        },
+        {
+            "name": "Abacus",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "tool"]
+        },
+        {
+            "name": "Dart",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "weapon"]
+        },
+        {
+            "name": "ScrollCase",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["paper", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "MagnifyingGlass",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "tool"]
+        },
+        {
+            "name": "Rope",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "tool"]
+        },
+        {
+            "name": "CandelabraFront",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["light", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Goblet",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["drinkware", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Crossbow",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "tableClutter", "tabletop", "weapon"]
+        },
+        {
+            "name": "Waterskin",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["drinkware", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Astrolabe",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "tool"]
+        },
+        {
+            "name": "Sundial",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop", "tool"]
+        },
+        {
+            "name": "AleKeg",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["drinkware", "randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "FluteBack",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "FluteFront",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Apple",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["food", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "PocketFlask",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["drinkware", "randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "WoodenSpoon",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "small", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "Cauldron",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["randomPool", "tableClutter", "tabletop"]
+        },
+        {
+            "name": "MysticTome",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["magic", "randomPool", "small", "tableClutter"]
+        },
+        {
+            "name": "GoblinSkull",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["monster", "randomPool", "small", "tableClutter"]
+        },
+        {
+            "name": "TavernCoaster",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["food", "randomPool", "small", "tableClutter"]
+        },
+        {
+            "name": "Inkwell",
+            "tier": "tier3",
+            "category": "tableClutter",
+            "tags": ["paper", "randomPool", "small", "tableClutter"]
+        }
+    ]
+}

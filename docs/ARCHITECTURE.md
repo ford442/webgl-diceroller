@@ -135,18 +135,41 @@ Systems register via `scheduler.register(phase, name, fn, { priority })`. Prop `
 
 ## Tiered loading
 
-[`loadTiers()`](../src/core/LoadingTiers.js) drives the loading overlay progress bar and yields to the main thread between heavy steps (`yieldToMain`).
+[`loadTiers()`](../src/core/LoadingTiers.js) drives the loading overlay progress bar and yields to the main thread between heavy steps (`yieldToMain`). _What_ it spawns is the loaded [scene document](#scenes) (`orchestrator.sceneDocument`, the tavern by default); the stages below name the tavern's contents.
 
 | Stage             | Progress | Contents                                                                                     |
 | ----------------- | -------- | -------------------------------------------------------------------------------------------- |
 | Textures + Tier 0 | ~10–40%  | Physics init, shared KTX2 preload, walls, room, table, clutter, dice models, UI, interaction |
 | Tier 1            | ~55–70%  | Furniture: bookshelf, chairs, chest, rug, atmosphere, lamp, floating candles, runecircle     |
-| Decorative pool   | ~85%     | Random subset of tabletop props from `DECORATIVE_TIER_ENTRIES` (layout seed)                 |
+| Decorative pool   | ~85%     | Random subset of the scene's tier 2 + 3 props (`compileScene(doc).decorative`; layout seed)  |
 | Finalizing        | 100%     | Overlay fade, `app.ready = true` (and `app:ready` event)                                     |
 
 Table layout (decor count, clutter, theme) comes from [`TableLayoutConfig.js`](../src/core/TableLayoutConfig.js) and [`RandomLayout.js`](../src/core/RandomLayout.js).
 
 Shared KTX2/JPG textures, dice GLBs, Draco/Basis transcoders, and other files under `public/` must be loaded through [`publicAssetUrl.js`](../src/core/publicAssetUrl.js) (`import.meta.env.BASE_URL`) — not raw `./images/…` strings — so subdirectory deploys (e.g. `go.1ink.us/dice-roller/`) do not request host-root `/images/`.
+
+## Scenes
+
+A dice table can be set in more than one place. A **scene document** ([`src/scenes/SceneDocument.ts`](../src/scenes/SceneDocument.ts)) is the data for one place: an `id`, the physics numbers (`gravity`, `table: { y, halfW, halfD }`), a `lighting` preset id, and a `props` list — each line a factory name, a tier (0–3), a pose, and optional `randomPool` / `cull` / `scale` / `id`. Nothing in it imports Three or the DOM.
+
+| Scene        | File                                         | What it is                                                                                                                |
+| ------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `tavern`     | [`tavern.ts`](../src/scenes/tavern.ts)       | The default: velvet zone, window, moonlight, the full catalogue (`tavern-night` lighting)                                 |
+| `chart-room` | [`chartRoom.ts`](../src/scenes/chartRoom.ts) | Windowless brick room, one lantern (`lantern-dim`): table, cup, tower, tray, jail, charting instruments. No new geometry. |
+
+**Choosing one.** `?scene=<id>` (see [`scenes/index.ts`](../src/scenes/index.ts)); an unknown id logs and loads the tavern. `main.js` resolves it once into `app.sceneDocument` (`window.__app.sceneDocument` under `?test`) and hands it to the three places that used to hard-code the tavern: `setupScene(container, { lighting })`, `bootstrapPhysics(app, sceneDocument)` (`engine.init(gravity, table.y, table.halfW, table.halfD)`), and `loadTiers(…, { sceneDocument })`. A share link starts from the current URL, so it carries `scene=` with it; `w=` (the collider-world hash) differs between scenes, so a receiver on the wrong scene gets the usual mismatch notice.
+
+**Documents are data; behaviour is a named hook.** [`sceneCompile.ts`](../src/environment/propRegistry/sceneCompile.ts) validates a document (`validateSceneDocument`: known factories and lighting preset, unique ids, one `Table`, finite poses, `randomPool` only on tiers 2/3) and compiles it into the `tier0…tier3` + `decorative` entries `spawnProp` takes. Anything that is not "a factory at a pose" — the table registering WASM bounds, the lamp hung from the ceiling, `update` registration, click handlers, the dice cup/tower/tray/jail controllers — is a hook in [`propHooks.js`](../src/environment/propRegistry/propHooks.js), keyed by **factory name**, so every scene that places a prop gets the same wiring and a document never carries a branch. Adding a prop to a room is a line in its document plus an existing factory; do not fork a factory per scene.
+
+**Slots are part of the contract.** A prop's seeded RNG stream is keyed by `(layout seed, id, slot)`, where the slot is its index in the decor list (tiers 2 + 3, document order). Reordering or inserting lines in a document moves other props' scatter and that scene's collider-world hash, so append unless that is the point. `tests/golden/tavern-entries.json` pins the tavern's entry list, order and derived tags; `tests/unit/scenes.test.js` compares against it.
+
+**What the layout seed still does** — scatter clutter and draw the decor subset, now from the loaded document's own decor list (`selectDecorPoolEntries(entries, …)` / `getRandomProps({ entries })`, and `createLayoutManager({ decorEntries })` for a re-roll). `PROP_INDEX` and `TIER_PROP_DEFINITIONS` remain the _tavern catalogue's_ view (tags, categories).
+
+**Lighting** is a preset id into [`LightingPresets.ts`](../src/core/LightingPresets.ts): numbers for the rig `setupScene` already builds (dice-zone pool, ambient, hemisphere, fill, candle, moon, fog). `tavern-night` is the original rig verbatim; `lantern-dim` hides the moon spot. A preset retunes lights; it does not duplicate the candle flicker (`LightingSystems.js`) or the god-ray beam, which belongs to the `TavernWalls` factory — a scene that does not list it simply has no beams.
+
+**Physics numbers.** The tavern reads `dice-core`'s `PHYSICS_GRAVITY` / `PHYSICS_TABLE_Y` / `PHYSICS_TABLE_HALF`, the same constants `rollHeadless` and the seeded throw parameters assume, so the browser and Node cannot drift. A scene with _different_ numbers is a different simulation from the headless core's until that core reads the document too; `chart-room` keeps the same numbers (it uses the same 36×36 `Table`).
+
+Tests: `tests/unit/scenes.test.js` (golden tavern, validator, `?scene=` resolution, engine init from the document, decor draw from the scene's own list) and `npm run test:scene-select` (browser, needs WASM: `?scene=chart-room` reaches ready, builds its own props, initialises the engine from its document, replays a seeded throw to the same faces on two cold loads; an unknown id falls back to the tavern).
 
 ## Prop registry
 
@@ -154,7 +177,7 @@ Shared KTX2/JPG textures, dice GLBs, Draco/Basis transcoders, and other files un
 
 **Factory discovery** — `import.meta.glob` in [`factories.js`](../src/environment/propRegistry/factories.js) collects every `createXxx` export from `src/environment/*.js` into `PROP_FACTORIES`, excluding the `PropRegistry.js` barrel and helper modules (`propKit`, `PropLifecycle`).
 
-**Spawn** — `spawnProp(entry, context)` either calls `entry.call(context)` or invokes the factory with `(scene, physicsWorld, position, rotation)`. Positions with legacy tabletop `y ≈ -2.75` are adjusted via `toCurrentTabletopY()` from [`SceneMetrics.js`](../src/core/SceneMetrics.js).
+**Spawn** — `spawnProp(entry, context)` either calls `entry.call(context)` (a `create` hook, see [Scenes](#scenes)) or invokes the factory with `(scene, physicsWorld, position, rotation, { scale }?)`. Positions with legacy tabletop `y ≈ -2.75` are adjusted via `toCurrentTabletopY()` from [`SceneMetrics.js`](../src/core/SceneMetrics.js).
 
 **Post-spawn policy (registry-owned, not per-prop):**
 
@@ -173,7 +196,7 @@ in how it is placed:
 
 |           | Decor (`PropRegistry`)                       | Clutter (`RandomClutter`)                          |
 | --------- | -------------------------------------------- | -------------------------------------------------- |
-| Entry     | `tierDefinitions.js` `factoryEntry`          | `CLUTTER_REGISTRY`                                 |
+| Entry     | a line in a scene document (`src/scenes/`)   | `CLUTTER_REGISTRY`                                 |
 | Call      | `(scene, physicsWorld, position, rotationY)` | `(scene, physicsWorld, { placement, rng, track })` |
 | Placement | authored position                            | seeded slot from `ClutterPlacement.js`             |
 | Scale     | 1                                            | tabletop scale via `asClutter(..., { scale })`     |

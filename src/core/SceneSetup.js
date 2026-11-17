@@ -22,6 +22,7 @@ import { guessInitialQualityProfile } from './AdaptiveQuality.js';
 import { createAccentLightRig } from './AccentLightRig.js';
 import { prefersReducedMotion } from './AccessibilityPrefs.js';
 import { createPostRuntimeControls } from './PostRuntimeControls.js';
+import { getLightingPreset } from './LightingPresets.js';
 import { createTslKit } from '../shaders/graph/ShaderKit.js';
 import {
     CHROMATIC_PARAMS,
@@ -143,9 +144,11 @@ async function compilePmremSceneShader(pmremGenerator) {
  */
 /**
  * @param {HTMLElement} container
+ * @param {{ lighting?: string }} [options] `lighting`: a `LightingPresets` id (the scene document's)
  * @returns {Promise<import('../types/app').SceneSetupResult>}
  */
-export async function setupScene(container) {
+export async function setupScene(container, options = {}) {
+    const lighting = getLightingPreset(options.lighting);
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;
 
@@ -235,24 +238,35 @@ export async function setupScene(container) {
     // Lights
 
     // Warm overhead pool on the velvet dice zone (no shadows — fill only).
-    const diceZoneLight = new THREE.SpotLight(0xfff2d6, 2.8, 40, Math.PI / 4, 0.65, 1.2);
+    const pool = lighting.diceZone;
+    const diceZoneLight = new THREE.SpotLight(
+        pool.color,
+        pool.intensity,
+        pool.distance,
+        pool.angle,
+        pool.penumbra,
+        pool.decay
+    );
     diceZoneLight.position.set(0, LAMP_HANG_Y - 6, 0);
     diceZoneLight.target.position.set(0, TABLE_SURFACE_Y, 0);
     scene.add(diceZoneLight);
     scene.add(diceZoneLight.target);
     // Lights — bias toward readable dice faces on the velvet zone.
-    const ambientIntensity = rendererState.usingWebGPU ? 0.16 : 0.09;
-    const ambientLight = new THREE.AmbientLight(0xfff8f0, ambientIntensity);
+    const rendererKey = rendererState.usingWebGPU ? 'webgpu' : 'webgl';
+    const ambientLight = new THREE.AmbientLight(
+        lighting.ambient.color,
+        lighting.ambient.intensity[rendererKey]
+    );
     scene.add(ambientLight);
 
     const hemisphereLight = new THREE.HemisphereLight(
-        0xc8d4ff,
-        0x3a2418,
-        rendererState.usingWebGPU ? 0.38 : 0.24
+        lighting.hemisphere.sky,
+        lighting.hemisphere.ground,
+        lighting.hemisphere.intensity[rendererKey]
     );
     scene.add(hemisphereLight);
 
-    const diceFillLight = new THREE.DirectionalLight(0xfff0dd, 0.32);
+    const diceFillLight = new THREE.DirectionalLight(lighting.fill.color, lighting.fill.intensity);
     diceFillLight.position.set(2, 16, 10);
     diceFillLight.target.position.set(0, TABLE_SURFACE_Y, 0);
     diceFillLight.castShadow = false;
@@ -261,8 +275,11 @@ export async function setupScene(container) {
 
     // Warm PointLight (Candle) - Key Light
     // Initial setup, position will be updated by clutter
-    // Deeper orange/red for a warmer, cozier feel (0xff9933)
-    const pointLight = new THREE.PointLight(0xff9933, 2.2, 22);
+    const pointLight = new THREE.PointLight(
+        lighting.candle.color,
+        lighting.candle.intensity,
+        lighting.candle.distance
+    );
     pointLight.position.set(3, 6, 3); // Default if no candle
     pointLight.castShadow = true;
     pointLight.shadow.bias = -0.001;
@@ -276,14 +293,18 @@ export async function setupScene(container) {
     pointLight.shadow.needsUpdate = true;
     scene.add(pointLight);
 
-    // Cool SpotLight (Moonlight) - Shining through the window
-    const spotLight = new THREE.SpotLight(0x5566bb, 2.2);
+    // Cool SpotLight (Moonlight) - Shining through the window. A preset with no
+    // moon still gets the light (quality governors and the result type expect
+    // one), hidden so the renderer skips it and it casts no shadow.
+    const moon = lighting.moon;
+    const spotLight = new THREE.SpotLight(moon?.color ?? 0x5566bb, moon?.intensity ?? 0);
     spotLight.position.set(-45, 15, -5); // Outside the window
     spotLight.target.position.set(0, TABLE_SURFACE_Y, 0); // Aim at table center
     spotLight.angle = Math.PI / 10;
     spotLight.distance = 100;
     spotLight.penumbra = 0.5;
-    spotLight.castShadow = true;
+    spotLight.castShadow = moon !== null;
+    spotLight.visible = moon !== null;
     spotLight.shadow.bias = -0.0001;
     spotLight.shadow.mapSize.width = postQuality === 'low' ? 512 : 1024;
     spotLight.shadow.mapSize.height = postQuality === 'low' ? 512 : 1024;
@@ -304,7 +325,7 @@ export async function setupScene(container) {
     postConfig.accentLightsEnabled = accentLightRig.enabled;
 
     // Fog for depth
-    scene.fog = new THREE.FogExp2(0x111111, 0.015);
+    scene.fog = new THREE.FogExp2(lighting.fog.color, lighting.fog.density);
 
     // Post-Processing
     // Auto-detect low-end GPUs: disable post-processing if texture size is limited.

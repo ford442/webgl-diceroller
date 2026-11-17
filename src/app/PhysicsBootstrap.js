@@ -30,9 +30,11 @@ export function showLoadFailure(message) {
 
 /**
  * @param {import('../types/app').AppContext} app
+ * @param {import('../scenes/SceneDocument').SceneDocument} sceneDocument the loaded
+ *   scene: its gravity and table bounds are what the engine is initialised with
  * @returns {Promise<{ wasmAvailable: boolean }>}
  */
-export async function bootstrapPhysics(app) {
+export async function bootstrapPhysics(app, sceneDocument) {
     const wasmAvailable = await loadWasmEngine();
     app.physics.getWasmEngine = getWasmEngine;
     app.physics.isWasmAvailable = isWasmAvailable;
@@ -44,8 +46,9 @@ export async function bootstrapPhysics(app) {
     }
 
     const eng = getWasmEngine();
-    eng.init(-15.0, -2.75, 18.0, 18.0);
-    console.log('[WasmPhysics] Engine initialized and ready.');
+    const { gravity, table } = sceneDocument;
+    eng.init(gravity, table.y, table.halfW, table.halfD);
+    console.log(`[WasmPhysics] Engine initialized for scene "${sceneDocument.id}".`);
 
     // A hidden tab parks the worker's step timer; coming back resumes from
     // where it stopped rather than replaying the backlog. The in-process

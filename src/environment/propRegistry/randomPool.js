@@ -1,5 +1,5 @@
 import { LAYOUT_THEMES } from '../../core/TableLayoutConfig.js';
-import { PROP_INDEX } from './propIndex.js';
+import { PROP_INDEX, describeEntry } from './propIndex.js';
 
 // Deterministic, seedable PRNG (mulberry32-style). Shared so query-based
 // selection and the legacy decor selection produce identical sequences.
@@ -36,7 +36,9 @@ function getDecorThemeWeight(entry, themeId) {
  *
  * Selection uses the same seeded, theme-weighted ordering as the layout system,
  * so passing only `{ count, seed, theme }` reproduces `selectDecorPoolEntries`
- * exactly.
+ * exactly. Pass `entries` (compiled scene entries) to draw from that scene's
+ * list instead of the tavern catalogue; with the tavern's own decor list the
+ * result is identical to the default.
  */
 export function getRandomProps({
     count = 0,
@@ -47,12 +49,15 @@ export function getRandomProps({
     seed = 1,
     theme = 'default',
     randomPoolOnly = true,
+    entries = null,
 } = {}) {
     const excludeSet = new Set(exclude);
     const tierSet = tiers ? new Set(tiers) : null;
     const tagList = tags ?? null;
 
-    const pool = PROP_INDEX.filter((d) => {
+    // `entries`: draw from a scene's own decor list rather than the tavern catalogue.
+    const candidates = entries ? entries.map((entry) => describeEntry(entry)) : PROP_INDEX;
+    const pool = candidates.filter((d) => {
         if (randomPoolOnly && !d.randomPool) return false;
         if (tierSet && !tierSet.has(d.tier)) return false;
         if (category && d.category !== category) return false;
@@ -72,14 +77,13 @@ export function getRandomProps({
 }
 
 /**
- * Backward-compatible decor selection used by `spawnTierWithRandomPool`. The
- * `entries` argument is retained for API stability; selection now flows through
- * `getRandomProps` over the shared descriptor index (whose randomPool subset is
- * exactly the randomPool subset of DECORATIVE_TIER_ENTRIES, in the same order),
- * so output is bit-identical to the previous implementation.
+ * Decor selection used by `spawnTierWithRandomPool`: the seeded, theme-weighted
+ * draw over `entries` (the loaded scene's decor list, tiers 2 + 3). For the
+ * tavern this is bit-identical to the old index-wide draw, whose randomPool
+ * subset was exactly the randomPool subset of the tavern's decor list, in order.
  */
 /** @param {{seed?: number, theme?: string}} [options] */
 export function selectDecorPoolEntries(entries, maxRandom, options = {}) {
     const { seed, theme = 'default' } = options;
-    return getRandomProps({ count: Math.max(0, maxRandom), seed, theme });
+    return getRandomProps({ count: Math.max(0, maxRandom), seed, theme, entries });
 }

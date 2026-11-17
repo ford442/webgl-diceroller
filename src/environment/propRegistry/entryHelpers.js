@@ -1,4 +1,4 @@
-import { LAMP_HANG_Y, toCurrentTabletopY } from '../../core/SceneMetrics.js';
+import { toCurrentTabletopY } from '../../core/SceneMetrics.js';
 
 /**
  * @template {object} T
@@ -7,8 +7,6 @@ import { LAMP_HANG_Y, toCurrentTabletopY } from '../../core/SceneMetrics.js';
  * @returns {{name: string, factoryName?: string, randomPool?: boolean, position?: {x: number, y: number, z: number}} & T}
  */
 export const factoryEntry = (name, options) => ({ name, .../** @type {any} */ (options ?? {}) });
-
-export const tier1Position = { x: 0, y: LAMP_HANG_Y, z: 0 };
 
 export const isLegacyTabletopPosition = (position) => position.y > -3.25 && position.y < -1.5;
 
