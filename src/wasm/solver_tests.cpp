@@ -572,6 +572,173 @@ TEST_CASE("restoreMotionState: a snapshot of a different dice set changes nothin
     CHECK(engine.serializeState() == before);
 }
 
+TEST_CASE("Snapshot v5: kinematic flags, materials, next id and cup walls round-trip") {
+    DicePhysicsEngine engine;
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    const int a = engine.addDie(6, -1.0f, 1.0f, 0.0f);
+    const int b = engine.addDie(20, 1.0f, 2.0f, 0.5f);
+    const int c = engine.addDie(4, 0.0f, 3.0f, -1.0f);
+    engine.setDieMaterial(a, 0.85f, 0.35f);
+    engine.setDieDrag(b, 0.0024f);
+    engine.setDieKinematic(b, true);
+    // The highest id leaves: the next die must still not reuse it.
+    engine.removeDie(c);
+    const std::vector<float> walls = {1.0f, 0.0f, 0.0f, -1.5f, 0.0f, 0.0f, -1.0f, -1.5f};
+    engine.setContainerPlanes(walls);
+    engine.setContainerActive(true);
+    for (int i = 0; i < 20; ++i) engine.step(FIXED_DT);
+
+    const auto bytes = engine.serializeState();
+    uint32_t version = 0;
+    std::memcpy(&version, bytes.data(), sizeof(version));
+    CHECK(version == DicePhysicsEngine::SNAPSHOT_VERSION);
+
+    DicePhysicsEngine restored;
+    restored.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    restored.deserializeState(bytes);
+    CHECK(restored.serializeState() == bytes);
+    // Sphere dice (no hulls on either side), so the restored world must step
+    // exactly like the original: held die held, the cup walls still there.
+    for (int i = 0; i < 60; ++i) {
+        engine.step(FIXED_DT);
+        restored.step(FIXED_DT);
+    }
+    CHECK(restored.serializeState() == engine.serializeState());
+    CHECK(restored.addDie(8, 0.0f, 2.0f, 0.0f) == engine.addDie(8, 0.0f, 2.0f, 0.0f));
+    CHECK(restored.getDieSides(a) == 6);
+    CHECK(restored.getDieSides(c) == -1);
+}
+
+namespace {
+
+/**
+ * The rollback scenario: tick-stamped engine calls (spawn, removal, grab,
+ * release, cup walls on and off) over two hulled d6 and a dynamic box. Input
+ * at tick t is applied before tick t runs, as RollbackSim does.
+ */
+void applyRewindScriptTick(DicePhysicsEngine& engine, int tick, const std::vector<float>& cubeFlat) {
+    const std::vector<float> walls = {1.0f, 0.0f, 0.0f, -2.0f, -1.0f, 0.0f, 0.0f, -2.0f};
+    switch (tick) {
+        case 10: {
+            const int id = engine.addDie(6, 0.5f, 3.0f, 0.5f);
+            engine.setDieMaterial(id, 0.6f, 0.1f);
+            engine.setDieHull(id, cubeFlat);
+            uploadD6FaceTable(engine, id);
+            engine.applyImpulse(id, 4.0f, 0.0f, -2.0f);
+            break;
+        }
+        case 15:
+            engine.setContainerPlanes(walls);
+            engine.setContainerActive(true);
+            break;
+        case 20:
+            engine.removeDie(0);
+            break;
+        case 30:
+            engine.setDieKinematic(1, true);
+            engine.setDieTransform(1, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+            break;
+        case 35:
+            engine.setContainerActive(false);
+            break;
+        case 40:
+            engine.setDieKinematic(1, false);
+            engine.applyImpulse(1, 0.0f, 0.0f, 6.0f);
+            break;
+        default:
+            break;
+    }
+}
+
+void buildRewindWorld(DicePhysicsEngine& engine, const std::vector<float>& cubeFlat) {
+    engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    engine.addDynamicBox(7, 0.3f, 2.0f, -2.35f, 0.0f, 0.4f, 0.4f, 0.4f, 0.0f, 0.0f, 0.0f, 1.0f, 2);
+    for (int i = 0; i < 2; ++i) {
+        const int id = engine.addDie(6, -1.5f + 3.0f * static_cast<float>(i), 2.0f, 0.0f);
+        engine.setDieHull(id, cubeFlat);
+        uploadD6FaceTable(engine, id);
+    }
+}
+
+} // namespace
+
+TEST_CASE("rewindState: rolling back over a spawn and a removal replays to the same bytes") {
+    const auto cubeFlat = flattenHull(makeUnitCubeHull());
+    constexpr int SNAPSHOT_TICK = 5;
+    constexpr int END_TICK = 180;
+
+    DicePhysicsEngine engine;
+    buildRewindWorld(engine, cubeFlat);
+    std::vector<uint8_t> snapshot;
+    for (int tick = 0; tick < END_TICK; ++tick) {
+        if (tick == SNAPSHOT_TICK) snapshot = engine.serializeState();
+        applyRewindScriptTick(engine, tick, cubeFlat);
+        engine.step(FIXED_DT);
+    }
+    const auto inOrder = engine.serializeState();
+
+    // Now: die 0 removed, die 2 spawned, cup walls off. The snapshot predates
+    // all of it.
+    REQUIRE(engine.rewindState(snapshot));
+    CHECK(engine.getDieCount() == 2);
+    CHECK(engine.getDieSides(2) == -1);
+    // Die 0 came back without its hull: re-attach, as the host does.
+    REQUIRE(engine.getDieSides(0) == 6);
+    engine.setDieHull(0, cubeFlat);
+    uploadD6FaceTable(engine, 0);
+    CHECK(engine.serializeState() == snapshot);
+
+    for (int tick = SNAPSHOT_TICK; tick < END_TICK; ++tick) {
+        applyRewindScriptTick(engine, tick, cubeFlat);
+        engine.step(FIXED_DT);
+    }
+    CHECK(engine.serializeState() == inOrder);
+
+    // A fresh engine on the same script agrees too (the rewound one is not
+    // merely consistent with itself).
+    DicePhysicsEngine fresh;
+    buildRewindWorld(fresh, cubeFlat);
+    for (int tick = 0; tick < END_TICK; ++tick) {
+        applyRewindScriptTick(fresh, tick, cubeFlat);
+        fresh.step(FIXED_DT);
+    }
+    CHECK(fresh.serializeState() == inOrder);
+}
+
+TEST_CASE("rewindState: an old version, other props or a changed die change nothing") {
+    const auto cubeFlat = flattenHull(makeUnitCubeHull());
+    DicePhysicsEngine engine;
+    buildRewindWorld(engine, cubeFlat);
+    for (int i = 0; i < 30; ++i) engine.step(FIXED_DT);
+    auto before = engine.serializeState();
+
+    CHECK_FALSE(engine.rewindState({}));
+    auto v4 = before;
+    const uint32_t oldVersion = 4;
+    std::memcpy(v4.data(), &oldVersion, sizeof(oldVersion));
+    CHECK_FALSE(engine.rewindState(v4));
+    CHECK(engine.serializeState() == before);
+
+    // A world without the box is a different world.
+    DicePhysicsEngine noProps;
+    noProps.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    noProps.addDie(6, 0.0f, 2.0f, 0.0f);
+    CHECK_FALSE(engine.rewindState(noProps.serializeState()));
+    CHECK(engine.serializeState() == before);
+
+    // Same props, but die 0 is a d20 there.
+    DicePhysicsEngine otherDie;
+    otherDie.init(-15.0f, -2.75f, 18.0f, 18.0f);
+    otherDie.addDynamicBox(7, 0.3f, 2.0f, -2.35f, 0.0f, 0.4f, 0.4f, 0.4f, 0.0f, 0.0f, 0.0f, 1.0f, 2);
+    otherDie.addDie(20, 0.0f, 2.0f, 0.0f);
+    CHECK_FALSE(engine.rewindState(otherDie.serializeState()));
+    CHECK(engine.serializeState() == before);
+
+    // Its own snapshot is fine, and a no-op.
+    CHECK(engine.rewindState(before));
+    CHECK(engine.serializeState() == before);
+}
+
 TEST_CASE("Dynamic box: a thrown die knocks it") {
     DicePhysicsEngine engine;
     engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
@@ -700,9 +867,10 @@ TEST_CASE("Golden traces: seed and parity hashes are stable") {
     CHECK(p1.hashSerializedState() == p2.hashSerializedState());
     // Hashes below are SOLVER_REVISION-pinned; regenerate with
     // `solver_tests --dump-golden` (see scripts/compare-solver-golden.mjs and
-    // tests/fixtures/solver-golden.json) whenever SOLVER_REVISION bumps.
-    CHECK(p1.hashSerializedState() == 0x23bb5c02d0827fbdULL);
-    CHECK(a.hashSerializedState() == 0xa7a55727ecb25b1cULL);
+    // tests/fixtures/solver-golden.json) whenever SOLVER_REVISION bumps or
+    // the serializeState() format changes (version 5: these two moved).
+    CHECK(p1.hashSerializedState() == 0xeb59be9a3bed3860ULL);
+    CHECK(a.hashSerializedState() == 0x84694843127b1c01ULL);
 }
 
 TEST_CASE("Determinism: same seed yields identical serialize output") {

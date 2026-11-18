@@ -90,6 +90,100 @@ replays and broadcasts exactly like a throw. It used to draw from
 `Math.random()` and was silently unreproducible — two loads of the same link,
 or a guest in a `?room=`, saw different faces.
 
+## Lockstep live table (#366, in progress)
+
+Today a room shares seeds: a throw is committed, revealed and replayed, and
+everything between throws (grabs, cup shakes, the jail) stays local. The
+lockstep table shares the table itself. Every peer runs the same simulation
+over the same tick-stamped input log. There is no host: the solver is
+deterministic, so peers that apply the same inputs at the same ticks hold the
+same `serializeState()` bytes.
+
+**Slice 1 (landed, headless only, no app behaviour change):** the core in
+`dice-core`.
+
+- [`InputLog.ts`](../packages/dice-core/src/net/InputLog.ts): typed records
+  `{ tick, seat, seq, input }`. The input types are `spawn`, `remove`, `grab`,
+  `drag`, `release`, `impulse`, `cupScoop`, `cupShake`, `cupPour`, `throw` and
+  `towerDrop`.
+    - Every peer applies inputs in one total order: `(tick, seat, seq)`. Two
+      seats acting on the same tick need no arbitration.
+    - `(tick, seat, seq)` names a record. A resend is a `duplicate`; another
+      input under the same name is a `conflict` and is ignored.
+    - A peer's record is untrusted: `parseTickInput` checks it field by field
+      and rebuilds it in one key order. It rejects non-finite or absurd
+      numbers (over 1e4), unknown types, a seven-sided die and an oversized
+      cup.
+- [`applyTableInput.ts`](../packages/dice-core/src/net/applyTableInput.ts):
+  the engine calls each input becomes.
+    - A `throw` / `towerDrop` is the existing seeded replay
+      (`applyReplayThrow`), re-seeded from the record. The RNG is therefore not
+      part of the snapshot.
+    - A `spawn` takes the shape's preset material and hull.
+    - The ids are the engine's own. A spawn's id is fixed by the log order, so
+      every peer gets the same one.
+- [`RollbackSim.ts`](../packages/dice-core/src/net/RollbackSim.ts): one fixed
+  tick (`SIM_FIXED_DT`) at a time. Each tick applies the inputs stamped `t`,
+  then runs tick `t`.
+    - Every `snapshotEvery` ticks (8) it keeps a `serializeState()` snapshot.
+      The ring reaches `maxRollbackTicks` (120 = 1 s) back.
+    - A late input rewinds the engine to the newest snapshot at or before its
+      tick (`rewindState`, which brings back removed dice and drops
+      later-spawned ones). It re-attaches hulls (`getDieSides`) and re-runs the
+      log to the present.
+    - A batch of late inputs rewinds once, to the earliest of them.
+    - An input older than the ring is `tooLate`: the peer needs a resync, not a
+      rollback.
+    - Collision events reach `onEvents` the first time a tick runs and never
+      from a re-simulated tick, so audio does not replay.
+- Snapshot format v5 ([`WASM_ENGINE.md`](WASM_ENGINE.md)) carries the
+  kinematic flags, materials, next die id and cup walls, so a snapshot is the
+  whole table the inputs left.
+
+Tests (`npm run test:core`; the engine ones need `npm run build:wasm`):
+
+- `inputLog.test.ts` covers validation, order, duplicates and conflicts,
+  pruning and the engine calls. A `fast-check` property checks that any arrival
+  order builds the same log.
+- `lockstep.test.ts` uses the three scripted scenarios in
+  [`tests/golden/lockstep.json`](../tests/golden/lockstep.json), written by
+  `npm run golden:lockstep` (regenerate after a `SOLVER_REVISION` bump, a
+  snapshot format change or a re-exported tavern world). The scenarios are:
+  throw, then a grab / drag / release of a die and a prop; cup scoop / shake /
+  pour; and spawn / remove, jail and tower drop.
+    - Each recorded log replays to the golden bytes.
+    - `fast-check`: any lateness up to 0.5 s, any arrival order and resends end
+      on those bytes.
+    - Two peers with random delays end byte-identical.
+    - A throw delivered 410 ticks late rewinds across a spawn and two removals.
+    - A record older than the window is refused without touching the table.
+    - No tick's events are heard twice.
+
+Measured on the tavern world:
+
+- A resting table with no dice snapshots to 361 B; it is about 1.25 KB while
+  the props are still settling.
+- Each die adds 111 B plus its contacts.
+- The scenarios' largest snapshots are 1.8–2.2 KB, against the issue's
+  ~1.5 KB estimate. The ring for a 1 s window at N = 8 is ~16 snapshots,
+  about 35 KB.
+- Re-simulating costs about 0.5 ms per tick with four or five dice in contact
+  (Node, on the development box). A 0.5 s rollback is ~30 ms of worker time, which slice 2
+  has to spread over frames or cap.
+
+**Still to do (later slices):**
+
+- `WorkerPhysicsBridge.applyInputs(tick, inputs[])`, with the interaction layer
+  (drag, cup, jail, tower) writing inputs instead of calling the engine.
+- Per-tick room protocol v3 in the Durable Object, behind `?lockstep`, with a
+  late joiner starting from a peer's snapshot (`rewindState`).
+- Ownership without a host.
+- Visual smoothing of corrected poses.
+- Late-joiner UI.
+- `verify:lockstep-room`.
+
+v1/v2 rooms are unchanged.
+
 ## Deploy signaling
 
 ```bash
@@ -230,6 +324,8 @@ Cup pours (`seed == null`) are not broadcast. Guests cannot roll (UI hint: “On
 | [`signaling/`](../signaling/)                                                                 | Cloudflare Worker + `RoomDurableObject` |
 | [`src/net/Protocol.ts`](../src/net/Protocol.ts)                                               | Message codec                           |
 | [`packages/dice-core/src/net/CommitReveal.ts`](../packages/dice-core/src/net/CommitReveal.ts) | SHA-256 commit-reveal                   |
+| [`packages/dice-core/src/net/InputLog.ts`](../packages/dice-core/src/net/InputLog.ts)         | Lockstep input records + order          |
+| [`packages/dice-core/src/net/RollbackSim.ts`](../packages/dice-core/src/net/RollbackSim.ts)   | Snapshot ring + rollback                |
 | [`src/net/SignalingClient.ts`](../src/net/SignalingClient.ts)                                 | HTTP/WS to Worker                       |
 | [`src/net/PeerMesh.js`](../src/net/PeerMesh.js)                                               | Star WebRTC + DataChannels              |
 | [`src/net/RoomSession.ts`](../src/net/RoomSession.ts)                                         | Host/guest session                      |

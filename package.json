@@ -65,6 +65,7 @@
         "test:core": "vitest run --project dice-core",
         "test:core:coverage": "DICE_CORE_COVERAGE=1 vitest run --project dice-core --coverage --reporter=default --reporter=json --outputFile.json=coverage/dice-core-results.json && node scripts/assert-no-skipped-tests.mjs coverage/dice-core-results.json",
         "golden:rolls": "tsx --conditions=source scripts/generate-roll-goldens.mjs",
+        "golden:lockstep": "tsx --conditions=source scripts/generate-lockstep-goldens.mjs",
         "verify:headless-parity": "tsx --conditions=source scripts/verify-headless-parity.mjs",
         "build:core": "npm run build -w dice-core",
         "test:share-roll-replay": "node tests/share-roll-replay.js",

@@ -190,6 +190,15 @@ export interface PhysicsEngine {
      * when the snapshot names other dice. In-process engines only.
      */
     restoreMotionState?(data: Uint8Array): boolean;
+    /**
+     * Rewind to a version-5 snapshot of this world even when dice were added
+     * or removed since (a lockstep rollback). Dice it brings back have no
+     * hull until re-attached. False (and no change) for a snapshot of another
+     * world. In-process engines only.
+     */
+    rewindState?(data: Uint8Array): boolean;
+    /** The die's side count, or -1 when no die has that id. In-process only. */
+    getDieSides?(id: number): number;
 }
 
 /**
@@ -379,6 +388,8 @@ export interface EmbindPhysicsEngine {
     serializeState(): EmbindVector<number>;
     deserializeState(data: EmbindVector<number>): void;
     restoreMotionState(data: EmbindVector<number>): boolean;
+    rewindState(data: EmbindVector<number>): boolean;
+    getDieSides(id: number): number;
 }
 
 /** The instantiated Emscripten module produced by `dice_physics.js`. */

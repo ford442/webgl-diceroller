@@ -137,6 +137,7 @@ Initiative / turn tracking and durable multiplayer rooms are wired through **`Ap
 - [`src/app/SessionWiring.js`](src/app/SessionWiring.js) + [`src/ui/SessionStrip.js`](src/ui/SessionStrip.js) — desktop strip (`session:initiative`, `session:turn`).
 - [`signaling/src/RoomDurableObject.js`](signaling/src/RoomDurableObject.js) — persisted room state + hibernating WebSockets; `solverBuildId` mismatch rejected at join.
 - [`packages/dice-core/src/net/CommitReveal.ts`](packages/dice-core/src/net/CommitReveal.ts) — SHA-256 commit-reveal (every room; binds seed, source and partial-throw slots).
+- [`packages/dice-core/src/net/InputLog.ts`](packages/dice-core/src/net/InputLog.ts) / [`RollbackSim.ts`](packages/dice-core/src/net/RollbackSim.ts) — lockstep core (#366, slice 1, headless only): tick-stamped inputs in `(tick, seat, seq)` order, applied by `applyTableInput.ts`. A late input rewinds a snapshot ring (`rewindState`, snapshot v5) and re-runs. Validate every peer record with `parseTickInput`. The interaction layer (drag, cup, jail, tower) still calls the engine directly until slice 2 routes it through the log.
 - [`src/xr/XrResultsHud.js`](src/xr/XrResultsHud.js) — world-space totals on `xrWorld`; DOM HUD hidden while presenting.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md).
@@ -519,6 +520,7 @@ npm run test:unit             # vitest: `dice-core` project (node env) + `app` p
 npm run test:core             # just packages/dice-core/test — WASM tests skip locally without a build, fail under $CI
 npm run test:core:coverage    # CI unit-wasm: dice-core coverage floor (70% lines) + no skipped tests allowed
 npm run golden:rolls          # rewrite tests/golden/rolls.json from Node (after a SOLVER_REVISION bump)
+npm run golden:lockstep       # rewrite tests/golden/lockstep.json (after a SOLVER_REVISION bump or a serializeState() format change)
 npm run verify:headless-parity  # Chromium reproduces tests/golden/rolls.json (`-- --update` rewrites it from the browser)
 npm run test:notation         # Roll notation parser (Node, no browser)
 npm run test:share-roll       # Shareable roll encoding (Node)
