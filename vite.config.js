@@ -1,7 +1,5 @@
 import { defaultClientConditions, defaultServerConditions, defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 const COOP_COEP_HEADERS = {
     'Cross-Origin-Opener-Policy': 'same-origin',
@@ -25,9 +23,12 @@ const CRITICAL_PRELOADS = [
     'basis/basis_transcoder.wasm',
 ];
 
-if (existsSync(resolve('public/wasm/dice_physics.wasm'))) {
-    CRITICAL_PRELOADS.push('wasm/dice_physics.wasm');
-}
+// `wasm/dice_physics.wasm` is deliberately NOT preloaded. It is instantiated by
+// the Emscripten loader inside the physics worker (the default backend), and a
+// document-level `<link rel=preload>` is never visible to a Worker: the page
+// downloaded it for the link, the console warned "preloaded but not used within
+// a few seconds", and the worker then fetched it again (#365).
+// `verify:bundle-loading` asserts the artifact is requested exactly once.
 
 function joinPublicHref(base, relativePath) {
     const dirBase = base.endsWith('/') ? base : `${base}/`;

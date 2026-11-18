@@ -64,6 +64,8 @@ async function probe(base, timeoutMs) {
  * @param {number} [options.port]
  * @param {number} [options.readyTimeoutMs]   Total wait for the first 2xx.
  * @param {boolean} [options.verbose]         Pipe server stdout/stderr through.
+ * @param {string} [options.outDir]           `preview` only: serve this build dir instead of
+ *                                            `dist/` (compare a "before" build against the tree).
  * @returns {Promise<{
  *   base: string,
  *   port: number,
@@ -76,10 +78,12 @@ async function startServer({
     port = mode === 'preview' ? PREVIEW_PORT : 5173,
     readyTimeoutMs = 60000,
     verbose = false,
+    outDir,
 } = {}) {
     const base = `http://${HOST}:${port}`;
     const args = [
         ...(mode === 'preview' ? ['preview'] : []),
+        ...(mode === 'preview' && outDir ? ['--outDir', outDir] : []),
         '--host',
         HOST,
         '--port',

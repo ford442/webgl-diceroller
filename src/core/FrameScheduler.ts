@@ -53,6 +53,12 @@ export interface FrameSystemHandle {
     dispose: () => void;
 }
 
+/** A claim on a phase: while any hold on it is live the phase's systems do not run. */
+export interface PhaseHold {
+    /** Idempotent. */
+    release: () => void;
+}
+
 interface FrameSystem {
     phase: FramePhase;
     name: string;
@@ -68,6 +74,8 @@ export interface FrameSchedulerStats {
     interpolationAlpha: number;
     phaseTimes: Partial<Record<FramePhase, number>>;
     systemTimes: Record<string, number>;
+    /** Frames in which at least one phase was held (the held phase's systems did not run). */
+    heldFrames: number;
     renderer: {
         render: Record<string, unknown>;
         memory: Record<string, unknown>;
@@ -90,6 +98,11 @@ export class FrameScheduler {
     accumulator: number;
     systems: PhaseBucket;
     stats: FrameSchedulerStats;
+    /** Live holds per phase, with the reason each was taken (for diagnostics). */
+    #holds: Map<FramePhase, Set<{ reason: string }>> = new Map();
+    /** Resolvers waiting for the current frame to finish; see `nextFrame()`. */
+    #frameWaiters: Array<() => void> = [];
+    #heldThisFrame = false;
 
     constructor({
         fixedDeltaTime = 1 / 60,
@@ -108,8 +121,58 @@ export class FrameScheduler {
             interpolationAlpha: 0,
             phaseTimes: {},
             systemTimes: {},
+            heldFrames: 0,
             renderer: null,
         };
+    }
+
+    /**
+     * Stop a phase's systems from running until the returned hold is released.
+     * Frames keep ticking (the other phases still run), so a loading screen can
+     * keep its bar moving while the scene is not drawn: the boot holds `render`
+     * while shaders compile, so no frame ever stalls on first-use link.
+     */
+    holdPhase(phase: FramePhase, reason: string): PhaseHold {
+        if (!this.systems[phase]) throw new Error(`Unknown frame phase "${phase}"`);
+        const hold = { reason };
+        let holds = this.#holds.get(phase);
+        if (!holds) {
+            holds = new Set();
+            this.#holds.set(phase, holds);
+        }
+        holds.add(hold);
+        return {
+            release: () => {
+                const live = this.#holds.get(phase);
+                if (!live) return;
+                live.delete(hold);
+                if (live.size === 0) this.#holds.delete(phase);
+            },
+        };
+    }
+
+    isPhaseHeld(phase: FramePhase): boolean {
+        return (this.#holds.get(phase)?.size ?? 0) > 0;
+    }
+
+    /** Reasons of the live holds on `phase` (empty when it is running). */
+    phaseHoldReasons(phase: FramePhase): string[] {
+        return [...(this.#holds.get(phase) ?? [])].map((hold) => hold.reason);
+    }
+
+    /**
+     * Resolves when the frame now running (or, between frames, the next one)
+     * has finished — on the scheduler's own clock, so a long job can pay its
+     * budget a slice per frame instead of guessing with `setTimeout`.
+     *
+     * Never resolves while nothing calls `runFrame` (hidden tab, loop stopped);
+     * callers that must not wait forever race it against a timer (see
+     * `SpawnBudget`).
+     */
+    nextFrame(): Promise<void> {
+        return new Promise((resolve) => {
+            this.#frameWaiters.push(resolve);
+        });
     }
 
     register(
@@ -144,6 +207,7 @@ export class FrameScheduler {
     runFrame(baseContext: FrameBaseContext): FrameContext {
         this.stats.frame += 1;
         this.stats.lastDeltaTime = baseContext.deltaTime;
+        this.#heldThisFrame = false;
         this.accumulator = Math.min(
             this.accumulator + baseContext.deltaTime,
             this.fixedDeltaTime * this.maxPhysicsSteps
@@ -192,12 +256,24 @@ export class FrameScheduler {
             };
         }
 
+        if (this.#heldThisFrame) this.stats.heldFrames += 1;
+
+        if (this.#frameWaiters.length > 0) {
+            const waiters = this.#frameWaiters;
+            this.#frameWaiters = [];
+            for (const resolve of waiters) resolve();
+        }
+
         return frameContext;
     }
 
     #runPhase(phase: FramePhase, context: FrameContext): void {
         const systems = this.systems[phase];
         if (!systems || systems.length === 0) return;
+        if (this.isPhaseHeld(phase)) {
+            this.#heldThisFrame = true;
+            return;
+        }
 
         context.phase = phase;
         const phaseStart = this.debugPerf ? performance.now() : 0;

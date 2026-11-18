@@ -26,7 +26,7 @@ webgl-diceroller/
 ├── src/                        # Main source code
 │   ├── main.js                 # Entry point: scene setup, render loop, camera, loading tiers
 │   ├── dice.js                 # Dice public API barrel (implementation under src/dice/)
-│   ├── core/                   # FrameScheduler, LoadingTiers, RendererFactory, textures, culling
+│   ├── core/                   # FrameScheduler, LoadingTiers, BootTrace / SpawnBudget / ShaderPrecompile, RendererFactory (+ PixelRatioPolicy, WebGpuDevice, WebGlContext, RendererRecovery), textures, culling
 │   ├── interaction.js          # Mouse/raycaster interaction (drag, levitate)
 │   ├── interaction/            # Dice cup / tower / tray / jail + shared WasmDieGrab helper
 │   ├── xr/                     # WebXR seated-table spike (?xr)
@@ -119,6 +119,7 @@ npm run format:check        # Prettier check (CI)
     - Software WebGL rasterizers (SwiftShader, llvmpipe, etc.) auto-enable the `low-post` profile.
     - Context attributes come from the boot `DeviceSession` (`src/core/DeviceSession.ts`): `?xr`, touch, low core count, or a software rasterizer request `low-power`; desktop stays `high-performance`. The WebGL software probe (`low-power` WebGL2, awaited `webglcontextlost`) never runs on the WebGPU path, and a failed curated WebGPU device falls back to WebGL instead of a device-less `WebGPURenderer`. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Device session).
     - GPU context/device loss surfaces the renderer badge and attempts WebGL fallback recovery.
+    - Boot budget (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), Boot budget): `?spawn-budget=<ms>` sets the per-frame spawn slice for every tier (`0` = never yield, the old run-it-all-at-once boot; default 16 ms tier 0 / 6 ms later tiers). `?no-precompile` skips the shader precompile and the render hold (the old boot: shaders link at first draw, which blocks the main thread). `?boot-trace` shows the boot trace under the loading bar without the rest of `?debug`. `window.__app.bootTrace()` (under `?test` / `?debug`) returns tiers, props, compiles, the first frame and long tasks.
     - `?no-post` disables the composer entirely (both renderers).
     - `?low-post` keeps post enabled but lowers bloom quality (both renderers).
     - `?no-bloom` disables only bloom (both renderers).
@@ -194,7 +195,7 @@ A scene is a **document**, not code: [`src/scenes/SceneDocument.ts`](src/scenes/
     - **Tier 1 (Important, 55–70%):** Furniture and background props (bookshelf, chairs, chest, rug, atmosphere, billiard lamp, floating candles, runecircle).
     - **Tier 2 (Secondary, ~85%):** Tabletop props arranged around the dice zone edges (dice tower, tray, jail, bag, bell, meal, hourglass, map, scroll, crystal ball, potions, skull, scale, lantern, spellbook, mug, tankard).
     - **Tier 3 (Decorative, 95%):** Background/decorative props (dagger, sword, shield, axe, pocket watch, compass, chalice, miniature, character sheet, bounty poster, pencil, coin pouch, lute, runestones, candelabra, smoking pipe, gemstones, writing set, cheese wheel, wax seal, crown, helmet, gong, mystic orb, DM screen, dragon scale, spyglass, playing cards, key, padlock, lockpicks, spectacles, leather journal, drinking horn, wand, coin, amulet, abacus, dart, scroll case, magnifying glass, rope, goblet, crossbow, waterskin, astrolabe, sundial, ale keg, flute, apple).
-    - **Finalizing (100%):** Disables `castShadow` on small decorative props by name, fades out loading overlay, sets `app.ready = true` (exposed as `window.__app.ready` under `?test` / `?debug`).
+    - **Finalizing (100%):** Disables `castShadow` on small decorative props by name, releases the boot hold on the `render` phase (every tier's shaders are linked by now), fades out loading overlay, sets `app.ready = true` (exposed as `window.__app.ready` under `?test` / `?debug`).
 - Implements an **"Eye-Head" FPS camera** with pointer lock (right-click to enter, ESC to exit). WASD moves, Space jumps.
 - Manages the **dice focus state machine** after a roll:
   `IDLE` → `WAITING_FOR_STOP` → `FOCUSING` → `HOLDING` (2s) → `RETURNING` → `IDLE`
@@ -363,6 +364,10 @@ export function createXxx(scene, physicsWorld, position, rotation) {
 
 Tabletop positions in tier entries may still use legacy `y: -2.75`; `resolveEntryPosition` applies `toCurrentTabletopY` at spawn. Use `footOffsetY` in `createProp` when the mesh origin is not at the resting foot (e.g. a cylinder whose center is mid-height).
 
+#### A factory runs inside a spawn slice
+
+`spawnTier` / `spawnTierWithRandomPool` hand the thread back to a frame **between** props once a slice's budget is spent (`SpawnBudget`); they cannot interrupt one. So keep a factory's synchronous work small (build geometry and materials; load big assets with `await`, not in a loop), and do not call `renderer.render` / `renderer.compile` from a prop — the boot holds the `render` phase and links every program itself (`ShaderPrecompile.ts`). A prop that is slow shows up as `longestProp` in `window.__app.bootTrace().tiers`.
+
 #### No `Math.random` — draw from the kit's `rng`
 
 A share link's `layout-seed` is a replay contract only if every collider is a pure function of it (#369), so **nothing under `src/environment/` (or `packages/dice-core/src`) may call `Math.random()` or `Date.now()`** — `npm run lint` rejects both (`no-restricted-properties`). Use:
@@ -498,7 +503,7 @@ npm run test:cauldron         # Cauldron interactable
 npm run test:mobile-touch     # Touch input smoke
 npm run test:wasm-authoritative  # Visual sync + interaction with physicsWorld === null (#250)
 npm run test:wasm-gameplay-loop  # Full-app: visual sync, drag interaction, collision audio (getStats().played)
-npm run test:share-roll-replay   # Two page loads of the same share URL settle to identical readAllDiceValues()
+npm run test:share-roll-replay   # Two visits (the second re-navigates the same page, after leaveAndWaitForGpuQuiet) of the same share URL settle to identical readAllDiceValues()
 npm run test:roll-timeout     # forceNoSettle: a roll that never settles still ends (timedOut, HUD result, re-roll)
 npm run test:no-worker-throttled  # ?no-worker under 6× CPU throttling still settles (timedOut=false; needs WASM)
 npm run test:partial-throw    # R leaves a held die alone; a partial-throw share link (?ids=, v=3) settles the same faces twice
@@ -506,6 +511,7 @@ npm run test:roll-theatre     # Crit cam on a natural max/min + skip; seek a set
 npm run test:game-farkle      # Solo Farkle vs the bot played to an outcome on the real table (needs WASM)
 npm run test:multiplayer-commit-reveal  # Host + guest through `npm run signal:dev`: commit-reveal throws match (needs WASM; not in CI)
 npm run test:default-route    # `/` without ?webgl reaches ready on SwiftShader (classic WebGL); ?overlay has real alpha (no WASM needed)
+npm run verify:boot-budget    # cold then warm load of `/` on SwiftShader: fails if the main thread is blocked past BOOT_TASK_BUDGET_MS (default 2000) before `ready`; writes boot-budget/report.json + Chromium traces (CI uploads them)
 npm run test:scene-select     # ?scene=chart-room builds its own props, inits physics from its document, replays a seeded throw; an unknown id falls back to the tavern (needs WASM)
 npm run test:a11y             # axe accessibility scan
 npm run test:audio-worklet    # AudioWorklet graph: fixed size, no main-thread oscillators, audible (no WASM needed)
@@ -543,6 +549,7 @@ npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when b
 ### CI notes
 
 - **No GPU on the runners.** CI sets `DICE_CI_NO_WEBGPU=1`; harnesses that probe `?webgpu` (`verify:godrays`, `render-regression`) report that profile as skipped instead of hanging on it. Leave the variable unset locally, where a GPU exists, so the WebGPU path stays a hard requirement.
+- **Boot budget.** `verify:boot-budget` (its own CI job, `boot-budget`, currently `BOOT_BUDGET_REPORT_ONLY=1` until calibrated on the runner: a 2 s task is not reachable on SwiftShader yet, see ARCHITECTURE.md; the script itself fails by default) loads `/` cold, then re-navigates the same page warm, and fails if any main-thread task passes `BOOT_TASK_BUDGET_MS` before `ready` or `load` takes longer than `BOOT_LOAD_BUDGET_MS`. A failure uploads `boot-budget/` (`report.json` plus `trace-cold.json` / `trace-warm.json`; open the traces in `chrome://tracing` or ui.perfetto.dev — the app's `boot:*` measures are on the `blink.user_timing` track beside the tasks). To measure a baseline without failing, run it with `BOOT_BUDGET_REPORT_ONLY=1`; to compare against another build, `BOOT_BUDGET_OUT_DIR=<dir with a vite build>`. Do not raise the budget to make it pass — find the span in the trace that blocks. The warm visit first calls `leaveAndWaitForGpuQuiet` ([`tests/helpers/browser.js`](tests/helpers/browser.js)), which leaves for `about:blank` and waits until a fresh WebGL context is created promptly; on a software rasterizer the GPU process spends 100–300 s tearing the previous document's context down and the next document's first GPU call (even the navigation commit) queues behind it. The wait is reported on its own line and not counted against the budget — it is Chromium's cleanup, not boot work (see ARCHITECTURE.md, Boot budget). Use the helper in any test that re-navigates a WebGL page; do not hand-roll an `about:blank` hop.
 - **Screenshots.** Never `page.screenshot()` a live scene — the rAF loop keeps the compositor busy and the call burns its timeout. Use `capturePng()` from [`tests/helpers/browser.js`](tests/helpers/browser.js), which stops the loop, renders one frame, and grabs the surface over CDP.
 - **Refreshing render baselines.** `tests/baselines/*.png` are compared at a 4% pixel-diff tolerance by `scripts/compare-render-baseline.mjs`. When a scene change legitimately moves them, regenerate and commit:
 

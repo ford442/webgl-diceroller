@@ -101,6 +101,11 @@ export interface AppOrchestrator {
     cullingSystem: ReturnType<typeof import('../core/CullingSystem.js').createCullingSystem>;
     /** The scene to build; omitted means the tavern. */
     sceneDocument?: import('../scenes/SceneDocument').SceneDocument;
+    /**
+     * main.js's hold on the render phase while shaders link (see ShaderPrecompile.ts).
+     * `loadTiers` releases it just before the overlay fades; null = `?no-precompile`.
+     */
+    renderHold?: import('../core/FrameScheduler.js').PhaseHold | null;
 }
 
 export interface AdaptiveQualityState {
@@ -327,6 +332,8 @@ export interface AppContext {
     isTouchPrimaryDevice: boolean;
     stats: unknown;
     tierRenderStats: unknown;
+    /** What the page did between navigation and `ready` (set in main.js; `?test` / `?debug`). */
+    bootTrace: (() => import('../core/BootTrace').BootTraceSnapshot) | null;
     fairnessMonitor: unknown;
     rollHistory: unknown;
     rollStats: unknown;

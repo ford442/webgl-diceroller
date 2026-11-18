@@ -28,3 +28,6 @@ src/wasm/compile_commands.json
 
 # `npm run signal:dev` (wrangler) local state
 signaling/.wrangler/
+
+# verify:boot-budget output (report.json + Chromium traces)
+boot-budget/

@@ -78,6 +78,9 @@ import { bootstrapRendererExtras } from './app/RendererBootstrap.js';
 import { buildTierLoadOptions } from './app/TierLoadOptions.js';
 import { bootstrapXr } from './app/XrBootstrap.js';
 import { createShadowController } from './app/RendererRecovery.js';
+import { getBootTrace } from './core/BootTrace.js';
+import { readProgramCount } from './core/ShaderPrecompile.js';
+import { installBootTraceOverlay } from './core/BootTraceOverlay.js';
 
 /** @typedef {import('./types/app').ComposerLike} ComposerLike */
 /** @typedef {import('./types/app').PostConfig} PostConfig */
@@ -123,6 +126,10 @@ const app = createAppContext({ events: appEvents, sceneDocument });
 app.scheduler = scheduler;
 app.THREE = THREE;
 app.stats = scheduler.stats;
+// What the page did between navigation and `ready` (tiers, props, compiles, first
+// frame, long tasks): `window.__app.bootTrace()` under ?test / ?debug.
+app.bootTrace = () => getBootTrace().snapshot();
+if (debugEnabled || searchParams.has('boot-trace')) installBootTraceOverlay(getBootTrace());
 app.isTouchPrimaryDevice = isTouchPrimaryDevice();
 setInteractablesMirror(app.interactables);
 
@@ -199,13 +206,29 @@ let cameraController;
 /** @type {ReturnType<typeof import('./core/InputHandler.js').setupInput> | undefined} */
 let inputState;
 
-init();
+/**
+ * Held from the first frame until every shader of the tavern is linked (released
+ * in `loadTiers`, right before the overlay fades): the opaque loading overlay
+ * covers the canvas anyway, and a frame that drew a half-linked scene would block
+ * the main thread on every new program at first use. `?no-precompile` is the old
+ * boot, for A/B measurement. See `ShaderPrecompile.ts`.
+ * @type {import('./core/FrameScheduler').PhaseHold | null}
+ */
+let bootRenderHold = null;
+
+init().catch((error) => {
+    // Never leave a failed boot staring at an undrawn canvas.
+    bootRenderHold?.release();
+    throw error;
+});
 
 async function init() {
     const container = document.getElementById('canvas-container');
 
     // Scene, camera, renderer, lights, post-processing, environment map
-    const sceneSetup = await setupScene(container, { lighting: sceneDocument.lighting });
+    const sceneSetup = await getBootTrace().spanAsync('renderer-setup', 'phase', () =>
+        setupScene(container, { lighting: sceneDocument.lighting })
+    );
     app.scene = sceneSetup.scene;
     app.camera = sceneSetup.camera;
     app.renderer = sceneSetup.renderer;
@@ -358,13 +381,23 @@ async function init() {
     // while the physics engine (WASM) compiles and initialises in the background.
     clock = new THREE.Clock();
     window.addEventListener('resize', onWindowResize);
+    // Watch the first frames: when the first real render happens and whether it
+    // had to compile anything (a frame that creates programs is a stall).
+    getBootTrace().attachScheduler(scheduler, {
+        getProgramCount: () => readProgramCount(app.renderer),
+    });
+    if (!searchParams.has('no-precompile')) {
+        bootRenderHold = scheduler.holdPhase('render', 'boot: shaders link before the first frame');
+    }
     app.renderer.setAnimationLoop(animate);
 
     // Initialize Physics — awaited here but the render loop above is already running,
     // so the browser paints every frame while WASM compiles/allocates. A failed
     // load does not abort init(): the tavern environment still loads below,
     // just without dice (see PhysicsBootstrap.js).
-    const physicsBoot = await bootstrapPhysics(app, sceneDocument);
+    const physicsBoot = await getBootTrace().spanAsync('physics', 'phase', () =>
+        bootstrapPhysics(app, sceneDocument)
+    );
     if (physicsBoot.wasmAvailable) {
         syncAllDiceToWasm();
     }
@@ -379,7 +412,7 @@ async function init() {
             app.scene,
             app.camera,
             app.physicsWorld,
-            { scheduler, cullingSystem, sceneDocument },
+            { scheduler, cullingSystem, sceneDocument, renderHold: bootRenderHold },
             buildTierLoadOptions(app, {
                 collisionAudio,
                 qualityProfile: postConfig?.adaptiveProfile ?? app.qualityProfile ?? null,
@@ -407,11 +440,13 @@ async function init() {
                 getDiceTrayController: () => diceTrayController,
                 getDiceJailController: () => diceJailController,
                 getShadowController: () => shadowController,
+                getComposer: () => composer,
             }),
             app.renderer
         );
     } catch (e) {
         console.error('Failed to load scene tiers', e);
+        bootRenderHold?.release();
         showLoadFailure('Error: Scene failed to load. Check console.');
         return;
     }

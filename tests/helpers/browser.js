@@ -168,7 +168,51 @@ async function waitForSettle(page, { timeout = 60000, polling = 100 } = {}) {
     }
 }
 
+// Leave the page for about:blank and wait until the GPU process is quiet again.
+//
+// Why: on a software rasterizer (SwiftShader, llvmpipe) an abandoned WebGL context
+// is torn down by the GPU process in the background, and that takes 100-300 s for
+// this scene. The next document's first GPU interaction (a WebGL or 2D canvas
+// context, even the navigation commit) queues behind it, so a same-page revisit
+// blocks its main thread before any of its own code can run (#365). That is
+// Chromium's cleanup, not boot work. A fresh context on a blank page is the
+// canary: it returns in milliseconds once the backlog is gone, and the wait is
+// returned (and should be reported), not hidden. Explicit `forceContextLoss()`
+// before leaving, at `pagehide` or earlier, did not avoid it for a real navigation
+// (see "Boot budget" in docs/ARCHITECTURE.md), so there is no in-app shortcut.
+// Returns the milliseconds waited.
+async function leaveAndWaitForGpuQuiet(page, { timeout = 900000, quickMs = 1000 } = {}) {
+    const started = Date.now();
+    await page.goto('about:blank');
+    const probe = () =>
+        page.evaluate(() => {
+            const canvas = document.createElement('canvas');
+            const t = performance.now();
+            const gl = canvas.getContext('webgl2');
+            const elapsed = performance.now() - t;
+            gl?.getExtension('WEBGL_lose_context')?.loseContext();
+            return elapsed;
+        });
+    let quick = 0;
+    while (quick < 2) {
+        let timer;
+        const elapsed = await Promise.race([
+            probe(),
+            new Promise((_, reject) => {
+                timer = setTimeout(
+                    () => reject(new Error(`GPU process still busy ${timeout} ms after leaving`)),
+                    Math.max(1, timeout - (Date.now() - started))
+                );
+            }),
+        ]).finally(() => clearTimeout(timer));
+        quick = elapsed < quickMs ? quick + 1 : 0;
+        if (quick < 2) await page.waitForTimeout(250);
+    }
+    return Date.now() - started;
+}
+
 export {
+    leaveAndWaitForGpuQuiet,
     launchPage,
     runTest,
     capturePng,
