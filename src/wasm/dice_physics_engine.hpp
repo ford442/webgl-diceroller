@@ -69,6 +69,8 @@ public:
     // forEachDieDynamicPair / forEachDynamicPair), so this is a memory/event
     // budget cap, not a brute-force-cost cap.
     static constexpr int MAX_DYNAMICS = 256;
+    /** serializeState() format; see docs/WASM_ENGINE.md (Snapshots). */
+    static constexpr uint32_t SNAPSHOT_VERSION = 5;
 
     DicePhysicsEngine();
 
@@ -321,6 +323,23 @@ public:
      */
     bool restoreMotionState(const std::vector<uint8_t>& data);
 
+    /**
+     * Rewind a live world to a version-5 `serializeState()` snapshot of
+     * itself, as a lockstep rollback does: unlike restoreMotionState the dice
+     * set may differ. Dice spawned since the snapshot are removed; dice
+     * removed since come back with the snapshot's motion, material and drag
+     * but no hull or face table — the caller re-attaches those (getDieSides)
+     * before the next step. Every die, kinematic flag, the next die id and
+     * the dice cup's walls are then the snapshot's; hulls, face tables,
+     * statics and props' shapes stay. Returns false and changes nothing for
+     * an older version, a different set of dynamic props, or a die id whose
+     * shape changed.
+     */
+    bool rewindState(const std::vector<uint8_t>& data);
+
+    /** The die's side count, or -1 when no die has that id. */
+    int getDieSides(int id) const;
+
     uint64_t hashSerializedState() const;
 
     float maxTablePenetration() const;
@@ -359,6 +378,9 @@ private:
     // kind of body was involved (die id >= 0, static <= STATIC_EVENT_ID_BASE,
     // dynamic prop <= DYNAMIC_EVENT_ID_BASE).
     static constexpr int DYNAMIC_EVENT_ID_BASE = -1000000;
+    // Highest next-die id a snapshot may restore: die ids travel as Float32
+    // in the transform/id buffers, exact only up to 2^24.
+    static constexpr int MAX_SNAPSHOT_NEXT_DIE_ID = 1 << 24;
 
     struct ContainerPlane {
         Vec3 normal;
@@ -547,6 +569,8 @@ private:
      * while a contact pass is still appending, so step() starts with room.
      */
     void reserveContactStorage();
+    /** deserializeState's version-5 tail: next die id and container walls. */
+    void readWorldTrailer(const std::vector<uint8_t>& data, size_t off);
     /**
      * Find-or-create the manifold for this key (nullptr at MAX_MANIFOLDS).
      * Only for a caller about to commit points: anything that just wants to

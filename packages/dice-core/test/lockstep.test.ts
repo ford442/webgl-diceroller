@@ -1,0 +1,272 @@
+// @vitest-environment node
+/**
+ * The lockstep core (#366, slice 1), on the real engine over the recorded
+ * tavern world:
+ *   - a recorded input log replays to the golden bytes (tests/golden/lockstep.json);
+ *   - whatever order and lateness its inputs arrive in, a RollbackSim ends on
+ *     those same bytes (fast-check);
+ *   - two peers, each issuing its own seat's inputs and hearing the other's
+ *     late, end on identical serializeState() bytes;
+ *   - a rollback reaches back across a spawn and a removal, refuses what is
+ *     older than its window, and reports each tick's collisions once.
+ */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import fc from 'fast-check';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { defaultPublicDir, fsAssetSource } from 'dice-core';
+import { InputLog, type TickInput } from 'dice-core/net/InputLog';
+import type { RollbackSim } from 'dice-core/net/RollbackSim';
+import { loadWasmBuildInfo } from 'dice-core/wasm/SolverBuildId';
+import { parseWorldFixtureFile } from 'dice-core/wasm/WorldRecorder';
+import {
+    LOCKSTEP_GOLDEN_PATH,
+    LOCKSTEP_SCENARIOS,
+    createLockstepTable,
+    replayInOrder,
+    snapshotVersion,
+    stateDigest,
+    type LockstepGoldenFile,
+    type LockstepGoldenScenario,
+    type LockstepTable,
+} from './lockstepScenarios.js';
+import { describeWasm } from './wasmGate.js';
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const golden = JSON.parse(
+    readFileSync(path.join(REPO_ROOT, LOCKSTEP_GOLDEN_PATH), 'utf8')
+) as LockstepGoldenFile;
+const { hash: worldHash, world } = parseWorldFixtureFile(
+    readFileSync(path.join(REPO_ROOT, 'tests/fixtures/tavern-world.json'), 'utf8')
+);
+
+/** Network delay a late input may have, in ticks (half a second). */
+const MAX_DELAY = 60;
+/** fast-check runs per scenario: each is a full table, a few hundred ms. */
+const RUNS = 5;
+const TIMEOUT_MS = 120_000;
+
+it('golden file holds a valid log for every scenario, in order', () => {
+    expect(golden.version).toBe(1);
+    expect(golden.worldHash).toBe(worldHash);
+    expect(golden.scenarios.map((s) => s.name)).toEqual(LOCKSTEP_SCENARIOS.map((s) => s.name));
+    LOCKSTEP_SCENARIOS.forEach((scenario, i) => {
+        const recorded = golden.scenarios[i]!;
+        expect(InputLog.from(recorded.records).size).toBe(recorded.records.length);
+        // `npm run golden:lockstep` would write the same log again.
+        expect(recorded.records).toEqual(scenario.build(world));
+        expect(recorded.ticks).toBe(scenario.ticks);
+    });
+});
+
+/** A record's arrival: `delay` ticks after its stamp, `order` within that tick. */
+interface Arrival {
+    delay: number;
+    order: number;
+    resend: boolean;
+}
+
+const arrivals = (n: number) =>
+    fc.array(
+        fc.record({
+            delay: fc.integer({ min: 0, max: MAX_DELAY }),
+            order: fc.integer(),
+            resend: fc.boolean({ trueWeight: 1, falseWeight: 4 }),
+        }),
+        { minLength: n, maxLength: n }
+    );
+
+type Inbox = Map<number, { order: number; rec: TickInput }[]>;
+
+function post(inbox: Inbox, at: number, order: number, rec: TickInput): void {
+    const due = inbox.get(at) ?? [];
+    due.push({ order, rec });
+    inbox.set(at, due);
+}
+
+/** Submit what arrives at the present tick, then run it; the last tick only receives. */
+function runWithInbox(sim: RollbackSim, inbox: Inbox, ticks: number): void {
+    for (let t = 0; t <= ticks; t++) {
+        const due = inbox.get(t);
+        if (due) {
+            const report = sim.submit(due.sort((a, b) => a.order - b.order).map((d) => d.rec));
+            expect(report.tooLate).toEqual([]);
+            expect(report.conflicts).toEqual([]);
+        }
+        if (t < ticks) sim.advance(1);
+    }
+}
+
+/** One peer hears every record `delay` ticks late (resends 7 ticks after that). */
+function deliverLate(
+    table: LockstepTable,
+    scenario: LockstepGoldenScenario,
+    plan: Arrival[],
+    onEvents?: (tick: number) => void
+): RollbackSim {
+    table.reset();
+    const sim = table.sim({ onEvents: onEvents && ((tick) => onEvents(tick)) });
+    const inbox: Inbox = new Map();
+    scenario.records.forEach((rec, i) => {
+        const { delay, order, resend } = plan[i]!;
+        const at = Math.min(scenario.ticks, rec.tick + delay);
+        post(inbox, at, order, rec);
+        if (resend) post(inbox, Math.min(scenario.ticks, at + 7), order, rec);
+    });
+    runWithInbox(sim, inbox, scenario.ticks);
+    return sim;
+}
+
+describeWasm('lockstep table (Node)', () => {
+    const assets = fsAssetSource(defaultPublicDir()!);
+    let peerA: LockstepTable;
+    let peerB: LockstepTable;
+
+    beforeAll(async () => {
+        peerA = await createLockstepTable(world, assets);
+        peerB = await createLockstepTable(world, assets);
+    });
+
+    it('was generated by this solver revision and snapshot format', async () => {
+        const { solver_revision: revision = 0 } = await loadWasmBuildInfo('wasm', assets);
+        expect(golden.solverRevision).toBe(revision);
+        peerA.reset();
+        expect(golden.snapshotVersion).toBe(snapshotVersion(peerA.engine.serializeState()));
+    });
+
+    describe.each(golden.scenarios)('$name', (scenario) => {
+        it('replays its recorded log to the golden bytes', () => {
+            const { bytes, faces, sim } = replayInOrder(peerA, scenario.records, scenario.ticks);
+            expect(stateDigest(bytes)).toEqual(scenario.digest);
+            expect(faces).toEqual(scenario.faces);
+            expect(sim.stats.rollbacks).toBe(0);
+            expect(sim.stats.maxSnapshotBytes).toBe(scenario.maxSnapshotBytes);
+        });
+
+        it(
+            'converges on them whatever order and lateness its inputs arrive in',
+            () => {
+                fc.assert(
+                    fc.property(arrivals(scenario.records.length), (plan) => {
+                        const sim = deliverLate(peerA, scenario, plan);
+                        expect(stateDigest(sim.stateBytes())).toEqual(scenario.digest);
+                    }),
+                    { numRuns: RUNS }
+                );
+            },
+            TIMEOUT_MS
+        );
+
+        it(
+            'two peers hearing each other late end on the same bytes',
+            () => {
+                fc.assert(
+                    fc.property(
+                        fc.array(fc.integer({ min: 0, max: MAX_DELAY }), {
+                            minLength: scenario.records.length,
+                            maxLength: scenario.records.length,
+                        }),
+                        (delays) => {
+                            peerA.reset();
+                            peerB.reset();
+                            const peers = [peerA.sim(), peerB.sim()];
+                            const inboxes: Inbox[] = [new Map(), new Map()];
+                            scenario.records.forEach((rec, i) => {
+                                // A seat's own peer has its input on time; the
+                                // other hears it over the wire.
+                                const own = rec.seat % 2;
+                                post(inboxes[own]!, rec.tick, i, rec);
+                                const at = Math.min(scenario.ticks, rec.tick + delays[i]!);
+                                post(inboxes[1 - own]!, at, i, rec);
+                            });
+                            for (let t = 0; t <= scenario.ticks; t++) {
+                                peers.forEach((sim, p) => {
+                                    const due = inboxes[p]!.get(t);
+                                    if (due) sim.submit(due.map((d) => d.rec));
+                                    if (t < scenario.ticks) sim.advance(1);
+                                });
+                            }
+                            const [a, b] = peers.map((sim) => sim.stateBytes());
+                            expect(Buffer.from(b!).equals(Buffer.from(a!))).toBe(true);
+                            expect(stateDigest(a!)).toEqual(scenario.digest);
+                        }
+                    ),
+                    { numRuns: RUNS }
+                );
+            },
+            TIMEOUT_MS
+        );
+    });
+
+    const scenario = (name: string) => {
+        const found = golden.scenarios.find((s) => s.name === name);
+        if (!found) throw new Error(`no golden scenario ${name}`);
+        return found;
+    };
+
+    it('rewinds across a spawn and two removals when an early input arrives late', () => {
+        const s = scenario('spawn-remove-jail-tower');
+        const throwRec = s.records.find((r) => r.input.type === 'throw')!;
+        // The throw (tick 20) arrives at tick 430: after die 4 was spawned
+        // (90) and dice 1 and 2 removed (400, 410). Die 4 lands on die 1, so
+        // the rewind has to bring both back with their hulls (and drop die
+        // 4 until its spawn re-runs) or die 4 comes to rest somewhere else.
+        peerA.reset();
+        const sim = peerA.sim({ maxRollbackTicks: 480 });
+        sim.submit(s.records.filter((r) => r !== throwRec && r.tick < 430));
+        sim.advanceTo(430);
+        expect(Array.from(peerA.engine.getDieIds())).toEqual([0, 3, 4]);
+        const report = sim.submit(throwRec);
+        expect(report).toMatchObject({ rewoundTo: 16, resimulated: 414 });
+        sim.submit(s.records.filter((r) => r.tick >= 430));
+        sim.advanceTo(s.ticks);
+        expect(stateDigest(sim.stateBytes())).toEqual(s.digest);
+        expect(sim.stats).toMatchObject({ rollbacks: 1, resimulatedTicks: 414 });
+    });
+
+    it('refuses an input older than its window and leaves the table alone', () => {
+        const s = scenario('throw-grab-drag-release');
+        const knock = s.records.find((r) => r.tick === 130)!;
+        peerA.reset();
+        const sim = peerA.sim({ maxRollbackTicks: 120 });
+        sim.submit(s.records.filter((r) => r !== knock));
+        sim.advanceTo(300);
+        expect(sim.oldestRewindableTick).toBe(176);
+        const before = sim.stateBytes();
+        const report = sim.submit(knock);
+        expect(report).toMatchObject({ inserted: 0, tooLate: [knock], rewoundTo: null });
+        expect(Buffer.from(sim.stateBytes()).equals(Buffer.from(before))).toBe(true);
+        // What it holds is bounded by the window, not by the length of the game.
+        expect(sim.stats.snapshotsHeld).toBeLessThanOrEqual(120 / sim.snapshotEvery + 2);
+        expect(sim.log.firstTick).toBeGreaterThanOrEqual(176);
+    });
+
+    it('ignores a resend and refuses a record that reuses another one’s name', () => {
+        const s = scenario('throw-grab-drag-release');
+        peerA.reset();
+        const sim = peerA.sim();
+        sim.submit(s.records);
+        const first = s.records[0]!;
+        const report = sim.submit([
+            structuredClone(first),
+            { ...first, input: { type: 'remove', id: 0 } },
+        ]);
+        expect(report).toMatchObject({ inserted: 0, duplicates: 1, rewoundTo: null });
+        expect(report.conflicts).toHaveLength(1);
+        sim.advanceTo(s.ticks);
+        expect(stateDigest(sim.stateBytes())).toEqual(s.digest);
+    });
+
+    it('reports each tick’s collisions once, and never a re-simulated tick’s', () => {
+        const s = scenario('throw-grab-drag-release');
+        const heard: number[] = [];
+        // Everything half a second late: dozens of rollbacks.
+        const plan = s.records.map((_, i) => ({ delay: 30 + (i % 7), order: i, resend: false }));
+        const sim = deliverLate(peerA, s, plan, (tick) => heard.push(tick));
+        expect(sim.stats.rollbacks).toBeGreaterThan(5);
+        expect(heard.length).toBeGreaterThan(0);
+        for (let i = 1; i < heard.length; i++) expect(heard[i]!).toBeGreaterThan(heard[i - 1]!);
+        expect(stateDigest(sim.stateBytes())).toEqual(s.digest);
+    });
+});

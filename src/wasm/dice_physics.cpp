@@ -121,5 +121,7 @@ EMSCRIPTEN_BINDINGS(dice_physics) {
         .function("serializeState",    &DicePhysicsEngine::serializeState)
         .function("deserializeState",  &DicePhysicsEngine::deserializeState)
         .function("restoreMotionState",&DicePhysicsEngine::restoreMotionState)
+        .function("rewindState",       &DicePhysicsEngine::rewindState)
+        .function("getDieSides",       &DicePhysicsEngine::getDieSides)
         ;
 }

@@ -680,50 +680,15 @@ const engine = getWasmEngine();
 
 #### Forces
 
-| Method               | Signature                | Description                            |
-| -------------------- | ------------------------ | -------------------------------------- |
-| `applyImpulse`       | `(id, fx, fy, fz): void` | Apply linear impulse (wakes the die).  |
-| `applyTorqueImpulse` | `(id, tx, ty, tz): void` | Apply angular impulse (wakes the die). |
-
-#### State sync
-
-| Method               | Signature                              | Description                                                                                                        |
-| -------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `setDieTransform`    | `(id, px,py,pz, qx,qy,qz,qw): void`    | Teleport a die and zero velocities.                                                                                |
-| `setDieVelocity`     | `(id, lvx,lvy,lvz, avx,avy,avz): void` | Override velocities.                                                                                               |
-| `setDieKinematic`    | `(id, kinematic: bool): void`          | Toggle kinematic mode (no integration).                                                                            |
-| `setContainerActive` | `(active: bool): void`                 | Enable/disable dice-cup interior planes.                                                                           |
-| `setContainerPlanes` | `(planes: VectorFloat): void`          | Upload world-space planes (4 floats each: nx, ny, nz, d). Up to 9. Collision events use `idB = -100 - planeIndex`. |
-
-#### Simulation
-
-| Method              | Signature         | Description                                                                                                                  |
-| ------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `step`              | `(dt: f32): void` | Bank `dt` seconds and run as many fixed 1/120 s ticks (4 substeps each) as it covers, at most 8 per call. See "Fixed clock". |
-| `getFixedTickCount` | `(): f64`         | Fixed ticks run since construction (monotonic).                                                                              |
-| `isWorldAsleep`     | `(): bool`        | Every die and dynamic prop asleep and none kinematic (empty world: `true`). The worker parks its timer on this.              |
-
-#### Query
-
-| Method                | Signature          | Description                                              |
-| --------------------- | ------------------ | -------------------------------------------------------- |
-| `getDieCount`         | `(): i32`          | Number of dice in the world.                             |
-| `areAllSettled`       | `(): bool`         | `hasDice() && allAsleep()` — false for an empty engine.  |
-| `hasDice`             | `(): bool`         | At least one die body is registered.                     |
-| `allAsleep`           | `(): bool`         | Every non-kinematic die sleeps (empty engine: `true`).   |
-| `getSleepDiagnostics` | `(): Float32Array` | Per-body sleep records (copy); see "Contacts and sleep". |
-| `getTransforms`       | `(): Float32Array` | Zero-copy view of `[px,py,pz,qx,qy,qz,qw]` per die.      |
-| `getCollisionEvents`  | `(): Float32Array` | Events as `[idA, idB, impactSpeed, …]`. Cleared on read. |
-
-#### Determinism & replay
-
-| Method               | Signature                | Description                                                                                                                                                                                        |
-| -------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `seedRNG`            | `(seed: u64): void`      | Seed the internal xorshift64\* generator.                                                                                                                                                          |
-| `randomFloat`        | `(): f32`                | Return next deterministic float in `[0,1)`.                                                                                                                                                        |
-| `serializeState`     | `(): VectorU8`           | Snapshot all body states to a byte vector.                                                                                                                                                         |
-| `deserializeState`   | `(data: VectorU8): void` | Restore a snapshot.                                                                                                                                                                                |
-| `restoreMotionState` | `(data: VectorU8): bool` | Rewind a live world to its own snapshot (poses, velocities, sleep, manifolds); keeps hulls / face tables / materials. False and no change on a dice-set mismatch. Used by the roll theatre's seek. |
+| Method               | Signature                | Description                                                                                                                                                                                                                                                            |
+| -------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `seedRNG`            | `(seed: u64): void`      | Seed the internal xorshift64\* generator.                                                                                                                                                                                                                              |
+| `randomFloat`        | `(): f32`                | Return next deterministic float in `[0,1)`.                                                                                                                                                                                                                            |
+| `serializeState`     | `(): VectorU8`           | Snapshot the simulated table (version 5, below): dice, dynamic props, manifolds, next die id, cup walls. Not the RNG, statics, hulls or face tables.                                                                                                                   |
+| `deserializeState`   | `(data: VectorU8): void` | Replace the dice and dynamic-prop motion with a snapshot (versions 1–5). Dice come back without hulls.                                                                                                                                                                 |
+| `restoreMotionState` | `(data: VectorU8): bool` | Rewind a live world to its own snapshot (poses, velocities, sleep, manifolds); keeps hulls / face tables / materials. False and no change on a dice-set mismatch. Used by the roll theatre's seek.                                                                     |
+| `rewindState`        | `(data: VectorU8): bool` | Lockstep rollback (#366): restore a version-5 snapshot of this world even when dice were spawned or removed since. Surviving dice keep their hulls; removed ones come back without (`getDieSides`); later ones are dropped. False and no change on a foreign snapshot. |
+| `getDieSides`        | `(id: i32): i32`         | A die's shape, or -1 when the id is not on the table — what to re-attach a hull for after `rewindState`.                                                                                                                                                               |
 
 Both seeded gameplay paths draw through `randomFloat()` in a fixed order, and
 both compute their parameters in shared TypeScript so the worker and the
@@ -811,6 +776,32 @@ reset the sleep timer and kept dice resting against props awake for ever.
 dynamic prop also carries its rest anchor and timer, so a restored world
 sleeps exactly as the original would. Versions 1–3 still load (rest window
 empty).
+
+Version 5 (#366, same `SOLVER_REVISION`: the physics did not change, the
+bytes did) adds everything an input can change besides motion, so a snapshot
+is the whole simulated table a lockstep rollback or a late joiner needs: each
+die's `kinematic` flag, friction, rolling friction and drag (a die record is
+111 bytes), then a trailer with the next die id, whether the dice-cup
+container is active and its planes. Versions 1–4 still load: dice come back
+dynamic with the engine's default material (friction 0.6, rolling 0.1, no
+drag), the next id follows the highest die id, and the cup is left as it was.
+Untrusted bytes are clamped as the setters clamp them; a cup plane that is
+not finite or not unit length is dropped.
+Still not in a snapshot, by design: the RNG (every seeded input re-seeds it),
+the static colliders (the world hash pins them), hulls and face tables (the
+caller re-attaches them from `hulls.json`), the engine flags and the
+accumulator (cleared: snapshots are taken between ticks).
+
+`rewindState(bytes)` is the rollback restore. `restoreMotionState` needs the
+same dice as the snapshot. `rewindState` also takes a snapshot from before a
+spawn or a removal. Dynamic props must match by `userId`, and a die id the
+snapshot shares with the present must have the same shape. A survivor keeps
+its hull, face table and bias axis. A removed die is rebuilt from the snapshot
+without them; `getDieSides(id)` names the shape to re-attach. A die spawned
+since the snapshot is dropped, and the next die id is restored, so re-running
+the spawn hands out the same id again. The solver tests run a spawn, a cup and
+a removal past a snapshot, rewind and replay, and require the uninterrupted
+run's bytes; `fuzz_deserialize` feeds every input to `rewindState` as well.
 
 `getSleepDiagnostics()` packs one `SLEEP_DIAG_STRIDE`-float record per die,
 then per dynamic prop: id, sleeping, kinematic, speed, spin, sleep timer, own

@@ -190,8 +190,12 @@ std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
         const uint8_t* p = static_cast<const uint8_t*>(ptr);
         out.insert(out.end(), p, p + len);
     };
-    // Version 4 (SOLVER_REVISION 12) adds each body's rest window.
-    uint32_t version = 4;
+    // Version 4 (SOLVER_REVISION 12) adds each body's rest window. Version 5
+    // adds what an input can change besides motion — each die's kinematic
+    // flag, material and drag, the next die id and the dice cup's walls — so
+    // a lockstep rollback (rewindState) or a late joiner rebuilds the table
+    // the inputs left, not just its poses.
+    uint32_t version = SNAPSHOT_VERSION;
     uint32_t count = static_cast<uint32_t>(bodies_.size());
     append(&version, sizeof(version));
     append(&count, sizeof(count));
@@ -208,6 +212,10 @@ std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
         append(&b.restPosition, sizeof(b.restPosition));
         append(&b.restRotation, sizeof(b.restRotation));
         append(&b.restTimer, sizeof(b.restTimer));
+        append(&b.kinematic, sizeof(b.kinematic));
+        append(&b.friction, sizeof(b.friction));
+        append(&b.rollingFriction, sizeof(b.rollingFriction));
+        append(&b.dragFactor, sizeof(b.dragFactor));
     }
 
     // Dynamic (non-die) props, added in version 2. Box shapes round-trip
@@ -258,6 +266,16 @@ std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
             append(&m.points[i].velBias, sizeof(m.points[i].velBias));
         }
     }
+
+    // World trailer (version 5).
+    append(&nextId_, sizeof(nextId_));
+    append(&containerActive_, sizeof(containerActive_));
+    uint32_t planeCount = static_cast<uint32_t>(containerPlanes_.size());
+    append(&planeCount, sizeof(planeCount));
+    for (const auto& plane : containerPlanes_) {
+        append(&plane.normal, sizeof(plane.normal));
+        append(&plane.dist, sizeof(plane.dist));
+    }
     return out;
 }
 
@@ -286,7 +304,7 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
     };
     uint32_t version = 0, count = 0;
     if (!read(&version, sizeof(version))) return;
-    if (version < 1 || version > 4) return;
+    if (version < 1 || version > SNAPSHOT_VERSION) return;
     if (!read(&count, sizeof(count))) return;
     bodies_.clear();
     bodies_.reserve(boundedCount(count, 2 * sizeof(int) + 3 * sizeof(Vec3) + sizeof(Quat) +
@@ -306,6 +324,20 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
             if (!read(&b.restPosition, sizeof(b.restPosition))) break;
             if (!read(&b.restRotation, sizeof(b.restRotation))) break;
             if (!read(&b.restTimer, sizeof(b.restTimer))) break;
+        }
+        if (version >= 5) {
+            float friction = 0.0f, rollingFriction = 0.0f, dragFactor = 0.0f;
+            if (!readBool(b.kinematic)) break;
+            if (!read(&friction, sizeof(friction))) break;
+            if (!read(&rollingFriction, sizeof(rollingFriction))) break;
+            if (!read(&dragFactor, sizeof(dragFactor))) break;
+            // The setters' own clamps: a peer's bytes get no wider range than
+            // setDieMaterial / setDieDrag would have allowed (and no NaN).
+            if (std::isfinite(friction)) b.friction = std::clamp(friction, 0.0f, 2.0f);
+            if (std::isfinite(rollingFriction)) {
+                b.rollingFriction = std::clamp(rollingFriction, 0.0f, 1.0f);
+            }
+            if (std::isfinite(dragFactor)) b.dragFactor = std::max(0.0f, dragFactor);
         }
         b.radius = radiusForSides(b.sides);
         b.mass = 5.0f;
@@ -443,7 +475,44 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
             }
         }
     }
+
+    if (version >= 5) readWorldTrailer(data, off);
     reserveContactStorage();
+}
+
+void DicePhysicsEngine::readWorldTrailer(const std::vector<uint8_t>& data, size_t off) {
+    auto read = [&](void* ptr, size_t len) {
+        if (off + len > data.size()) return false;
+        std::memcpy(ptr, data.data() + off, len);
+        off += len;
+        return true;
+    };
+    int nextId = 0;
+    uint8_t active = 0;
+    uint32_t planeCount = 0;
+    if (!read(&nextId, sizeof(nextId))) return;
+    // Never below an id the snapshot holds (addDie would hand it out twice),
+    // and never past what a Float32 id buffer still reads exactly.
+    if (nextId > nextId_ && nextId <= MAX_SNAPSHOT_NEXT_DIE_ID) nextId_ = nextId;
+    if (!read(&active, sizeof(active))) return;
+    containerActive_ = active != 0;
+    containerPlanes_.clear();
+    if (!read(&planeCount, sizeof(planeCount))) return;
+    planeCount = std::min<uint32_t>(planeCount, MAX_CONTAINER_PLANES);
+    for (uint32_t i = 0; i < planeCount; ++i) {
+        ContainerPlane plane{};
+        if (!read(&plane.normal, sizeof(plane.normal))) break;
+        if (!read(&plane.dist, sizeof(plane.dist))) break;
+        // setContainerPlanes stores unit normals; anything else in a peer's
+        // bytes is not a plane this engine wrote. Kept bit for bit when it
+        // is, so the snapshot round-trips.
+        const float len = plane.normal.length();
+        if (!allFinite(plane.normal.x, plane.normal.y, plane.normal.z) ||
+            !std::isfinite(plane.dist) || !(std::abs(len - 1.0f) < 1e-3f)) {
+            continue;
+        }
+        containerPlanes_.push_back(plane);
+    }
 }
 
 bool DicePhysicsEngine::restoreMotionState(const std::vector<uint8_t>& data) {
@@ -497,6 +566,99 @@ bool DicePhysicsEngine::restoreMotionState(const std::vector<uint8_t>& data) {
     events_.clear();
     reserveContactStorage();
     return true;
+}
+
+bool DicePhysicsEngine::rewindState(const std::vector<uint8_t>& data) {
+    // Only a version-5 snapshot carries the kinematic flags, materials, next
+    // id and container walls; rewinding to an older one would restore the
+    // poses and keep the rest of the present.
+    uint32_t version = 0;
+    if (data.size() < sizeof(version)) return false;
+    std::memcpy(&version, data.data(), sizeof(version));
+    if (version != SNAPSHOT_VERSION) return false;
+
+    // Parse into a scratch engine first: a snapshot that does not fit this
+    // world leaves it untouched.
+    DicePhysicsEngine snap;
+    snap.deserializeState(data);
+    // Props are registered with the world, never spawned by an input, so the
+    // same world has the same props in the same order.
+    if (snap.dynamics_.size() != dynamics_.size()) return false;
+    for (size_t i = 0; i < dynamics_.size(); ++i) {
+        if (snap.dynamics_[i].userId != dynamics_[i].userId) return false;
+    }
+    // A die id the snapshot shares with the present must be the same die.
+    for (const RigidBody& s : snap.bodies_) {
+        for (const RigidBody& b : bodies_) {
+            if (b.id == s.id && b.sides != s.sides) return false;
+        }
+    }
+
+    std::vector<RigidBody> next;
+    next.reserve(snap.bodies_.size());
+    for (RigidBody& s : snap.bodies_) {
+        auto live = std::find_if(bodies_.begin(), bodies_.end(),
+                                 [&](const RigidBody& b) { return b.id == s.id; });
+        if (live == bodies_.end()) {
+            // Removed since the snapshot: it comes back with the snapshot's
+            // motion, material and drag, and no hull or face table until the
+            // caller re-attaches them (getDieSides names its shape).
+            next.push_back(std::move(s));
+            continue;
+        }
+        // Still here: keep its hull, face table and bias axis, take the rest.
+        RigidBody b = std::move(*live);
+        b.position = s.position;
+        b.velocity = s.velocity;
+        b.rotation = s.rotation;
+        b.angularVelocity = s.angularVelocity;
+        b.sleeping = s.sleeping;
+        b.sleepTimer = s.sleepTimer;
+        b.kinematic = s.kinematic;
+        b.restPosition = s.restPosition;
+        b.restRotation = s.restRotation;
+        b.restTimer = s.restTimer;
+        b.friction = s.friction;
+        b.rollingFriction = s.rollingFriction;
+        b.dragFactor = s.dragFactor;
+        next.push_back(std::move(b));
+    }
+    // Dice spawned since the snapshot are dropped with the old vector.
+    bodies_ = std::move(next);
+    for (auto& b : bodies_) refreshDieDerived(b);
+
+    for (size_t i = 0; i < dynamics_.size(); ++i) {
+        DynamicBody& d = dynamics_[i];
+        const DynamicBody& s = snap.dynamics_[i];
+        d.position = s.position;
+        d.velocity = s.velocity;
+        d.rotation = s.rotation;
+        d.angularVelocity = s.angularVelocity;
+        d.sleeping = s.sleeping;
+        d.sleepTimer = s.sleepTimer;
+        d.kinematic = s.kinematic;
+        d.restPosition = s.restPosition;
+        d.restRotation = s.restRotation;
+        d.restTimer = s.restTimer;
+        refreshDynamicDerived(d);
+    }
+
+    // Same body order as the snapshot, so its manifold indices bind here too.
+    manifolds_ = std::move(snap.manifolds_);
+    nextId_ = snap.nextId_;
+    containerActive_ = snap.containerActive_;
+    containerPlanes_ = std::move(snap.containerPlanes_);
+    accumulator_ = 0.0;
+    events_.clear();
+    reserveContactStorage();
+    return true;
+}
+
+int DicePhysicsEngine::getDieSides(int id) const {
+    for (const auto& b : bodies_) {
+        if (b.id == id) return b.sides;
+    }
+    return -1;
 }
 
 uint64_t DicePhysicsEngine::hashSerializedState() const {

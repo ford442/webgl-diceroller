@@ -44,6 +44,8 @@ Collision audio and the settled results overlay subscribe via events; the live p
 
 Host-authoritative WebRTC tables use deterministic WASM seeded replay. See [`MULTIPLAYER.md`](MULTIPLAYER.md) for signaling (Cloudflare Durable Object rooms), `?room=` deep links, commit-reveal (protocol v2, every room), and COOP/COEP constraints.
 
+A lockstep live table (#366) is being built in slices. It has no host: every peer runs the same tick-stamped input log. Slice 1 is the headless core in `dice-core`: [`InputLog`](../packages/dice-core/src/net/InputLog.ts), [`applyTableInput`](../packages/dice-core/src/net/applyTableInput.ts), and [`RollbackSim`](../packages/dice-core/src/net/RollbackSim.ts), which keeps a ring of snapshots and replays late inputs over the engine's `rewindState` and snapshot format v5. Nothing in the app calls it yet. See [`MULTIPLAYER.md`](MULTIPLAYER.md) (Lockstep live table).
+
 ### Session layer
 
 Desktop **initiative / turn strip** and multiplayer session sync live outside `main.js`:

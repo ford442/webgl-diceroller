@@ -17,6 +17,7 @@ import type {
     CollisionEvent,
     DicePhysicsModule,
     EmbindPhysicsEngine,
+    EmbindVector,
     PhysicsEngine,
 } from './physicsTypes.js';
 import type { SeededDieRef } from './seededThrowParams.js';
@@ -99,6 +100,8 @@ const STUB_ENGINE = {
     serializeState: () => new Uint8Array(0),
     deserializeState: () => {},
     restoreMotionState: () => false,
+    rewindState: () => false,
+    getDieSides: () => -1,
 } satisfies PhysicsEngine;
 
 /**
@@ -156,15 +159,20 @@ function wrapEngine(raw: EmbindPhysicsEngine, Module: DicePhysicsModule): Physic
         originalDeserialize(vec);
         vec.delete?.();
     };
-    const originalRestore = raw.restoreMotionState?.bind(raw);
-    engine.restoreMotionState = (data: Uint8Array) => {
-        if (!originalRestore) return false;
-        const vec = new Module.VectorU8();
-        for (let i = 0; i < data.length; i++) vec.push_back(data[i] ?? 0);
-        const ok = originalRestore(vec);
-        vec.delete?.();
-        return ok;
+    // Both restores take a snapshot as a VectorU8; an artifact built before
+    // the method existed reports false rather than throwing.
+    const wrapRestore = (original: ((vec: EmbindVector<number>) => boolean) | undefined) => {
+        return (data: Uint8Array) => {
+            if (!original) return false;
+            const vec = new Module.VectorU8();
+            for (let i = 0; i < data.length; i++) vec.push_back(data[i] ?? 0);
+            const ok = original(vec);
+            vec.delete?.();
+            return ok;
+        };
     };
+    engine.restoreMotionState = wrapRestore(raw.restoreMotionState?.bind(raw));
+    engine.rewindState = wrapRestore(raw.rewindState?.bind(raw));
     const originalSeedRNG = raw.seedRNG.bind(raw);
     engine.seedRNG = (seed: number) => {
         originalSeedRNG(toRngSeedBigInt(seed));
