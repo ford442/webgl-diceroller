@@ -47,17 +47,33 @@ export const initUI = (
     });
     const container = controlsPanel.body;
 
-    const diceTypes = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+    const standardTypes = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+    // Catalog-derived dice ride an existing hull (dF/d2/d3 on the d6, d5 on the
+    // d10); spawn and notation already know them, so they are plain counts here.
+    const derivedTypes = [
+        { type: 'dF', label: 'dF (Fate)' },
+        { type: 'd2', label: 'd2' },
+        { type: 'd3', label: 'd3' },
+        { type: 'd5', label: 'd5' },
+    ];
+    const diceTypes = [...standardTypes, ...derivedTypes.map((d) => d.type)];
     const inputs = {};
-    const counts = { d4: 1, d6: 1, d8: 1, d10: 1, d12: 1, d20: 1 };
+    const counts = { d4: 1, d6: 1, d8: 1, d10: 1, d12: 1, d20: 1, dF: 0, d2: 0, d3: 0, d5: 0 };
 
-    diceTypes.forEach((type) => {
+    const derivedGroup = document.createElement('details');
+    derivedGroup.className = 'hud-details';
+    const derivedSummary = document.createElement('summary');
+    derivedSummary.className = 'hud-label';
+    derivedSummary.textContent = 'More dice';
+    derivedGroup.appendChild(derivedSummary);
+
+    const addCountRow = (type, labelText, parent) => {
         const row = document.createElement('div');
         row.className = 'hud-row hud-row--between';
 
         const label = document.createElement('label');
         label.htmlFor = `dice-count-${type}`;
-        label.textContent = type.toUpperCase() + ': ';
+        label.textContent = labelText + ': ';
 
         const input = hudInput('number', `${type} count`);
         input.id = `dice-count-${type}`;
@@ -74,8 +90,11 @@ export const initUI = (
         inputs[type] = input;
         row.appendChild(label);
         row.appendChild(input);
-        container.appendChild(row);
-    });
+        parent.appendChild(row);
+    };
+    standardTypes.forEach((type) => addCountRow(type, type.toUpperCase(), container));
+    derivedTypes.forEach(({ type, label }) => addCountRow(type, label, derivedGroup));
+    container.appendChild(derivedGroup);
 
     // --- Dice-set presets: quickly load a themed handful of dice ---
     const PRESETS = {
@@ -84,6 +103,7 @@ export const initUI = (
         "Bard's Luck": { d4: 1, d6: 1, d8: 0, d10: 0, d12: 0, d20: 2 },
         'Fistful of d6': { d4: 0, d6: 5, d8: 0, d10: 0, d12: 0, d20: 0 },
         "Wizard's Arsenal": { d4: 2, d6: 2, d8: 2, d10: 1, d12: 1, d20: 1 },
+        'Fate (4dF)': { d4: 0, d6: 0, d8: 0, d10: 0, d12: 0, d20: 0, dF: 4 },
     };
 
     const applyPreset = (preset) => {
@@ -230,6 +250,7 @@ export const initUI = (
             { id: 'compound', label: 'Compound !!' },
             { id: 'reroll1', label: 'Reroll 1s' },
             { id: 'percentile', label: 'd100' },
+            { id: 'fate', label: 'Fate 4dF' },
             { id: 'opposed', label: 'Opposed' },
         ];
 
@@ -276,6 +297,7 @@ export const initUI = (
             '4d6r1',
             '2d6!',
             '1d100',
+            '4dF',
             '1d20 vs 1d20',
         ];
 

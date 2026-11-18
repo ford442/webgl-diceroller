@@ -109,6 +109,11 @@ export const ROLL_SYSTEMS: Record<string, RollSystemConfig> = {
         percentile: true,
         fumbleMin: 96,
     },
+    fate: {
+        id: 'fate',
+        label: 'Fate',
+        // 4dF + skill; ladder bands are table talk, not flags.
+    },
 };
 
 export const DEFAULT_ROLL_SYSTEM = 'dnd5e';
@@ -385,6 +390,16 @@ export function composePercentile(tens: number | null, ones: number | null): num
     if (tens == null || ones == null) return null;
     if (tens === 0 && ones === 0) return 100;
     return tens + ones;
+}
+
+/**
+ * Format a face value for display. Fudge dice read `+ / 0 / −` rather than the
+ * -1/0/+1 they score as; everything else is its number.
+ */
+export function formatFaceValue(type: string, value: number | null | undefined): string {
+    if (value == null || Number.isNaN(value)) return '—';
+    if (type === 'dF') return value > 0 ? '+' : value < 0 ? '−' : '0';
+    return String(value);
 }
 
 /** Format a die's display label for HUD/overlay. */
@@ -744,7 +759,14 @@ export function mergeRoundDice(
 }
 
 export type ExpressionChip =
-    'advantage' | 'disadvantage' | 'explode' | 'compound' | 'reroll1' | 'percentile' | 'clear';
+    | 'advantage'
+    | 'disadvantage'
+    | 'explode'
+    | 'compound'
+    | 'reroll1'
+    | 'percentile'
+    | 'fate'
+    | 'clear';
 
 /**
  * Rewrite helpers for mobile-friendly UI chips (no raw typing required).
@@ -759,6 +781,11 @@ export function applyExpressionChip(
 
     if (chip === 'percentile' || (chip === 'clear' && system?.percentile)) {
         return '1d100';
+    }
+    if (chip === 'fate') {
+        // Keep a trailing skill bonus ("+2") when the expression already has one.
+        const bonus = /([+-]\s*\d+)\s*$/.exec(trimmed.split(/\s+vs\.?\s+/i)[0] ?? '');
+        return `4dF${bonus ? (bonus[1] ?? '').replace(/\s+/g, '') : ''}`;
     }
 
     if (chip === 'advantage') {
@@ -789,6 +816,7 @@ export function defaultExpressionForSystem(systemId: string): string {
     if (system.id === 'pbta') return '2d6';
     if (system.id === 'coc' || system.percentile) return '1d100';
     if (system.id === 'savage') return '1d8!';
+    if (system.id === 'fate') return '4dF';
     return '1d20';
 }
 
