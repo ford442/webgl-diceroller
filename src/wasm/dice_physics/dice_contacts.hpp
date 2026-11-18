@@ -55,6 +55,21 @@ static constexpr float CCD_CONTACT_OFFSET = 0.01f;
 // 5 kg die.
 static constexpr float SLEEP_ENERGY_THRESHOLD = 0.08f;
 static constexpr float SLEEP_DELAY = 0.5f;
+// Rest window: an island also sleeps once every member's pose has stayed
+// within REST_LINEAR_EPS (metres) and REST_QUAT_DOT_MIN (|q·q0|, i.e. about
+// 0.57 degrees) of where it was SLEEP_DELAY seconds ago, whatever its kinetic
+// energy did meanwhile. Energy alone kept a die awake that jittered in place:
+// a contact limit cycle can spike KE above the threshold every few substeps
+// while the die moves a fraction of a millimetre. The window is measured
+// from an anchor pose, not two samples, so a die swinging back through the
+// same pose does not count as resting.
+static constexpr float REST_LINEAR_EPS = 0.002f;
+static constexpr float REST_QUAT_DOT_MIN = 0.9999875f; // cos(0.01 rad / 2)
+// Position pass: the most one point may move its bodies per iteration. A
+// normal resting overlap (< 13 cm) is corrected exactly as before; a deep one
+// (spawned overlap, a contact read through a sliver face) is recovered over
+// several substeps instead of in one jump that gravity turns into a hop.
+static constexpr float MAX_LINEAR_CORRECTION = 0.002f;
 
 // --- Fixed clock ------------------------------------------------------------
 // The engine owns its integration quantum. step(dt) adds dt to an accumulator
@@ -71,7 +86,7 @@ static constexpr int MAX_TICKS_PER_STEP = 8;
 static constexpr double FIXED_DT_EPSILON = 1e-6;
 
 /** Snapshot + solver protocol. Bump when manifolds / impulses change behaviour. */
-static constexpr uint32_t SOLVER_REVISION = 11;
+static constexpr uint32_t SOLVER_REVISION = 12;
 
 enum class ManifoldKind : uint8_t {
     DieDie = 0,

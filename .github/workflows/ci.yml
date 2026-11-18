@@ -172,7 +172,10 @@ jobs:
             # build_solver_test.sh compiles with -Werror and, as a side effect,
             # writes src/wasm/build-native/compile_commands.json — which the
             # clang-tidy step below analyses against. Keep that order.
-            - run: FUZZ_SEEDS=2000 npm run test:solver
+            # TAVERN_SEEDS: the tavern-world settle test at its 2000-seed cap
+            # (threaded; prints the slowest seeds). The default 200 is what
+            # the other legs run.
+            - run: FUZZ_SEEDS=2000 TAVERN_SEEDS=2000 npm run test:solver
             - name: Install clang-tidy
               run: |
                   if ! command -v clang-tidy >/dev/null 2>&1; then
@@ -379,6 +382,7 @@ jobs:
                     - test:wasm-gameplay-loop
                     - test:share-roll-replay
                     - test:roll-timeout
+                    - test:no-worker-throttled
                     # A throw that names its dice: R skips a held die, and a
                     # partial-throw share link replays the same faces twice.
                     - test:partial-throw

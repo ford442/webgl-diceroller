@@ -408,6 +408,7 @@ private:
     // updateIslandSleep reuses it rather than partitioning again.
     std::vector<int> islandRoot_;
     std::vector<float> islandKe_;
+    std::vector<uint8_t> islandRest_;
     // Islands as CSR over solveOrder_: island k solves
     // islandItems_[islandStart_[k] .. islandStart_[k + 1]), in solve order.
     // islandOfRoot_ numbers a root's island by first appearance.

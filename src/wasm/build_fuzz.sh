@@ -31,8 +31,13 @@ fi
 
 # Same language level and FP contract as the shipped engine
 # (emcc_flags.inc.sh / build_solver_test.sh), so a finding reproduces there.
+# float-cast-overflow / float-divide-by-zero are not in clang's `undefined`
+# group: without them a NaN or infinite float cast to an integer (the #362
+# rebuildGrid crash) or a division by zero shows up only as a `-nan` far
+# downstream. With -fno-sanitize-recover=all each is a hard error at the line.
 CXXFLAGS=(-std=c++20 -O1 -g -fno-omit-frame-pointer -ffp-contract=off
-    -fsanitize=address,undefined -fno-sanitize-recover=all -I"${SCRIPT_DIR}")
+    -fsanitize=address,undefined,float-cast-overflow,float-divide-by-zero
+    -fno-sanitize-recover=all -I"${SCRIPT_DIR}")
 
 ENGINE_SOURCES=()
 while IFS= read -r rel; do

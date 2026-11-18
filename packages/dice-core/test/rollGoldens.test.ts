@@ -55,6 +55,7 @@ describeWasm('golden rolls (Node)', () => {
         ).toBe(golden.solverRevision);
     });
 
+    // 50 full headless rolls: ~5 s on a loaded box, past vitest's default.
     it(`reproduces all ${GOLDEN_CASES.length} vectors`, async () => {
         const mismatches: string[] = [];
         for (const want of golden.vectors) {
@@ -63,5 +64,5 @@ describeWasm('golden rolls (Node)', () => {
             if (diff) mismatches.push(diff);
         }
         expect(mismatches).toEqual([]);
-    });
+    }, 60_000);
 });

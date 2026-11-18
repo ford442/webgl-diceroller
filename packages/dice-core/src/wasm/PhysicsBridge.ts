@@ -101,6 +101,25 @@ export const setContainerPlanes = (planes: Float32Array | number[]): void =>
     active.setContainerPlanes(planes);
 
 export const isUsingWorkerPhysics = (): boolean => active === workerBridge;
+
+/**
+ * Step the in-process engine for this frame (wall-clock driven, budgeted —
+ * see SimClock.catchUp). No-op on the worker, which paces itself.
+ */
+export const stepMainThreadPhysics = (nowMs?: number): { ticks: number; behind: boolean } =>
+    active === mainBridge ? mainBridge.stepMainThreadPhysics(nowMs) : { ticks: 0, behind: false };
+
+/** Forget the wall time since the last main-thread step (table parked or not ready). */
+export const skipMainThreadPhysics = (nowMs?: number): void => {
+    if (active === mainBridge) mainBridge.skipMainThreadPhysics(nowMs);
+};
+
+/**
+ * The simulation is running slower than wall time: the main-thread bridge
+ * could not pay a frame's owed ticks within its budget. Always false on the
+ * worker, whose timer catches up on its own.
+ */
+export const isPhysicsBehind = (): boolean => active === mainBridge && mainBridge.isPhysicsBehind();
 export const isUsingSharedArrayBuffer = (): boolean =>
     active === workerBridge && workerBridge.isUsingSharedArrayBuffer();
 

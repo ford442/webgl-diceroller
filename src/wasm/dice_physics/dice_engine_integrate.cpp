@@ -13,6 +13,7 @@ namespace dice_physics {
 void DicePhysicsEngine::wake(RigidBody& b) {
     b.sleeping = false;
     b.sleepTimer = 0.0f;
+    b.restTimer = 0.0f;
 }
 
 void DicePhysicsEngine::integrate(RigidBody& b, float dt) {

@@ -283,6 +283,14 @@ void DicePhysicsEngine::addSatContacts(
         }
         return any ? best : fallback;
     };
+    // Distance from p to the nearest of a hull's planes (> 0 inside): its
+    // true penetration depth. Moving it out along any one direction takes at
+    // least this far, so it bounds the along-normal exit below.
+    auto depthInside = [](const Vec3& p, const std::vector<HullPlane>& planes) {
+        float best = 1e20f;
+        for (const auto& pl : planes) best = std::min(best, pl.d - Vec3::dot(pl.n, p));
+        return best;
+    };
     float maxA = -1e20f, minB = 1e20f;
     for (const auto& v : wa) maxA = std::max(maxA, Vec3::dot(v, normal));
     for (const auto& v : wb) minB = std::min(minB, Vec3::dot(v, normal));
@@ -299,13 +307,25 @@ void DicePhysicsEngine::addSatContacts(
     for (size_t i = 0; i < wa.size() && nC < 128; ++i) {
         // An A vertex leaves B by moving back along -n.
         if (minB - Vec3::dot(wa[i], normal) >= spec || !inside(wa[i], planesB)) continue;
-        const float sep = -exitDistance(wa[i], planesB, backward, Vec3::dot(wa[i], normal) - minB);
+        // Three upper bounds on how deep the vertex is; take the least. The
+        // slab (its overlap with B along n) and the exit through B along -n
+        // can each overstate it: the exit runs through a face nearly parallel
+        // to n (a 2 cm map sheet read 1.17 m), and for a die tipping over
+        // the velvet rim a vertex just under the top face reads the rim's
+        // full height, while its nearest way out is the side face a few mm
+        // away. Pushed out along n by either, the die hopped back onto the
+        // velvet every half second and never slept (#364).
+        const float slab = Vec3::dot(wa[i], normal) - minB;
+        const float sep = -std::min({exitDistance(wa[i], planesB, backward, slab), slab,
+                                     depthInside(wa[i], planesB)});
         if (sep < spec) cands[nC++] = {wa[i], sep, axisBits | static_cast<uint32_t>(i)};
     }
     for (size_t i = 0; i < wb.size() && nC < 128; ++i) {
         // A B vertex leaves A by moving along +n.
         if (Vec3::dot(wb[i], normal) - maxA >= spec || !inside(wb[i], planesA)) continue;
-        const float sep = -exitDistance(wb[i], planesA, normal, maxA - Vec3::dot(wb[i], normal));
+        const float slab = maxA - Vec3::dot(wb[i], normal);
+        const float sep = -std::min({exitDistance(wb[i], planesA, normal, slab), slab,
+                                     depthInside(wb[i], planesA)});
         if (sep < spec) cands[nC++] = {wb[i], sep, axisBits | 0x8000u | static_cast<uint32_t>(i)};
     }
     if (nC == 0) {
@@ -1208,7 +1228,8 @@ void DicePhysicsEngine::solvePositionConstraints(ManifoldSpan manifolds) {
                 if (p.separation >= -CONTACT_SLOP) continue;
                 const float invSum = va.invMass + vb.invMass;
                 if (invSum < 1e-6f) continue;
-                float corrMag = (-p.separation - CONTACT_SLOP) * 0.08f / invSum;
+                const float corrMag =
+                    std::min((-p.separation - CONTACT_SLOP) * 0.08f, MAX_LINEAR_CORRECTION) / invSum;
                 Vec3 corr = m.normal * corrMag;
                 if (!va.kinematic) *va.position -= corr * va.invMass;
                 if (!vb.kinematic) *vb.position += corr * vb.invMass;
@@ -1279,47 +1300,67 @@ void DicePhysicsEngine::updateIslandSleep(float dt) {
     const int dynN = static_cast<int>(dynamics_.size());
     if (dieN + dynN <= 0) return;
     // The partition the solve just used: nothing between buildIslands() and
-    // here adds or drops a manifold. Energies are read after the solve.
+    // here adds or drops a manifold. Energies and poses are read after the
+    // solve.
     std::vector<int>& roots = islandRoot_;
     std::vector<float>& islandKe = islandKe_;
     if (roots.size() != static_cast<size_t>(dieN + dynN)) partitionIslands(roots);
     islandEnergies(roots, islandKe);
     auto find = [&](int node) { return roots[static_cast<size_t>(node)]; };
-    auto dieNode = [&](int idx) { return idx; };
-    auto dynNode = [&](int idx) { return dieN + idx; };
 
-    for (int i = 0; i < dieN; ++i) {
-        auto& b = bodies_[static_cast<size_t>(i)];
-        if (b.kinematic) continue;
-        const int root = find(dieNode(i));
-        if (islandKe[static_cast<size_t>(root)] >= SLEEP_ENERGY_THRESHOLD) {
+    // Rest window, per body; an island rests only if all its members do.
+    std::vector<uint8_t>& islandRest = islandRest_;
+    islandRest.assign(roots.size(), 1);
+    auto trackRest = [&](auto& b, int node) {
+        if (b.kinematic) return;
+        const float qdot = std::abs(b.rotation.x * b.restRotation.x + b.rotation.y * b.restRotation.y +
+                                    b.rotation.z * b.restRotation.z + b.rotation.w * b.restRotation.w);
+        if (b.sleeping) {
+            // A sleeping member does not move; it neither holds its island
+            // awake nor needs a window of its own.
+            return;
+        }
+        // Written so a NaN pose (a corrupt snapshot) restarts the window
+        // rather than counting as rest.
+        if (!((b.position - b.restPosition).lengthSq() <= REST_LINEAR_EPS * REST_LINEAR_EPS) ||
+            !(qdot >= REST_QUAT_DOT_MIN)) {
+            b.restPosition = b.position;
+            b.restRotation = b.rotation;
+            b.restTimer = 0.0f;
+        } else {
+            b.restTimer += dt;
+        }
+        if (b.restTimer < SLEEP_DELAY) islandRest[static_cast<size_t>(find(node))] = 0;
+    };
+    for (int i = 0; i < dieN; ++i) trackRest(bodies_[static_cast<size_t>(i)], i);
+    for (int i = 0; i < dynN; ++i) trackRest(dynamics_[static_cast<size_t>(i)], dieN + i);
+
+    auto update = [&](auto& b, int node) {
+        if (b.kinematic) return;
+        const auto root = static_cast<size_t>(find(node));
+        if (islandRest[root] && !b.sleeping) {
+            b.sleeping = true;
+            b.sleepTimer = SLEEP_DELAY;
+            b.restTimer = 0.0f;
+            b.velocity = {};
+            b.angularVelocity = {};
+            return;
+        }
+        if (islandKe[root] >= SLEEP_ENERGY_THRESHOLD) {
             if (b.sleeping) wake(b);
             else b.sleepTimer = 0.0f;
         } else {
             b.sleepTimer += dt;
             if (b.sleepTimer >= SLEEP_DELAY) {
                 b.sleeping = true;
+                b.restTimer = 0.0f;
                 b.velocity = {};
                 b.angularVelocity = {};
             }
         }
-    }
-    for (int i = 0; i < dynN; ++i) {
-        auto& b = dynamics_[static_cast<size_t>(i)];
-        if (b.kinematic) continue;
-        const int root = find(dynNode(i));
-        if (islandKe[static_cast<size_t>(root)] >= SLEEP_ENERGY_THRESHOLD) {
-            if (b.sleeping) wake(b);
-            else b.sleepTimer = 0.0f;
-        } else {
-            b.sleepTimer += dt;
-            if (b.sleepTimer >= SLEEP_DELAY) {
-                b.sleeping = true;
-                b.velocity = {};
-                b.angularVelocity = {};
-            }
-        }
-    }
+    };
+    for (int i = 0; i < dieN; ++i) update(bodies_[static_cast<size_t>(i)], i);
+    for (int i = 0; i < dynN; ++i) update(dynamics_[static_cast<size_t>(i)], dieN + i);
 }
 
 void DicePhysicsEngine::solveContacts(float dt) {

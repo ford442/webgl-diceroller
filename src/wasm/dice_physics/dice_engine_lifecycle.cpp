@@ -132,6 +132,14 @@ void DicePhysicsEngine::setDieHull(int id, const std::vector<float>& flatVerts) 
         }
         b.hull.build(verts);
         b.useHull = true;
+        // The bounding sphere every pair test culls with must contain the
+        // hull. radiusForSides() is a hull-less die's size (0.8-1.0), but the
+        // shipped hulls reach 1.07-1.88 from the body origin, so with it a d4
+        // resting on a d6 fell outside the d6's sphere test on most substeps
+        // and sank 15 cm into it before the pair was seen.
+        float reach = 0.0f;
+        for (const auto& v : b.hull.verts) reach = std::max(reach, v.length());
+        b.radius = std::max(radiusForSides(b.sides), reach);
         b.computeInertiaFromHull();
         b.refreshComAxis();
         break;
@@ -189,6 +197,7 @@ void DicePhysicsEngine::setDieKinematic(int id, bool kinematic) {
             b.angularVelocity = {};
             b.sleeping = false;
             b.sleepTimer = 0.0f;
+            b.restTimer = 0.0f;
         } else {
             wake(b);
         }

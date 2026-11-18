@@ -701,8 +701,8 @@ TEST_CASE("Golden traces: seed and parity hashes are stable") {
     // Hashes below are SOLVER_REVISION-pinned; regenerate with
     // `solver_tests --dump-golden` (see scripts/compare-solver-golden.mjs and
     // tests/fixtures/solver-golden.json) whenever SOLVER_REVISION bumps.
-    CHECK(p1.hashSerializedState() == 0xa1d45868a58d37daULL);
-    CHECK(a.hashSerializedState() == 0x18e5bb310b16c34bULL);
+    CHECK(p1.hashSerializedState() == 0x23bb5c02d0827fbdULL);
+    CHECK(a.hashSerializedState() == 0xa7a55727ecb25b1cULL);
 }
 
 TEST_CASE("Determinism: same seed yields identical serialize output") {
@@ -1467,49 +1467,152 @@ std::string describeAwake(DicePhysicsEngine& engine) {
 TEST_CASE("Tavern world: every seeded throw sleeps within 12 s of simulated time") {
     const auto& world = tavernWorld().world;
     REQUIRE(world["version"].i() == 1);
+    // Parse the fixtures once, here: the workers below only read them.
     const int sidesCycle[] = {20, 6, 4, 8, 10, 12};
+    std::vector<float> hulls[21];
+    for (const int sides : sidesCycle) hulls[sides] = shippedHull(sides);
     // TAVERN_SEEDS overrides the default 200 (capped at 2000). Separate from
     // FUZZ_SEEDS, which CI raises to 2000 for the cheap fuzz loops.
     const char* env = std::getenv("TAVERN_SEEDS");
     int seeds = env ? std::atoi(env) : 200;
     if (seeds < 1) seeds = 200;
     seeds = std::min(seeds, 2000);
+
+    // Each seed is its own engine, so the seeds run on all cores; doctest
+    // assertions stay on this thread.
+    struct Outcome {
+        uint64_t seed = 0;
+        int count = 0;
+        int frame = -1; // -1: awake after 12 s
+        bool finite = true;
+        std::string awake;
+    };
+    std::vector<Outcome> outcomes(static_cast<size_t>(seeds));
+    std::atomic<int> next{0};
+    auto worker = [&] {
+        for (int k = next++; k < seeds; k = next++) {
+            Outcome& out = outcomes[static_cast<size_t>(k)];
+            out.seed = 0x5EED0000ULL + static_cast<uint64_t>(k) * 7919ULL;
+            DicePhysicsEngine engine;
+            applyTavernWorld(engine, world);
+            out.count = 1 + k % 6;
+            std::vector<int> ids;
+            for (int n = 0; n < out.count; ++n) {
+                const int sides = sidesCycle[(k + n) % 6];
+                const int id = engine.addDie(sides, 0.0f, 8.0f, 0.0f);
+                engine.setDieHull(id, hulls[sides]);
+                ids.push_back(id);
+            }
+            seededThrow(engine, out.seed, ids);
+            const int maxFrames = 60 * 12;
+            for (int frame = 0; frame < maxFrames; ++frame) {
+                engine.step(1.0f / 60.0f);
+                if (engine.areAllSettled()) {
+                    out.frame = frame;
+                    break;
+                }
+            }
+            out.finite = engine.allBodyStatesFinite();
+            if (out.frame < 0) out.awake = describeAwake(engine);
+        }
+    };
+    const unsigned threads = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
+    std::vector<std::thread> pool;
+    for (unsigned t = 1; t < threads; ++t) pool.emplace_back(worker);
+    worker();
+    for (auto& t : pool) t.join();
+
     int failures = 0;
-    std::vector<int> settleFrames;
-    for (int k = 0; k < seeds; ++k) {
-        const uint64_t seed = 0x5EED0000ULL + static_cast<uint64_t>(k) * 7919ULL;
-        DicePhysicsEngine engine;
-        applyTavernWorld(engine, world);
-        const int count = 1 + k % 6;
-        std::vector<int> ids;
-        for (int n = 0; n < count; ++n) {
-            const int sides = sidesCycle[(k + n) % 6];
-            const int id = engine.addDie(sides, 0.0f, 8.0f, 0.0f);
-            engine.setDieHull(id, shippedHull(sides));
-            ids.push_back(id);
-        }
-        seededThrow(engine, seed, ids);
-        int frame = 0;
-        const int maxFrames = 60 * 12;
-        for (; frame < maxFrames; ++frame) {
-            engine.step(1.0f / 60.0f);
-            if (engine.areAllSettled()) break;
-        }
-        REQUIRE(engine.allBodyStatesFinite());
-        if (frame >= maxFrames) {
+    std::vector<const Outcome*> settled;
+    for (const auto& out : outcomes) {
+        REQUIRE(out.finite);
+        if (out.frame < 0) {
             ++failures;
-            MESSAGE("seed " << seed << " (" << count << " dice) awake after 12 s:"
-                            << describeAwake(engine));
+            MESSAGE("seed " << out.seed << " (" << out.count << " dice) awake after 12 s:" << out.awake);
         } else {
-            settleFrames.push_back(frame);
+            settled.push_back(&out);
         }
     }
-    if (!settleFrames.empty()) {
-        std::sort(settleFrames.begin(), settleFrames.end());
-        MESSAGE("tavern world: " << settleFrames.size() << "/" << seeds << " settled; median "
-                                 << settleFrames[settleFrames.size() / 2] / 60.0f << " s, max "
-                                 << settleFrames.back() / 60.0f << " s");
+    if (!settled.empty()) {
+        std::sort(settled.begin(), settled.end(),
+                  [](const Outcome* a, const Outcome* b) { return a->frame < b->frame; });
+        std::ostringstream worst;
+        for (size_t i = settled.size(); i > 0 && i + 5 > settled.size(); --i) {
+            worst << " " << settled[i - 1]->seed << " (" << settled[i - 1]->count << " dice, "
+                  << (settled[i - 1]->frame + 1) / 60.0f << " s)";
+        }
+        MESSAGE("tavern world: " << settled.size() << "/" << seeds << " settled; median "
+                                 << (settled[settled.size() / 2]->frame + 1) / 60.0f << " s, max "
+                                 << (settled.back()->frame + 1) / 60.0f << " s; slowest:"
+                                 << worst.str());
     }
+    CHECK(failures == 0);
+}
+
+namespace {
+
+std::vector<float> shippedFaceTable(int sides) {
+    const auto& entry = tavernWorld().hulls["d" + std::to_string(sides)];
+    std::vector<float> packed;
+    for (const auto& f : entry["faces"].array) {
+        const auto n = f["normal"].floats();
+        packed.insert(packed.end(), {n[0], n[1], n[2], f["value"].f()});
+    }
+    return packed;
+}
+
+} // namespace
+
+TEST_CASE("Resting contact: every shipped die dropped 1 mm onto a vertex sleeps within 4 s") {
+    // A die let go just above the velvet with one vertex lowest has to tip
+    // onto a face and stop. A contact limit cycle (#364) shows up here as a
+    // die that keeps hopping on the vertex or the face it lands on. Tipping
+    // off the vertex and rolling onto a face takes real time: the worst of
+    // these 48 drops sleeps at ~2.9 s (SOLVER_REVISION 12), the median ~1.6 s.
+    const int sidesList[] = {4, 6, 8, 10, 12, 20};
+    // Generic orientations: no face or edge parallel to the table.
+    const float eulers[][3] = {
+        {0.37f, 0.11f, 0.83f}, {1.21f, 2.05f, 0.29f}, {2.71f, 0.43f, 1.57f},
+        {0.93f, 1.77f, 2.49f}, {1.63f, 0.31f, 2.97f}, {2.19f, 2.83f, 0.61f},
+        {0.53f, 2.41f, 1.13f}, {2.97f, 1.37f, 0.17f},
+    };
+    const float velvetTop = 1.1f;
+    float worst = 0.0f;
+    int failures = 0;
+    for (const int sides : sidesList) {
+        const std::vector<float> flat = shippedHull(sides);
+        for (const auto& e : eulers) {
+            DicePhysicsEngine engine;
+            engine.init(-15.0f, -2.75f, 18.0f, 18.0f);
+            addTavernTableStatics(engine);
+            const int id = engine.addDie(sides, 0.0f, 5.0f, 0.0f);
+            engine.setDieHull(id, flat);
+            engine.setDieFaceTable(id, shippedFaceTable(sides));
+            const Quat q = eulerXYZ(e[0], e[1], e[2]);
+            float lowest = 1e9f;
+            for (size_t i = 0; i + 2 < flat.size(); i += 3) {
+                lowest = std::min(lowest, q.rotate(Vec3{flat[i], flat[i + 1], flat[i + 2]}).y);
+            }
+            engine.setDieTransform(id, 0.3f, velvetTop + 0.001f - lowest, -0.2f, q.x, q.y, q.z, q.w);
+            int frame = 0;
+            const int maxFrames = 60 * 4;
+            for (; frame < maxFrames; ++frame) {
+                engine.step(1.0f / 60.0f);
+                if (engine.areAllSettled()) break;
+            }
+            REQUIRE(engine.allBodyStatesFinite());
+            if (frame >= maxFrames) {
+                ++failures;
+                MESSAGE("d" << sides << " euler (" << e[0] << ", " << e[1] << ", " << e[2]
+                            << ") awake after 4 s:" << describeAwake(engine));
+                continue;
+            }
+            worst = std::max(worst, static_cast<float>(frame + 1) / 60.0f);
+            CHECK_MESSAGE(engine.getDieFaceValue(id) > 0,
+                          "d" << sides << " slept without a face up (cocked)");
+        }
+    }
+    MESSAGE("vertex drop: worst sleep " << worst << " s");
     CHECK(failures == 0);
 }
 

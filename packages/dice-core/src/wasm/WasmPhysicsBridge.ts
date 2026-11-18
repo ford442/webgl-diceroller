@@ -11,6 +11,7 @@ import { applyFaceTableForDie } from './faceTableLoader.js';
 import { loadHullTable } from './hullTable.js';
 import type { HullTable } from './hullTypes.js';
 import { parseMassBiasRatio, parsePhysicsFlags } from './physicsFlags.js';
+import { SimClock, type CatchUpResult } from './SimClock.js';
 import { toRngSeedBigInt } from './seedUtil.js';
 import type {
     CollisionEvent,
@@ -312,6 +313,40 @@ export const getWasmEngine = (): PhysicsEngine => {
     }
     return _session.engine;
 };
+
+// --- main-thread stepping (?no-worker) --------------------------------------
+
+let _clock: SimClock | null = null;
+let _clockEngine: PhysicsEngine | null = null;
+
+function mainClock(): SimClock | null {
+    if (!_session?.available) return null;
+    if (_clockEngine !== _session.engine) {
+        _clockEngine = _session.engine;
+        _clock = new SimClock(_session.engine);
+    }
+    return _clock;
+}
+
+/**
+ * Advance the in-process engine by the wall time since the previous call,
+ * within a per-frame wall budget (SimClock.catchUp). A frame too slow to pay
+ * it all carries the rest to the next frame and reports `behind`, so a roll on
+ * a slow main thread runs slower rather than skipping simulated time.
+ */
+export const stepMainThreadPhysics = (nowMs?: number): CatchUpResult => {
+    const clock = mainClock();
+    if (!clock) return { ticks: 0, behind: false, backlogSeconds: 0 };
+    return clock.catchUp(nowMs);
+};
+
+/** Drop the wall time since the last step without simulating it (table parked). */
+export const skipMainThreadPhysics = (nowMs?: number): void => {
+    mainClock()?.skip(nowMs);
+};
+
+/** The last main-thread step left simulated time unpaid. */
+export const isPhysicsBehind = (): boolean => _clock?.behind ?? false;
 
 export const loadHullForDie = (wasmId: number, sides: number): void => {
     _session?.loadHullForDie(wasmId, sides);
