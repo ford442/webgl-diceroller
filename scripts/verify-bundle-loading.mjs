@@ -5,6 +5,11 @@
  * `?no-wasm` now forces WasmPhysicsBridge's no-op stub instead of a
  * different engine, so this also checks that path shows the honest
  * failure banner and spawns no dice, rather than fetching a fallback chunk.
+ *
+ * It also counts network requests for `dice_physics.wasm`: the artifact must be
+ * fetched exactly once per page load, by whichever thread instantiates it. A
+ * document `<link rel=preload>` used to fetch it a second time (a Worker cannot
+ * consume a document preload) — see the note in vite.config.js (#365).
  */
 import { chromium } from 'playwright';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -18,9 +23,11 @@ function scriptRequests(urls, pattern) {
 
 async function collectScripts(page, path) {
     const urls = [];
+    const wasmUrls = [];
     const consoleMessages = [];
     page.on('request', (req) => {
         if (req.resourceType() === 'script') urls.push(req.url());
+        if (/\/dice_physics\.wasm(\?|$)/.test(req.url())) wasmUrls.push(req.url());
     });
     page.on('console', (msg) => consoleMessages.push(msg.text()));
     await page.goto(`${BASE}${path}`, { waitUntil: 'domcontentloaded', timeout: 120000 });
@@ -34,7 +41,7 @@ async function collectScripts(page, path) {
         { timeout: 240000 }
     );
     await sleep(3000);
-    return { urls, consoleMessages };
+    return { urls, wasmUrls, consoleMessages };
 }
 
 const preview = await startPreview({ port: PORT });
@@ -105,6 +112,35 @@ try {
             console.error('FAIL: ?no-wasm did not log the physics-unavailable warning');
         } else {
             console.log('ok: ?no-wasm logged the physics-unavailable warning');
+        }
+        await page.close();
+    }
+
+    // The physics artifact is requested once per load: in the worker (default) and
+    // on the main thread (?no-worker). Needs the build's WASM; a missing artifact
+    // is a skip locally and a failure under $CI (the job downloads it).
+    for (const [label, query] of [
+        ['worker backend', '/?webgl&no-post&fair-dice&test'],
+        ['?no-worker', '/?webgl&no-post&fair-dice&test&no-worker'],
+    ]) {
+        const page = await browser.newPage();
+        const { wasmUrls } = await collectScripts(page, query);
+        const wasmAvailable = await page.evaluate(() => window.__app?.isWasmAvailable?.() === true);
+        if (!wasmAvailable) {
+            if (process.env.CI) {
+                failed += 1;
+                console.error(`FAIL: ${label}: WASM physics did not load (CI must have it)`);
+            } else {
+                console.log(`skip: ${label}: no WASM build here (npm run build:wasm)`);
+            }
+        } else if (wasmUrls.length !== 1) {
+            failed += 1;
+            console.error(
+                `FAIL: ${label} requested dice_physics.wasm ${wasmUrls.length} times (want 1):`,
+                wasmUrls
+            );
+        } else {
+            console.log(`ok: ${label} requested dice_physics.wasm exactly once`);
         }
         await page.close();
     }

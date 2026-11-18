@@ -25,10 +25,13 @@ export function buildTierLoadOptions(app, deps) {
         getDiceTrayController,
         getDiceJailController,
         getShadowController,
+        getComposer,
     } = deps;
 
     return {
         app,
+        // The post chain (if any): shader precompile binds its render target.
+        getComposer,
         audio: collisionAudio,
         qualityProfile,
         onRollAll: () => {

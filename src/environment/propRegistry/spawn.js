@@ -13,6 +13,7 @@ import { INTERACTIVE_NAMES } from './propIndex.js';
 import { selectDecorPoolEntries } from './randomPool.js';
 import { registerDynamicProp, unregisterDynamicProp } from '../DynamicPropState.js';
 import { withPropScope } from '../propRng.js';
+import { getBootTrace } from '../../core/BootTrace.js';
 
 // Test/debug hook: `?forceProps=Flute,PlayingCards` guarantees those randomPool
 // props spawn regardless of seed, so e2e tests can target their interactions
@@ -61,13 +62,17 @@ export async function spawnTierWithRandomPool(entries, maxRandom, context, optio
     // never changes what this one looks like or where its colliders sit.
     const slotOf = (entry) => Math.max(0, entries.indexOf(entry));
 
+    // `context.spawnBudget` (set by LoadingTiers) hands the thread back to a frame
+    // between props once the frame's slice is spent; absent, props run back to back.
     for (const entry of always) {
         await spawnProp(entry, context, { slot: slotOf(entry) });
+        await context.spawnBudget?.checkpoint();
     }
 
     for (const entry of selected) {
         const record = await spawnProp(entry, context, { slot: slotOf(entry) });
         records.push(record);
+        await context.spawnBudget?.checkpoint();
     }
 
     return records;
@@ -78,7 +83,17 @@ export async function spawnTierWithRandomPool(entries, maxRandom, context, optio
  * @param {object} context spawn context (scene, physicsWorld, layoutConfig, …)
  * @param {{ slot?: number }} [options] `slot`: the entry's index in its tier list
  */
-export async function spawnProp(entry, context, options = {}) {
+export function spawnProp(entry, context, options = {}) {
+    // One boot-trace span per prop (wall time: includes anything the factory awaits).
+    return getBootTrace().spanAsync(
+        entry.name || entry.factoryName || 'prop',
+        'prop',
+        () => spawnPropUntraced(entry, context, options),
+        { slot: options.slot ?? entry.slot ?? 0 }
+    );
+}
+
+async function spawnPropUntraced(entry, context, options) {
     const factoryName = entry.factoryName || entry.name;
     let result;
     let updateHandle = null;

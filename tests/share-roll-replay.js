@@ -1,10 +1,11 @@
 /**
- * Playwright smoke test: two page loads with the same shareable-roll URL
- * must produce identical readAllDiceValues() output after settlement.
+ * Playwright smoke test: two visits (the second a re-navigation of the same page)
+ * to the same shareable-roll URL must produce identical readAllDiceValues() output
+ * after settlement.
  *
  * Prereq: npx vite build && npm run preview
  */
-import { launchPage, waitForRollFinished } from './helpers/browser.js';
+import { launchPage, leaveAndWaitForGpuQuiet, waitForRollFinished } from './helpers/browser.js';
 import { BASE } from './helpers/server.js';
 
 // layout-seed/density/theme pin the clutter colliders the way a real share
@@ -40,41 +41,39 @@ async function captureReplayValues(page) {
     });
 }
 
-// One cold load in its own browser. Each Playwright launch gets a fresh
-// profile, so run B is a second *cold* visit, like a friend opening the link.
-// Re-navigating the same page is deliberately avoided: a warm-cache second
-// visit on SwiftShader blocks the main thread for 40-140 s before `load` (or
-// even `commit`) fires and burns the whole timeout — tracked in #365.
-async function loadAndCapture(url, label) {
-    const { browser, page, errors } = await launchPage();
-    page.setDefaultTimeout(LOAD_TIMEOUT_MS);
-    try {
-        await page.goto(url, { waitUntil: 'load', timeout: LOAD_TIMEOUT_MS });
-        const settle = await waitForReplaySettled(page);
-        if (settle.skipped) {
-            console.error(`FAIL: ${settle.reason}`);
-            process.exit(1);
-        }
-        const values = await captureReplayValues(page);
-        console.log(`Run ${label}:`, JSON.stringify(values));
-        return { values, errors };
-    } finally {
-        await browser.close();
+// One visit on the given page. Run B re-navigates the *same* page, the reload /
+// revisit a player does, with `waitUntil: 'load'`. On a software rasterizer the
+// previous document's WebGL context is torn down by the GPU process for minutes
+// and the next document queues behind it (#365), so run B first leaves for
+// about:blank and waits for the GPU to go quiet (`leaveAndWaitForGpuQuiet`, which
+// says how long it waited). What is under test is that a revisit still loads and
+// replays the same roll, not Chromium's cleanup.
+async function visit(page, url, label) {
+    await page.goto(url, { waitUntil: 'load', timeout: LOAD_TIMEOUT_MS });
+    const settle = await waitForReplaySettled(page);
+    if (settle.skipped) {
+        console.error(`FAIL: ${settle.reason}`);
+        process.exit(1);
     }
+    const values = await captureReplayValues(page);
+    console.log(`Run ${label}:`, JSON.stringify(values));
+    return values;
 }
 
 (async () => {
+    const { browser, page, errors } = await launchPage();
+    page.setDefaultTimeout(LOAD_TIMEOUT_MS);
     const url = `${BASE}/${REPLAY_QUERY}`;
 
     try {
         console.log(`Opening replay URL: ${url}`);
 
-        const { values: runA, errors: errorsA } = await loadAndCapture(url, 'A');
-        const { values: runB, errors: errorsB } = await loadAndCapture(url, 'B');
+        const runA = await visit(page, url, 'A');
+        const quietMs = await leaveAndWaitForGpuQuiet(page);
+        console.log(`GPU quiet after ${(quietMs / 1000).toFixed(1)} s on about:blank`);
+        const runB = await visit(page, url, 'B');
 
-        const fatalErrors = [...errorsA, ...errorsB].filter(
-            (message) => !isBenignBrowserError(message)
-        );
+        const fatalErrors = errors.filter((message) => !isBenignBrowserError(message));
         if (fatalErrors.length) {
             console.error('Browser errors:', fatalErrors);
             process.exit(1);
@@ -96,5 +95,7 @@ async function loadAndCapture(url, label) {
     } catch (err) {
         console.error('FAILURE:', err.message);
         process.exit(1);
+    } finally {
+        await browser.close();
     }
 })();

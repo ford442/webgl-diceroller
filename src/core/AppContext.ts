@@ -55,6 +55,7 @@ export function createAppContext(options: CreateAppContextOptions = {}): AppCont
         isTouchPrimaryDevice: false,
         stats: null,
         tierRenderStats: null,
+        bootTrace: null,
         fairnessMonitor: null,
         rollHistory: null,
         rollStats: null,

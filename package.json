@@ -20,6 +20,7 @@
         "check:cycles": "madge --circular --extensions js,ts src/",
         "check:dice-core": "node scripts/check-dice-core-isolation.mjs",
         "verify:bundle-loading": "node scripts/verify-bundle-loading.mjs",
+        "verify:boot-budget": "node scripts/verify-boot-budget.mjs",
         "audit:prop-colliders": "node scripts/prop-collider-audit.mjs",
         "verify:pwa-isolation": "node scripts/verify-pwa-isolation.mjs",
         "verify:production-isolation": "node scripts/verify-production-isolation.mjs",

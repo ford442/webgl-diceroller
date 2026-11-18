@@ -109,22 +109,23 @@ Under `?test`, `?debug`, or `?debug-perf`, [`AppTestHooks.js`](../src/core/AppTe
 
 Minimum `__app` surface:
 
-| Field / method                                                                      | Notes                                        |
-| ----------------------------------------------------------------------------------- | -------------------------------------------- |
-| `ready`                                                                             | Scene fully loaded                           |
-| `scene`, `camera`, `renderer`, `THREE`                                              | Three.js handles                             |
-| `physicsWorld`, `physics.getWasmEngine`, `physics.isWasmAvailable`                  | Physics                                      |
-| `rendererType`, `usingWebGPU`, `usingWebGL`, `rendererFallbackReason`, `postConfig` | Renderer                                     |
-| `qualityProfile`, `touchInputEnabled`, `isTouchPrimaryDevice`                       | Device / quality                             |
-| `stats`                                                                             | Scheduler timings (was `__renderStats`)      |
-| `interactables`                                                                     | Named prop hooks                             |
-| `replayRoll`, `areDiceSettled`, `readAllDiceValues`                                 | Dice / replay                                |
-| `getRollState`, `physics.getSleepDiagnostics`, `physics.forceNoSettle`              | Roll lifecycle / "why is it awake?" (#341)   |
-| `physics.exportWorld`, `physics.getDieLog` (`?test` only)                           | Recorded collider world / die add-remove log |
-| `physics.worldHash()`                                                               | Hash of the recorded collider world (#369)   |
-| `events`                                                                            | Subscribe to `AppEvent` names                |
-| `game`                                                                              | Table game (Farkle) controls; null w/o WASM  |
-| `theatre`, `seekRoll(tick)`                                                         | Roll theatre: seek / play / live (see above) |
+| Field / method                                                                      | Notes                                                      |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `ready`                                                                             | Scene fully loaded                                         |
+| `scene`, `camera`, `renderer`, `THREE`                                              | Three.js handles                                           |
+| `physicsWorld`, `physics.getWasmEngine`, `physics.isWasmAvailable`                  | Physics                                                    |
+| `rendererType`, `usingWebGPU`, `usingWebGL`, `rendererFallbackReason`, `postConfig` | Renderer                                                   |
+| `qualityProfile`, `touchInputEnabled`, `isTouchPrimaryDevice`                       | Device / quality                                           |
+| `stats`                                                                             | Scheduler timings (was `__renderStats`)                    |
+| `interactables`                                                                     | Named prop hooks                                           |
+| `replayRoll`, `areDiceSettled`, `readAllDiceValues`                                 | Dice / replay                                              |
+| `getRollState`, `physics.getSleepDiagnostics`, `physics.forceNoSettle`              | Roll lifecycle / "why is it awake?" (#341)                 |
+| `physics.exportWorld`, `physics.getDieLog` (`?test` only)                           | Recorded collider world / die add-remove log               |
+| `physics.worldHash()`                                                               | Hash of the recorded collider world (#369)                 |
+| `events`                                                                            | Subscribe to `AppEvent` names                              |
+| `game`                                                                              | Table game (Farkle) controls; null w/o WASM                |
+| `theatre`, `seekRoll(tick)`                                                         | Roll theatre: seek / play / live (see above)               |
+| `bootTrace()`                                                                       | Boot spans, tiers, compiles, first frame (see Boot budget) |
 
 Playwright URLs should include `&test`, e.g. `?webgl&no-post&fair-dice&test`.
 
@@ -144,6 +145,8 @@ Playwright URLs should include `&test`, e.g. `?webgl&no-post&fair-dice&test`.
 
 The engine owns the physics clock: `step(dt)` banks `dt` and runs fixed 1/120 s ticks (4 substeps each, at most 8 ticks per call). One JS [`SimClock`](../packages/dice-core/src/wasm/SimClock.ts) feeds it everywhere — the worker (wall time since the previous wakeup, so a throttled timer catches up instead of slowing the dice), `?no-worker` (FrameScheduler's 1/60 chunks → 2 ticks each) and `rollHeadless()` — so all three integrate identically. `stepIndex` (the engine tick counter, published in the SAB header as `H_TICKS`) is how settle timeouts and replays refer to time. The worker parks its timer when the world is asleep or the page is hidden and resumes without replaying a backlog. The pipping centre-of-mass bias is applied inside each substep, not from the render loop. See "Fixed clock" and "Pipping bias" in [`WASM_ENGINE.md`](WASM_ENGINE.md).
 
+The scheduler also exposes two boot primitives. `holdPhase(phase, reason)` returns a hold: while any hold on a phase is live its systems do not run (the other phases do, so the loading bar keeps moving) and the frame counts in `stats.heldFrames`. `nextFrame()` resolves when the frame now running finishes — the scheduler's own clock, which is what [`SpawnBudget`](../src/core/SpawnBudget.ts) pays boot work against (see [Boot budget](#boot-budget)).
+
 Systems register via `scheduler.register(phase, name, fn, { priority })`. Prop `update` callbacks and interactables hook into `updates` through [`LoadingTiers.js`](../src/core/LoadingTiers.js) and [`PropRegistry.js`](../src/environment/PropRegistry.js) `afterCreate` handlers — avoid ad-hoc per-frame calls in `main.js`.
 
 ## Tiered loading
@@ -160,6 +163,38 @@ Systems register via `scheduler.register(phase, name, fn, { priority })`. Prop `
 Table layout (decor count, clutter, theme) comes from [`TableLayoutConfig.js`](../src/core/TableLayoutConfig.js) and [`RandomLayout.js`](../src/core/RandomLayout.js).
 
 Shared KTX2/JPG textures, dice GLBs, Draco/Basis transcoders, and other files under `public/` must be loaded through [`publicAssetUrl.js`](../src/core/publicAssetUrl.js) (`import.meta.env.BASE_URL`) — not raw `./images/…` strings — so subdirectory deploys (e.g. `go.1ink.us/dice-roller/`) do not request host-root `/images/`.
+
+### Boot budget
+
+The boot path is measured, not just typed (#365). Four pieces, all of which can be switched off for an A/B (`?spawn-budget=0`, `?no-precompile`):
+
+- **Boot trace** ([`BootTrace.ts`](../src/core/BootTrace.ts)). `performance.mark/measure` around each phase (`renderer-setup`, `physics`, `textures`, `dice-models`, `dice-appearance`, `ui`), tier (`tier0`, `tier1`, `decor`), prop and shader compile, plus the first frames and, where the browser has `longtask`, the long tasks attributed to whichever spans overlap them. `window.__app.bootTrace()` (under `?test` / `?debug`) returns `{ ready, tiers[], spans[], compile, firstFrame, frames[], longTasks[], counters, notes }`; the same measures sit on the `blink.user_timing` track of a Chromium trace beside the tasks they lengthen. `?debug` / `?boot-trace` also print it under the loading bar, and `[BootTrace]` is logged once at `ready`. A prop span is wall time (it includes anything the factory awaits), so a slow prop reads as `longestProp` per tier.
+- **Budgeted spawning** ([`SpawnBudget.ts`](../src/core/SpawnBudget.ts)). A factory is synchronous, so every `await` between props of a tier resolved as a microtask and the main thread never reached the event loop until the whole tier was built; a cached second visit has no network waits to break the chain. `spawnTier` / `spawnTierWithRandomPool` now call `checkpoint()` between props: inside the slice's budget it is free, past it the continuation waits for the scheduler's **next frame** (so the work lands in a rendering opportunity and the overlay can paint) and a new slice starts. Budgets are ms of work per frame: 16 for tier 0 (so `ready` is not held up by yields), 6 for tier 1 and the decorative pool; `?spawn-budget=<ms>` sets them all, `0` never yields. Two escape hatches keep a boot from stalling: a hidden tab (rAF is paused) does not wait, and a watchdog (1 s) bounds the wait for a frame that never comes. It can only yield _between_ props — one prop is as long as its factory.
+- **Shader precompile and the render hold** ([`ShaderPrecompile.ts`](../src/core/ShaderPrecompile.ts)). three links a WebGL program lazily: the first draw with it calls `getProgramInfoLog`, a synchronous round trip to the GPU process. Whatever frame first shows a prop therefore blocks on every new program in it — on SwiftShader one program is 1–4 s of link time and the tavern has 80–90 of them, so the unmodified boot blocked the main thread for about 57 s cold, in tasks of up to 25 s (see the measurements below). `renderer.compileAsync` is no cure on its own: without `KHR_parallel_shader_compile` (SwiftShader has none) three reports every program "ready" at once and the stall stays at first use. So the boot does it by hand, in three steps, each behind the loading overlay:
+    1. **`precompileScene`, after each tier, one scene child at a time**: `renderer.compile(child, camera, scene)` (with the composer's `readBuffer` bound, because a program's key depends on the target it renders into, and restored before any `await`), then `program.getUniforms()` on the programs that child brought, then a budget checkpoint. The unit size is the point: `compile(scene)` queues every link first and the first `getUniforms()` then waits for all of them (measured: one "program" of 24 s, fifteen instant), so a tier-sized batch is one tier-sized task. Two exceptions are handled on purpose: a child that holds a light is compiled with the whole scene after the others (three's `compile(unit, camera, scene)` counts a light inside an in-scene unit twice, which changes the program key, so those programs would never be the ones a frame draws), and where the extension exists the children are queued, polled with the non-blocking `isReady()`, and only then read.
+    2. **`precompilePostChain`, after the last tier**: each EffectComposer pass's own `render()`, one pass per turn, against the composer's real buffers (the last enabled pass to the canvas, the others to the buffers, buffers swapped where a pass asks and the parity restored). It runs the pass rather than compiling its materials because passes set their `defines` inside `render()` — `OutputPass` builds `SRGB_TRANSFER` / the tone-mapping define there, so a program compiled beforehand has a different key and the real one links again in the first frame (measured: `OutputShader`). The scene's own `RenderPass` is skipped.
+    3. **`warmFirstRender`, last**: one real render of the scene pass. What is left after steps 1–2 is what three builds only _inside_ `render()` — the shadow-depth / distance programs (`WebGLShadowMap` makes them from the casters, and `setProgram` needs a render state that exists only during a render) and the first upload of every texture and buffer. Left to the first real frame they were 4 programs and 8–18 s the player saw as a freeze right after the overlay fades. It re-arms `shadowMap.needsUpdate` afterwards, because it consumed the pending update and finalizing still changes which props cast.
+
+    WebGPU compiles pipelines off the main thread; its node-material build is JS, so it compiles one scene child at a time (`compileAsync(child, camera, scene)`, light-bearing children with the whole scene) with the same checkpoints, and steps 2–3 do nothing there (no `passes`, and `warmFirstRender` skips `WebGPURenderer`). While all of this runs, `main.js` holds the `render` phase from the first frame until `loadTiers` releases it just before the overlay fades — the overlay is opaque, so nobody sees the missing frames, and no frame ever draws a half-linked scene. The trace's `firstFrame.newPrograms` is the check: a first real frame that still creates programs is a regression, and shows as a number. **What this does not do:** it moves the stall rather than removing it. On SwiftShader one program is 1–4 s of link time and the warm-up render is a single task (16.9 s of which four programs and the first uploads are nearly all) — three gives no way to link a shadow-depth program on its own, so that step cannot be sliced further. It sits behind the loading overlay with the text "Warming up the first frame…", but the main thread is blocked for it, and the 2 s gate below measures main-thread tasks, not what the player sees.
+
+- **The gate** (`npm run verify:boot-budget`, CI job `boot-budget`). Cold load, then a warm re-navigation of the same page, on SwiftShader; records `longtask` entries and a Chromium trace, and fails if any main-thread task passes `BOOT_TASK_BUDGET_MS` (2000) before `ready`, or `load` takes longer than `BOOT_LOAD_BUDGET_MS`. Between the visits it calls `leaveAndWaitForGpuQuiet` (see _Revisiting on a software rasterizer_) and prints the wait on its own line. See AGENTS.md, CI notes.
+
+**Measured** (SwiftShader, headless Chromium, `/?test`, the same harness on a baseline build and the final one; the whole trace window, from navigation to one second past `ready`). The box is shared and its load swung between 3 and 40 over the session, and the two builds were not measured at the same moment, so treat the magnitudes as indicative and the _shape_ as the finding:
+
+|                                        | baseline cold              | final cold            | baseline warm              | final warm            |
+| -------------------------------------- | -------------------------- | --------------------- | -------------------------- | --------------------- |
+| main thread blocked (tasks > 50 ms)    | 57.0 s                     | 33.3 s                | 59.9 s                     | 25.7 s                |
+| tasks over 2 s                         | 6.3, 3.1, 18.9, **25.5 s** | 3.4, 16.9 s           | 6.2, 2.8, 11.1, **37.0 s** | 20.4 s                |
+| of those, after `ready` (overlay gone) | **25.5 s**                 | none                  | **37.0 s**                 | none                  |
+| first real frame                       | the 25.5 s task            | 54 ms, 0 new programs | the 37.0 s task            | 1.3 s, 8 new programs |
+
+The baseline's worst task is the first real frame, which starts right at `ready`: the page looked loaded and then froze for 25–37 s. (The harness's long-task window ends at `ready`, so a before-`ready` measurement alone _understates_ the baseline; the final build's first real frame is cheap, so there is nothing to miss.) Everything the final build still blocks on is behind the opaque loading overlay, cut into per-prop and per-pass units with a frame between them wherever three allows, and named in `__app.bootTrace()` and the Chromium trace. **The 2 s budget is still not met on this runner class**: one program is 1–4 s of link time on a CPU rasterizer, so even per-program slicing cannot get every task under it, and the last step three does not let us slice — the warm-up render (shadow-depth programs and first uploads) — is the longest task in both visits (16.9 s, 20.4 s). On the warm visit the first real frame still links 8 programs (1.3 s, programs already in ANGLE's in-process cache); which ones was not chased. The gate fails on this runner class until a link is under the budget or a cache makes it so, so the CI job runs `BOOT_BUDGET_REPORT_ONLY=1` (traces still uploaded) until it is calibrated there; the script fails by default, and the budget was not raised to hide that.
+
+**Revisiting on a software rasterizer.** A same-page re-navigation (a reload, or the second visit in `test:share-roll-replay`) used to block for 40–300 s before the new document ran anything. That is not boot work: a blank page's first `getContext('webgl2')` after a visit waits just as long, and then the next one takes 20 ms. The GPU process is still tearing down the abandoned context (97 s after the unmodified baseline build, 103 s after the final one, 130–296 s on a more loaded box); waiting 150 s on `about:blank` first makes the first context instant. What was tried to avoid it from the app, none of which worked for a real navigation: `renderer.setAnimationLoop(null)` before leaving (no effect, 296 s); an explicit `forceContextLoss()` on a live page followed by a hop to `about:blank` (44–67 ms, which looked like the answer) — but the same call at `pagehide` (verified: `persisted: false`, `isContextLost() === true` by the end of the event), in the same task as the navigation, or 20 ms before it, still left the next real document waiting 147–272 s to _commit_. A `pagehide` release was written, tested and removed again for that reason; do not re-add one without a measurement that it helps. The harness and `test:share-roll-replay` therefore call `leaveAndWaitForGpuQuiet`, which leaves for `about:blank` and waits until a fresh context is created in under a second, twice running, and returns the wait so it is printed and not hidden. On a machine with a GPU, context teardown is quick and the wait is ~0.
+
+Not in scope here, on purpose: nothing about tier 0 moved into the service worker or behind a `modulepreload` to hide the task — the point is to see it. The `software` context profile's MSAA / shadow values are untouched (the render baselines pin them, see `ContextProfile.ts`).
+
+The physics artifact `wasm/dice_physics.wasm` is fetched once per load, by whichever thread instantiates it (the worker, or the page under `?no-worker`). It used to be fetched twice because `vite.config.js` also emitted a document `<link rel=preload>`, which a Worker cannot consume; `verify:bundle-loading` asserts the request count.
 
 ## Scenes
 
@@ -253,7 +288,15 @@ A share link carries `layout-seed`; replaying it is only honest if the receiver 
 
 ## Renderer selection
 
-[`RendererFactory.ts`](../src/core/RendererFactory.ts):
+[`RendererFactory.ts`](../src/core/RendererFactory.ts) is the thin factory (`createRenderer`, `recoverRenderer`) and re-exports everything it used to export. The pieces it composes, each with one reason to change:
+
+| File                                                     | Owns                                                                                                                |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| [`PixelRatioPolicy.ts`](../src/core/PixelRatioPolicy.ts) | `?pr=` / DPR cap, MSAA-vs-FXAA choice, `applyRendererSize`, the sustained-slow-frame pixel-ratio monitor            |
+| [`WebGlContext.ts`](../src/core/WebGlContext.ts)         | Software-rasterizer detection and probe, WebGL context attributes, `createWebGlRenderer`                            |
+| [`WebGpuDevice.ts`](../src/core/WebGpuDevice.ts)         | Required limits / features, curated `requestAdapter` + `requestDevice`, adapter description, `createWebGpuRenderer` |
+| [`RendererConfig.ts`](../src/core/RendererConfig.ts)     | Config both backends share (shadow map type, tone mapping, colour space)                                            |
+| [`RendererRecovery.ts`](../src/core/RendererRecovery.ts) | Context / device-loss handlers (`installRendererRecoveryHandlers`)                                                  |
 
 | Condition                                                                  | Renderer                                                                                 |
 | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |

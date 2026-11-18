@@ -86,6 +86,49 @@ jobs:
             - run: npx playwright install --with-deps chromium
             - run: npm run verify:bundle-loading
 
+    # Cold then warm load of `/` on SwiftShader; reports (report-only for now, see
+    # below) any main-thread task past BOOT_TASK_BUDGET_MS between navigation and
+    # `ready` (#365). The Chromium traces + report are uploaded so a run shows
+    # *what* blocked.
+    boot-budget:
+        name: Verify (boot budget)
+        needs: build-wasm
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 24
+                  cache: npm
+            - run: npm ci
+            - name: Download WASM artifacts
+              uses: actions/download-artifact@v7
+              with:
+                  name: wasm-artifacts
+                  # Extract under `public/` so `wasm/…` + `wasm-scalar/…` round-trip
+                  # (see the note on the bundle-loading job).
+                  path: public
+            - run: npm run build:js
+            - run: npx playwright install --with-deps chromium
+            - run: npm run verify:boot-budget
+              env:
+                  BOOT_TASK_BUDGET_MS: '2000'
+                  # REPORT-ONLY until calibrated on this runner. One SwiftShader program
+                  # link is 1-4 s, so a 2 s task budget is not reachable here yet (local
+                  # runs: longest task 17-20 s, all of it behind the loading overlay).
+                  # The traces below are uploaded either way. Delete this line to make
+                  # the job a hard gate; do not raise BOOT_TASK_BUDGET_MS to get green.
+                  BOOT_BUDGET_REPORT_ONLY: '1'
+            - name: Upload boot traces
+              if: always()
+              uses: actions/upload-artifact@v6
+              with:
+                  name: boot-budget-traces
+                  path: boot-budget/
+                  if-no-files-found: ignore
+                  retention-days: 7
+
     pwa-isolation:
         name: Verify (PWA + crossOriginIsolated)
         needs: build-js
