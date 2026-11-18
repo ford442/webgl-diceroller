@@ -5,11 +5,11 @@
  * camera controller, ...) are only assigned after registration happens.
  */
 
-import { SimClock } from 'dice-core/wasm/SimClock';
 import {
-    getWasmEngine,
     isUsingWorkerPhysics,
     isReplayActive,
+    skipMainThreadPhysics,
+    stepMainThreadPhysics,
     isWasmAvailable,
     flushWorkerCommandBatch,
 } from '../wasm/PhysicsBridge.js';
@@ -78,21 +78,23 @@ export function registerFrameCallbacks(scheduler, deps) {
     // Write-only, mirrors main.js's original unused gong flash bookkeeping.
     let _gongFlashIntensity = 0;
 
-    /** @type {SimClock | null} */
-    let simClock = null;
-
-    scheduler.register('physicsStep', 'dicePhysics', ({ deltaTime }) => {
-        if (!isSimulationReady()) return;
-
-        // In-process (?no-worker) only: hand the frame's elapsed time to the
-        // same SimClock the worker and rollHeadless() use, which feeds the
-        // engine's fixed 1/120 s ticks. The worker self-paces on its own clock.
+    scheduler.register('physicsStep', 'dicePhysics', ({ physicsStepIndex }) => {
+        // In-process (?no-worker) only; the worker self-paces on its own clock.
+        if (!isWasmAvailable() || isUsingWorkerPhysics()) return;
         // The roll theatre parks the table while it scrubs; it steps the
-        // engine itself (replaySeek / replayStep), so the frame must not.
-        if (isWasmAvailable() && !isUsingWorkerPhysics() && !isReplayActive()) {
-            simClock ??= new SimClock(getWasmEngine());
-            simClock.advanceBy(deltaTime);
+        // engine itself (replaySeek / replayStep), so the frame must not —
+        // and the parked time is dropped, not caught up on afterwards.
+        if (!isSimulationReady() || isReplayActive()) {
+            skipMainThreadPhysics();
+            return;
         }
+        // Once per frame: the bridge owes the engine the *wall* time since the
+        // last frame and pays it in fixed 1/120 s ticks within a wall budget
+        // (SimClock.catchUp). The scheduler's own fixed steps cap a frame at
+        // 5/60 s, which on a slow main thread silently dropped most of the
+        // simulated time; what one frame cannot pay now carries to the next
+        // and the settle watch sees `isPhysicsBehind()`.
+        if (physicsStepIndex === 0) stepMainThreadPhysics();
     });
 
     scheduler.register('postPhysicsSync', 'diceVisualSync', () => {

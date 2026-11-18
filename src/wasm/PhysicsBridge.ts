@@ -12,6 +12,7 @@ export {
     getWorldHash,
     getWorldRecorder,
     isUsingSharedArrayBuffer,
+    isPhysicsBehind,
     isUsingWorkerPhysics,
     isWasmAvailable,
     isWasmInitialized,
@@ -34,6 +35,8 @@ export {
     setContainerPlanes,
     setPhysicsHidden,
     setPhysicsTimerScale,
+    skipMainThreadPhysics,
+    stepMainThreadPhysics,
 } from 'dice-core/wasm/PhysicsBridge';
 
 import type { Object3D } from 'three';

@@ -190,7 +190,8 @@ std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
         const uint8_t* p = static_cast<const uint8_t*>(ptr);
         out.insert(out.end(), p, p + len);
     };
-    uint32_t version = 3;
+    // Version 4 (SOLVER_REVISION 12) adds each body's rest window.
+    uint32_t version = 4;
     uint32_t count = static_cast<uint32_t>(bodies_.size());
     append(&version, sizeof(version));
     append(&count, sizeof(count));
@@ -204,6 +205,9 @@ std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
         append(&b.sleeping, sizeof(b.sleeping));
         append(&b.sleepTimer, sizeof(b.sleepTimer));
         append(&b.useHull, sizeof(b.useHull));
+        append(&b.restPosition, sizeof(b.restPosition));
+        append(&b.restRotation, sizeof(b.restRotation));
+        append(&b.restTimer, sizeof(b.restTimer));
     }
 
     // Dynamic (non-die) props, added in version 2. Box shapes round-trip
@@ -226,6 +230,9 @@ std::vector<uint8_t> DicePhysicsEngine::serializeState() const {
         append(&d.kinematic, sizeof(d.kinematic));
         append(&d.mass, sizeof(d.mass));
         append(&d.halfExtents, sizeof(d.halfExtents));
+        append(&d.restPosition, sizeof(d.restPosition));
+        append(&d.restRotation, sizeof(d.restRotation));
+        append(&d.restTimer, sizeof(d.restTimer));
     }
 
     uint32_t manCount = static_cast<uint32_t>(manifolds_.size());
@@ -279,7 +286,7 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
     };
     uint32_t version = 0, count = 0;
     if (!read(&version, sizeof(version))) return;
-    if (version != 1 && version != 2 && version != 3) return;
+    if (version < 1 || version > 4) return;
     if (!read(&count, sizeof(count))) return;
     bodies_.clear();
     bodies_.reserve(boundedCount(count, 2 * sizeof(int) + 3 * sizeof(Vec3) + sizeof(Quat) +
@@ -295,6 +302,11 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
         if (!readBool(b.sleeping)) break;
         if (!read(&b.sleepTimer, sizeof(b.sleepTimer))) break;
         if (!readBool(b.useHull)) break;
+        if (version >= 4) {
+            if (!read(&b.restPosition, sizeof(b.restPosition))) break;
+            if (!read(&b.restRotation, sizeof(b.restRotation))) break;
+            if (!read(&b.restTimer, sizeof(b.restTimer))) break;
+        }
         b.radius = radiusForSides(b.sides);
         b.mass = 5.0f;
         b.invMass = 1.0f / b.mass;
@@ -326,6 +338,11 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
                 if (!readBool(d.kinematic)) break;
                 if (!read(&d.mass, sizeof(d.mass))) break;
                 if (!read(&halfExtents, sizeof(halfExtents))) break;
+                if (version >= 4) {
+                    if (!read(&d.restPosition, sizeof(d.restPosition))) break;
+                    if (!read(&d.restRotation, sizeof(d.restRotation))) break;
+                    if (!read(&d.restTimer, sizeof(d.restTimer))) break;
+                }
                 // Unknown shape tag: the record was consumed, drop the body.
                 if (shape > static_cast<uint8_t>(DynamicShapeType::Hull)) continue;
                 d.shape = static_cast<DynamicShapeType>(shape);
@@ -455,6 +472,9 @@ bool DicePhysicsEngine::restoreMotionState(const std::vector<uint8_t>& data) {
         b.angularVelocity = s.angularVelocity;
         b.sleeping = s.sleeping;
         b.sleepTimer = s.sleepTimer;
+        b.restPosition = s.restPosition;
+        b.restRotation = s.restRotation;
+        b.restTimer = s.restTimer;
         refreshDieDerived(b);
     }
     for (size_t i = 0; i < dynamics_.size(); ++i) {
@@ -466,6 +486,9 @@ bool DicePhysicsEngine::restoreMotionState(const std::vector<uint8_t>& data) {
         d.angularVelocity = s.angularVelocity;
         d.sleeping = s.sleeping;
         d.sleepTimer = s.sleepTimer;
+        d.restPosition = s.restPosition;
+        d.restRotation = s.restRotation;
+        d.restTimer = s.restTimer;
         refreshDynamicDerived(d);
     }
     // Same body order as the snapshot, so its manifold indices bind here too.

@@ -338,7 +338,9 @@ FUZZ_TIME=600 npm run fuzz:solver
 # The "Tavern world" case rolls into tests/fixtures/tavern-world.json — the
 # colliders the app actually registers — with the shipped hulls and the app's
 # own throw parameters. Every seed must sleep within 12 s of simulated time.
-TAVERN_SEEDS=500 npm run test:solver
+# Seeds run on all cores; the summary names the five slowest. CI's
+# test-solver job runs the 2000-seed cap.
+TAVERN_SEEDS=2000 npm run test:solver
 ```
 
 The tavern-world fixture is exported from the running app (`npm run
@@ -747,10 +749,28 @@ go through SAT (`satTestFromWorld`) and `addSatContacts`:
   tolerance), and last substep's normal kept while it is within 5 mm of the
   best. The normal is oriented by the hulls' vertex centroids.
 - **Points:** every vertex of either hull inside the other (grown by the
-  speculative margin), with its separation measured as its _exit distance_
-  from the other hull along the normal. Up to four points are kept by spread,
-  so a die resting on a face has the whole face. With no vertex inside
-  (edge-edge), one point sits on the smaller hull's support feature.
+  speculative margin). Its depth is the least of three upper bounds: its
+  _exit distance_ from the other hull along the normal, its overlap with the
+  other hull along the normal (the slab), and its distance to the other hull's
+  nearest plane. Each of the first two alone overstated depth in the tavern
+  (#364): the exit runs through a face nearly parallel to the normal (a 2 cm
+  map sheet read 1.17 m), and a vertex of a die tipping over the velvet rim
+  read the rim's full height under the +y normal while the side face was a
+  few mm away. The position pass pushed those dice out along the normal in one
+  jump, gravity dropped them back, and they hopped for ever. Up to four points
+  are kept by spread, so a die resting on a face has the whole face. With no
+  vertex inside (edge-edge), one point sits on the smaller hull's support
+  feature.
+- **Bounding sphere:** `setDieHull` sets a die's `radius` to the farthest hull
+  vertex from the body origin (never below `radiusForSides`). Every pair test
+  culls with it; it used to stay at the hull-less 0.8–1.0 while the shipped
+  hulls reach 1.07–1.88, so a d4 resting on a d6 fell outside the pair test on
+  most substeps and sank 15 cm into it (#364).
+- **Position pass:** Baumgarte 0.08 of the penetration past `CONTACT_SLOP`,
+  capped at `MAX_LINEAR_CORRECTION` (2 mm) per point per iteration (≈ 2 m/s).
+  Resting and landing overlaps (< 3.3 cm) are corrected exactly as before; a
+  deep one (a spawn overlap, a die sliding off a small prop's corner) is
+  recovered over several substeps instead of in one hop.
 - **Speculative points** stop only the approach that would close their gap
   this substep (`velN + sep/dt`), so near-but-open vertices of a resting face
   are safe to keep.
@@ -776,8 +796,21 @@ under ThreadSanitizer. The shipped module stays single-threaded (Phase 11).
 
 Sleep is per contact island, reusing the solve's partition: an island whose
 most energetic member stays under `SLEEP_ENERGY_THRESHOLD` (0.08 J) for
-`SLEEP_DELAY` (0.5 s) sleeps. A body-body contact only wakes the sleeper — waking both every substep
+`SLEEP_DELAY` (0.5 s) sleeps. An island also sleeps on **rest**: once every
+awake member's pose has stayed within `REST_LINEAR_EPS` (2 mm) and
+`REST_QUAT_DOT_MIN` (≈ 0.57°) of an anchor pose for `SLEEP_DELAY`, whatever
+its kinetic energy did meanwhile — a contact limit cycle can spike KE above
+the threshold every few substeps while the die moves a fraction of a
+millimetre. The window runs from an anchor, not two samples, so a die
+swinging back through the same pose does not count; `wake()` restarts it.
+The energy threshold itself is unchanged (a die that sleeps while still
+moving reads the wrong face). A body-body contact only wakes the sleeper — waking both every substep
 reset the sleep timer and kept dice resting against props awake for ever.
+
+`serializeState()` is version 4 from `SOLVER_REVISION` 12: each die and
+dynamic prop also carries its rest anchor and timer, so a restored world
+sleeps exactly as the original would. Versions 1–3 still load (rest window
+empty).
 
 `getSleepDiagnostics()` packs one `SLEEP_DIAG_STRIDE`-float record per die,
 then per dynamic prop: id, sleeping, kinematic, speed, spin, sleep timer, own
@@ -817,7 +850,7 @@ void step(float dt) {
 | Caller                    | What it passes                                            | Ticks                                |
 | ------------------------- | --------------------------------------------------------- | ------------------------------------ |
 | Physics worker            | `SimClock.advance()`: wall time since the previous wakeup | as many as elapsed, ≤ 8 per wakeup   |
-| `?no-worker` (in-process) | `SimClock.advanceBy()` of FrameScheduler's 1/60 chunks    | 2 per chunk                          |
+| `?no-worker` (in-process) | `SimClock.catchUp()`: wall time since the previous frame  | one at a time, within a wall budget  |
 | `rollHeadless()`          | `SimClock.advanceBy(dt)` (default `dt` = 1/120)           | 1 per call                           |
 | Native tests / benchmarks | anything                                                  | `floor(banked / FIXED_DT)`, ≤ 8/call |
 
@@ -836,6 +869,21 @@ settle in the same wall time (±10%). Sub-tick remainders are banked, never
 integrated on their own. `getFixedTickCount()` exposes the tick counter.
 `init`, `reset` and `deserializeState` clear the accumulator (snapshots are
 taken between ticks).
+
+The main-thread bridge (`?no-worker`) is driven by `SimClock.catchUp()`
+through `stepMainThreadPhysics()`, once per rendered frame. It owes the
+engine the wall time since the previous frame (carried up to 4 s) and pays it
+one tick at a time until it is paid, 480 ticks ran, or its wall budget is
+spent: the larger of 8 ms and a quarter of the frame. At 60 fps that is the
+old 2 ticks a frame; on a multi-second SwiftShader frame it is the whole
+backlog, where FrameScheduler's 5 × 1/60 cap used to drop all but 10 ticks and
+the roll hit the settle watch's wall backstop with the dice in the air. What a
+frame cannot pay carries to the next and `isPhysicsBehind()` reports it; the
+settle watch does not count wall time toward `wallTimeout` while it is set
+(`simTimeout` and `stalled` still end the roll). The tick sequence is the same
+however the ticks are batched, so seeded rolls are unchanged.
+`npm run test:no-worker-throttled` rolls under 6× CPU throttling and requires
+`timedOut === false`.
 
 The worker parks its interval once `isWorldAsleep()` has held for 30 ticks
 (0.25 s) with an empty command ring, and while the page is hidden

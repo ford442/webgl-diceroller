@@ -123,6 +123,51 @@ describe('SettleWatch', () => {
         expect(status.simSeconds).toBeLessThan(12);
     });
 
+    it('does not count wall time while the engine reports it is behind', () => {
+        // ?no-worker on a slow frame: the clock carries unpaid ticks and says
+        // so. The roll is still simulating, so the wall backstop waits; the
+        // simulated budget still ends it.
+        const { world, probe, now } = makeWorld();
+        let behind = true;
+        const watch = createSettleWatch(
+            { ...probe, behind: () => behind },
+            { now, stallMs: 5000, maxWallMs: 30_000, timeoutSimSeconds: 12 }
+        );
+        watch.begin();
+        let status = watch.poll();
+        while (status.state === 'pending' && world.wall < 120_000) {
+            world.ticks = (world.ticks ?? 0) + 10;
+            world.wall += 4000;
+            status = watch.poll();
+        }
+        expect(status.state).toBe('pending');
+        expect(world.wall).toBe(120_000);
+        // Caught up: wall time counts again from here.
+        behind = false;
+        world.ticks = (world.ticks ?? 0) + 10;
+        world.wall += 29_000;
+        expect(watch.poll().state).toBe('pending');
+        world.ticks = (world.ticks ?? 0) + 10;
+        world.wall += 1000;
+        expect(watch.poll()).toMatchObject({ state: 'timedOut', reason: 'wallTimeout' });
+    });
+
+    it('a behind engine still ends on the simulated budget', () => {
+        const { world, probe, now } = makeWorld();
+        const watch = createSettleWatch(
+            { ...probe, behind: () => true },
+            { now, stallMs: 5000, maxWallMs: 30_000, timeoutSimSeconds: 12 }
+        );
+        watch.begin();
+        let status = watch.poll();
+        while (status.state === 'pending' && world.wall < 1_000_000) {
+            world.ticks = (world.ticks ?? 0) + 10;
+            world.wall += 4000;
+            status = watch.poll();
+        }
+        expect(status).toMatchObject({ state: 'timedOut', reason: 'simTimeout' });
+    });
+
     it('does not count a hidden tab toward the wall-time backstop', () => {
         const { world, probe, now } = makeWorld();
         let paused = true;

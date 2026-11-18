@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createInProcessPhysicsSession, defaultHeadlessAssets } from 'dice-core';
 import {
+    SIM_CATCH_UP_BUDGET_FRACTION,
+    SIM_CATCH_UP_MAX_BACKLOG_SECONDS,
+    SIM_CATCH_UP_MAX_TICKS,
     SIM_FIXED_DT,
     SIM_MAX_CATCH_UP_TICKS,
     SimClock,
@@ -38,6 +41,111 @@ function runTimer(clock: SimClock, intervalMs: number, ms: number): void {
     clock.resume(0);
     for (let t = intervalMs; t <= ms + 1e-9; t += intervalMs) clock.advance(t);
 }
+
+/** A wall clock that advances `costMs` every time a tick runs. */
+function costlyEngine(costMs: number) {
+    const engine = fakeEngine();
+    const clock = { ms: 0 };
+    const step = engine.step;
+    engine.step = (dt: number) => {
+        const before = engine.ticks;
+        step(dt);
+        clock.ms += (engine.ticks - before) * costMs;
+    };
+    return { engine, clock };
+}
+
+describe('SimClock.catchUp (main-thread driver)', () => {
+    it('pays a slow frame in full when the ticks are cheap', () => {
+        const engine = fakeEngine();
+        const clock = new SimClock(engine, { now: () => 0 });
+        clock.catchUp(0);
+        // A 250 ms frame (SwiftShader): advanceBy() would have run 8 ticks.
+        const r = clock.catchUp(250);
+        expect(r.ticks).toBe(30);
+        expect(r.behind).toBe(false);
+        expect(clock.behind).toBe(false);
+    });
+
+    it('stops at the wall budget, carries the rest and reports behind', () => {
+        const { engine, clock: wall } = costlyEngine(1);
+        const clock = new SimClock(engine, { now: () => wall.ms });
+        clock.catchUp(0, { budgetMs: 8 });
+        const first = clock.catchUp(500, { budgetMs: 8 });
+        expect(first.ticks).toBe(8);
+        expect(first.behind).toBe(true);
+        expect(first.backlogSeconds).toBeCloseTo(0.5 - 8 * SIM_FIXED_DT, 9);
+        // Later frames with no new wall time pay the carried backlog off.
+        let ticks = first.ticks;
+        let r = first;
+        for (let i = 0; i < 20 && r.behind; i++) {
+            r = clock.catchUp(500, { budgetMs: 8 });
+            ticks += r.ticks;
+        }
+        expect(r.behind).toBe(false);
+        expect(ticks).toBe(60);
+    });
+
+    it('a slow frame earns a proportional budget, not a fixed 8 ms', () => {
+        // 1 ms per tick, 2 s frames (SwiftShader): 8 ms would pay 8 ticks a
+        // frame; a quarter of the frame pays all 240.
+        const { engine, clock: wall } = costlyEngine(1);
+        const clock = new SimClock(engine, { now: () => wall.ms });
+        clock.catchUp(0);
+        wall.ms = 2000;
+        const r = clock.catchUp(2000);
+        expect(r.ticks).toBe(240);
+        expect(r.behind).toBe(false);
+    });
+
+    it('a frame whose share cannot pay the ticks carries the rest', () => {
+        // 5 ms per tick, a 400 ms frame: 48 ticks owed, 100 ms budget → 20.
+        const { engine, clock: wall } = costlyEngine(5);
+        const clock = new SimClock(engine, { now: () => wall.ms });
+        clock.catchUp(0);
+        const r = clock.catchUp(400);
+        expect(r.ticks).toBe((400 * SIM_CATCH_UP_BUDGET_FRACTION) / 5);
+        expect(r.behind).toBe(true);
+        expect(r.backlogSeconds).toBeCloseTo(0.4 - r.ticks * SIM_FIXED_DT, 9);
+    });
+
+    it('caps the ticks per call and the carried backlog', () => {
+        const engine = fakeEngine();
+        const clock = new SimClock(engine, { now: () => 0 });
+        clock.catchUp(0);
+        const r = clock.catchUp(10_000);
+        expect(r.ticks).toBe(SIM_CATCH_UP_MAX_TICKS);
+        expect(r.ticks * SIM_FIXED_DT).toBeCloseTo(SIM_CATCH_UP_MAX_BACKLOG_SECONDS, 9);
+        expect(r.behind).toBe(false);
+        expect(r.backlogSeconds).toBeLessThan(SIM_FIXED_DT);
+        const r2 = clock.catchUp(20_000, { maxBacklogSeconds: 0.5, maxTicks: 10 });
+        expect(r2.ticks).toBe(10);
+        expect(r2.backlogSeconds).toBeCloseTo(0.5 - 10 * SIM_FIXED_DT, 9);
+    });
+
+    it('runs the same ticks as advance() at 60 fps', () => {
+        const a = new SimClock(fakeEngine());
+        const b = new SimClock(fakeEngine(), { now: () => 0 });
+        a.resume(0);
+        b.catchUp(0);
+        for (let f = 1; f <= 120; f++) {
+            a.advance((f * 1000) / 60);
+            b.catchUp((f * 1000) / 60);
+        }
+        expect(b.stepIndex).toBe(a.stepIndex);
+        expect(b.stepIndex).toBe(240);
+    });
+
+    it('skip() drops the backlog: parked time is never caught up on', () => {
+        const { engine, clock: wall } = costlyEngine(1);
+        const clock = new SimClock(engine, { now: () => wall.ms });
+        clock.catchUp(0, { budgetMs: 2 });
+        expect(clock.catchUp(1000, { budgetMs: 2 }).behind).toBe(true);
+        clock.skip(5000);
+        expect(clock.behind).toBe(false);
+        expect(clock.catchUp(5000).ticks).toBe(0);
+    });
+});
 
 describe('SimClock', () => {
     it('first advance sets the baseline; later ones step the elapsed time', () => {

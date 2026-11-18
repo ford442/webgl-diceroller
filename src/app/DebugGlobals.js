@@ -8,6 +8,7 @@ import {
     isWasmAvailable,
     getWasmEngine,
     getWorldHash,
+    isPhysicsBehind,
     getWorldRecorder,
     readSleepDiagnostics,
 } from '../wasm/PhysicsBridge.js';
@@ -90,6 +91,9 @@ export function installDebugGlobals(app, deps) {
     // Hash of that world (hashWorld): equal across clients that rebuilt the same
     // table, which is what a share link's `w=` and a room join compare.
     app.physics.worldHash = () => getWorldHash();
+    // ?no-worker: the main-thread clock could not pay the last frame's ticks
+    // within its budget (SimClock.catchUp); the settle watch waits it out.
+    app.physics.behind = () => isPhysicsBehind();
     app.physics.getDieLog = () => getWorldRecorder()?.dieLog() ?? [];
     app.getActiveDiceSet = getActiveDiceSet;
     // Documented for Playwright: patch one die's descriptor entry and the table

@@ -80,6 +80,7 @@ int DicePhysicsEngine::dynamicEventOtherId(int userId) {
 void DicePhysicsEngine::wake(DynamicBody& b) {
     b.sleeping = false;
     b.sleepTimer = 0.0f;
+    b.restTimer = 0.0f;
 }
 
 void DicePhysicsEngine::integrateDynamic(DynamicBody& b, float dt) {
@@ -122,6 +123,7 @@ void DicePhysicsEngine::setDynamicKinematic(int userId, bool kinematic) {
             d.angularVelocity = {};
             d.sleeping = false;
             d.sleepTimer = 0.0f;
+            d.restTimer = 0.0f;
         } else {
             wake(d);
         }

@@ -53,6 +53,11 @@ struct RigidBody {
     bool  sleeping    = false;
     float sleepTimer  = 0.0f;
     bool  kinematic   = false;
+    // Rest window (updateIslandSleep): the pose this body has stayed within
+    // REST_LINEAR_EPS / REST_QUAT_DOT_MIN of, and for how long. Reset by wake().
+    Vec3  restPosition{};
+    Quat  restRotation{};
+    float restTimer   = 0.0f;
 
     std::vector<Vec3> worldVerts;
     std::vector<Vec3> worldFaceNormals;
@@ -221,6 +226,11 @@ struct DynamicBody {
     bool  sleeping   = false;
     float sleepTimer = 0.0f;
     bool  kinematic  = false;
+    // Rest window (updateIslandSleep): the pose this body has stayed within
+    // REST_LINEAR_EPS / REST_QUAT_DOT_MIN of, and for how long. Reset by wake().
+    Vec3  restPosition{};
+    Quat  restRotation{};
+    float restTimer   = 0.0f;
 
     std::vector<Vec3> worldVerts;
     std::vector<Vec3> worldFaceNormals;

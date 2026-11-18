@@ -18,7 +18,11 @@
  *                    has dice the engine never registered; `wallTimeout`: the
  *                    engine ticks, but so slowly (main-thread physics on a
  *                    slow frame rate) that `timeoutSimSeconds` would take
- *                    minutes — a visible-wall-time backstop.
+ *                    minutes — a visible-wall-time backstop. Wall time
+ *                    while the probe reports `behind()` (the main-thread
+ *                    clock could not pay a frame's ticks within its budget)
+ *                    does not count: that roll is still simulating, only
+ *                    slower, and `simTimeout` / `stalled` still bound it.
  *
  * Pure and DOM-free: the probe and the clock are injected.
  */
@@ -35,6 +39,11 @@ export interface SettleProbe {
     allAsleep(): boolean;
     /** Fixed engine ticks since boot, or null when unknown (stub engine). */
     ticks(): number | null;
+    /**
+     * The engine is ticking but running slower than wall time (see
+     * SimClock.catchUp). Optional; absent means never behind.
+     */
+    behind?(): boolean;
 }
 
 export interface SettleWatchOptions {
@@ -131,7 +140,7 @@ export function createSettleWatch(
             if (!active) this.begin();
 
             const t = now();
-            if (!isPaused()) visibleWallMs += t - lastPollWall;
+            if (!isPaused() && !probe.behind?.()) visibleWallMs += t - lastPollWall;
             lastPollWall = t;
             const ticks = probe.ticks();
             const simSeconds =

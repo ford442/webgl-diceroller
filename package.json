@@ -68,6 +68,7 @@
         "build:core": "npm run build -w dice-core",
         "test:share-roll-replay": "node tests/share-roll-replay.js",
         "test:roll-timeout": "node tests/roll-timeout.js",
+        "test:no-worker-throttled": "node tests/no-worker-throttled.js",
         "test:partial-throw": "node tests/partial-throw.js",
         "test:roll-theatre": "node tests/roll-theatre.js",
         "test:game-farkle": "node tests/game-farkle.js",

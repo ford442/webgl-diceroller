@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getWasmEngine } from '../wasm/PhysicsBridge.js';
+import { getWasmEngine, isPhysicsBehind } from '../wasm/PhysicsBridge.js';
 import { spawnedDice, diceTypes } from './DiceState.js';
 import { getDieTemplate } from './DiceModels.js';
 import { isUsingWasmPhysics } from './DicePhysicsPresets.js';
@@ -171,6 +171,7 @@ export const diceSettleProbe: SettleProbe = {
         const ticks = getWasmEngine().getFixedTickCount?.();
         return typeof ticks === 'number' && Number.isFinite(ticks) ? ticks : null;
     },
+    behind: () => isUsingWasmPhysics() && isPhysicsBehind(),
 };
 
 /**

@@ -240,6 +240,8 @@ export interface AppContextPhysics {
     getDieLog?: () => import('dice-core/wasm/WorldRecorder').DieLogEntry[];
     /** Hash of the collider world the page registered (`hashWorld`); null without WASM. */
     worldHash?: () => string | null;
+    /** `?no-worker`: the main-thread clock is running behind wall time (SimClock.catchUp). */
+    behind?: () => boolean;
 }
 
 export interface AppContextDice {
