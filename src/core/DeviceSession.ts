@@ -11,7 +11,7 @@
  * `RendererFactory`'s attribute helpers — never a hand-rolled bag.
  */
 import { collectDeviceQualityHints } from './DeviceCapabilities.js';
-import { isXrRequested } from '../xr/XrFlags.js';
+import { isXrRequested, isXrWebGlForced } from '../xr/XrFlags.js';
 
 export type RendererPreference = 'webgl' | 'webgpu';
 export type GlPowerPreference = 'high-performance' | 'low-power';
@@ -37,13 +37,9 @@ export function getRendererPreference(
     searchParams: URLSearchParams,
     { forceWebGl = false }: GetRendererPreferenceOptions = {}
 ): RendererPreference {
-    // WebXR spike requires WebGLRenderer.xr; ignore conflicting ?webgpu/?wgpu.
-    if (
-        forceWebGl ||
-        searchParams.has('webgl') ||
-        searchParams.has('xr') ||
-        searchParams.has('xr-emulator')
-    ) {
+    // WebXR (?xr / ?ar) requires WebGLRenderer.xr; ignore conflicting
+    // ?webgpu/?wgpu. Only the experimental ?xr-webgpu keeps WebGPURenderer.
+    if (forceWebGl || searchParams.has('webgl') || isXrWebGlForced(searchParams)) {
         return 'webgl';
     }
 

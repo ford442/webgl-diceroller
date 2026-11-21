@@ -1,4 +1,5 @@
 import { collectDeviceQualityHints } from './DeviceCapabilities.js';
+import { isXrRequested } from '../xr/XrFlags.js';
 
 export const QUALITY_PROFILES = {
     high: {
@@ -37,6 +38,15 @@ export const QUALITY_PROFILES = {
         shadowLights: 'key',
         pixelRatioCap: 1.0,
         extraLights: false,
+        // WebXR only (src/xr/XrFramebufferScale.js): the session starts at
+        // `framebufferScale` and a sustained-slow-frame monitor steps it down
+        // by `framebufferScaleStep` toward `framebufferScaleMin` — applied on
+        // the next session start, since three refuses to resize a live layer.
+        framebufferScale: 1.0,
+        framebufferScaleMin: 0.6,
+        framebufferScaleStep: 0.1,
+        // Fixed foveation (0 = off … 1 = max) where the layer exposes it.
+        foveation: 1,
     },
 };
 
@@ -48,14 +58,13 @@ export function hasExplicitQualityOverride() {
         params.has('no-godrays') ||
         params.has('no-bloom') ||
         params.has('pr') ||
-        params.has('xr') ||
-        params.has('xr-emulator')
+        isXrRequested(params)
     );
 }
 
 export function guessInitialQualityProfile(rendererState: any) {
     const params = new URLSearchParams(window.location.search);
-    if (params.has('xr') || params.has('xr-emulator')) {
+    if (isXrRequested(params)) {
         return QUALITY_PROFILES.xr;
     }
     const hints = collectDeviceQualityHints(rendererState);

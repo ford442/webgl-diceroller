@@ -1,5 +1,7 @@
 /**
- * World-space roll totals for XR (parented to xrWorld).
+ * World-space roll totals for XR. Hangs off the rig's `xrTableAnchor`
+ * (meters, at the velvet centre) — not `xrWorld`, whose 0.05 scale would
+ * shrink a 45 cm panel to 2 cm.
  */
 
 import * as THREE from 'three';
@@ -11,7 +13,8 @@ const PANEL_H = 256;
 /**
  * @param {{
  *   appEvents: import('../types/app').AppEvents,
- *   getXrWorld: () => import('three').Group | null,
+ *   getAnchor: () => import('three').Object3D | null,
+ *   isPresenting?: () => boolean,
  *   readAllDiceValues: () => Array<{ type: string, value: number | null }>,
  * }} deps
  */
@@ -38,13 +41,16 @@ export function createXrResultsHud(deps) {
     mesh.renderOrder = 999;
     group.add(mesh);
 
-    function attachToXrWorld() {
-        const xrWorld = deps.getXrWorld();
-        if (!xrWorld) return;
-        if (group.parent !== xrWorld) {
-            xrWorld.add(group);
+    /** Attach under the table anchor; false while not presenting (desktop never shows it). */
+    function attachToAnchor() {
+        if (deps.isPresenting && !deps.isPresenting()) return false;
+        const anchor = deps.getAnchor();
+        if (!anchor) return false;
+        if (group.parent !== anchor) {
+            anchor.add(group);
         }
         group.position.set(0, 0, 0);
+        return true;
     }
 
     function clearPanel() {
@@ -95,13 +101,13 @@ export function createXrResultsHud(deps) {
     }
 
     deps.appEvents.on(AppEvent.ROLL_STARTED, () => {
-        attachToXrWorld();
+        if (!attachToAnchor()) return;
         group.visible = true;
         clearPanel();
     });
 
     deps.appEvents.on(AppEvent.ROLL_SETTLED, () => {
-        attachToXrWorld();
+        if (!attachToAnchor()) return;
         group.visible = true;
         showFromDiceValues();
     });
@@ -109,7 +115,7 @@ export function createXrResultsHud(deps) {
     deps.appEvents.on(AppEvent.ROLL_EVALUATED, (payload) => {
         const result = /** @type {{ result?: object }} */ (payload)?.result;
         if (!result) return;
-        attachToXrWorld();
+        if (!attachToAnchor()) return;
         group.visible = true;
         showEvaluated(result);
     });

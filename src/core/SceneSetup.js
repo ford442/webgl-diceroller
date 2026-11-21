@@ -24,6 +24,7 @@ import { prefersReducedMotion } from './AccessibilityPrefs.js';
 import { createPostRuntimeControls } from './PostRuntimeControls.js';
 import { getLightingPreset } from './LightingPresets.js';
 import { createTslKit } from '../shaders/graph/ShaderKit.js';
+import { isXrRequested } from '../xr/XrFlags.js';
 import {
     CHROMATIC_PARAMS,
     VIGNETTE_PARAMS,
@@ -183,12 +184,9 @@ export async function setupScene(container, options = {}) {
     // The context profile sets the post floor: `none` (xr, overlay) and `low`
     // (mobile, software) here, the URL flags on top.
     const forceLowPost = params.has('low-post') || rendererState.contextPost === 'low';
-    // ?xr implies no-post — EffectComposer fights the XR framebuffer.
+    // ?xr / ?ar imply no-post — EffectComposer fights the XR framebuffer.
     const disablePost =
-        params.has('no-post') ||
-        params.has('xr') ||
-        params.has('xr-emulator') ||
-        rendererState.contextPost === 'none';
+        params.has('no-post') || isXrRequested(params) || rendererState.contextPost === 'none';
     // A transparent profile (?overlay) shows the host page through the canvas:
     // drop the opaque backdrop so the alpha-0 clear actually reaches it.
     if (rendererState.contextAlpha) {

@@ -45,6 +45,11 @@ export function createSessionStrip(opts) {
     return {
         root,
         refresh,
+        /** @param {boolean} hidden */
+        setHidden(hidden) {
+            root.hidden = hidden;
+            root.style.display = hidden ? 'none' : '';
+        },
         destroy() {
             root.remove();
         },

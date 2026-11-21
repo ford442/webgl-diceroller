@@ -1,24 +1,30 @@
 /**
- * DOM affordances for the XR spike: Enter VR button + hide desktop help while presenting.
+ * DOM affordances for XR: Enter VR / Enter AR button + hide desktop help while presenting.
  */
+
+import { xrButtonLabel } from './XrSessionOptions.js';
 
 /**
  * @param {object} options
+ * @param {'immersive-vr' | 'immersive-ar'} [options.mode]
  * @param {() => Promise<void>} options.onEnter
  * @param {() => void} [options.onExit]
  * @returns {{
  *   button: HTMLButtonElement;
  *   setPresenting: (presenting: boolean) => void;
  *   setSupported: (supported: boolean) => void;
+ *   setError: (message: string | null) => void;
  *   dispose: () => void;
  * }}
  */
-export function createXrUi({ onEnter, onExit }) {
+export function createXrUi({ mode = 'immersive-vr', onEnter, onExit }) {
     const button = document.createElement('button');
     button.type = 'button';
+    // Stable id for automation; `#xr-enter-vr` predates `?ar`.
     button.id = 'xr-enter-vr';
-    button.textContent = 'Enter VR';
-    button.setAttribute('aria-label', 'Enter VR');
+    button.dataset.xrMode = mode;
+    button.textContent = xrButtonLabel(mode, false);
+    button.setAttribute('aria-label', xrButtonLabel(mode, false));
     Object.assign(button.style, {
         position: 'absolute',
         bottom: '16px',
@@ -46,7 +52,9 @@ export function createXrUi({ onEnter, onExit }) {
             return;
         }
         button.style.display = presenting ? 'none' : 'block';
-        button.textContent = presenting ? 'Exit VR' : 'Enter VR';
+        const label = xrButtonLabel(mode, presenting);
+        button.textContent = label;
+        button.setAttribute('aria-label', label);
     }
 
     button.addEventListener('click', () => {
@@ -91,6 +99,11 @@ export function createXrUi({ onEnter, onExit }) {
         setSupported(next) {
             supported = next;
             sync();
+        },
+        setError(message) {
+            // Shown as a tooltip; the session-start failure is also logged.
+            button.title = message ? `XR failed: ${message}` : '';
+            button.dataset.xrError = message ?? '';
         },
         dispose() {
             button.remove();

@@ -84,6 +84,12 @@ assert(
 );
 assert(isXrRequested(new URLSearchParams('')) === false, 'isXrRequested false by default');
 assert(isXrRequested(new URLSearchParams('xr')) === true, 'isXrRequested true for ?xr');
+assert(isXrRequested(new URLSearchParams('ar')) === true, 'isXrRequested true for ?ar');
+assert(getRendererPreference(new URLSearchParams('ar')) === 'webgl', '?ar forces webgl preference');
+assert(
+    getRendererPreference(new URLSearchParams('xr&xr-webgpu')) === 'webgpu',
+    '?xr-webgpu keeps the WebGPU preference (experimental)'
+);
 assert(getXrSnapDegrees(new URLSearchParams('')) === 45, 'default xr snap is 45');
 assert(getXrSnapDegrees(new URLSearchParams('xr-snap=30')) === 30, 'xr-snap=30 honored');
 assert(getXrSnapDegrees(new URLSearchParams('xr-snap=5')) === 15, 'xr-snap clamps to min 15');

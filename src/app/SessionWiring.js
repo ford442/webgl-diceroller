@@ -55,16 +55,20 @@ export function setupSessionWiring(app, deps) {
         }
     }
 
+    const canPassTurn = () => !multiplayerRef.current?.isGuest?.();
+
+    function doPassTurn() {
+        if (!canPassTurn()) return;
+        snapshot = passTurn(snapshot);
+        persist();
+        emitTurn('pass');
+        emitInitiative();
+        broadcastIfHost();
+        panel.refresh(snapshot);
+    }
+
     const panel = createSessionStrip({
-        onPassTurn: () => {
-            if (multiplayerRef.current?.isGuest?.()) return;
-            snapshot = passTurn(snapshot);
-            persist();
-            emitTurn('pass');
-            emitInitiative();
-            broadcastIfHost();
-            panel.refresh(snapshot);
-        },
+        onPassTurn: doPassTurn,
         getCurrentActorLabel: () => {
             const actor = currentActor(snapshot);
             return actor?.name ?? '—';
@@ -103,10 +107,19 @@ export function setupSessionWiring(app, deps) {
         return deps.getPendingExpression?.() ?? null;
     }
 
+    // The DOM strip is desktop-only: while a headset presents, the world-space
+    // XR chrome (src/xr/XrChrome.js) shows the same snapshot instead.
+    appEvents.on(AppEvent.XR_PRESENTING, (payload) => {
+        const presenting = /** @type {{ presenting?: boolean }} */ (payload)?.presenting === true;
+        panel.setHidden(presenting);
+    });
+
     panel.refresh(snapshot);
     emitInitiative();
 
     app.session = {
+        passTurn: doPassTurn,
+        canPassTurn,
         getSnapshot: () => ({ ...snapshot }),
         applyRemoteSession,
         setSeats: (seats) => {
