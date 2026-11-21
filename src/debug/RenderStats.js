@@ -273,6 +273,22 @@ export function createRenderStats({
             );
         }
 
+        // WebXR (?xr / ?ar): framebuffer scale actually applied to the layer,
+        // the stepped-down value the next session will start with, foveation.
+        const xr = scheduler?.stats?.xr;
+        if (xr) {
+            const next =
+                xr.nextFramebufferScale !== xr.framebufferScale
+                    ? ` → next ${Number(xr.nextFramebufferScale).toFixed(2)}`
+                    : '';
+            lines.push(
+                `xr ${xr.mode}${xr.presenting ? ' presenting' : ''}  fb ${Number(xr.framebufferScale).toFixed(2)}${next}  fov ${xr.foveation}${xr.handsTracked ? '  hands' : ''}`
+            );
+            if (xr.presenting && xr.lastWindowAvgMs) {
+                lines.push(`xr frame ${xr.lastWindowAvgMs} ms  stepDowns ${xr.stepDowns}`);
+            }
+        }
+
         if (debugPerf && scheduler?.stats?.phaseTimes) {
             const pt = scheduler.stats.phaseTimes;
             lines.push('— phases (ms) —');

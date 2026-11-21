@@ -147,6 +147,9 @@ async function spawnPropUntraced(entry, context, options) {
     }
 
     const root = resolveRootObject(result);
+    // Which scene-document factory built this root. Read by anything that has
+    // to recognise a prop without matching mesh names (XR AR keeps `Table`).
+    if (root) root.userData.sceneFactory = factoryName;
     if (root && context.cullingSystem && entry.cull !== false) {
         context.cullingSystem.register(root, { important: entry.important === true });
     }

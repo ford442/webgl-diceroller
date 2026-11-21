@@ -24,6 +24,8 @@ export const AppEvent = Object.freeze({
     APP_READY: 'app:ready',
     SESSION_INITIATIVE: 'session:initiative',
     SESSION_TURN: 'session:turn',
+    /** WebXR presenting changed (`{ presenting, mode }`); DOM chrome hides while true. */
+    XR_PRESENTING: 'xr:presenting',
 } as const satisfies Record<string, AppEventName>);
 
 export function createAppEvents(): AppEvents {

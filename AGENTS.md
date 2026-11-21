@@ -29,7 +29,7 @@ webgl-diceroller/
 │   ├── core/                   # FrameScheduler, LoadingTiers, BootTrace / SpawnBudget / ShaderPrecompile, RendererFactory (+ PixelRatioPolicy, WebGpuDevice, WebGlContext, RendererRecovery), textures, culling
 │   ├── interaction.js          # Mouse/raycaster interaction (drag, levitate)
 │   ├── interaction/            # Dice cup / tower / tray / jail + shared WasmDieGrab helper
-│   ├── xr/                     # WebXR seated-table spike (?xr)
+│   ├── xr/                     # WebXR: seated VR (?xr), AR table placement (?ar), hands, world-space chrome
 │   ├── ui.js                   # DOM-based UI controls and crosshair
 │   ├── scenes/                 # Scene documents (data): tavern, chart-room; ?scene= picks one
 │   ├── shaders/                # Shader graphs, built as GLSL (WebGL) and TSL (WebGPU)
@@ -112,7 +112,7 @@ npm run format:check        # Prettier check (CI)
     - WebGPU is the default; `?webgpu` / `?wgpu` are redundant but still force it explicitly.
     - `?webgl` forces the stable WebGL baseline path (escape hatch / older browsers). It is no longer needed to get a working boot: a missing or software/fallback WebGPU adapter routes to the classic `WebGLRenderer` on its own (`?webgpu` keeps a software adapter for testing).
     - Context creation options come from one `ContextProfile` table (`src/core/ContextProfile.ts`: `desktop`, `mobile`, `xr`, `software`, `overlay`, `preview`). `?context=<profile>` forces a row; `?overlay` selects the transparent #315 overlay profile (alpha canvas, no shadows, no post). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Context profiles).
-    - `?xr` / `?xr-emulator` enable the seated WebXR spike (forces WebGL + no-post). See [`docs/XR.md`](docs/XR.md).
+    - `?xr` / `?xr-emulator` enable seated WebXR (forces WebGL + no-post). `?ar` enables `immersive-ar` table placement (hit-test + anchors; implies everything `?xr` does). `?xr-hands=off` stops requesting `hand-tracking`; `?xr-webgpu` is an experimental opt-out of the forced WebGL (three r181's XRManager still refuses a WebGPU backend, and the session reports that). Every XR check goes through `isXrRequested()` in `src/xr/XrFlags.js` — never `params.has('xr')`. See [`docs/XR.md`](docs/XR.md).
     - `?xr-snap=45` sets VR snap-turn degrees (15–90) when `?xr` is active.
     - `?pr=N` sets render pixel ratio (clamped to `[0.5, 3]`); default is `min(devicePixelRatio, 2)`. At `pr=1` MSAA is enabled; above 1.0 FXAA is used in the post chain instead.
     - Pixel ratio auto step-down: when sustained frame times exceed ~32 ms, ratio steps down toward 1.0 (skipped when `?pr=` forces a ratio).
@@ -138,7 +138,7 @@ Initiative / turn tracking and durable multiplayer rooms are wired through **`Ap
 - [`signaling/src/RoomDurableObject.js`](signaling/src/RoomDurableObject.js) — persisted room state + hibernating WebSockets; `solverBuildId` mismatch rejected at join.
 - [`packages/dice-core/src/net/CommitReveal.ts`](packages/dice-core/src/net/CommitReveal.ts) — SHA-256 commit-reveal (every room; binds seed, source and partial-throw slots).
 - [`packages/dice-core/src/net/InputLog.ts`](packages/dice-core/src/net/InputLog.ts) / [`RollbackSim.ts`](packages/dice-core/src/net/RollbackSim.ts) — lockstep core (#366, slice 1, headless only): tick-stamped inputs in `(tick, seat, seq)` order, applied by `applyTableInput.ts`. A late input rewinds a snapshot ring (`rewindState`, snapshot v5) and re-runs. Validate every peer record with `parseTickInput`. The interaction layer (drag, cup, jail, tower) still calls the engine directly until slice 2 routes it through the log.
-- [`src/xr/XrResultsHud.js`](src/xr/XrResultsHud.js) — world-space totals on `xrWorld`; DOM HUD hidden while presenting.
+- [`src/xr/XrResultsHud.js`](src/xr/XrResultsHud.js) / [`src/xr/XrChrome.js`](src/xr/XrChrome.js) — world-space totals and initiative / pass-turn / tower-drop panel on the rig's `xrTableAnchor`; the DOM HUD and session strip hide while presenting (`xr:presenting`).
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Session layer) and [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md).
 

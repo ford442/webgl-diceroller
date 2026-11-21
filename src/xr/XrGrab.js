@@ -8,6 +8,7 @@ import {
     endWasmDieGrab,
     isWasmDieGrabActive,
 } from '../interaction/WasmDieGrab.js';
+import { nearestWithinReach, PINCH_REACH_M } from './XrPinch.js';
 
 const _raycaster = new THREE.Raycaster();
 const _origin = new THREE.Vector3();
@@ -17,9 +18,13 @@ const _attachPoint = new THREE.Vector3();
 const _tip = new THREE.Vector3();
 const _physicsPoint = new THREE.Vector3();
 const _physicsTip = new THREE.Vector3();
+const _pinchPoint = new THREE.Vector3();
+const _scale = new THREE.Vector3();
 
 /**
- * Controller-ray grab using the shared WASM kinematic grab helper.
+ * Controller-ray and hand-pinch grab on the shared WASM kinematic grab helper
+ * (the same `setDieKinematic` + velocity path the mouse drag uses). Only one
+ * die is held at a time, by whichever controller / hand grabbed it.
  * @param {object} [options]
  * @param {() => import('three').Object3D | null | undefined} [options.getContentRoot]
  *   XR world group (scaled). Grab targets are converted into this space for physics.
@@ -30,6 +35,8 @@ export function createXrGrab(options = {}) {
     const state = createWasmDieGrabState();
     /** @type {number | null} */
     let grabControllerIndex = null;
+    /** @type {'ray' | 'pinch'} */
+    let grabMode = 'ray';
     /** Offset from controller (physics space) to die at grab start */
     const localOffset = new THREE.Vector3();
 
@@ -70,18 +77,53 @@ export function createXrGrab(options = {}) {
     /**
      * @param {number} controllerIndex
      * @param {import('three').Object3D} controller
+     * @returns {boolean}
      */
     function tryGrab(controllerIndex, controller) {
-        if (isWasmDieGrabActive(state)) return;
+        if (isWasmDieGrabActive(state)) return false;
         const die = pickDie(controller);
-        if (!die) return;
+        if (!die) return false;
 
         controller.getWorldPosition(_origin);
         toPhysicsPoint(_origin, _physicsPoint);
         localOffset.copy(die.position).sub(_physicsPoint);
         startWasmDieGrab(state, die, die.position.clone());
         grabControllerIndex = controllerIndex;
+        grabMode = 'ray';
         hooks.onMotionActivityChange?.(true, 'drag');
+        return true;
+    }
+
+    /**
+     * Direct grab: the die nearest a hand's pinch point (world space), if one
+     * is within reach.
+     * @param {number} handIndex
+     * @param {import('three').Vector3} worldPoint
+     * @param {number} [reach] meters
+     * @returns {boolean}
+     */
+    function tryGrabNear(handIndex, worldPoint, reach = PINCH_REACH_M) {
+        if (isWasmDieGrabActive(state)) return false;
+        const candidates = [];
+        for (const d of spawnedDice) {
+            const mesh = d.mesh;
+            if (!mesh) continue;
+            const position = mesh.getWorldPosition(new THREE.Vector3());
+            mesh.getWorldScale(_scale);
+            const geometry = /** @type {import('three').Mesh} */ (mesh).geometry;
+            if (geometry && !geometry.boundingSphere) geometry.computeBoundingSphere?.();
+            const radius = (geometry?.boundingSphere?.radius ?? 0) * _scale.x;
+            candidates.push({ item: mesh, position, radius });
+        }
+        const die = nearestWithinReach(worldPoint, candidates, reach);
+        if (!die) return false;
+        toPhysicsPoint(worldPoint, _physicsPoint);
+        localOffset.copy(die.position).sub(_physicsPoint);
+        startWasmDieGrab(state, /** @type {import('three').Mesh} */ (die), die.position.clone());
+        grabControllerIndex = handIndex;
+        grabMode = 'pinch';
+        hooks.onMotionActivityChange?.(true, 'drag');
+        return true;
     }
 
     /**
@@ -98,9 +140,22 @@ export function createXrGrab(options = {}) {
     /**
      * @param {number} deltaTime
      * @param {import('three').Object3D[]} controllers
+     * @param {(index: number, out: import('three').Vector3) => boolean} [getPinchPoint]
+     *   world-space pinch point of a hand; false when that hand is not tracked
      */
-    function update(deltaTime, controllers) {
+    function update(deltaTime, controllers, getPinchPoint) {
         if (!isWasmDieGrabActive(state) || grabControllerIndex === null) return;
+        if (grabMode === 'pinch') {
+            if (!getPinchPoint?.(grabControllerIndex, _pinchPoint)) {
+                releaseAll();
+                return;
+            }
+            toPhysicsPoint(_pinchPoint, _physicsPoint);
+            _physicsPoint.add(localOffset);
+            setWasmDieGrabTarget(state, _physicsPoint);
+            updateWasmDieGrab(state, deltaTime);
+            return;
+        }
         const controller = controllers[grabControllerIndex];
         if (!controller) {
             endWasmDieGrab(state, {
@@ -135,9 +190,15 @@ export function createXrGrab(options = {}) {
 
     return {
         tryGrab,
+        tryGrabNear,
         tryRelease,
         update,
         releaseAll,
         isGrabbing: () => isWasmDieGrabActive(state),
+        /** @returns {{ index: number, mode: 'ray' | 'pinch' } | null} */
+        getGrabSource: () =>
+            isWasmDieGrabActive(state) && grabControllerIndex !== null
+                ? { index: grabControllerIndex, mode: grabMode }
+                : null,
     };
 }

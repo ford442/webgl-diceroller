@@ -1,6 +1,6 @@
 # Architecture Overview
 
-High-level map of how the WebGPU Dice Roller is structured. For agent-oriented detail (commands, flags, prop authoring), see [`AGENTS.md`](../AGENTS.md). For the WASM physics engine, see [`WASM_ENGINE.md`](WASM_ENGINE.md). For the WebXR seated-table spike, see [`XR.md`](XR.md).
+High-level map of how the WebGPU Dice Roller is structured. For agent-oriented detail (commands, flags, prop authoring), see [`AGENTS.md`](../AGENTS.md). For the WASM physics engine, see [`WASM_ENGINE.md`](WASM_ENGINE.md). For WebXR (seated VR, AR placement), see [`XR.md`](XR.md).
 
 ## Entry point and orchestration
 
@@ -31,8 +31,9 @@ main.js
 | `roll:started`       | `{ seed, expression, diceSet, source? }`    | `beginRoll`, UI roll, cup pour, notation                          | RoomSession host broadcast                                      |
 | `roll:settled`       | `{ results, timedOut, reason, simSeconds }` | Camera focus settle (or the settle timeout; see `SettleWatch.ts`) | Results HUD, history / fairness / game-feel / session strip     |
 | `roll:evaluated`     | `{ result }`                                | Notation `RollSession` onComplete                                 | XR world HUD, session strip                                     |
-| `session:initiative` | `{ order, currentIndex }`                   | SessionWiring                                                     | Session strip                                                   |
-| `session:turn`       | `{ actorId, actorName, direction }`         | Session strip pass turn                                           | Session strip                                                   |
+| `session:initiative` | `{ order, currentIndex }`                   | SessionWiring                                                     | Session strip, XR chrome                                        |
+| `session:turn`       | `{ actorId, actorName, direction }`         | Session strip / XR chrome pass turn                               | Session strip, XR chrome                                        |
+| `xr:presenting`      | `{ presenting, mode }`                      | `XrAppWiring` (WebXR enter / exit)                                | Session strip (hides while presenting)                          |
 | `dice:collision`     | Enriched collision event                    | `postPhysicsSync` poll                                            | Collision audio, game-feel; optional `__onDiceCollision` bridge |
 | `renderer:lost`      | `{ reason, … }`                             | GPU context/device loss                                           | (open)                                                          |
 | `layout:rerolled`    | Layout manager result                       | Layout reroll                                                     | (open)                                                          |
@@ -53,7 +54,7 @@ Desktop **initiative / turn strip** and multiplayer session sync live outside `m
 - [`SessionState.ts`](../src/session/SessionState.ts) — seat list, current actor, `lastExpression`; persisted in `localStorage` per room code.
 - [`SessionWiring.js`](../src/app/SessionWiring.js) — subscribes to `roll:settled` / `roll:evaluated`; emits `session:initiative` and `session:turn`; host broadcasts `session-sync` via [`RoomSession.ts`](../src/net/RoomSession.ts).
 - [`SessionStrip.js`](../src/ui/SessionStrip.js) — DOM strip (pass turn, current actor).
-- XR roll totals: [`XrResultsHud.js`](../src/xr/XrResultsHud.js) on `xrWorld`; DOM HUD suppressed while presenting (`setDomResultsSuppressed`).
+- XR roll totals: [`XrResultsHud.js`](../src/xr/XrResultsHud.js) and the initiative panel [`XrChrome.js`](../src/xr/XrChrome.js) on the rig's `xrTableAnchor`; DOM HUD suppressed while presenting (`setDomResultsSuppressed`), DOM session strip hidden on `xr:presenting`.
 
 State flows through **`AppContext`** (`app.session`, `app.multiplayer`) and **`AppEvents`** — not new `window.*` globals.
 
@@ -307,7 +308,7 @@ A share link carries `layout-seed`; replaying it is only honest if the receiver 
 | No adapter, or a software / fallback adapter (SwiftShader, lavapipe, WARP) | Classic `WebGLRenderer`, chosen by the factory itself — never Three's WebGL2 TSL backend |
 | `?webgl`                                                                   | Force `WebGLRenderer` (stable baseline / CI / SwiftShader)                               |
 | `?webgpu` / `?wgpu`                                                        | Force WebGPU explicitly (redundant with default)                                         |
-| `?xr` / `?xr-emulator`                                                     | Force `WebGLRenderer` + no-post for WebXR (see [`XR.md`](XR.md))                         |
+| `?xr` / `?xr-emulator` / `?ar`                                             | Force `WebGLRenderer` + no-post for WebXR (see [`XR.md`](XR.md))                         |
 
 ### Device session (context attributes)
 

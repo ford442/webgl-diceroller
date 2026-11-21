@@ -202,7 +202,8 @@ export type AppEventName =
     | 'layout:rerolled'
     | 'app:ready'
     | 'session:initiative'
-    | 'session:turn';
+    | 'session:turn'
+    | 'xr:presenting';
 
 export interface AppEvents {
     on(type: string, handler: (payload: unknown) => void): () => void;
@@ -221,6 +222,7 @@ export interface AppEvents {
         APP_READY: 'app:ready';
         SESSION_INITIATIVE: 'session:initiative';
         SESSION_TURN: 'session:turn';
+        XR_PRESENTING: 'xr:presenting';
     };
 }
 
@@ -281,6 +283,10 @@ export interface AppContextSession {
     getSnapshot?: () => unknown;
     applyRemoteSession?: (msg: unknown) => void;
     setSeats?: (seats: unknown) => void;
+    /** Advance initiative (no-op for a room guest). Same path as the strip's button. */
+    passTurn?: () => void;
+    /** False for a room guest: only the host advances the turn. */
+    canPassTurn?: () => boolean;
 }
 
 export interface AppContextInteractable {
@@ -369,8 +375,10 @@ export interface AppContext {
     /** Table game (Farkle) controls — see src/app/GameWiring.ts. Null without physics. */
     game: AppContextGame | null;
     xrResultsHud?: unknown;
-    /** WebXR seated-table spike API when `?xr` is set. */
+    /** WebXR API when `?xr` / `?ar` is set (src/xr/XrSession.js; `getStats()` for automation). */
     xr?: unknown;
+    /** World-space initiative / pass-turn panel while presenting (src/xr/XrChrome.js). */
+    xrChrome?: unknown;
     /** Top-level aliases for Playwright (`window.__app.replayRoll`). */
     replayRoll?: ((seed?: number | null) => void) | null;
     readAllDiceValues?: (() => DiceReadValue[]) | null;
