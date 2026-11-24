@@ -464,6 +464,6 @@ try {
 
 await browser.close();
 console.log(
-    `\nedge cases: ${failed === 0 ? 'all asserted cases passed' : `${failed} check(s) failed`}${skipped ? `, ${skipped} skipped (no WASM)` : ''}`
+    `\nedge cases: ${failed === 0 ? 'all asserted cases passed' : `${failed} check(s) failed`}${skipped ? `, ${skipped} skipped` : ''}`
 );
 process.exit(failed === 0 ? 0 : 1);
