@@ -42,7 +42,9 @@ def main():
     """
     Main function to connect to the server and start the upload process.
     """
-    password = 'GoogleBez12!' # getpass.getpass(f"Enter password for {USERNAME}@{HOSTNAME}: ")
+    password = os.environ.get("DEPLOY_SSH_PASSWORD") or getpass.getpass(
+        f"Enter password for {USERNAME}@{HOSTNAME}: "
+    )
 
     transport = None
     sftp = None
