@@ -31,6 +31,27 @@ export const WEBGPU_REQUIRED_LIMITS: Record<string, number> = {
  */
 export const WEBGPU_CURATED_FEATURES: readonly string[] = [];
 
+/**
+ * Texture-compression features, requested only when the adapter reports them.
+ *
+ * The shared PBR textures ship as KTX2 (see TexturePipeline.js). `KTX2Loader`
+ * decides its transcode target from `renderer.hasFeature(...)`, which reads
+ * the *device's* feature set, not the adapter's. With none of these enabled
+ * the loader transcodes to uncompressed RGBA, which Three wraps in a
+ * `CompressedTexture` that `WebGPUTextureUtils._getBlockData` has no entry for
+ * and the upload throws `Cannot read properties of undefined (reading 'width')`
+ * inside the first draw of every prop that uses a shared texture.
+ *
+ * Only the three families `KTX2Loader` can target on WebGPU (BC on desktop,
+ * ASTC on Apple / mobile, ETC2 on mobile) are listed. They are texture-format
+ * capabilities and do not touch the simulation or its replay surface.
+ */
+export const WEBGPU_TEXTURE_COMPRESSION_FEATURES: readonly string[] = [
+    'texture-compression-bc',
+    'texture-compression-astc',
+    'texture-compression-etc2',
+];
+
 /** GPU feature name gating `WebGPURenderer`'s `trackTimestamp` (GPU pass timing). */
 export const WEBGPU_TIMESTAMP_QUERY_FEATURE = 'timestamp-query';
 
@@ -41,8 +62,9 @@ export function wantsWebGpuTimestampQuery(searchParams: URLSearchParams): boolea
 
 /**
  * Curated `requiredFeatures` for `adapter.requestDevice()`: the documented
- * floor (currently empty) plus `timestamp-query` when both the caller wants
- * GPU-timestamp tracking and the adapter actually supports it. Never
+ * floor (currently empty), the texture-compression features the adapter
+ * reports (see WEBGPU_TEXTURE_COMPRESSION_FEATURES), plus `timestamp-query`
+ * when both the caller wants GPU-timestamp tracking and the adapter supports it. Never
  * requests a feature the adapter lacks — `requestDevice` rejects on an
  * unsupported required feature, and that would turn "no GPU timer" into
  * "no WebGPU at all".
@@ -52,6 +74,9 @@ export function getWebGpuRequiredFeatures(
     { wantTimestampQuery }: { wantTimestampQuery: boolean }
 ): string[] {
     const features = [...WEBGPU_CURATED_FEATURES];
+    for (const name of WEBGPU_TEXTURE_COMPRESSION_FEATURES) {
+        if (adapterFeatures.has(name)) features.push(name);
+    }
     if (wantTimestampQuery && adapterFeatures.has(WEBGPU_TIMESTAMP_QUERY_FEATURE)) {
         features.push(WEBGPU_TIMESTAMP_QUERY_FEATURE);
     }
