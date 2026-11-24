@@ -116,8 +116,13 @@ export function installErrorBoundary(options: ErrorBoundaryOptions = {}): ErrorB
 
     const reporter = createErrorReporter({ onFirst: surface, log: options.log });
 
+    // One failed import raises several signals (vite:preloadError, the import()
+    // rejection, an unhandled rejection): they are one problem, so one recovery.
+    let recovering = false;
     const handleChunk = (error: unknown) => {
         reporter.report('chunk', error, 'import');
+        if (recovering) return;
+        recovering = true;
         void recoverFromStaleChunk({
             storage,
             reload,
@@ -127,6 +132,7 @@ export function installErrorBoundary(options: ErrorBoundaryOptions = {}): ErrorB
             },
         }).then((outcome: ChunkRecovery) => {
             if (outcome === 'reloaded') return;
+            recovering = false;
             // A reload did not help (or could not be tried safely): leave the choice to the player.
             try {
                 banner(

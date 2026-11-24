@@ -34,12 +34,15 @@ describe('installErrorBoundary', () => {
     let reload: ReturnType<typeof vi.fn>;
     const log = vi.fn();
 
+    let storage: StorageLike;
+
     beforeEach(() => {
         document.body.innerHTML =
             '<div id="loading-overlay"><div id="loading-text">Loading Tavern...</div><div id="loading-bar"></div></div>';
         reload = vi.fn();
+        storage = memoryStorage();
         log.mockClear();
-        boundary = installErrorBoundary({ storage: memoryStorage(), reload, log });
+        boundary = installErrorBoundary({ storage, reload, log });
     });
 
     afterEach(() => {
@@ -103,7 +106,13 @@ describe('installErrorBoundary', () => {
         fireRejection(err);
         window.dispatchEvent(Object.assign(new Event('vite:preloadError'), { payload: err }));
         await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
-        // the later ones saw the guard and fell back to the banner
+        // The three signals were one problem: one reload, and no banner flashed before it.
+        expect(banners()).toHaveLength(0);
+        // The reloaded page (a fresh boundary, same tab storage) fails the same import again:
+        // the guard says a reload was already tried.
+        boundary.dispose();
+        boundary = installErrorBoundary({ storage, reload, log });
+        fireRejection(err);
         await vi.waitFor(() => expect(banners()).toHaveLength(1));
         expect(reload).toHaveBeenCalledTimes(1);
         expect(banners()[0]?.textContent).toContain('out of date');
