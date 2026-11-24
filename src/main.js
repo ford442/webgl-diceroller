@@ -57,6 +57,7 @@ import { loadTiers } from './core/LoadingTiers.js';
 import { setupInput } from './core/InputHandler.js';
 import { createCameraController } from './core/CameraController.js';
 import { createFrameScheduler } from './core/FrameScheduler.js';
+import { installErrorBoundary } from './core/ErrorBoundary.js';
 import { createRollHistory } from 'dice-core/roll/RollHistory';
 import { createRollStats } from 'dice-core/roll/RollStats';
 import { createRollHistoryPanel } from './ui/RollHistoryPanel.js';
@@ -111,10 +112,15 @@ let interaction;
 const searchParams = new URLSearchParams(window.location.search);
 const debugEnabled = searchParams.has('debug') || searchParams.has('debug-perf');
 const testHooksEnabled = searchParams.has('test') || debugEnabled;
+// First thing: from here a throw anywhere is logged once and shown, never silent.
+const errorBoundary = installErrorBoundary();
 const scheduler = createFrameScheduler({
     fixedDeltaTime: 1 / 60,
     maxPhysicsSteps: 5,
     debugPerf: searchParams.has('debug-perf'),
+    // A system that throws is isolated (and switched off if it keeps throwing)
+    // instead of ending the render loop.
+    onSystemError: errorBoundary.onSystemError,
 });
 const cullingSystem = createCullingSystem({ enabled: !searchParams.has('no-cull') });
 
@@ -129,6 +135,20 @@ app.stats = scheduler.stats;
 // What the page did between navigation and `ready` (tiers, props, compiles, first
 // frame, long tasks): `window.__app.bootTrace()` under ?test / ?debug.
 app.bootTrace = () => getBootTrace().snapshot();
+app.errors = {
+    list: () => errorBoundary.reporter.list(),
+    total: () => errorBoundary.reporter.total(),
+    clear: () => errorBoundary.reporter.clear(),
+};
+if (testHooksEnabled) {
+    // A system that throws every frame from the given phase (default `updates`):
+    // lets a harness prove one failing system is contained and reported once.
+    app.injectFault = (phase = 'updates', name = 'injectedFault') => {
+        scheduler.register(phase, name, () => {
+            throw new Error(`injected fault in ${name}`);
+        });
+    };
+}
 if (debugEnabled || searchParams.has('boot-trace')) installBootTraceOverlay(getBootTrace());
 app.isTouchPrimaryDevice = isTouchPrimaryDevice();
 setInteractablesMirror(app.interactables);
@@ -217,9 +237,9 @@ let inputState;
 let bootRenderHold = null;
 
 init().catch((error) => {
-    // Never leave a failed boot staring at an undrawn canvas.
+    // Never leave a failed boot staring at an undrawn canvas or a loading bar.
     bootRenderHold?.release();
-    throw error;
+    errorBoundary.reportBoot(error);
 });
 
 async function init() {
@@ -445,8 +465,8 @@ async function init() {
             app.renderer
         );
     } catch (e) {
-        console.error('Failed to load scene tiers', e);
         bootRenderHold?.release();
+        errorBoundary.reportBoot(e);
         showLoadFailure('Error: Scene failed to load. Check console.');
         return;
     }
@@ -654,14 +674,21 @@ function onWindowResize() {
 }
 
 function animate() {
-    const deltaTime = clock.getDelta();
-    const time = clock.getElapsedTime();
-    scheduler.runFrame({
-        deltaTime,
-        time,
-        renderer: app.renderer,
-        composer,
-        scene: app.scene,
-        camera: app.camera,
-    });
+    // Systems are guarded inside the scheduler; this catches anything around
+    // them. three re-arms requestAnimationFrame only after this callback
+    // returns, so an escaped throw here would end the loop for good.
+    try {
+        const deltaTime = clock.getDelta();
+        const time = clock.getElapsedTime();
+        scheduler.runFrame({
+            deltaTime,
+            time,
+            renderer: app.renderer,
+            composer,
+            scene: app.scene,
+            camera: app.camera,
+        });
+    } catch (error) {
+        errorBoundary.report('system', error, 'frame');
+    }
 }

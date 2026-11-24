@@ -910,14 +910,4 @@ export function createRoomSession(deps: RoomSessionDeps): RoomSession {
 /**
  * Resolve signaling base URL from Vite env or query override.
  */
-export function resolveSignalingUrl(
-    searchParams: URLSearchParams = new URLSearchParams(window.location.search)
-): string {
-    const fromQuery = searchParams.get('signal');
-    if (fromQuery) return fromQuery;
-    try {
-        return String(import.meta.env.VITE_SIGNALING_URL || '');
-    } catch {
-        return '';
-    }
-}
+export { resolveSignalingUrl } from './signalingUrl.js';

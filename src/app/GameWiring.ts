@@ -1,131 +1,27 @@
 /**
- * Table games on the tavern: the real `GameTable` (the scene, the jail, the
- * roll wiring), the Farkle panel, and the one place a game is started.
+ * The Farkle panel and `window.__app.game`, the one place a game is started.
  *
- * Rules live in `dice-core` and know nothing of this file; the session logic
- * lives in GameSession.ts and knows nothing of the scene. This is the join.
- * Solo against a bot for now — a room needs the host to broadcast `{ action,
- * seed, ids }` (the roll message already carries `ids`), which is the next slice.
+ * This file is only the facade: the panel, a handful of guards, and the
+ * handle to the running session. Everything that plays the game — the rules,
+ * the bot, GameSession, the adapter that seats dice on the real table — lives
+ * in `GameTable.ts`, fetched on the first "Play Farkle" and never for a person
+ * who does not open a game. Types come from there too (erased at build time).
  */
 
-import {
-    createFarkleRules,
-    FARKLE_DICE,
-    FARKLE_DIE_TYPE,
-    type FarkleAction,
-    type FarkleConfig,
-    type FarkleState,
-} from 'dice-core/game/Farkle';
-import { createFarkleBot } from 'dice-core/game/FarkleBot';
-import type { ThrowDie } from 'dice-core/game/GameRules';
-import { generateRollSeed } from 'dice-core/roll/ShareableRoll';
-import { createSeededRng } from 'dice-core/wasm/seededThrowParams';
-import { getSpawnedDiceCounts, spawnedDice, updateDiceSet, whenDiceRegistered } from '../dice.js';
-import { reorderToTypeSequence } from './diceOrder.js';
 import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
 import { isTouchPrimaryDevice } from '../core/DeviceCapabilities.js';
 import { createFarklePanel, type FarklePanel } from '../ui/FarklePanel.js';
-import type { DiceJailController } from '../interaction/DiceJailController.js';
-import type { RoomSession } from '../net/RoomSession.js';
 import type { AppContext } from '../types/app';
-import {
-    createGameSession,
-    type GameSession,
-    type GameSnapshot,
-    type GameTable,
-    type SubmitResult,
-    type TableThrow,
-} from './GameSession.js';
-import type { createRollWiring } from './RollWiring.js';
+import type { SubmitResult } from './GameSession.js';
+import type { FarkleAction } from 'dice-core/game/Farkle';
+import type {
+    FarkleSession,
+    FarkleSnapshot,
+    FarkleStartOptions,
+    GameWiringDeps,
+} from './GameTable.js';
 
-export type FarkleSession = GameSession<FarkleState, FarkleAction, FarkleState>;
-export type FarkleSnapshot = GameSnapshot<FarkleState, FarkleAction>;
-
-export interface FarkleStartOptions {
-    /** Seeds the game (init + every throw). Random when omitted. */
-    seed?: number;
-    config?: Partial<FarkleConfig>;
-    /** Milliseconds a bot "thinks", and the beat after a throw lands. */
-    pace?: { think?: number; afterThrow?: number };
-}
-
-export interface GameWiringDeps {
-    rollWiring: ReturnType<typeof createRollWiring>;
-    getScene: () => unknown;
-    getPhysicsWorld: () => unknown;
-    getUi: () => { updateCounts?: (counts: Record<string, number>) => void } | null | undefined;
-    getDiceJailController: () => DiceJailController | null | undefined;
-    multiplayerRef: { current: RoomSession | null };
-}
-
-/** The six d6 Farkle plays with; rules die id `i` is `FARKLE_TABLE_DICE[i]`. */
-export const FARKLE_TABLE_DICE: ThrowDie[] = Array.from({ length: FARKLE_DICE }, (_, id) => ({
-    id,
-    type: FARKLE_DIE_TYPE,
-}));
-
-// Long enough that a bot's next throw lands after the camera's focus-hold-return
-// (about 2.5 s from a settle), so back-to-back throws do not cut it short.
-const BOT_PACE = { think: 1000, afterThrow: 700 };
-
-/** The scene, as a game sees it. */
-export function createTavernGameTable(deps: GameWiringDeps): GameTable {
-    let saved: Record<string, number> | null = null;
-    /** The type of each die, in table order, before the game took the table. */
-    let savedOrder: string[] = [];
-
-    const jail = () => deps.getDiceJailController() ?? null;
-    const setCounts = async (counts: Record<string, number>) => {
-        updateDiceSet(deps.getScene(), deps.getPhysicsWorld(), counts);
-        deps.getUi()?.updateCounts?.(counts);
-        // The throw that follows poses these exact bodies: wait until the engine has them.
-        if (!(await whenDiceRegistered())) {
-            throw new Error('The physics engine did not register the dice.');
-        }
-    };
-
-    return {
-        async seat(dice) {
-            const current = getSpawnedDiceCounts();
-            saved = { ...current };
-            savedOrder = spawnedDice.map((die) => die.type);
-            jail()?.release();
-            const wanted: Record<string, number> = Object.fromEntries(
-                Object.keys(current).map((type) => [type, 0])
-            );
-            for (const die of dice) wanted[die.type] = (wanted[die.type] ?? 0) + 1;
-            await setCounts(wanted);
-
-            const taken = new Set<number>();
-            return dice.map((want) => {
-                const found = spawnedDice.find(
-                    (die) => die.type === want.type && die.wasmId != null && !taken.has(die.wasmId)
-                );
-                if (!found || found.wasmId == null) {
-                    throw new Error(`The table has no ${want.type} for the game.`);
-                }
-                taken.add(found.wasmId);
-                return found.wasmId;
-            });
-        },
-
-        async restore() {
-            if (!saved) return;
-            const back = saved;
-            saved = null;
-            await setCounts(back);
-            // updateDiceSet re-adds removed dice at the end; put each back in its slot.
-            reorderToTypeSequence(spawnedDice, savedOrder);
-        },
-
-        present: (ids) => ids.every((id) => spawnedDice.some((die) => die.wasmId === id)),
-        heldIds: () => jail()?.getState().heldIds ?? [],
-        hold: (ids) => jail()?.hold([...ids]) ?? 0,
-        release: (ids) => jail()?.release(ids) ?? 0,
-        throw: (ids, seed): Promise<TableThrow> => deps.rollWiring.throwSubset(ids, seed),
-        setLocked: (reason) => jail()?.setLocked(reason),
-    };
-}
+export type { FarkleSession, FarkleSnapshot, FarkleStartOptions, GameWiringDeps };
 
 export function setupGameWiring(app: AppContext, deps: GameWiringDeps) {
     const touchUi = isTouchPrimaryDevice();
@@ -177,20 +73,16 @@ export function setupGameWiring(app: AppContext, deps: GameWiringDeps) {
             return null;
         }
 
-        const bot = createFarkleBot();
-        const next = createGameSession<FarkleState, FarkleAction, FarkleState>({
-            rules: createFarkleRules(options.config),
-            table: createTavernGameTable(deps),
-            dice: FARKLE_TABLE_DICE,
-            heldDice: (state) => state.dice.filter((d) => d.kept).map((d) => d.id),
-            seats: [
-                { id: 'you', name: 'You' },
-                { id: 'bot', name: 'Tavern bot', policy: bot },
-            ],
-            createRng: createSeededRng,
-            seed: (options.seed ?? generateRollSeed()) >>> 0,
-            pace: { ...BOT_PACE, ...options.pace },
-        });
+        let next: FarkleSession;
+        try {
+            const { createFarkleTableSession } = await import('./GameTable.js');
+            next = createFarkleTableSession({ deps, options });
+        } catch (err) {
+            // A stale or unreachable chunk must read as a message, not a dead button.
+            console.error('[Game] could not load the game', err);
+            panel.showMessage('Farkle could not load. Check your connection and try again.');
+            return null;
+        }
         session = next;
         unsubscribe = next.subscribe((snapshot) => {
             if (session === next) panel.render(snapshot, next.preview);

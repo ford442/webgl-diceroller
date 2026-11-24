@@ -81,8 +81,11 @@ export function createRollHistory({
     let nextId = 1;
 
     function load(): void {
-        if (!persist || typeof localStorage === 'undefined') return;
+        if (!persist) return;
         try {
+            // Inside the try: with storage blocked (private mode, cookies off) merely *naming*
+            // `localStorage` throws a SecurityError, and that must not stop the app booting.
+            if (typeof localStorage === 'undefined') return;
             const raw = localStorage.getItem(storageKey);
             if (!raw) return;
             const parsed = JSON.parse(raw) as { entries?: unknown };
@@ -119,8 +122,11 @@ export function createRollHistory({
     }
 
     function save(): void {
-        if (!persist || typeof localStorage === 'undefined') return;
+        if (!persist) return;
         try {
+            // Inside the try: with storage blocked (private mode, cookies off) merely *naming*
+            // `localStorage` throws a SecurityError, and that must not stop the app booting.
+            if (typeof localStorage === 'undefined') return;
             localStorage.setItem(storageKey, JSON.stringify({ entries }));
         } catch (error) {
             console.warn('[RollHistory] Failed to persist history:', error);

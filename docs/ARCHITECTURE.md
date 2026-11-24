@@ -152,6 +152,17 @@ The scheduler also exposes two boot primitives. `holdPhase(phase, reason)` retur
 
 Systems register via `scheduler.register(phase, name, fn, { priority })`. Prop `update` callbacks and interactables hook into `updates` through [`LoadingTiers.js`](../src/core/LoadingTiers.js) and [`PropRegistry.js`](../src/environment/PropRegistry.js) `afterCreate` handlers — avoid ad-hoc per-frame calls in `main.js`.
 
+### Error boundary: one failing system does not stop the loop (#383)
+
+three re-arms `requestAnimationFrame` only **after** the animation callback returns, so before this a single throw in a prop `update` or the post stack ended the render loop for good and the page froze with no message. Now:
+
+- **The scheduler isolates each system.** `runFrame` wraps every system call; a throw is counted (`stats.systemErrors[name]`), handed to `onSystemError`, and the rest of the frame still runs (so `nextFrame()` waiters, the render phase and the other systems are unaffected). A system that throws `maxConsecutiveFailures` (3) times **in a row** is switched off (`stats.quarantined`); one clean run resets the streak. **The `render` phase is never switched off** — drawing is retried every frame because a restored context or a resize can make the next attempt work. `animate()` in `main.js` also wraps `runFrame`, for anything around the systems.
+- **One report per failure.** [`ErrorReporter`](../src/core/ErrorReporter.ts) fingerprints a failure (kind + source + message + first stack frame): the first occurrence is logged and surfaced, repeats only bump a counter, so a system that throws 60 times a second prints one line. `window.__app.errors.list()` (under `?test` / `?debug`) returns every distinct failure with its count.
+- **One banner.** [`ErrorBoundary`](../src/core/ErrorBoundary.ts) installs `error`, `unhandledrejection` and `vite:preloadError` handlers first thing in `main.js` and shows a single `role="alert"` banner ([`ErrorBanner.ts`](../src/ui/ErrorBanner.ts): plain DOM and inline styles, so it works when the stylesheet or renderer did not) with **Reload**; further failures add a line to it (three, then "and N more"). Decisions: uncaught exceptions and failed systems show the banner; **unhandled rejections are logged and counted but do not** (mostly benign here: a blocked `AudioContext.resume`, a dead signaling server). `ResizeObserver loop` notices and opaque cross-origin `Script error.` are ignored.
+- **Boot failure is a message.** A rejected `init()` (no WebGL at all, a tier that threw) replaces "Loading Tavern..." with "The tavern could not start." plus the banner. `index.html` has a small bootstrap script for what happens before the entry module runs (the entry 404s on a stale deploy, a module throws while evaluating, a 90 s stall): it rewrites the loading text and offers Reload, then hands over (`window.__diceBooted`).
+- **Stale chunk → reload once**, and a new service worker taking over an open tab → a "new version is ready" notice: see [`DEPLOYMENT.md`](DEPLOYMENT.md) (Cache policy).
+- Test hook (`?test` / `?debug`): `__app.injectFault(phase = 'updates', name)` registers a system that always throws. `npm run test:error-boundary` uses it to prove containment, a single log line and a single banner.
+
 ## Tiered loading
 
 [`loadTiers()`](../src/core/LoadingTiers.js) drives the loading overlay progress bar and yields to the main thread between heavy steps (`yieldToMain`). _What_ it spawns is the loaded [scene document](#scenes) (`orchestrator.sceneDocument`, the tavern by default); the stages below name the tavern's contents.
@@ -418,7 +429,21 @@ scripts/          Asset conversion, verify-* harnesses
 docs/             ARCHITECTURE.md, WASM_ENGINE.md, MULTIPLAYER.md
 ```
 
+## Lazy chunks
+
+The entry chunk (`index`, budget 175 kB gzip) is only what a session needs to draw the tavern. Behind dynamic imports, each its own budgeted chunk in `scripts/bundle-budgets.json`:
+
+| Chunk             | Fetched when                                                | Gate                                                                                                           |
+| ----------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `MultiplayerRoom` | a signaling URL resolves (`VITE_SIGNALING_URL`, `?signal=`) | `MultiplayerWiring.ts` (the gate) asks `net/signalingUrl.ts`, which pulls in nothing else                      |
+| `GameTable`       | the first "Play Farkle"                                     | `GameWiring.ts` keeps the panel and `app.game`; rules, bot, `GameSession` and the table adapter load on demand |
+| `RenderStats`     | `?debug` / `?debug-perf`                                    | `RendererBootstrap.js` hands the scheduler a facade that forwards once the chunk arrived                       |
+| `XrAppWiring`     | `?xr` / `?ar`                                               | `XrBootstrap.js`                                                                                               |
+| `three.webgpu`    | WebGPU sessions                                             | `RendererFactory.ts`                                                                                           |
+
+A chunk that fails to load (stale deploy, offline) is handled by the stale-chunk path above; `GameWiring` also turns it into a message in the Farkle panel.
+
 ## Deployment and utilities
 
-- **`deploy.py`** — zips `dist/` and uploads via the Contabo storage manager API (see script header for config). Run `npm run build` first.
+- **`deploy.py`** — zips `dist/` and uploads via the Contabo storage manager API (see script header for config). Run `npm run build` first. It never deletes remote files, so a previous build's hashed chunks stay available to tabs that have not reloaded; cache headers per path class are in [`DEPLOYMENT.md`](DEPLOYMENT.md) (Cache policy).
 - **`git.sh`** — personal convenience script (`git pull`, `git add .`, commit, push). Not part of CI; credentials and commit messages are ad hoc.

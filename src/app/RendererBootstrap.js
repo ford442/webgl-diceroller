@@ -6,7 +6,6 @@
  * single call made once during startup.
  */
 
-import { createRenderStats } from '../debug/RenderStats.js';
 import { createFairnessMonitor } from '../debug/FairnessMonitor.js';
 import { createPixelRatioMonitor } from '../core/RendererFactory.js';
 import {
@@ -98,7 +97,7 @@ export function bootstrapRendererExtras(app, deps) {
                 })
                 .catch(() => {});
         };
-        renderStats = createRenderStats({
+        const renderStatsOptions = {
             renderer,
             scene,
             scheduler,
@@ -140,7 +139,23 @@ export function bootstrapRendererExtras(app, deps) {
             getAudio: () => getCollisionAudio()?.getStats?.() ?? null,
             getCollisionTotal,
             getTierRenderStats,
-        });
+        };
+        // The HUD is a debug-only module (~14 kB): fetched here, never for a normal
+        // session. `renderStats` is a facade the scheduler can call from frame one;
+        // it forwards once the chunk has arrived.
+        /** @type {ReturnType<typeof import('../debug/RenderStats.js').createRenderStats> | null} */
+        let realStats = null;
+        renderStats = {
+            update: (/** @type {any} */ arg) => realStats?.update(arg),
+            setVisible: (/** @type {boolean} */ v) => realStats?.setVisible(v),
+            toggle: () => realStats?.toggle(),
+            dispose: () => realStats?.dispose(),
+        };
+        import('../debug/RenderStats.js')
+            .then(({ createRenderStats }) => {
+                realStats = createRenderStats(renderStatsOptions);
+            })
+            .catch((err) => console.warn('[Debug] render stats HUD unavailable', err));
         // Backtick toggles the HUD during playtesting without reloading.
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Backquote') renderStats?.toggle();

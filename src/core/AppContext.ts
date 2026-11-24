@@ -56,6 +56,8 @@ export function createAppContext(options: CreateAppContextOptions = {}): AppCont
         stats: null,
         tierRenderStats: null,
         bootTrace: null,
+        errors: null,
+        injectFault: null,
         fairnessMonitor: null,
         rollHistory: null,
         rollStats: null,

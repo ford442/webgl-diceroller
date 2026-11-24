@@ -360,6 +360,15 @@ export interface AppContext {
     tierRenderStats: unknown;
     /** What the page did between navigation and `ready` (set in main.js; `?test` / `?debug`). */
     bootTrace: (() => import('../core/BootTrace').BootTraceSnapshot) | null;
+    /** Failures the error boundary has seen (logged once each; repeats counted). */
+    errors: {
+        list: () => import('../core/ErrorReporter').ReportedError[];
+        total: () => number;
+        clear: () => void;
+    } | null;
+    /** ?test / ?debug only: register a system that throws, to exercise the boundary. */
+    injectFault:
+        ((phase?: import('../core/FrameScheduler').FramePhase, name?: string) => void) | null;
     /** Commit / version this bundle was built from (`window.__app.buildInfo`, #380). */
     buildInfo?: import('../core/BuildInfo').BuildInfo;
     fairnessMonitor: unknown;

@@ -28,6 +28,9 @@ import {
  * } | null} [notationHooks]
  * @param {{ hasShareableRoll?: () => boolean; buildShareUrl?: () => string | null } | null} [rollShareHooks]
  */
+/** Per-type ceiling for the dice count inputs (60 dice with the six standard types). */
+const MAX_DICE_PER_TYPE = 10;
+
 export const initUI = (
     onUpdateDice,
     onRollAll,
@@ -78,12 +81,15 @@ export const initUI = (
         const input = hudInput('number', `${type} count`);
         input.id = `dice-count-${type}`;
         input.min = '0';
-        input.max = '10';
+        input.max = String(MAX_DICE_PER_TYPE);
         input.value = counts[type];
         input.style.width = touchUi ? '56px' : '40px';
 
         input.addEventListener('change', () => {
-            counts[type] = parseInt(input.value) || 0;
+            // `max` on a number input only flags a typed value; it does not stop it.
+            const n = Math.min(MAX_DICE_PER_TYPE, Math.max(0, parseInt(input.value) || 0));
+            input.value = String(n);
+            counts[type] = n;
             onUpdateDice(counts);
         });
 

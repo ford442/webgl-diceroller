@@ -36,10 +36,34 @@ export interface FrameContext extends FrameBaseContext {
 
 export type FrameSystemFn = (context: FrameContext) => void;
 
+/** What the scheduler tells `onSystemError` about a system that threw. */
+export interface SystemErrorInfo {
+    system: string;
+    phase: FramePhase;
+    /** Throws in a row, this one included (a clean run resets it). */
+    consecutive: number;
+    /** True when this throw got the system switched off. */
+    quarantined: boolean;
+}
+
 export interface FrameSchedulerOptions {
     fixedDeltaTime?: number;
     maxPhysicsSteps?: number;
     debugPerf?: boolean;
+    /**
+     * A system that throws must not take the frame (and the render loop) with
+     * it. The error lands here instead; the other systems still run. Without a
+     * handler each failing system is logged once to `console.error`.
+     */
+    onSystemError?: (error: unknown, info: SystemErrorInfo) => void;
+    /**
+     * Consecutive throws before a system is switched off for good (default 3:
+     * one bad frame is tolerated, a persistently broken prop `update` is not
+     * allowed to throw 60 times a second). The `render` phase is never
+     * switched off — drawing is retried every frame, since a lost context or
+     * a resize can make the next attempt succeed.
+     */
+    maxConsecutiveFailures?: number;
 }
 
 export interface FrameSystemRegistrationOptions {
@@ -65,6 +89,8 @@ interface FrameSystem {
     fn: FrameSystemFn;
     priority: number;
     enabled: boolean;
+    failures: number;
+    quarantined: boolean;
 }
 
 export interface FrameSchedulerStats {
@@ -76,6 +102,10 @@ export interface FrameSchedulerStats {
     systemTimes: Record<string, number>;
     /** Frames in which at least one phase was held (the held phase's systems did not run). */
     heldFrames: number;
+    /** Throws per system since boot (repeats counted, never re-logged). */
+    systemErrors: Record<string, number>;
+    /** Systems switched off after repeated throws. */
+    quarantined: string[];
     renderer: {
         render: Record<string, unknown>;
         memory: Record<string, unknown>;
@@ -95,6 +125,7 @@ export class FrameScheduler {
     fixedDeltaTime: number;
     maxPhysicsSteps: number;
     debugPerf: boolean;
+    maxConsecutiveFailures: number;
     accumulator: number;
     systems: PhaseBucket;
     stats: FrameSchedulerStats;
@@ -103,15 +134,22 @@ export class FrameScheduler {
     /** Resolvers waiting for the current frame to finish; see `nextFrame()`. */
     #frameWaiters: Array<() => void> = [];
     #heldThisFrame = false;
+    readonly #onSystemError: FrameSchedulerOptions['onSystemError'];
+    /** Systems already logged by the default handler (one line each). */
+    #loggedSystems: Set<string> = new Set();
 
     constructor({
         fixedDeltaTime = 1 / 60,
         maxPhysicsSteps = 5,
         debugPerf = false,
+        onSystemError,
+        maxConsecutiveFailures = 3,
     }: FrameSchedulerOptions = {}) {
         this.fixedDeltaTime = fixedDeltaTime;
         this.maxPhysicsSteps = maxPhysicsSteps;
         this.debugPerf = debugPerf;
+        this.maxConsecutiveFailures = maxConsecutiveFailures;
+        this.#onSystemError = onSystemError;
         this.accumulator = 0;
         this.systems = createPhaseBucket();
         this.stats = {
@@ -122,6 +160,8 @@ export class FrameScheduler {
             phaseTimes: {},
             systemTimes: {},
             heldFrames: 0,
+            systemErrors: {},
+            quarantined: [],
             renderer: null,
         };
     }
@@ -185,13 +225,24 @@ export class FrameScheduler {
             throw new Error(`Unknown frame phase "${phase}"`);
         }
 
-        const system: FrameSystem = { phase, name, fn, priority, enabled };
+        const system: FrameSystem = {
+            phase,
+            name,
+            fn,
+            priority,
+            enabled,
+            failures: 0,
+            quarantined: false,
+        };
         this.systems[phase].push(system);
         this.systems[phase].sort((a, b) => a.priority - b.priority);
 
         return {
             enable: () => {
                 system.enabled = true;
+                system.failures = 0;
+                system.quarantined = false;
+                this.stats.quarantined = this.stats.quarantined.filter((n) => n !== name);
             },
             disable: () => {
                 system.enabled = false;
@@ -267,6 +318,42 @@ export class FrameScheduler {
         return frameContext;
     }
 
+    /**
+     * One system threw: count it, hand it to the boundary, and switch the
+     * system off once it keeps failing. Nothing here may throw — a broken
+     * error handler must not bring back the frame crash it exists to stop.
+     */
+    #systemFailed(system: FrameSystem, error: unknown): void {
+        system.failures += 1;
+        const { name, phase } = system;
+        this.stats.systemErrors[name] = (this.stats.systemErrors[name] ?? 0) + 1;
+
+        let quarantined = false;
+        if (phase !== 'render' && system.failures >= this.maxConsecutiveFailures) {
+            system.enabled = false;
+            system.quarantined = true;
+            quarantined = true;
+            if (!this.stats.quarantined.includes(name)) this.stats.quarantined.push(name);
+        }
+
+        const info: SystemErrorInfo = {
+            system: name,
+            phase,
+            consecutive: system.failures,
+            quarantined,
+        };
+        try {
+            if (this.#onSystemError) {
+                this.#onSystemError(error, info);
+            } else if (!this.#loggedSystems.has(name)) {
+                this.#loggedSystems.add(name);
+                console.error(`[FrameScheduler] System "${name}" (${phase}) threw`, error);
+            }
+        } catch {
+            /* the handler failed; the frame carries on regardless */
+        }
+    }
+
     #runPhase(phase: FramePhase, context: FrameContext): void {
         const systems = this.systems[phase];
         if (!systems || systems.length === 0) return;
@@ -282,7 +369,12 @@ export class FrameScheduler {
             if (!system.enabled) continue;
 
             const systemStart = this.debugPerf ? performance.now() : 0;
-            system.fn(context);
+            try {
+                system.fn(context);
+                system.failures = 0;
+            } catch (error) {
+                this.#systemFailed(system, error);
+            }
 
             if (this.debugPerf) {
                 const duration = performance.now() - systemStart;

@@ -137,8 +137,11 @@ export function createRollStats({
     const store = new Map<string, DieStatsEntry>();
 
     function load(): void {
-        if (!persist || typeof localStorage === 'undefined') return;
+        if (!persist) return;
         try {
+            // Inside the try: with storage blocked (private mode, cookies off) merely *naming*
+            // `localStorage` throws a SecurityError, and that must not stop the app booting.
+            if (typeof localStorage === 'undefined') return;
             const raw = localStorage.getItem(storageKey);
             if (!raw) return;
             const parsed = JSON.parse(raw) as unknown;
@@ -153,8 +156,11 @@ export function createRollStats({
     }
 
     function save(): void {
-        if (!persist || typeof localStorage === 'undefined') return;
+        if (!persist) return;
         try {
+            // Inside the try: with storage blocked (private mode, cookies off) merely *naming*
+            // `localStorage` throws a SecurityError, and that must not stop the app booting.
+            if (typeof localStorage === 'undefined') return;
             localStorage.setItem(storageKey, JSON.stringify(serializeStore(store)));
         } catch (error) {
             console.warn('[RollStats] Failed to persist stats:', error);

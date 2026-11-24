@@ -184,29 +184,41 @@ export default defineConfig({
                 ],
             },
             workbox: {
+                // A redeploy's worker activates at once and drops the previous build's
+                // precache; docs/DEPLOYMENT.md ("Cache policy") has the full story.
+                skipWaiting: true,
+                clientsClaim: true,
+                cleanupOutdatedCaches: true,
                 globPatterns: [
                     '**/*.{js,css,html,ico,svg,wasm,json}',
                     'images/dice/*.glb',
+                    // The textures and the lamp mesh the tavern cannot draw without. They used
+                    // to be runtime-cached only, but a runtime cache fills only from requests
+                    // made *while the worker controls the page*, which the first visit's are
+                    // not: go offline right after the first load and the reload could not
+                    // build the scene (#383, test:edge-cases "offline after the first load").
+                    'images/**/*.ktx2',
+                    'images/props/*.glb',
                     'draco/**/*',
                     'basis/**/*',
                     'wasm/**/*',
                     'wasm-scalar/**/*',
                 ],
-                // Large JPG/KTX2 textures: runtime cache-first instead of precache.
+                // The JPGs are the rare KTX2-failure fallback: never precached, and
+                // runtime-cached (below) only if something actually asks for them.
                 // build-info.json must always come from the network: a precached copy would
                 // report the previous deploy's commit.
-                globIgnores: [
-                    '**/images/**/*.jpg',
-                    '**/images/**/*.ktx2',
-                    '**/images/lamp/**',
-                    'build-info.json',
-                ],
+                globIgnores: ['**/images/**/*.jpg', 'build-info.json'],
                 navigateFallback: 'index.html',
                 navigateFallbackDenylist: [/^\/wasm\//, /build-info\.json$/],
                 runtimeCaching: [
                     {
                         urlPattern: /\/images\/.*\.(ktx2|jpe?g|png)$/i,
-                        handler: 'CacheFirst',
+                        // Texture file names are not content-hashed, so CacheFirst would pin
+                        // a re-encoded texture to every returning visitor for a year.
+                        // StaleWhileRevalidate serves the cached copy instantly (offline
+                        // works) and refreshes it in the background for the next load.
+                        handler: 'StaleWhileRevalidate',
                         options: {
                             cacheName: 'texture-cache',
                             expiration: {
@@ -220,7 +232,7 @@ export default defineConfig({
                     },
                     {
                         urlPattern: /\/images\/props\/.*\.glb$/i,
-                        handler: 'CacheFirst',
+                        handler: 'StaleWhileRevalidate',
                         options: {
                             cacheName: 'prop-mesh-cache',
                             expiration: {
