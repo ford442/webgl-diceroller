@@ -32,7 +32,7 @@ function measure(touch, minTouch) {
     };
     // HUD panels: fixed/absolute overlays that are direct children of body
     // (the canvas container and the loading overlay excluded).
-    const panels = [...document.body.children].filter((el) => {
+    const panels = Array.from(document.body.children).filter((el) => {
         if (!visible(el) || el.id === 'canvas-container' || el.tagName === 'CANVAS') return false;
         if (/loading/i.test(el.id)) return false;
         const pos = getComputedStyle(el).position;
@@ -52,7 +52,7 @@ function measure(touch, minTouch) {
             if (w > 1 && h > 1 && !full(a) && !full(b))
                 overlaps.push(`${rects[i].name} × ${rects[j].name}`);
         }
-    const controls = [...document.querySelectorAll('button, input, select, a[href]')].filter(
+    const controls = Array.from(document.querySelectorAll('button, input, select, a[href]')).filter(
         visible
     );
     const outside = [];
