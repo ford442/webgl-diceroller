@@ -24,6 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { classify } from '../scripts/lib/cachePolicy.mjs';
+import { capturePng } from './helpers/browser.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const COMMIT_A = 'a'.repeat(40);
@@ -207,6 +208,10 @@ try {
         const el = document.getElementById('app-error-banner');
         return { text: el?.textContent ?? '', role: el?.getAttribute('role') };
     });
+    if (process.env.SW_SHOT_DIR) {
+        fs.mkdirSync(process.env.SW_SHOT_DIR, { recursive: true });
+        await capturePng(page, path.join(process.env.SW_SHOT_DIR, 'sw-update-notice.png'));
+    }
     check(
         /new version is ready/i.test(notice.text),
         'the open tab says a new version is ready',

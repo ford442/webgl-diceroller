@@ -172,3 +172,39 @@ measured**; `npm run verify:production-isolation -- <url>` reports whether a hos
 isolated, and the soak's `report.json` records `crossOriginIsolated` beside its frame
 times, so running it once against an isolated and once against a non-isolated URL gives
 the number.
+
+## Soak results so far, and a known issue
+
+Two runs on a **full build** (Emscripten 3.1.61, SIMD profile), headless Chromium on
+SwiftShader (software GL, so frame times are 1.4-2.6 s and say nothing about a real GPU),
+320×240, 20 dice, worker physics with `crossOriginIsolated: true`, 3 warm-up rolls,
+swapping between two 20-die sets every 5 rolls, sampled every 10 rolls after two forced GCs:
+
+| Run              | Rolls | JS heap (first → last sample) | geometries / textures / programs | scene objects / die meshes | audio voices at rest | frame p95 first → last window | settle timeouts |
+| ---------------- | ----: | ----------------------------- | -------------------------------- | -------------------------- | -------------------- | ----------------------------- | --------------- |
+| `soak-run` (40)  |    40 | 33.4 → 34.1 MB                | 643 / 27 / 101 → unchanged       | 931 / 20 → unchanged       | 0                    | 2300 → 2333 ms (×1.01)        | 1               |
+| `soak-run2` (60) |    60 | 32.6 → 33.8 MB                | 613 / 25 / 93 → unchanged        | 892 / 20 → unchanged       | 0                    | 2550 → 2583 ms (×1.01)        | 1               |
+
+No monotonic growth in either run: renderer resources and scene counts are exactly flat
+across dice-set swaps; the heap moves about 1 MB over 40-60 rolls (gate: 15 MB). These
+are not the 200-roll runs the issue asks for (a software-rendered roll takes ~25 s of
+wall time; 200 would be about 80 minutes): run `npm run verify:perf-soak` against the
+full build on a faster machine or against staging for that.
+
+**Known issue: ~1-2% of rolls hit the 12 s settle timeout.** The recorded diagnostic
+for `soak-run2` roll 3 (seed 3668339987, 20 dice):
+
+```
+simTimeout  die 7: v=0.0013 spin=0.0015 islandKE=0.0001 (n=3) timer=0.45 pts=4
+            touching velvet, die 12, wood
+            die 12 / die 18: v≈0.003 islandKE=0.0001, timer=0.1271 (n=3 island)
+```
+
+A three-die contact island sits just below the sleep threshold but never accumulates
+the sleep timer. The app handles it (reads faces from the mesh orientation, marks a die
+that is not lying flat as cocked, offers a re-roll), so it is not a crash or a hang, but
+it is a solver behaviour (`dice_physics/`), which this issue puts out of scope. Owner:
+solver (#380 tracks the native-solver CI failures). Call: **ship**, with the timeout path
+as the user-visible behaviour. CI's `perf-soak` job tolerates one timeout
+(`--max-timeouts 1`); the soak records the seed and diagnostics of each one
+(`report.json` → `rolls.timeoutDetails`) so it can be replayed.

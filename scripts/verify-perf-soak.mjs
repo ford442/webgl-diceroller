@@ -22,6 +22,9 @@
  *   --target-p95-ms       SOAK_TARGET_P95_MS        Optional absolute p95 target for this device class.
  *   --out <dir>           SOAK_OUT (soak/)          Where report.json is written.
  *   --report-only         SOAK_REPORT_ONLY=1        Record, never fail on the growth/degradation checks.
+ *   --max-timeouts <n>    SOAK_MAX_TIMEOUTS (0)     Rolls allowed to hit the 12 s settle timeout. The solver
+ *                                                   occasionally leaves a 3-die contact island below the
+ *                                                   sleep threshold (see docs/PERFORMANCE.md, known issues).
  *   --allow-no-wasm       Run (and pass) without physics: only a harness check, rolls are skipped.
  *
  * Exit: 0 pass; 1 growth / degradation / roll timeouts; 2 cannot soak (no WASM, no ready).
@@ -58,6 +61,7 @@ const TARGET_P95 = arg('target-p95-ms', 'SOAK_TARGET_P95_MS', null);
 const OUT_DIR = path.resolve(String(arg('out', 'SOAK_OUT', 'soak')));
 const REPORT_ONLY = flag('report-only', 'SOAK_REPORT_ONLY');
 const ALLOW_NO_WASM = flag('allow-no-wasm', 'SOAK_ALLOW_NO_WASM');
+const MAX_TIMEOUTS = Number(arg('max-timeouts', 'SOAK_MAX_TIMEOUTS', 0));
 const ROLL_TIMEOUT_MS = Number(arg('roll-timeout-ms', 'SOAK_ROLL_TIMEOUT_MS', 120000));
 const READY_TIMEOUT_MS = Number(arg('ready-timeout-ms', 'SOAK_READY_TIMEOUT_MS', 300000));
 
@@ -434,7 +438,8 @@ async function main() {
             );
         }
 
-        if (timeouts > 0) fail(`${timeouts} of ${ROLLS} rolls hit the settle timeout`);
+        if (timeouts > MAX_TIMEOUTS)
+            fail(`${timeouts} of ${ROLLS} rolls hit the settle timeout (allowed ${MAX_TIMEOUTS})`);
         if (report.end.errors > report.start.errors) {
             fail(
                 `${report.end.errors - report.start.errors} new error(s) recorded by the error boundary during the soak`

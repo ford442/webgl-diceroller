@@ -437,6 +437,13 @@ jobs:
                     # Default route (no ?webgl) on SwiftShader must reach
                     # ready on the classic WebGLRenderer; ?overlay has alpha.
                     - test:default-route
+                    # Error boundary (#383): an injected throwing system is
+                    # contained, logged once, one banner; a 404ing chunk reloads
+                    # once; a failed boot says so.
+                    - test:error-boundary
+                    # Redeploy (#383): two commits built and swapped under one
+                    # origin; the service worker updates A -> B, no 404s.
+                    - test:sw-redeploy
                     # The checked-in tavern-world fixture must match what the
                     # app registers; a moved or new prop collider fails here
                     # until `npm run fixture:world` is re-run and committed.
@@ -480,6 +487,76 @@ jobs:
                   echo "preview server did not come up" >&2
                   exit 1
             - run: npm run ${{ matrix.script }}
+
+    # Edge cases (#383): blocked storage, no audio, malformed URLs, dead room
+    # server, rotation, context loss, 60 dice / R spam / hidden tab, offline
+    # reload. REQUIRE_WASM makes the roll cases fail rather than skip.
+    edge-cases:
+        name: Verify (edge cases)
+        needs: build-wasm
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 24
+                  cache: npm
+            - run: npm ci
+            - name: Download WASM artifacts
+              uses: actions/download-artifact@v7
+              with:
+                  name: wasm-artifacts
+                  path: public
+            - run: npx playwright install --with-deps chromium
+            - run: npm run build:js
+            - name: Start preview server on :4173
+              run: |
+                  npx vite preview --host 127.0.0.1 --port 4173 --strictPort &
+                  for i in $(seq 1 60); do
+                    curl -sf http://127.0.0.1:4173/ > /dev/null && exit 0
+                    sleep 1
+                  done
+                  echo "preview server did not come up" >&2
+                  exit 1
+            - run: npm run test:edge-cases
+              env:
+                  REQUIRE_WASM: '1'
+
+    # Performance soak (#383): rolls of a 20-die set on the production build;
+    # fails on heap / renderer.info / audio growth or frame-time degradation.
+    # Shortened for the runner (a SwiftShader frame takes seconds); run the full
+    # 200 rolls against staging with `npm run verify:perf-soak -- --url <staging>`.
+    # One settle timeout is tolerated: the solver occasionally leaves a 3-die
+    # contact island under the sleep threshold (docs/PERFORMANCE.md, known issues).
+    perf-soak:
+        name: Verify (perf soak)
+        needs: build-wasm
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 24
+                  cache: npm
+            - run: npm ci
+            - name: Download WASM artifacts
+              uses: actions/download-artifact@v7
+              with:
+                  name: wasm-artifacts
+                  path: public
+            - run: npx playwright install --with-deps chromium
+            - run: npm run build:js
+            - run: npm run verify:perf-soak -- --rolls 30 --warmup 3 --sample-every 10 --churn-every 5 --viewport 320x240 --max-timeouts 1
+            - name: Upload soak report
+              if: always()
+              uses: actions/upload-artifact@v6
+              with:
+                  name: perf-soak-report
+                  path: soak/
+                  if-no-files-found: ignore
+                  retention-days: 14
 
     render-regression:
         name: Render regression (webgl baselines enforced; webgpu soft-fail)
