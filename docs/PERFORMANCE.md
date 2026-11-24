@@ -43,8 +43,10 @@ raised to 190 kB for #380); after is this branch, with the error boundary includ
 7.78 MiB (was 8.05 MiB without WASM at the start of #383; 7.37 MiB without WASM now).
 The drop is the asm.js Draco decoder (719 kB), an unreferenced lamp texture, a `.url`
 shortcut and the dev-only WASM test page moved out of `public/`. Each profile is a
-~175 kB `.wasm` plus a 55 kB loader. The PWA precache is 56 entries / 3,971 KiB (it was
-44 entries / 4,210 KiB without WASM; the Draco decoder was in it).
+~175 kB `.wasm` plus a 55 kB loader. The PWA precache is now 72 entries / 5,752 KiB (it was
+44 entries / 4,210 KiB without WASM, and 56 / 3,971 KiB with WASM before this change):
+the KTX2 textures and the lamp/dice GLBs moved into it so the first visit works offline
+(see DEPLOYMENT.md). It downloads once, in the background, after the page is already drawing.
 
 Fallback JPGs stay: they are the documented path when KTX2 decoding fails (~2.1 MB,
 quality 80, never precached, requested only on failure).

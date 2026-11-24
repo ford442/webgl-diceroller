@@ -179,9 +179,13 @@ its owner for. Re-run the command afterwards; it exits non-zero until the table 
    controller) and shows a "A new version is ready" banner with a Reload
    button. It is **not** reloaded automatically: a roll may be in flight.
 3. The next load is served from the new precache: the new `index.html`, the new
-   hashed chunks. Textures, props and the dice GLBs are runtime-cached
-   `StaleWhileRevalidate` (they are un-hashed, so `CacheFirst` would have pinned
-   a re-encoded texture to returning visitors for a year).
+   hashed chunks, the KTX2 textures, the dice and lamp GLBs, the decoders and the
+   WASM engine (72 entries, ~5.6 MiB in a full build). The textures are **precached,
+   not just runtime-cached**: a runtime cache fills only from requests made while the
+   worker already controls the page, which the first visit's are not, so going offline
+   right after the first load could not draw the tavern (found by `test:edge-cases`).
+   The fallback JPGs are never precached; if something asks for one it is
+   runtime-cached `StaleWhileRevalidate` (un-hashed names must not be `CacheFirst`).
 4. `build-info.json` is never precached or served as the navigation fallback.
 
 An old tab that lazily imports a chunk after step 2 asks the new worker for an

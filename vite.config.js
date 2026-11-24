@@ -192,20 +192,23 @@ export default defineConfig({
                 globPatterns: [
                     '**/*.{js,css,html,ico,svg,wasm,json}',
                     'images/dice/*.glb',
+                    // The textures and the lamp mesh the tavern cannot draw without. They used
+                    // to be runtime-cached only, but a runtime cache fills only from requests
+                    // made *while the worker controls the page*, which the first visit's are
+                    // not: go offline right after the first load and the reload could not
+                    // build the scene (#383, test:edge-cases "offline after the first load").
+                    'images/**/*.ktx2',
+                    'images/props/*.glb',
                     'draco/**/*',
                     'basis/**/*',
                     'wasm/**/*',
                     'wasm-scalar/**/*',
                 ],
-                // Large JPG/KTX2 textures: runtime cache-first instead of precache.
+                // The JPGs are the rare KTX2-failure fallback: never precached, and
+                // runtime-cached (below) only if something actually asks for them.
                 // build-info.json must always come from the network: a precached copy would
                 // report the previous deploy's commit.
-                globIgnores: [
-                    '**/images/**/*.jpg',
-                    '**/images/**/*.ktx2',
-                    '**/images/lamp/**',
-                    'build-info.json',
-                ],
+                globIgnores: ['**/images/**/*.jpg', 'build-info.json'],
                 navigateFallback: 'index.html',
                 navigateFallbackDenylist: [/^\/wasm\//, /build-info\.json$/],
                 runtimeCaching: [
