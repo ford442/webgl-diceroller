@@ -31,3 +31,4 @@ signaling/.wrangler/
 
 # verify:boot-budget output (report.json + Chromium traces)
 boot-budget/
+__pycache__/

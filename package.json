@@ -1,5 +1,6 @@
 {
     "name": "webgl-diceroller",
+    "version": "0.1.0",
     "private": true,
     "type": "module",
     "workspaces": [
@@ -18,6 +19,8 @@
         "check:bundle-size": "node scripts/check-bundle-size.mjs",
         "check:deploy-size": "node scripts/check-deploy-size.mjs",
         "check:cycles": "madge --circular --extensions js,ts src/",
+        "gates": "npm run check:bundle-size && npm run check:deploy-size && npm run check:cycles && npm run typecheck && npm run lint && npm run format:check",
+        "release:build": "npm run build && npm run gates",
         "check:dice-core": "node scripts/check-dice-core-isolation.mjs",
         "verify:bundle-loading": "node scripts/verify-bundle-loading.mjs",
         "verify:boot-budget": "node scripts/verify-boot-budget.mjs",

@@ -28,7 +28,7 @@ import {
     type ThrowRecord,
 } from '../dice/ThrowRecord.js';
 import type { ReplayBase, ReplayFrame } from 'dice-core/wasm/replayThrow';
-import type { AppEvents } from '../types/app';
+import type { AppEvents, TheatreRefusal, TheatreState } from '../types/app';
 import {
     CRIT_REPLAY_RATE,
     advancePlayback,
@@ -39,25 +39,9 @@ import {
     type SettledDieRow,
 } from './rollTheatreModel.js';
 
-export type TheatreRefusal =
-    'no-wasm' | 'rolling' | 'no-roll' | 'unseeded' | 'table-changed' | 'snapshot-mismatch';
-
-export interface TheatreState {
-    /** A finished, seeded roll is on the table and can be scrubbed. */
-    available: boolean;
-    /** The theatre has the table (dice are at `tick`, not at the settled pose). */
-    active: boolean;
-    playing: boolean;
-    rate: number;
-    /** Fixed ticks since the throw the dice are posed at (while active). */
-    tick: number;
-    /** Ticks from the throw to the settle: the end of the timeline. */
-    endTick: number;
-    /** Why the theatre is unavailable (null when available). */
-    reason: TheatreRefusal | null;
-    /** A crit-cam replay is running. */
-    crit: boolean;
-}
+// The state shapes live in types/app.d.ts (AppContextTheatre uses them); this
+// module re-exports them so the dependency runs one way (no import cycle).
+export type { TheatreRefusal, TheatreState };
 
 interface SettledRoll {
     record: ThrowRecord;

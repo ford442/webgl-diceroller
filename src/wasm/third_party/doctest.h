@@ -496,7 +496,14 @@ DOCTEST_GCC_SUPPRESS_WARNING_POP
 // https://github.com/doctest/doctest/issues/126
 // https://github.com/doctest/doctest/issues/356
 #if DOCTEST_CLANG
+// LOCAL PATCH: <ciso646> is deprecated in C++20 and libstdc++ 15 turns it into a
+// #warning, which -Werror (build_solver_test.sh) makes fatal under clang. <version>
+// defines _LIBCPP_VERSION / __GLIBCXX__ just the same, so prefer it when present.
+#if defined(__has_include) && __has_include(<version>)
+#include <version>
+#else
 #include <ciso646>
+#endif
 #endif // clang
 
 #ifdef _LIBCPP_VERSION

@@ -295,12 +295,32 @@ export interface AppContextInteractable {
     [key: string]: unknown;
 }
 
+export type TheatreRefusal =
+    'no-wasm' | 'rolling' | 'no-roll' | 'unseeded' | 'table-changed' | 'snapshot-mismatch';
+
+export interface TheatreState {
+    /** A finished, seeded roll is on the table and can be scrubbed. */
+    available: boolean;
+    /** The theatre has the table (dice are at `tick`, not at the settled pose). */
+    active: boolean;
+    playing: boolean;
+    rate: number;
+    /** Fixed ticks since the throw the dice are posed at (while active). */
+    tick: number;
+    /** Ticks from the throw to the settle: the end of the timeline. */
+    endTick: number;
+    /** Why the theatre is unavailable (null when available). */
+    reason: TheatreRefusal | null;
+    /** A crit-cam replay is running. */
+    crit: boolean;
+}
+
 /**
  * Mutable bag created in main.js and filled as systems come online.
  * Exposed as `window.__app` only under `?test` / `?debug` / `?debug-perf`.
  */
 export interface AppContextTheatre {
-    getState: () => import('../app/RollTheatre').TheatreState;
+    getState: () => TheatreState;
     seek: (tick: number) => Promise<{ tick: number; ids: number[]; transforms: number[] } | null>;
     play: (rate?: number, options?: { from?: number }) => Promise<boolean>;
     pause: () => void;
@@ -340,6 +360,8 @@ export interface AppContext {
     tierRenderStats: unknown;
     /** What the page did between navigation and `ready` (set in main.js; `?test` / `?debug`). */
     bootTrace: (() => import('../core/BootTrace').BootTraceSnapshot) | null;
+    /** Commit / version this bundle was built from (`window.__app.buildInfo`, #380). */
+    buildInfo?: import('../core/BuildInfo').BuildInfo;
     fairnessMonitor: unknown;
     rollHistory: unknown;
     rollStats: unknown;

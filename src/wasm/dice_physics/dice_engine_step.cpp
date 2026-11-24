@@ -346,7 +346,12 @@ void DicePhysicsEngine::deserializeState(const std::vector<uint8_t>& data) {
         bodies_.push_back(b);
     }
     nextId_ = 0;
-    for (const auto& b : bodies_) nextId_ = std::max(nextId_, b.id + 1);
+    // b.id came off the wire: INT_MAX + 1 is signed overflow (UBSan found it via
+    // libFuzzer), and an id past MAX_SNAPSHOT_NEXT_DIE_ID could not be minted
+    // again anyway (see the world trailer below).
+    for (const auto& b : bodies_) {
+        if (b.id >= 0 && b.id < MAX_SNAPSHOT_NEXT_DIE_ID) nextId_ = std::max(nextId_, b.id + 1);
+    }
 
     dynamics_.clear();
     if (version >= 2) {
