@@ -131,8 +131,14 @@ assert(getXrSnapDegrees(new URLSearchParams('xr-snap=5')) === 15, 'xr-snap clamp
     ]);
     const noneRequested = getWebGpuRequiredFeatures(fullFeatureSet, { wantTimestampQuery: false });
     assert(
-        noneRequested.length === WEBGPU_CURATED_FEATURES.length,
-        'requiredFeatures stays at the documented (currently empty) floor when timestamp query is not wanted'
+        noneRequested.length === WEBGPU_CURATED_FEATURES.length + 1 &&
+            noneRequested.includes('texture-compression-bc'),
+        'requiredFeatures is the floor plus only the texture-compression features the adapter has (not float32-filterable)'
+    );
+    assert(
+        getWebGpuRequiredFeatures(new Set(['float32-filterable']), { wantTimestampQuery: false })
+            .length === WEBGPU_CURATED_FEATURES.length,
+        'requiredFeatures stays at the documented floor when the adapter offers no compression'
     );
 
     const withTimestamp = getWebGpuRequiredFeatures(fullFeatureSet, { wantTimestampQuery: true });
@@ -141,7 +147,7 @@ assert(getXrSnapDegrees(new URLSearchParams('xr-snap=5')) === 15, 'xr-snap clamp
         'requiredFeatures includes timestamp-query when wanted and supported'
     );
     assert(
-        withTimestamp.length === WEBGPU_CURATED_FEATURES.length + 1,
+        withTimestamp.length === noneRequested.length + 1,
         'requiredFeatures adds exactly one feature for timestamp query, not the whole adapter set'
     );
 

@@ -33,6 +33,7 @@ export function initTexturePipeline(renderer) {
     const ktx2Loader = new KTX2Loader();
     ktx2Loader.setTranscoderPath(publicAssetUrl('basis/'));
     ktx2Loader.detectSupport(renderer);
+    const isWebGpu = renderer?.isWebGPURenderer === true;
 
     const jpgLoader = new THREE.TextureLoader();
 
@@ -41,6 +42,17 @@ export function initTexturePipeline(renderer) {
         if (ktx2Url !== url) {
             try {
                 const texture = await ktx2Loader.loadAsync(ktx2Url);
+                // A device with no BC / ASTC / ETC2 makes KTX2Loader transcode to plain
+                // RGBA, which Three's WebGPU backend cannot upload as a CompressedTexture
+                // (it throws on the first draw). Use the shipped JPG instead.
+                if (
+                    isWebGpu &&
+                    texture.isCompressedTexture &&
+                    /** @type {number} */ (texture.format) === THREE.RGBAFormat
+                ) {
+                    texture.dispose();
+                    throw new Error(`KTX2 transcoded to uncompressed RGBA: ${ktx2Url}`);
+                }
                 texture.colorSpace = colorSpace;
                 return texture;
             } catch {

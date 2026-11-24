@@ -74,6 +74,7 @@ export type {
 export {
     WEBGPU_CURATED_FEATURES,
     WEBGPU_REQUIRED_LIMITS,
+    WEBGPU_TEXTURE_COMPRESSION_FEATURES,
     WEBGPU_TIMESTAMP_QUERY_FEATURE,
     describeLimitMismatches,
     describeWebGpuAdapter,
