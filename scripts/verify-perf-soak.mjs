@@ -299,7 +299,18 @@ async function main() {
                 s.on = false;
                 return Array.from(s.buf.slice(0, s.n), (v) => Math.round(v * 10) / 10);
             });
-            return { timedOut: state.phase === 'timedOut', frames };
+            let timeout = null;
+            if (state.phase === 'timedOut') {
+                // Why it did not settle, while the awake bodies are still awake.
+                const diag = await page.evaluate(async () => {
+                    const d = await /** @type {any} */ (
+                        window
+                    ).__app.physics?.getSleepDiagnostics?.();
+                    return d ? String(d.summary).slice(0, 400) : null;
+                });
+                timeout = { reason: state.lastTimeoutReason ?? null, diagnostics: diag };
+            }
+            return { timedOut: state.phase === 'timedOut', timeout, frames };
         };
 
         for (let i = 0; i < WARMUP; i++) await rollOnce(-1 - i);
@@ -309,6 +320,7 @@ async function main() {
         const samples = [];
         const rollFrames = [];
         let timeouts = 0;
+        const timeoutDetails = [];
         const t1 = Date.now();
         for (let i = 0; i < ROLLS; i++) {
             if (CHURN_EVERY > 0 && i > 0 && i % CHURN_EVERY === 0) {
@@ -316,7 +328,17 @@ async function main() {
             }
             const r = await rollOnce(i);
             rollFrames.push(r.frames);
-            if (r.timedOut) timeouts += 1;
+            if (r.timedOut) {
+                timeouts += 1;
+                timeoutDetails.push({
+                    roll: i + 1,
+                    seed: (0x9e3779b1 * (i + 1)) >>> 0,
+                    ...r.timeout,
+                });
+                note(
+                    `  roll ${i + 1} timed out: ${r.timeout?.reason} ${r.timeout?.diagnostics ?? ''}`
+                );
+            }
             // Sample when the set is A, so every sample sees the same dice.
             if (i % SAMPLE_EVERY === SAMPLE_EVERY - 1) {
                 const onA = !(CHURN_EVERY > 0 && Math.floor(i / CHURN_EVERY) % 2 === 1);
@@ -334,7 +356,7 @@ async function main() {
         await page.waitForTimeout(2500); // let the audio tail drain
         report.end = await sample();
         report.samples = samples;
-        report.rolls = { measured: ROLLS, timeouts, wallMs: Date.now() - t1 };
+        report.rolls = { measured: ROLLS, timeouts, timeoutDetails, wallMs: Date.now() - t1 };
 
         // ---- frame time ------------------------------------------------------
         const all = rollFrames.flat();
