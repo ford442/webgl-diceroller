@@ -191,8 +191,14 @@ try {
         const c = await openCase('?room= with a dead signaling server', {
             query: `${BASE_QUERY}&room=ABCD&signal=http://127.0.0.1:9`,
         });
-        await c.page.waitForTimeout(2500);
         check(true, 'reaches ready although the room cannot be reached');
+        // The room stack is a lazy chunk plus a solver-id fetch: give it time on a slow runner.
+        await c.page
+            .waitForFunction(() => Boolean(/** @type {any} */ (window).__app.multiplayer), null, {
+                timeout: 90000,
+                polling: 250,
+            })
+            .catch(() => {});
         const mp = await app(c.page, (a) => Boolean(a.multiplayer));
         check(
             mp === true,
@@ -252,7 +258,10 @@ try {
         const before = await app(c.page, (a) => a.stats.frame);
         await app(c.page, (a) => {
             const gl = a.renderer.getContext();
-            gl.getExtension('WEBGL_lose_context').loseContext();
+            // A lost context returns null for getExtension: keep the handle for the restore.
+            const ext = gl.getExtension('WEBGL_lose_context');
+            /** @type {any} */ (window).__loseCtx = ext;
+            ext.loseContext();
         });
         await c.page.waitForTimeout(1500);
         const lost = await app(c.page, (a) => ({
