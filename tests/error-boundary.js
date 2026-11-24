@@ -196,10 +196,23 @@ try {
             polling: 500,
         })
         .catch(() => {});
-    const stale = await page2.evaluate(() => ({
-        banner: document.getElementById('app-error-banner')?.textContent ?? '',
-        reloadAt: sessionStorage.getItem('dice:chunk-reload-at'),
-    }));
+    // The page is mid-navigation around the reload: retry a read that lands in a dying context.
+    let stale = null;
+    for (let attempt = 0; attempt < 10 && !stale; attempt++) {
+        try {
+            stale = await page2.evaluate(() => ({
+                banner: document.getElementById('app-error-banner')?.textContent ?? '',
+                reloadAt: sessionStorage.getItem('dice:chunk-reload-at'),
+            }));
+            if (!stale.banner) {
+                stale = null;
+                await page2.waitForTimeout(1000);
+            }
+        } catch {
+            await page2.waitForTimeout(1000);
+        }
+    }
+    stale ??= { banner: '', reloadAt: null };
     check(
         documentLoads === 2,
         'a 404ing chunk reloads exactly once',
