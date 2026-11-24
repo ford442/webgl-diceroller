@@ -184,6 +184,11 @@ export default defineConfig({
                 ],
             },
             workbox: {
+                // A redeploy's worker activates at once and drops the previous build's
+                // precache; docs/DEPLOYMENT.md ("Cache policy") has the full story.
+                skipWaiting: true,
+                clientsClaim: true,
+                cleanupOutdatedCaches: true,
                 globPatterns: [
                     '**/*.{js,css,html,ico,svg,wasm,json}',
                     'images/dice/*.glb',
@@ -206,7 +211,11 @@ export default defineConfig({
                 runtimeCaching: [
                     {
                         urlPattern: /\/images\/.*\.(ktx2|jpe?g|png)$/i,
-                        handler: 'CacheFirst',
+                        // Texture file names are not content-hashed, so CacheFirst would pin
+                        // a re-encoded texture to every returning visitor for a year.
+                        // StaleWhileRevalidate serves the cached copy instantly (offline
+                        // works) and refreshes it in the background for the next load.
+                        handler: 'StaleWhileRevalidate',
                         options: {
                             cacheName: 'texture-cache',
                             expiration: {
@@ -220,7 +229,7 @@ export default defineConfig({
                     },
                     {
                         urlPattern: /\/images\/props\/.*\.glb$/i,
-                        handler: 'CacheFirst',
+                        handler: 'StaleWhileRevalidate',
                         options: {
                             cacheName: 'prop-mesh-cache',
                             expiration: {

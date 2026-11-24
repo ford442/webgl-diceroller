@@ -44,6 +44,28 @@ for (const { path, size } of rows.slice(0, 15)) {
     console.log(`  ${(size / 1024).toFixed(1).padStart(9)} KB  ${path.replace(distDir, 'dist')}`);
 }
 
+// Where the bytes are, by top-level directory (files at the root are grouped as "(root)").
+const groups = new Map();
+for (const { path, size } of rows) {
+    const rel = path.slice(distDir.length + 1);
+    const top = rel.includes('/') ? rel.split('/')[0] : '(root)';
+    groups.set(top, (groups.get(top) ?? 0) + size);
+}
+console.log('\nBy directory:\n');
+for (const [name, size] of [...groups.entries()].sort((a, b) => b[1] - a[1])) {
+    console.log(`  ${(size / 1024).toFixed(1).padStart(9)} KB  ${name}`);
+}
+// A bundle built without the physics artifacts is not a releasable size: say so rather than pass quietly.
+const hasWasm = rows.some(({ path }) => /\/wasm\/dice_physics\.wasm$/.test(path));
+const hasScalar = rows.some(({ path }) => /\/wasm-scalar\/dice_physics\.wasm$/.test(path));
+if (!hasWasm || !hasScalar) {
+    console.log(
+        `\nnote: dist/ has no ${[!hasWasm && 'wasm/dice_physics.wasm', !hasScalar && 'wasm-scalar/dice_physics.wasm'].filter(Boolean).join(' or ')}: ` +
+            'this is a build:js:allow-missing-wasm bundle. The budget below includes an allowance for both engines; ' +
+            're-check the real figure after `npm run build`.'
+    );
+}
+
 console.log(`\nTotal dist/ size: ${(total / 1024 / 1024).toFixed(2)} MB`);
 
 if (total > DEPLOY_SIZE_MAX_BYTES) {

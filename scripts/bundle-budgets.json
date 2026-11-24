@@ -1,16 +1,37 @@
 {
     "description": "Gzip byte budgets for production JS chunks (see scripts/check-bundle-size.mjs); totals.deploySizeMaxBytes is the raw dist/ size budget (see scripts/check-deploy-size.mjs).",
-    "threeChunkComment": "`three` and `three.webgpu` are split again as of the WebGPU-chunk-collapse fix (manualChunks in vite.config.js routes node_modules/three/build/three.webgpu(.js), three.tsl(.js), and the examples/jsm/tsl/* addon nodes to their own 'three.webgpu' chunk before the generic node_modules/three catch-all — those addon nodes matter too: they statically import 'three/webgpu' and 'three/tsl', so leaving them in the eager chunk reintroduced both eager bytes and a chunk cycle). `three` covers the WebGL-path build of three + three's examples/jsm loaders/controls, real post-split size ~233-239 KB gzip; the budget below adds headroom pending a real tree-shake audit. `three.webgpu` is demand-loaded (see below) — WebGPU sessions only, never fetched by ?webgl (enforced by verify:bundle-loading and by static module-graph inspection: the 'three' chunk has zero imports from 'three.webgpu').",
+    "threeChunkComment": "`three` and `three.webgpu` are split again as of the WebGPU-chunk-collapse fix (manualChunks in vite.config.js routes node_modules/three/build/three.webgpu(.js), three.tsl(.js), and the examples/jsm/tsl/* addon nodes to their own 'three.webgpu' chunk before the generic node_modules/three catch-all \u2014 those addon nodes matter too: they statically import 'three/webgpu' and 'three/tsl', so leaving them in the eager chunk reintroduced both eager bytes and a chunk cycle). `three` covers the WebGL-path build of three + three's examples/jsm loaders/controls, real post-split size ~233-239 KB gzip; the budget below adds headroom pending a real tree-shake audit. `three.webgpu` is demand-loaded (see below) \u2014 WebGPU sessions only, never fetched by ?webgl (enforced by verify:bundle-loading and by static module-graph inspection: the 'three' chunk has zero imports from 'three.webgpu').",
     "chunks": {
-        "index": { "pattern": "^assets/index-.*\\.js$", "gzipMax": 190000 },
-        "three": { "pattern": "^assets/three-[^.]+\\.js$", "gzipMax": 260000 },
-        "three.webgpu": { "pattern": "^assets/three\\.webgpu-.*\\.js$", "gzipMax": 195000 },
+        "index": {
+            "pattern": "^assets/index-.*\\.js$",
+            "gzipMax": 175000
+        },
+        "three": {
+            "pattern": "^assets/three-[^.]+\\.js$",
+            "gzipMax": 240000
+        },
+        "three.webgpu": {
+            "pattern": "^assets/three\\.webgpu-.*\\.js$",
+            "gzipMax": 190000
+        },
         "rectAreaLtc": {
             "pattern": "^assets/RectAreaLightTexturesLib-.*\\.js$",
-            "gzipMax": 115000
+            "gzipMax": 104000
+        },
+        "multiplayerRoom": {
+            "pattern": "^assets/MultiplayerRoom-.*\\.js$",
+            "gzipMax": 8000
+        },
+        "gameTable": {
+            "pattern": "^assets/GameTable-.*\\.js$",
+            "gzipMax": 5500
+        },
+        "renderStats": {
+            "pattern": "^assets/RenderStats-.*\\.js$",
+            "gzipMax": 3500
         }
     },
-    "indexBudgetComment": "index raised 175000 -> 190000 B gzip (#380). main was at 181,688 B after the XR (hand pinch / ?ar placement chrome), lockstep input log, Farkle table-game and roll-theatre slices landed in the entry chunk; the 175 kB figure predates them. 190 kB leaves ~4% headroom over the 181.9 kB measured at #380. Cutting it properly means moving the table-game / theatre / session UI behind dynamic imports (a candidate for #383), not trimming here. Do not raise this again without a written reason.",
+    "indexBudgetComment": "index is back at the original 175000 B gzip (#383). It had been raised to 190000 for #380 when it measured 181.9 kB; the room stack (RoomSession, PeerMesh, signaling client, panel: now the MultiplayerRoom chunk, fetched only when a signaling URL resolves) and the Farkle session (rules, bot, GameSession, the table adapter: now the GameTable chunk, fetched on the first 'Play Farkle') were moved behind dynamic imports, taking it to 171.2 kB. Do not raise this again without a written reason; a new feature that is not needed on every boot belongs behind an import(), like these two.",
     "demandLoadedComment": "Chunks fetched only by a subset of sessions, so they do not belong in the every-session (eager) total. Each still needs its own `chunks` budget or an explicit note below.",
     "demandLoaded": [
         {
@@ -32,11 +53,24 @@
         {
             "pattern": "^assets/three\\.webgpu-.*\\.js$",
             "reason": "WebGPU backend + TSL; WebGPU sessions only"
+        },
+        {
+            "pattern": "^assets/MultiplayerRoom-.*\\.js$",
+            "reason": "Room session + panel; only when a signaling URL resolves (VITE_SIGNALING_URL or ?signal=)"
+        },
+        {
+            "pattern": "^assets/GameTable-.*\\.js$",
+            "reason": "Farkle rules, bot, session and table adapter; first 'Play Farkle' click only"
+        },
+        {
+            "pattern": "^assets/RenderStats-.*\\.js$",
+            "reason": "?debug / ?debug-perf HUD only"
         }
     ],
     "totals": {
-        "jsGzipMax": 730000,
-        "allChunksGzipMax": 900000,
-        "deploySizeMaxBytes": 15728640
-    }
+        "jsGzipMax": 430000,
+        "allChunksGzipMax": 750000,
+        "deploySizeMaxBytes": 9437184
+    },
+    "deploySizeComment": "deploySizeMaxBytes 15 MiB -> 9 MiB (#383). dist/ measured 7,726,393 B (7.37 MiB) without the physics artifacts, after dropping draco_decoder.js (719 kB, the asm.js fallback no browser that can run this app uses) and moving the dev-only WASM test page out of public/. The WASM engine is documented at ~52 kB raw per profile (docs/WASM_ENGINE.md) plus its loader; the 1.6 MiB of headroom over the measured figure is the allowance for both profiles (wasm/, wasm-scalar/) and is a placeholder until a full `npm run build` can be measured (no Emscripten in the session that set it). Replace it with measured-plus-5% once it has been."
 }

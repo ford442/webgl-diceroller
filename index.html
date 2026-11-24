@@ -113,6 +113,67 @@
                 }
             })();
         </script>
+        <noscript>
+            <p
+                style="
+                    position: fixed;
+                    inset: 0;
+                    z-index: 10000;
+                    background: #111;
+                    color: #ccc;
+                    padding: 2rem;
+                    font-family: sans-serif;
+                "
+            >
+                The tavern dice roller needs JavaScript. Please enable it and reload.
+            </p>
+        </noscript>
+        <script>
+            // Boot watchdog (#383). The app's own error boundary (src/core/ErrorBoundary.ts)
+            // takes over once the entry module has run and sets window.__diceBooted; this
+            // covers what happens before that: the entry script 404s (stale deploy), a
+            // module throws while evaluating, or the page just never gets going.
+            (function () {
+                function fail(message, stalled) {
+                    // After the entry ran, its own boundary reports errors; only a stall is ours.
+                    if (window.__diceBooted && !stalled) return;
+                    var text = document.getElementById('loading-text');
+                    if (!text || text.dataset.failed) return;
+                    text.dataset.failed = '1';
+                    text.textContent = message;
+                    var bar = document.getElementById('loading-bar');
+                    if (bar) bar.style.background = '#a33';
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = 'Reload';
+                    btn.style.cssText =
+                        'margin-top:1.25rem;font:inherit;padding:8px 18px;cursor:pointer;border-radius:4px;border:1px solid #ff9933;background:#ff9933;color:#1a0f08';
+                    btn.onclick = function () {
+                        location.reload();
+                    };
+                    text.parentNode.appendChild(btn);
+                }
+                // Capture phase: a failed <script>/<link> reports on the element, not on window.
+                window.addEventListener(
+                    'error',
+                    function (e) {
+                        var t = e.target;
+                        if (t && t !== window && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+                            fail('The app could not load. Check your connection and reload.');
+                        } else if (e.error) {
+                            fail('The app failed to start.');
+                        }
+                    },
+                    true
+                );
+                // ?no-wasm / slow networks legitimately take a while: only a hard stall counts.
+                setTimeout(function () {
+                    if (document.getElementById('loading-overlay')) {
+                        fail('Still loading… the app is taking much longer than usual.', true);
+                    }
+                }, 90000);
+            })();
+        </script>
         <script type="module" src="/src/main.js"></script>
     </body>
 </html>
