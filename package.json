@@ -83,6 +83,7 @@
         "test:wasm-authoritative": "node tests/wasm-authoritative.js",
         "test:wasm-gameplay-loop": "node tests/wasm-gameplay-loop.mjs",
         "test:a11y": "node tests/a11y.js",
+        "test:layout": "node tests/layout-matrix.js",
         "fixture:world": "tsx --conditions=source scripts/export-collider-fixture.mjs",
         "check:world-fixture": "tsx --conditions=source scripts/export-collider-fixture.mjs --check",
         "test:tavern-world": "TAVERN_SEEDS=200 vitest run --project dice-core packages/dice-core/test/tavernWorldSettle.test.ts",

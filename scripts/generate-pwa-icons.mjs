@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Generate PNG PWA icons from the Vite logo SVG.
+ * Generate PNG PWA icons from the d20 favicon SVG (public/favicon.svg).
  * Run: node scripts/generate-pwa-icons.mjs
  */
 import sharp from 'sharp';
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
-const svgPath = resolve(root, 'public/vite.svg');
+const svgPath = resolve(root, 'public/favicon.svg');
 const outDir = resolve(root, 'public');
 
 const svg = await readFile(svgPath, 'utf8');
@@ -19,8 +19,8 @@ const sizes = [192, 512];
 for (const size of sizes) {
     const padded = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <rect width="${size}" height="${size}" fill="#0a0a0a"/>
-  <g transform="translate(${size * 0.18}, ${size * 0.18}) scale(${(size * 0.64) / 32})">
+  <rect width="${size}" height="${size}" fill="#1a0f08"/>
+  <g transform="translate(${size * 0.1}, ${size * 0.1}) scale(${(size * 0.8) / 64})">
     ${svg
         .replace(/<\?xml[^>]*\?>/, '')
         .replace(/<svg[^>]*>/, '')

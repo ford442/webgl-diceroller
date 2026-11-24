@@ -17,6 +17,9 @@ async function launchPage(opts = {}) {
     const browser = await chromium.launch({
         headless: opts.headless ?? true,
         args: opts.args ?? DEFAULT_ARGS,
+        // Optional: point at a preinstalled Chromium when the pinned
+        // Playwright's own browser download is unavailable.
+        executablePath: opts.executablePath ?? process.env.PW_CHROMIUM_PATH,
     });
     // `browser.newPage()` creates an implicit context, which AxeBuilder
     // rejects ("Please use browser.newContext()"). Callers that inject
