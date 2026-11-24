@@ -16,6 +16,7 @@ import {
 import { spawnedProps } from './environment/DynamicPropState.js';
 import { propWasmGrabDriver } from './environment/DynamicPropSync.js';
 import { returnTableToLive } from './dice/ThrowRecord.js';
+import { TABLE_SURFACE_Y } from './core/SceneMetrics.js';
 import type { InteractionHooks } from './types/interaction.js';
 import type { SpawnedDie } from './types/dice.js';
 
@@ -206,7 +207,11 @@ function onPointerDown(x: any, y: any, camera: any, scene: any, hooks: any = {})
 
             draggedItem = /** @type {import('three').Mesh} */ object;
             hooks.onMotionActivityChange?.(true, 'drag');
-            startWasmDieGrab(wasmGrab, draggedItem, point);
+            // A held die is kinematic, so the engine never pushes it out of the table:
+            // keep it above the felt however far down the cursor goes.
+            startWasmDieGrab(wasmGrab, draggedItem, point, undefined, {
+                surfaceY: TABLE_SURFACE_Y,
+            });
         }
         return;
     }
