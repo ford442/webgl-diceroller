@@ -269,9 +269,7 @@ try {
             frame: a.stats.frame,
         }));
         check(lost.lost === true, 'the context reports lost', JSON.stringify(lost));
-        await app(c.page, (a) =>
-            a.renderer.getContext().getExtension('WEBGL_lose_context').restoreContext()
-        );
+        await c.page.evaluate(() => /** @type {any} */ (window).__loseCtx.restoreContext());
         await c.page
             .waitForFunction(
                 (f) =>
