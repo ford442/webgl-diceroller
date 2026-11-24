@@ -96,6 +96,9 @@ export function installErrorBoundary(options: ErrorBoundaryOptions = {}): ErrorB
     const surface = (entry: ReportedError) => {
         // Rejections are recorded, not announced (see the decisions above).
         if (entry.kind === 'rejection') return;
+        // A stale chunk reloads first and only then (if that did not help) shows its own
+        // banner from handleChunk; showing one here would flash it right before the reload.
+        if (entry.kind === 'chunk') return;
         try {
             banner(
                 {
