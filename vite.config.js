@@ -1,5 +1,7 @@
 import { defaultClientConditions, defaultServerConditions, defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 const COOP_COEP_HEADERS = {
     'Cross-Origin-Opener-Policy': 'same-origin',
@@ -29,6 +31,56 @@ const CRITICAL_PRELOADS = [
 // downloaded it for the link, the console warned "preloaded but not used within
 // a few seconds", and the worker then fetched it again (#365).
 // `verify:bundle-loading` asserts the artifact is requested exactly once.
+
+/**
+ * Build stamp (#380): which commit is live? Resolved once per build from, in
+ * order, BUILD_COMMIT, GITHUB_SHA, `git rev-parse HEAD`. Only the commit and
+ * version are compiled into the bundle (deterministic: the same checkout
+ * builds the same chunks); the wall-clock build time lives only in the emitted
+ * build-info.json, which the service worker never precaches.
+ */
+function git(...args) {
+    try {
+        return execFileSync('git', args, {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'ignore'],
+        }).trim();
+    } catch {
+        return '';
+    }
+}
+
+function resolveBuildInfo() {
+    const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+    const commit =
+        process.env.BUILD_COMMIT || process.env.GITHUB_SHA || git('rev-parse', 'HEAD') || 'unknown';
+    // Tracked-file changes only: the build writes untracked PWA icons / dist/.
+    const dirty =
+        commit !== 'unknown' && git('status', '--porcelain', '--untracked-files=no') !== '';
+    return {
+        version: pkg.version || '0.0.0',
+        commit,
+        shortCommit: commit === 'unknown' ? 'unknown' : commit.slice(0, 7),
+        dirty,
+    };
+}
+
+const BUILD_INFO = resolveBuildInfo();
+
+function emitBuildInfo() {
+    return {
+        name: 'emit-build-info',
+        apply: 'build',
+        generateBundle() {
+            const info = { ...BUILD_INFO, buildTime: new Date().toISOString() };
+            this.emitFile({
+                type: 'asset',
+                fileName: 'build-info.json',
+                source: `${JSON.stringify(info, null, 2)}\n`,
+            });
+        },
+    };
+}
 
 function joinPublicHref(base, relativePath) {
     const dirBase = base.endsWith('/') ? base : `${base}/`;
@@ -82,9 +134,14 @@ export default defineConfig({
         format: 'es',
     },
     publicDir: 'public',
+    define: {
+        __BUILD_COMMIT__: JSON.stringify(BUILD_INFO.commit),
+        __BUILD_VERSION__: JSON.stringify(BUILD_INFO.version),
+    },
     assetsInclude: ['**/*.wasm'],
     plugins: [
         injectCriticalPreloads(),
+        emitBuildInfo(),
         VitePWA({
             registerType: 'autoUpdate',
             includeAssets: [
@@ -136,9 +193,16 @@ export default defineConfig({
                     'wasm-scalar/**/*',
                 ],
                 // Large JPG/KTX2 textures: runtime cache-first instead of precache.
-                globIgnores: ['**/images/**/*.jpg', '**/images/**/*.ktx2', '**/images/lamp/**'],
+                // build-info.json must always come from the network: a precached copy would
+                // report the previous deploy's commit.
+                globIgnores: [
+                    '**/images/**/*.jpg',
+                    '**/images/**/*.ktx2',
+                    '**/images/lamp/**',
+                    'build-info.json',
+                ],
                 navigateFallback: 'index.html',
-                navigateFallbackDenylist: [/^\/wasm\//],
+                navigateFallbackDenylist: [/^\/wasm\//, /build-info\.json$/],
                 runtimeCaching: [
                     {
                         urlPattern: /\/images\/.*\.(ktx2|jpe?g|png)$/i,
@@ -174,6 +238,11 @@ export default defineConfig({
     ],
     build: {
         target: 'esnext',
+        // Largest chunk is `three` (~840 kB raw / ~235 kB gzip) and `index` (~540 kB).
+        // Rollup's 500 kB default warned on every build and would hide a new
+        // problem chunk; 900 kB sits just above the known ones, and the real
+        // regression gate is scripts/bundle-budgets.json (gzip, per chunk).
+        chunkSizeWarningLimit: 900,
         modulePreload: {
             polyfill: true,
             resolveDependencies(filename, deps) {

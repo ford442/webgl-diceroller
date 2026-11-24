@@ -48,7 +48,8 @@ webgl-diceroller/
 │   ├── ARCHITECTURE.md         # Scheduler phases, tier loading, prop registry, renderer
 │   ├── WASM_ENGINE.md          # Custom WASM physics
 │   ├── XR.md                   # WebXR seated-table spike
-│   └── MULTIPLAYER.md          # Optional signaling / rooms
+│   ├── MULTIPLAYER.md          # Optional signaling / rooms
+│   └── DEPLOYMENT.md           # Fresh checkout → dist/, deploy.py, COOP/COEP host config
 ├── tests/                      # Playwright smoke / a11y scripts (see Testing Instructions)
 ├── scripts/                    # Asset conversion + verify-* harnesses
 ├── public/                     # Static assets (dice GLB, draco, basis, wasm)
@@ -57,7 +58,7 @@ webgl-diceroller/
 ├── index.html
 ├── vite.config.js
 ├── package.json
-├── deploy.py                   # Upload dist/ via Contabo storage manager API
+├── deploy.py                   # Upload dist/ via Contabo storage manager API (see docs/DEPLOYMENT.md)
 ├── git.sh                      # Ad-hoc pull/add/commit/push helper (not CI)
 ├── plan.md                     # Pointer to docs/ + GitHub Issues (historical roadmap retired)
 └── claude.md                   # Pointer to AGENTS.md (avoid doc drift)
@@ -580,18 +581,17 @@ npm run verify:render-regression    # WebGL vs WebGPU screenshot compare (when b
 
 ## Deployment
 
-The [`deploy.py`](deploy.py) script zips `dist/` and uploads via the Contabo storage manager HTTP API (see the script header for `PROJECT_NAME`, `BUILD_DIR`, and optional `DEPLOY_TOKEN`):
+Full recipe, host header snippets and token handling live in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). In short:
 
 ```bash
-# 1. Build first
-npm run build
-
-# 2. Deploy (requires: pip install requests)
-python deploy.py
+npm ci && npm run build && npm run gates   # needs an EMSDK (build:wasm); gates = bundle/deploy size, cycles, typecheck, lint, format
+export DEPLOY_TOKEN=...                    # env only; deploy.py exits if unset
+python deploy.py --target staging          # or: --target production --confirm-production
 ```
 
-- **Remote target:** configured in `deploy.py` (`PROJECT_NAME` → `dice-roller` on the storage host)
-- **Local directory:** `dist/`
+- `dist/build-info.json` (`{ version, commit, shortCommit, dirty, buildTime }`) is emitted by every build; the short SHA shows in the `?debug` HUD and `window.__app.buildInfo`. `deploy.py` prints it, uploads by content hash (never size alone), and reads it back from the live URL after upload.
+- **Remote target:** `staging` is site `test` (`https://test.1ink.us/dice-roller/`); `production` needs `DEPLOY_PRODUCTION_SITE`.
+- The host must send COOP/COEP (+ CORP); check with `npm run verify:production-isolation -- <url>`.
 
 **`git.sh`** is a personal convenience wrapper (`git pull`, `git add .`, commit, push). It is not part of CI and should not be treated as project documentation.
 

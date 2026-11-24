@@ -3,6 +3,8 @@
  * Call only when ?test, ?debug, or ?debug-perf is present.
  */
 
+import { BUILD_INFO } from './BuildInfo.js';
+
 let installed = false;
 
 /**
@@ -13,6 +15,7 @@ export function installAppTestHooks(app) {
     installed = true;
 
     window.__app = app;
+    app.buildInfo = BUILD_INFO;
 
     // Bridge legacy test hook → events (callers that set window.__onDiceCollision).
     app.events.on(app.events.AppEvent.DICE_COLLISION, (ev) => {

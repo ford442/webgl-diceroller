@@ -16,6 +16,8 @@
  * traversal are throttled to fixed intervals so the panel never causes jank.
  */
 
+import { BUILD_INFO } from '../core/BuildInfo.js';
+
 const DOM_INTERVAL_MS = 200; // ~5 Hz text refresh
 const TRAVERSE_INTERVAL_MS = 500; // ~2 Hz scene-graph summary
 const SLOW_FRAME_MS = 50; // < 20 fps — log when debug-perf is on
@@ -147,6 +149,7 @@ export function createRenderStats({
 
         const lines = [];
         lines.push('DICE ROLLER · DEBUG');
+        lines.push(`build ${BUILD_INFO.shortCommit} · v${BUILD_INFO.version}`);
         lines.push(
             `fps ${(1000 / frameMsSmoothed).toFixed(0)}  (${frameMsSmoothed.toFixed(1)} ms)`
         );

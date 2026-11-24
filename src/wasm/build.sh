@@ -149,9 +149,15 @@ compile_profile() {
     mkdir -p "${out_dir}"
     echo "[build:wasm] Profile: ${profile}"
     echo "[build:wasm] Compiling dice_physics.cpp + dice_physics/*.cpp → ${out_dir}/dice_physics.{js,wasm}"
-    em++ "${SCRIPT_DIR}/dice_physics.cpp" \
+    # Flags BEFORE inputs, the order CMake's link line uses (flags, then the
+    # object list). `--bind` links libembind, and where it sits relative to the
+    # inputs moves libc++'s RTTI name strings in the data segment: sources-first
+    # produced a wasm 11 bytes larger than CMake's, which scripts/
+    # verify-cmake-wasm-parity.sh (CI's wasm-toolchain job) rejects. Keep the
+    # two orders identical.
+    em++ "${EMCC_FLAGS[@]}" \
+        "${SCRIPT_DIR}/dice_physics.cpp" \
         "${ENGINE_SOURCES[@]}" \
-        "${EMCC_FLAGS[@]}" \
         -o "${out_dir}/dice_physics.js"
     write_build_info "${out_dir}" "${profile}"
     echo "[build:wasm] Done.  Output:"

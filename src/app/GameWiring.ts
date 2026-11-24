@@ -21,6 +21,7 @@ import type { ThrowDie } from 'dice-core/game/GameRules';
 import { generateRollSeed } from 'dice-core/roll/ShareableRoll';
 import { createSeededRng } from 'dice-core/wasm/seededThrowParams';
 import { getSpawnedDiceCounts, spawnedDice, updateDiceSet, whenDiceRegistered } from '../dice.js';
+import { reorderToTypeSequence } from './diceOrder.js';
 import { isWasmAvailable } from '../wasm/PhysicsBridge.js';
 import { isTouchPrimaryDevice } from '../core/DeviceCapabilities.js';
 import { createFarklePanel, type FarklePanel } from '../ui/FarklePanel.js';
@@ -70,6 +71,8 @@ const BOT_PACE = { think: 1000, afterThrow: 700 };
 /** The scene, as a game sees it. */
 export function createTavernGameTable(deps: GameWiringDeps): GameTable {
     let saved: Record<string, number> | null = null;
+    /** The type of each die, in table order, before the game took the table. */
+    let savedOrder: string[] = [];
 
     const jail = () => deps.getDiceJailController() ?? null;
     const setCounts = async (counts: Record<string, number>) => {
@@ -85,6 +88,7 @@ export function createTavernGameTable(deps: GameWiringDeps): GameTable {
         async seat(dice) {
             const current = getSpawnedDiceCounts();
             saved = { ...current };
+            savedOrder = spawnedDice.map((die) => die.type);
             jail()?.release();
             const wanted: Record<string, number> = Object.fromEntries(
                 Object.keys(current).map((type) => [type, 0])
@@ -110,6 +114,8 @@ export function createTavernGameTable(deps: GameWiringDeps): GameTable {
             const back = saved;
             saved = null;
             await setCounts(back);
+            // updateDiceSet re-adds removed dice at the end; put each back in its slot.
+            reorderToTypeSequence(spawnedDice, savedOrder);
         },
 
         present: (ids) => ids.every((id) => spawnedDice.some((die) => die.wasmId === id)),
