@@ -48,9 +48,9 @@ and `check:deploy-size` (raw `dist/` bytes, printed by directory). Both read
   (only when a signaling URL resolves), `GameTable` (first "Play Farkle"),
   `RenderStats` (`?debug`), `XrAppWiring` (`?xr` / `?ar`). A new feature that is
   not needed to draw the tavern belongs behind an import, not in `index`.
-- `deploySizeMaxBytes` is 9 MiB: the measured bundle without WASM (7.37 MiB)
-  plus an allowance for both physics profiles. `check:deploy-size` says so when
-  the WASM artifacts are missing; re-pin it from a full build.
+- `deploySizeMaxBytes` is 8.5 MiB: a full build (both physics profiles) measures
+  7.78 MiB (8,161,736 B). `check:deploy-size` says so when the WASM artifacts are
+  missing, because that bundle is not a releasable size.
 - Shipped on purpose although a modern browser rarely reads them: the fallback
   JPGs next to each KTX2 texture (~2.1 MB, fetched only when KTX2 decoding fails,
   never precached). Dropped because nothing can reach them: Draco's asm.js

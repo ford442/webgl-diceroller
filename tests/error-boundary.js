@@ -189,7 +189,13 @@ try {
         waitUntil: 'load',
         timeout: 60000,
     });
-    await page2.waitForSelector('#app-error-banner', { timeout: 150000 }).catch(() => {});
+    // waitForFunction (unlike waitForSelector) survives the reload this test provokes.
+    await page2
+        .waitForFunction(() => Boolean(document.getElementById('app-error-banner')), null, {
+            timeout: 240000,
+            polling: 500,
+        })
+        .catch(() => {});
     const stale = await page2.evaluate(() => ({
         banner: document.getElementById('app-error-banner')?.textContent ?? '',
         reloadAt: sessionStorage.getItem('dice:chunk-reload-at'),

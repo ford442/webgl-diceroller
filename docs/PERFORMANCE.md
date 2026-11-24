@@ -16,7 +16,7 @@ where the numbers still have to be filled in by someone with the hardware.
 | Per-chunk gzip                               | `npm run check:bundle-size`  | `index` 175 kB, `three` 240 kB, `three.webgpu` 190 kB, LTC 104 kB, `MultiplayerRoom` 8 kB, `GameTable` 5.5 kB, `RenderStats` 3.5 kB |
 | Eager JS gzip (what every session downloads) | same                         | 430 kB                                                                                                                              |
 | All chunks gzip                              | same                         | 750 kB                                                                                                                              |
-| `dist/` raw bytes                            | `npm run check:deploy-size`  | 9 MiB (see the note in `bundle-budgets.json`)                                                                                       |
+| `dist/` raw bytes                            | `npm run check:deploy-size`  | 8.5 MiB (full build measures 7.78 MiB)                                                                                              |
 | Main-thread task before `ready`              | `npm run verify:boot-budget` | 2 s (report-only on SwiftShader; see ARCHITECTURE.md, Boot budget)                                                                  |
 | Growth over 200 rolls of 20 dice             | `npm run verify:perf-soak`   | see "Soak" below                                                                                                                    |
 
@@ -39,14 +39,12 @@ raised to 190 kB for #380); after is this branch, with the error boundary includ
 | **Eager total**                   | 429,203 | 419,359 | −9,844 B                                                                 |
 | **All chunks**                    | 730,639 | 735,751 | +5,112 B: the new lazy chunks and the error boundary                     |
 
-`dist/` without WASM: 8.03 MB → 7.37 MiB (7,726,393 B) after dropping the asm.js Draco
-decoder (719 kB), an unreferenced lamp texture, a `.url` shortcut and moving the
-dev-only WASM test page out of `public/`. The PWA precache shrinks by the same
-719 kB (it globs `draco/**/*`). The WASM artifacts could not be built here
-(no Emscripten); docs/WASM_ENGINE.md puts a release `dice_physics.wasm` at ~52 kB
-raw, so the full figure is expected to be well inside the 9 MiB gate, but it has
-**not been measured**: run `npm run build && npm run check:deploy-size` and replace
-the allowance in `bundle-budgets.json` with the measured number.
+`dist/` of a **full build** (Emscripten 3.1.61, SIMD + scalar profiles): 8,161,736 B =
+7.78 MiB (was 8.05 MiB without WASM at the start of #383; 7.37 MiB without WASM now).
+The drop is the asm.js Draco decoder (719 kB), an unreferenced lamp texture, a `.url`
+shortcut and the dev-only WASM test page moved out of `public/`. Each profile is a
+~175 kB `.wasm` plus a 55 kB loader. The PWA precache is 56 entries / 3,971 KiB (it was
+44 entries / 4,210 KiB without WASM; the Draco decoder was in it).
 
 Fallback JPGs stay: they are the documented path when KTX2 decoding fails (~2.1 MB,
 quality 80, never precached, requested only on failure).
@@ -86,7 +84,7 @@ so the pass/fail rules are checked even where the soak itself cannot run.
 `report.json` (default `soak/`) holds the samples, the verdicts, the boot-trace
 summary and the environment.
 
-**Not yet run** against a full build; needs `npm run build:wasm` (Emscripten) first.
+Run results are recorded in `docs/release/383-state-of-the-app.md`.
 
 ## Targets per device class (proposed, to be confirmed by the table below)
 

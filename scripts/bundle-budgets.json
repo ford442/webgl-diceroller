@@ -70,7 +70,7 @@
     "totals": {
         "jsGzipMax": 430000,
         "allChunksGzipMax": 750000,
-        "deploySizeMaxBytes": 9437184
+        "deploySizeMaxBytes": 8912896
     },
-    "deploySizeComment": "deploySizeMaxBytes 15 MiB -> 9 MiB (#383). dist/ measured 7,726,393 B (7.37 MiB) without the physics artifacts, after dropping draco_decoder.js (719 kB, the asm.js fallback no browser that can run this app uses) and moving the dev-only WASM test page out of public/. The WASM engine is documented at ~52 kB raw per profile (docs/WASM_ENGINE.md) plus its loader; the 1.6 MiB of headroom over the measured figure is the allowance for both profiles (wasm/, wasm-scalar/) and is a placeholder until a full `npm run build` can be measured (no Emscripten in the session that set it). Replace it with measured-plus-5% once it has been."
+    "deploySizeComment": "deploySizeMaxBytes 15 MiB -> 8.5 MiB (#383). Measured on a full build (Emscripten 3.1.61, both physics profiles): dist/ = 8,161,736 B (7.78 MiB); the same bundle without WASM was 7,726,393 B. That is after dropping draco_decoder.js (719 kB, the asm.js fallback no browser that can run this app uses), an unreferenced lamp texture and a .url shortcut, and moving the dev-only WASM test page out of public/. The budget is the measurement plus ~9%."
 }
