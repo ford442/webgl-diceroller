@@ -72,10 +72,11 @@ done
 read -r -a PROFILES <<< "${DICE_PARITY_PROFILES:-simd scalar}"
 STRICT="${DICE_CMAKE_PARITY_STRICT:-1}"
 
-if ! command -v emcmake >/dev/null 2>&1 && [ -f /root/emsdk/emsdk_env.sh ]; then
-    # shellcheck source=/dev/null
-    source /root/emsdk/emsdk_env.sh
-fi
+# Same toolchain as build.sh, or the byte diff compares two different compilers.
+SCRIPT_DIR="${WASM_DIR}"
+# shellcheck source=/dev/null
+source "${WASM_DIR}/ensure_emsdk.sh"
+ensure_pinned_emsdk
 if ! command -v emcmake >/dev/null 2>&1; then
     echo "FAIL: emcmake not on PATH (and no /root/emsdk). This check needs an EMSDK." >&2
     exit 1

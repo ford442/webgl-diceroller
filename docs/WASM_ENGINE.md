@@ -1338,7 +1338,7 @@ pinned hashes in `solver_tests.cpp` are unchanged under both g++ and clang.
 
 #### Still deferred after Phase 10
 
-- [ ] **EMSDK pin bump** — still 3.1.61. Needs the `emsdk-experiment.yml`
+- [ ] **EMSDK pin bump** — still 3.1.61, now stored in `src/wasm/EMSDK_VERSION` (what `build.sh` installs into `.emsdk/` via `ensure_emsdk.sh`; `verify-emcc-flags-sync.sh` asserts it equals `ci.yml`'s). Bump all three together. Needs the `emsdk-experiment.yml`
       table recorded above before `EMSDK_VERSION` / `PINNED_EMSDK_VERSION` move,
       and with them the `-sWASM_BIGINT` / `--closure 1` / `-sSTRICT=1` /
       `-fno-rtti` / `-fno-exceptions` / split-`ENVIRONMENT` /

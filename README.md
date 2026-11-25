@@ -35,7 +35,7 @@ See [docs/WASM_ENGINE.md](docs/WASM_ENGINE.md) for build instructions, API refer
 status. Architecture overview: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Agent/contributor
 guide: [AGENTS.md](AGENTS.md).
 
-Quick start (requires [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html)):
+Quick start (the first `build:wasm` installs the pinned Emscripten — see `src/wasm/EMSDK_VERSION` — into the git-ignored `.emsdk/`, so it needs git, python3 and network once):
 
 ```bash
 npm run build:wasm   # compile C++ → WASM

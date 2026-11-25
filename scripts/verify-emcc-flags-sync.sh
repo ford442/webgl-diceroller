@@ -137,7 +137,14 @@ if [[ -f "${CI_YML}" && -f "${EXPERIMENT_YML}" ]]; then
     if [[ "${CI_EMSDK}" != "${EXP_EMSDK}" ]]; then
         fail "EMSDK pin drift: ci.yml has '${CI_EMSDK}', emsdk-experiment.yml has '${EXP_EMSDK}'"
     fi
-    echo "ok: EMSDK pin consistent across workflows (${CI_EMSDK})"
+    # src/wasm/EMSDK_VERSION is what build.sh installs; CI must test that very version.
+    PIN_FILE="${REPO_ROOT}/src/wasm/EMSDK_VERSION"
+    [[ -f "${PIN_FILE}" ]] || fail "src/wasm/EMSDK_VERSION is missing (build.sh reads the pin from it)"
+    FILE_EMSDK="$(tr -d '[:space:]' <"${PIN_FILE}")"
+    if [[ "${CI_EMSDK}" != "${FILE_EMSDK}" ]]; then
+        fail "EMSDK pin drift: ci.yml has '${CI_EMSDK}', src/wasm/EMSDK_VERSION has '${FILE_EMSDK}'"
+    fi
+    echo "ok: EMSDK pin consistent across workflows and src/wasm/EMSDK_VERSION (${CI_EMSDK})"
 fi
 
 echo "ok: CMake per-config flag slots cleared (no hidden -DNDEBUG / -O override)"

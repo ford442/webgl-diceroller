@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # build.sh — Compile dice_physics.cpp to WebAssembly using Emscripten.
 #
-# Prerequisites:
-#   1. Install the Emscripten SDK: https://emscripten.org/docs/getting_started/downloads.html
-#   2. Activate it in your shell:  source /path/to/emsdk/emsdk_env.sh
+# Prerequisites: git, python3 and network access the first time. The script installs
+# the pinned Emscripten (src/wasm/EMSDK_VERSION) into <repo>/.emsdk if `em++` on PATH
+# is not that version; it never touches an emsdk of your own. Knobs:
+#   EMSDK_AUTO_INSTALL=0    fail instead of downloading
+#   EMSDK_ALLOW_MISMATCH=1  build with whatever em++ is on PATH, with a warning
 #
 # Usage (run from repository root or this directory):
 #   cd src/wasm && ./build.sh              # SIMD → public/wasm/ AND scalar → public/wasm-scalar/
@@ -41,15 +43,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Local dev convenience: activate an emsdk checked out at /root/emsdk if emcc
-# isn't already on PATH (e.g. CI activates its own emsdk via setup-emsdk).
-if ! command -v em++ >/dev/null 2>&1 && [ -f /root/emsdk/emsdk_env.sh ]; then
-    # shellcheck source=/dev/null
-    source /root/emsdk/emsdk_env.sh
-fi
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+# Make em++ the pinned Emscripten (src/wasm/EMSDK_VERSION), installing it into the
+# git-ignored <repo>/.emsdk if it is not already there. See ensure_emsdk.sh.
+# shellcheck source=ensure_emsdk.sh
+source "${SCRIPT_DIR}/ensure_emsdk.sh"
+ensure_pinned_emsdk
 
 # shellcheck source=emcc_flags.inc.sh
 source "${SCRIPT_DIR}/emcc_flags.inc.sh"

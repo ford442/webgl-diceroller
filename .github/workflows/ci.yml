@@ -19,6 +19,9 @@ permissions:
 
 env:
     EMSDK_VERSION: '3.1.61'
+    # setup-emsdk provides exactly this version; build.sh must never go and download
+    # another one if the two ever drift (verify-emcc-flags-sync.sh catches the drift).
+    EMSDK_AUTO_INSTALL: '0'
     # GitHub-hosted runners have no GPU. The WebGL2 TSL backend never finishes
     # loading under SwiftShader (see AGENTS.md), so harnesses that probe
     # `?webgpu` report and skip that profile instead of hanging on it.
