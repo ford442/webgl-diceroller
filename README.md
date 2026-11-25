@@ -1,5 +1,4 @@
-WebGPU Dice Roller
-===========================================
+# WebGPU Dice Roller
 
 A Three.js application that spawns 3D models of gaming dice (d4–d20) in a tavern-themed
 scene and lets you fling, drag, and levitate them with realistic rigid-body physics.
@@ -50,3 +49,5 @@ Runtime flags:
   exist: no dice spawn, and the app shows the honest failure banner. There is no
   fallback engine to fall back to any more. The former `?dual-physics`, `?ammo-drag`,
   and `?wasm-drag` flags have been removed.
+
+Releases and rollback: see [docs/RELEASE.md](docs/RELEASE.md) and [CHANGELOG.md](CHANGELOG.md).
