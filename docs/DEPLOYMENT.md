@@ -1,6 +1,8 @@
 # Deployment
 
 How a production bundle is built from a fresh checkout, deployed, and verified.
+
+Cutting a version and rolling back: [`RELEASE.md`](RELEASE.md).
 Release tracking: #378 (this page: #380; cache policy and redeploy: #383).
 
 ## Fresh checkout → `dist/` (CI-equivalent)
