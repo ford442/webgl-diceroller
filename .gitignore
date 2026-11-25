@@ -34,3 +34,6 @@ boot-budget/
 __pycache__/
 soak/
 release/
+
+# Repo-local Emscripten SDK installed by src/wasm/ensure_emsdk.sh
+.emsdk/

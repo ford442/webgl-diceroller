@@ -39,6 +39,9 @@ jobs:
         # Five full -O3 -flto links plus a build + native parity run; the
         # timeout is sized for that, not optimism.
         timeout-minutes: 45
+        env:
+            # The point of this job is a toolchain that is not the pin.
+            EMSDK_ALLOW_MISMATCH: '1'
         steps:
             - uses: actions/checkout@v5
             - uses: mymindstorm/setup-emsdk@v15

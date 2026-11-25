@@ -115,6 +115,8 @@ export default [
         ignores: [
             'dist/**',
             'node_modules/**',
+            // Repo-local Emscripten SDK that build:wasm installs (src/wasm/ensure_emsdk.sh).
+            '.emsdk/**',
             'legacy/**',
             'public/**',
             'src/wasm/third_party/**',
