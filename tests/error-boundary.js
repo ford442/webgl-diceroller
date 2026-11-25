@@ -189,17 +189,22 @@ try {
         waitUntil: 'load',
         timeout: 60000,
     });
-    // waitForFunction (unlike waitForSelector) survives the reload this test provokes.
-    await page2
-        .waitForFunction(() => Boolean(document.getElementById('app-error-banner')), null, {
-            timeout: 240000,
-            polling: 500,
-        })
-        .catch(() => {});
-    const stale = await page2.evaluate(() => ({
-        banner: document.getElementById('app-error-banner')?.textContent ?? '',
-        reloadAt: sessionStorage.getItem('dice:chunk-reload-at'),
-    }));
+    // Poll from Node: both waitForSelector and waitForFunction can reject with "context
+    // destroyed" when the reload lands mid-poll, so a read that fails is simply retried.
+    let stale = null;
+    for (let attempt = 0; attempt < 480 && !stale; attempt++) {
+        try {
+            const read = await page2.evaluate(() => ({
+                banner: document.getElementById('app-error-banner')?.textContent ?? '',
+                reloadAt: sessionStorage.getItem('dice:chunk-reload-at'),
+            }));
+            if (read.banner) stale = read;
+        } catch {
+            /* mid-navigation */
+        }
+        if (!stale) await page2.waitForTimeout(500);
+    }
+    stale ??= { banner: '', reloadAt: null };
     check(
         documentLoads === 2,
         'a 404ing chunk reloads exactly once',
