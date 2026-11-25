@@ -6,7 +6,7 @@ This is a **WebGL-based 3D dice roller application** built with Three.js. It sim
 
 > **Renderer default:** The default runtime is `THREE.WebGPURenderer` (with a TSL post stack) on browsers that expose `navigator.gpu`; it automatically falls back to `THREE.WebGLRenderer` when WebGPU is unavailable or init fails. `?webgl` forces the stable WebGL baseline path (kept as the supported fallback for older browsers and testing). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the renderer selection table.
 
-**Further reading:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (scheduler, tiers, props, renderer, error boundary, lazy chunks) · [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) (budgets, soak, device baselines) · [`docs/EDGE_CASES.md`](docs/EDGE_CASES.md) · [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) (cache policy, redeploy) · [`docs/WASM_ENGINE.md`](docs/WASM_ENGINE.md) (physics) · [`docs/XR.md`](docs/XR.md) (WebXR seated spike) · [GitHub Issues](https://github.com/ford442/webgl-diceroller/issues) (roadmap)
+**Further reading:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (scheduler, tiers, props, renderer, error boundary, lazy chunks) · [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) (budgets, soak, device baselines) · [`docs/EDGE_CASES.md`](docs/EDGE_CASES.md) · [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) (cache policy, redeploy) · [`docs/RELEASE.md`](docs/RELEASE.md) (release, rollback) · [`docs/WASM_ENGINE.md`](docs/WASM_ENGINE.md) (physics) · [`docs/XR.md`](docs/XR.md) (WebXR seated spike) · [GitHub Issues](https://github.com/ford442/webgl-diceroller/issues) (roadmap)
 
 ## Technology Stack
 
