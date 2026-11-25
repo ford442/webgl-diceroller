@@ -8,6 +8,43 @@ const _e2 = new THREE.Vector3();
 const _n = new THREE.Vector3();
 
 /**
+ * Turn a loaded die hull into the clean, origin-centred, Y-up geometry the rest
+ * of the dice code assumes.
+ *
+ * The shipped GLBs are Draco + `KHR_mesh_quantization`, so GLTFLoader hands over
+ * positions as *normalized int16* (range -1..1). Baking the node transform into
+ * such an attribute is lossy: `applyMatrix4` adds the node's translation (up to
+ * ~2 units on the d4, d8, d10 and d20), and any vertex pushed past 1.0 wraps
+ * around in the Int16Array. The d4, d8 and d20 came out with their top vertices
+ * folded to the bottom — mis-shapen on screen, and with face normals computed
+ * from the folded mesh. Every attribute is therefore widened to float32 before
+ * a single transform is applied.
+ *
+ * @param {THREE.BufferGeometry} source
+ * @param {THREE.Matrix4} matrixWorld  transform baked into the vertices (node scale/translation)
+ * @returns {THREE.BufferGeometry} a new geometry; `source` is left untouched
+ */
+export function bakeDieGeometry(source, matrixWorld) {
+    const geometry = source.clone();
+    for (const name of Object.keys(geometry.attributes)) {
+        const attr = /** @type {THREE.BufferAttribute} */ (geometry.getAttribute(name));
+        if (attr.array instanceof Float32Array) continue;
+        const wide = new Float32Array(attr.count * attr.itemSize);
+        for (let i = 0; i < attr.count; i++) {
+            for (let k = 0; k < attr.itemSize; k++) {
+                wide[i * attr.itemSize + k] = attr.getComponent(i, k); // de-normalizes
+            }
+        }
+        geometry.setAttribute(name, new THREE.BufferAttribute(wide, attr.itemSize));
+    }
+    geometry.center();
+    geometry.applyMatrix4(matrixWorld);
+    geometry.rotateX(-Math.PI / 2);
+    geometry.center();
+    return geometry;
+}
+
+/**
  * The shipped hulls carry their numerals as recessed geometry in a second draw
  * group. Until they are re-exported with flat faces, that relief is the cheapest
  * glyph source we have for the default numbering: the die material wears two

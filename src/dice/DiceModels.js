@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { publicAssetUrl } from '../core/publicAssetUrl.js';
-import { ensureBodyPipGroups } from './DiceGeometryGroups.js';
+import { ensureBodyPipGroups, bakeDieGeometry } from './DiceGeometryGroups.js';
 import {
     backendForRenderer,
     createDiceMaterialForEntry,
@@ -159,12 +159,8 @@ export const loadDiceModels = async (onProgress) => {
                             });
 
                             if (mesh) {
-                                const geometry = mesh.geometry.clone();
-                                geometry.center();
                                 mesh.updateMatrixWorld(true);
-                                geometry.applyMatrix4(mesh.matrixWorld);
-                                geometry.rotateX(-Math.PI / 2);
-                                geometry.center();
+                                const geometry = bakeDieGeometry(mesh.geometry, mesh.matrixWorld);
                                 ensureBodyPipGroups(geometry);
 
                                 const cleanMesh = new THREE.Mesh(
