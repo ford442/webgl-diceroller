@@ -97,32 +97,12 @@ export const initInteraction = (camera: any, scene: any, physicsWorld: any, hook
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
 
-    const warmMaterials = () => {
-        if (!scene.userData.renderer) {
-            requestAnimationFrame(warmMaterials);
-            return;
-        }
-        const warmLight = new THREE.PointLight(0x0088ff, 1, 1);
-        const warmGeo = new THREE.SphereGeometry(0.01, 4, 4);
-        const warmMat = new THREE.MeshBasicMaterial({ color: 0x0088ff });
-        const warmMesh = new THREE.Mesh(warmGeo, warmMat);
-        warmMesh.add(warmLight);
-        warmMesh.position.set(0, -1000, 0);
-        scene.add(warmMesh);
-
-        if (typeof scene.userData.renderer.compile === 'function') {
-            scene.userData.renderer.compile(scene, camera);
-        }
-
-        setTimeout(() => {
-            scene.remove(warmMesh);
-            warmGeo.dispose();
-            warmMat.dispose();
-            warmLight.dispose();
-        }, 500);
-    };
-
-    requestAnimationFrame(warmMaterials);
+    // The levitation glow lives in the scene from the start and only changes
+    // intensity. Adding or removing a light changes the light count, which makes the
+    // renderer rebuild every lit material's pipeline — a multi-second freeze. It
+    // used to happen when a die was lifted and again at the instant it was thrown,
+    // so the whole hard roll played out behind a frozen frame.
+    ensureLevitationGlow(scene);
 
     return {
         handleDown: (x: number, y: number) => onPointerDown(x, y, camera, scene, hooks),
@@ -352,6 +332,19 @@ export const getHoveredDie = (camera: any, normX: any, normY: any) => {
     return null;
 };
 
+let levitationGlow: THREE.PointLight | null = null;
+
+function ensureLevitationGlow(scene: any): THREE.PointLight {
+    if (!levitationGlow) {
+        levitationGlow = new THREE.PointLight(0x0088ff, 0, 5);
+        // No shadow map: a shadow-casting light costs another depth pass per frame.
+        levitationGlow.castShadow = false;
+        levitationGlow.name = 'levitationGlow';
+    }
+    if (levitationGlow.parent !== scene) scene.add(levitationGlow);
+    return levitationGlow;
+}
+
 /** @type {LevitationState[]} */
 const levitatingDice: any[] = [];
 
@@ -365,15 +358,10 @@ function triggerLevitation(object: any, scene: any, hooks: any = {}) {
 
     setDieWasmKinematic(object, true);
 
-    const light = new THREE.PointLight(0x0088ff, 5, 5);
-    light.castShadow = true;
-    light.shadow.bias = -0.0001;
-    light.position.set(0, 0, 0);
-    object.add(light);
+    ensureLevitationGlow(scene).intensity = 5;
 
     levitatingDice.push({
         object,
-        light,
         scene,
         hooks,
         startTime: Date.now(),
@@ -419,12 +407,8 @@ function updateLevitation() {
             );
             item.object.position.set(item.startX, currentY, item.startZ);
             item.object.quaternion.copy(item.spinQuat);
+            levitationGlow?.position.copy(item.object.position);
         } else {
-            if (item.light) {
-                item.object.remove(item.light);
-                if (item.light.dispose) item.light.dispose();
-            }
-
             const forceX = (Math.random() - 0.5) * 50;
             const forceY = Math.random() * 20 - 10;
             const forceZ = (Math.random() - 0.5) * 50;
@@ -443,6 +427,7 @@ function updateLevitation() {
 
             item.hooks?.onMotionActivityChange?.(false, 'levitation');
             levitatingDice.splice(i, 1);
+            if (levitatingDice.length === 0 && levitationGlow) levitationGlow.intensity = 0;
         }
     }
 }
